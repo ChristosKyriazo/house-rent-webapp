@@ -1,0 +1,187 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    // Handle both sync and async params (Next.js 14 vs 15)
+    const resolvedParams = await Promise.resolve(params)
+    const homeId = resolvedParams.id
+    
+    console.log('API Route - Looking for home with ID/key:', homeId)
+    
+    const home = await prisma.home.findFirst({
+      where: {
+        OR: [
+          { key: homeId },
+          { id: isNaN(Number(homeId)) ? -1 : Number(homeId) }
+        ]
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            createdAt: true,
+          },
+        },
+      },
+    })
+
+    if (!home) {
+      console.log('API Route - Home not found for ID/key:', homeId)
+      // Let's also check what homes exist
+      const allHomes = await prisma.home.findMany({ select: { id: true, key: true, title: true }, take: 5 })
+      console.log('API Route - Sample homes in DB:', allHomes)
+      return NextResponse.json(
+        { error: 'Home not found', searchedId: homeId },
+        { status: 404 }
+      )
+    }
+
+    console.log('API Route - Found home:', { id: home.id, key: home.key, title: home.title })
+    return NextResponse.json({ home }, { status: 200 })
+  } catch (error) {
+    console.error('Get home error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json(
+      { error: 'Internal server error', details: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT /api/homes/[id] - update an existing home listing
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user has owner role
+    const userRole = user.role || 'user'
+    if (userRole !== 'owner' && userRole !== 'both') {
+      return NextResponse.json(
+        { error: 'Only owners can update listings' },
+        { status: 403 }
+      )
+    }
+
+    // Handle both sync and async params (Next.js 14 vs 15)
+    const resolvedParams = await Promise.resolve(params)
+    const homeId = resolvedParams.id
+
+    // Find the home listing
+    const existingHome = await prisma.home.findFirst({
+      where: {
+        OR: [
+          { key: homeId },
+          { id: isNaN(Number(homeId)) ? -1 : Number(homeId) }
+        ]
+      },
+    })
+
+    if (!existingHome) {
+      return NextResponse.json(
+        { error: 'Home listing not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check if user owns this listing
+    if (existingHome.ownerId !== user.id) {
+      return NextResponse.json(
+        { error: 'You can only update your own listings' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const {
+      title,
+      description,
+      street,
+      city,
+      country,
+      listingType,
+      pricePerMonth,
+      bedrooms,
+      bathrooms,
+      floor,
+      heating,
+      sizeSqMeters,
+      yearBuilt,
+      yearRenovated,
+      availableFrom,
+      photos,
+    } = body
+
+    // Minimal validation
+    if (!title || !city || !country || !pricePerMonth) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Parse availableFrom date - handle both date strings and empty values
+    let availableFromDate: Date
+    if (availableFrom) {
+      availableFromDate = new Date(availableFrom)
+      if (isNaN(availableFromDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid date format for availableFrom' },
+          { status: 400 }
+        )
+      }
+    } else {
+      availableFromDate = new Date()
+    }
+
+    const updatedHome = await prisma.home.update({
+      where: { id: existingHome.id },
+      data: {
+        title: title.trim(),
+        description: description?.trim() || null,
+        street: street?.trim() || null,
+        city: city.trim(),
+        country: country.trim(),
+        listingType: listingType || 'rent',
+        pricePerMonth: Number(pricePerMonth),
+        bedrooms: Number(bedrooms || 0),
+        bathrooms: Number(bathrooms || 0),
+        floor: floor && floor !== '' ? Number(floor) : null,
+        heating: heating?.trim() || null,
+        sizeSqMeters: sizeSqMeters && sizeSqMeters !== '' ? Number(sizeSqMeters) : null,
+        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
+        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+        availableFrom: availableFromDate,
+        photos: photos || null,
+      },
+    })
+
+    return NextResponse.json(
+      { message: 'Home updated', home: updatedHome },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error('Update home error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json(
+      { error: 'Internal server error', details: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+

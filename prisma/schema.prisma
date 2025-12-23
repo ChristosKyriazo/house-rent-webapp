@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  key             String    @unique @default(cuid())
+  email           String    @unique
+  password        String
+  name            String?
+  age             Int?
+  dateOfBirth     DateTime?
+  title           String?
+  occupation      String?
+  role            String    @default("user") // "owner", "user", or "both"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  homes           Home[]
+  ratingsReceived Rating[]  @relation("RatedUser")
+  ratingsGiven    Rating[]  @relation("Rater")
+  sessions        Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @default(cuid())
+  userId    Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Home {
+  id            Int      @id @default(autoincrement())
+  key           String   @unique @default(cuid())
+  title         String
+  description   String?
+  street        String?
+  city          String
+  country       String
+  listingType   String   @default("rent")
+  pricePerMonth Int
+  bedrooms      Int
+  bathrooms     Int
+  floor         Int?
+  heating       String?
+  sizeSqMeters  Int?
+  yearBuilt     Int?
+  yearRenovated Int?
+  availableFrom DateTime
+  photos        String?  // JSON array of photo file paths/URLs
+  ownerId       Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([city])
+  @@index([ownerId])
+  @@index([listingType])
+  @@map("homes")
+}
+
+model Rating {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @default(cuid())
+  raterId     Int
+  ratedUserId Int
+  type        String
+  score       Int
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ratedUser   User     @relation("RatedUser", fields: [ratedUserId], references: [id], onDelete: Cascade)
+  rater       User     @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
+
+  @@unique([raterId, ratedUserId, type])
+  @@index([ratedUserId])
+  @@index([type])
+  @@map("ratings")
+}

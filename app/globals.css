@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Hide Next.js development indicator and any bottom-left logos */
+#__next-build-watcher,
+[data-nextjs-toast],
+[data-nextjs-dialog],
+.__next-dev-overlay,
+[class*="nextjs"],
+iframe[src*="nextjs"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide any fixed positioned elements in bottom left that might be logos */
+body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] {
+  display: none !important;
+}
