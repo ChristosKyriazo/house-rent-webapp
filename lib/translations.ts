@@ -8,6 +8,8 @@ export const translations = {
     edit: 'Επεξεργασία',
     save: 'Αποθήκευση',
     cancel: 'Ακύρωση',
+    close: 'Κλείσιμο',
+    confirm: 'Επιβεβαίωση',
     delete: 'Διαγραφή',
     upload: 'Ανέβασμα',
     photos: 'Φωτογραφίες',
@@ -37,12 +39,15 @@ export const translations = {
     buy: 'Αγορά',
     street: 'Οδός',
     city: 'Πόλη',
+    cityArea: 'Περιοχή',
+    selectCityArea: 'Επιλέξτε περιοχή',
     country: 'Χώρα',
     pricePerMonth: 'Τιμή ανά μήνα (€)',
     bedrooms: 'Υπνοδωμάτια',
     bathrooms: 'Μπάνια',
     floor: 'Όροφος',
-    heating: 'Τύπος Θέρμανσης',
+            heatingCategory: 'Κατηγορία Θέρμανσης',
+            heatingAgent: 'Υλικό Θέρμανσης',
     sizeSqMeters: 'Μέγεθος (m²)',
     yearBuilt: 'Έτος Κατασκευής',
     yearRenovated: 'Έτος Ανακαίνισης',
@@ -54,7 +59,8 @@ export const translations = {
     price: 'Τιμή',
     perMonth: 'ανά μήνα',
     totalPrice: 'συνολική τιμή',
-    ownerProfile: 'Προφίλ Ιδιοκτήτη',
+            ownerProfile: 'Προφίλ Ιδιοκτήτη',
+            homeowner: 'Ιδιοκτήτης',
     name: 'Όνομα',
     email: 'Email',
     memberSince: 'Μέλος από',
@@ -81,6 +87,11 @@ export const translations = {
     availableProperties: 'Διαθέσιμα Ακίνητα',
     foundListings: 'Βρέθηκαν {count} {count === 1 ? "αγγελία" : "αγγελίες"}',
     newListing: 'Νέα Αγγελία',
+    listing: 'αγγελία',
+    listings: 'αγγελίες',
+    found: 'βρέθηκαν',
+    bedroomsShort: 'υπνοδ.',
+    bathroomsShort: 'μπάνια',
     noPropertiesFound: 'Δεν βρέθηκαν ακίνητα που να ταιριάζουν με τα φίλτρα σας. Δοκιμάστε να προσαρμόσετε τα κριτήρια αναζήτησης.',
     noPropertiesFoundAi: 'Δεν βρέθηκαν ακίνητα. Δοκιμάστε μια διαφορετική αναζήτηση.',
     tellUsWhatYouNeed: 'Πείτε μας τι χρειάζεστε',
@@ -92,6 +103,8 @@ export const translations = {
     anyCountry: 'Οποιαδήποτε χώρα',
     minBedrooms: 'Ελάχιστα Υπνοδωμάτια',
     maxBedrooms: 'Μέγιστα Υπνοδωμάτια',
+    minSize: 'Ελάχιστο Μέγεθος (m²)',
+    maxSize: 'Μέγιστο Μέγεθος (m²)',
     minPrice: 'Ελάχιστη Τιμή (€)',
     maxPrice: 'Μέγιστη Τιμή (€)',
     any: 'Οποιοδήποτε',
@@ -170,6 +183,8 @@ export const translations = {
     edit: 'Edit',
     save: 'Save',
     cancel: 'Cancel',
+    close: 'Close',
+    confirm: 'Confirm',
     delete: 'Delete',
     upload: 'Upload',
     photos: 'Photos',
@@ -199,12 +214,15 @@ export const translations = {
     buy: 'Buy',
     street: 'Street',
     city: 'City',
+    cityArea: 'City Area',
+    selectCityArea: 'Select area',
     country: 'Country',
     pricePerMonth: 'Price per month (€)',
     bedrooms: 'Bedrooms',
     bathrooms: 'Bathrooms',
     floor: 'Floor',
-    heating: 'Heating Type',
+            heatingCategory: 'Heating Category',
+            heatingAgent: 'Heating Agent',
     sizeSqMeters: 'Size (m²)',
     yearBuilt: 'Year Built',
     yearRenovated: 'Year Renovated',
@@ -216,7 +234,8 @@ export const translations = {
     price: 'Price',
     perMonth: 'per month',
     totalPrice: 'total price',
-    ownerProfile: 'Owner Profile',
+            ownerProfile: 'Owner Profile',
+            homeowner: 'Homeowner',
     name: 'Name',
     email: 'Email',
     memberSince: 'Member Since',
@@ -243,6 +262,11 @@ export const translations = {
     availableProperties: 'Available Properties',
     foundListings: 'Found {count} {count === 1 ? "listing" : "listings"}',
     newListing: 'New Listing',
+    listing: 'listing',
+    listings: 'listings',
+    found: 'found',
+    bedroomsShort: 'bedr.',
+    bathroomsShort: 'bathr.',
     noPropertiesFound: 'No properties found matching your filters. Try adjusting your search criteria.',
     noPropertiesFoundAi: 'No properties found. Try a different search.',
     tellUsWhatYouNeed: 'Tell us what you need',
@@ -254,6 +278,8 @@ export const translations = {
     anyCountry: 'Any country',
     minBedrooms: 'Min Bedrooms',
     maxBedrooms: 'Max Bedrooms',
+    minSize: 'Min Size (m²)',
+    maxSize: 'Max Size (m²)',
     minPrice: 'Min Price (€)',
     maxPrice: 'Max Price (€)',
     any: 'Any',
@@ -333,43 +359,135 @@ export function getTranslation(lang: Language, key: keyof typeof translations.el
 
 // Translation map for user-entered values (heating types, occupations, titles, etc.)
 const valueTranslations: Record<string, { el: string; en: string }> = {
-  // Heating Types
-  'Central': { el: 'Κεντρική Θέρμανση', en: 'Central Heating' },
-  'Electric': { el: 'Ηλεκτρική', en: 'Electric' },
-  'Gas': { el: 'Φυσικό Αέριο', en: 'Natural Gas' },
-  'Oil': { el: 'Πετρέλαιο', en: 'Oil' },
-  'Heat Pump': { el: 'Αντλία Θερμότητας', en: 'Heat Pump' },
-  'Wood/Pellet': { el: 'Ξύλο/Πελλέτ', en: 'Wood/Pellet' },
-  'Other': { el: 'Άλλο', en: 'Other' },
+  // Heating Category
+  'central': { el: 'Κεντρική', en: 'Central' },
+  'autonomous': { el: 'Αυτόνομη', en: 'Autonomous' },
+  
+  // Heating Agent
+  'oil': { el: 'Πετρέλαιο', en: 'Oil' },
+  'natural gas': { el: 'Φυσικό Αέριο', en: 'Natural Gas' },
+  'electricity': { el: 'Ρεύμα', en: 'Electricity' },
+  'other': { el: 'Άλλο', en: 'Other' },
   
   // Titles
   'Mr': { el: 'Κος', en: 'Mr' },
   'Mrs': { el: 'Κυρία', en: 'Mrs' },
   
   // Occupations
-  'Worker': { el: 'Εργαζόμενος', en: 'Worker' },
+  'Employed': { el: 'Εργαζόμενος', en: 'Employed' },
+  'Worker': { el: 'Εργαζόμενος', en: 'Employed' }, // Backward compatibility
   'Student': { el: 'Φοιτητής', en: 'Student' },
-  'Professional': { el: 'Επαγγελματίας', en: 'Professional' },
-  'Entrepreneur': { el: 'Επιχειρηματίας', en: 'Entrepreneur' },
   'Retired': { el: 'Συνταξιούχος', en: 'Retired' },
+  'Unemployed': { el: 'Άνεργος', en: 'Unemployed' },
   // Note: 'Other' for occupations is already covered in heating types above
+  
+  // City Areas
+  'Nea Smirni': { el: 'Νέα Σμύρνη', en: 'Nea Smirni' },
+  'Νέα Σμύρνη': { el: 'Νέα Σμύρνη', en: 'Nea Smirni' },
 }
 
 /**
- * Translates user-entered values (like heating types) based on current language
+ * Translates user-entered values (like heating types, city areas) based on current language
  * Returns the original value if no translation is found
+ * Handles both directions: can translate from English to Greek or Greek to English
+ * Case-insensitive matching for better reliability
  */
 export function translateValue(lang: Language, value: string | null | undefined): string {
   if (!value) return ''
   
   const trimmedValue = value.trim()
-  const translation = valueTranslations[trimmedValue]
+  if (!trimmedValue) return ''
   
+  const lowerValue = trimmedValue.toLowerCase()
+  
+  // Special case: "Worker" should map to "Employed" for backward compatibility
+  if (trimmedValue === 'Worker' || lowerValue === 'worker') {
+    return valueTranslations['Employed']?.[lang] || 'Employed'
+  }
+  
+  // First, try direct lookup (case-sensitive)
+  let translation = valueTranslations[trimmedValue]
   if (translation) {
     return translation[lang]
   }
   
+  // Try case-insensitive lookup by key
+  for (const [key, trans] of Object.entries(valueTranslations)) {
+    if (key.toLowerCase() === lowerValue) {
+      // Special case: if we find "Worker" key, use "Employed" translation
+      if (key === 'Worker') {
+        return valueTranslations['Employed']?.[lang] || 'Employed'
+      }
+      return trans[lang]
+    }
+  }
+  
+  // If not found, try reverse lookup (find the key that has this value in the other language)
+  // This handles cases where the value might already be in the target language
+  for (const [key, trans] of Object.entries(valueTranslations)) {
+    // Check if the value matches the English translation
+    if (trans.en.toLowerCase() === lowerValue) {
+      // Special case: if this is "Worker", return "Employed" translation
+      if (key === 'Worker') {
+        return valueTranslations['Employed']?.[lang] || 'Employed'
+      }
+      return lang === 'el' ? trans.el : trans.en
+    }
+    // Check if the value matches the Greek translation
+    if (trans.el.toLowerCase() === lowerValue) {
+      // Special case: if this is "Worker", return "Employed" translation
+      if (key === 'Worker') {
+        return valueTranslations['Employed']?.[lang] || 'Employed'
+      }
+      return lang === 'el' ? trans.el : trans.en
+    }
+  }
+  
   // Return original value if no translation found
+  return trimmedValue
+}
+
+/**
+ * Translates a value from the current display language back to its canonical (English) key.
+ * Useful for sending translated UI values back to the API in a consistent format.
+ */
+export function reverseTranslateValue(value: string | null | undefined): string {
+  if (!value) return ''
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return ''
+
+  const lowerValue = trimmedValue.toLowerCase()
+
+  // Special case: "Worker" should map to "Employed" for backward compatibility
+  if (trimmedValue === 'Worker' || lowerValue === 'worker') {
+    return 'Employed'
+  }
+
+  // Check if the value is already an English key
+  if (valueTranslations[trimmedValue] && valueTranslations[trimmedValue].en === trimmedValue) {
+    return trimmedValue
+  }
+
+  // Check if the value is a Greek translation - find the English key
+  for (const [key, trans] of Object.entries(valueTranslations)) {
+    if (trans.el.toLowerCase() === lowerValue || trans.el === trimmedValue) {
+      // Special case: if we find "Worker" key, return "Employed" instead
+      if (key === 'Worker') {
+        return 'Employed'
+      }
+      return key // Return the English key
+    }
+    // Also check case-insensitive
+    if (trans.en.toLowerCase() === lowerValue && trans.en !== trimmedValue) {
+      if (key === 'Worker') {
+        return 'Employed'
+      }
+      return key
+    }
+  }
+
+  // Return original if no reverse translation found
   return trimmedValue
 }
 

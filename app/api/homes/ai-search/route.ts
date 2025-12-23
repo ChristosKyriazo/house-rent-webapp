@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
     // 3. Rank results by relevance
 
     const queryLower = query.toLowerCase()
-    const keywords = queryLower.split(/\s+/)
 
     // Build search conditions
     // Note: SQLite doesn't support case-insensitive mode, but contains works case-insensitive by default

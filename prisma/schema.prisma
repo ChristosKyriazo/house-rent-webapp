@@ -34,12 +34,14 @@ model Home {
   street        String?
   city          String
   country       String
+  area          String?  // City area (e.g., "Nea Smirni")
   listingType   String   @default("rent")
   pricePerMonth Int
   bedrooms      Int
   bathrooms     Int
   floor         Int?
-  heating       String?
+  heatingCategory String?  // "central" or "autonomous"
+  heatingAgent   String?   // "oil", "natural gas", "electricity", "other"
   sizeSqMeters  Int?
   yearBuilt     Int?
   yearRenovated Int?
@@ -53,6 +55,7 @@ model Home {
   @@index([city])
   @@index([ownerId])
   @@index([listingType])
+  @@index([area])
   @@map("homes")
 }
 

@@ -33,6 +33,32 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('maxPrice')) {
       where.pricePerMonth = { ...where.pricePerMonth, lte: Number(searchParams.get('maxPrice')) }
     }
+    
+    if (searchParams.get('minSize')) {
+      where.sizeSqMeters = { gte: Number(searchParams.get('minSize')) }
+    }
+    
+    if (searchParams.get('maxSize')) {
+      where.sizeSqMeters = { ...where.sizeSqMeters, lte: Number(searchParams.get('maxSize')) }
+    }
+    
+    if (searchParams.get('heatingCategory')) {
+      where.heatingCategory = searchParams.get('heatingCategory')
+    }
+    
+    if (searchParams.get('heatingAgent')) {
+      where.heatingAgent = searchParams.get('heatingAgent')
+    }
+    
+    if (searchParams.get('yearBuilt')) {
+      where.yearBuilt = Number(searchParams.get('yearBuilt'))
+    }
+    
+    // Filter by areas (multiple areas can be selected)
+    const areas = searchParams.getAll('areas').filter(area => area && area.trim() !== '')
+    if (areas.length > 0) {
+      where.area = { in: areas }
+    }
 
     const homes = await prisma.home.findMany({
       where,
@@ -87,7 +113,8 @@ export async function POST(request: NextRequest) {
       bedrooms,
       bathrooms,
       floor,
-      heating,
+      heatingCategory,
+      heatingAgent,
       sizeSqMeters,
       yearBuilt,
       yearRenovated,
@@ -124,12 +151,14 @@ export async function POST(request: NextRequest) {
         street: street?.trim() || null,
         city: city.trim(),
         country: country.trim(),
+        area: null, // Will be set to 'Nea Smirni' after creation, confirmed by owner
         listingType: listingType || 'rent',
         pricePerMonth: Number(pricePerMonth),
         bedrooms: Number(bedrooms || 0),
         bathrooms: Number(bathrooms || 0),
         floor: floor && floor !== '' ? Number(floor) : null,
-        heating: heating?.trim() || null,
+        heatingCategory: heatingCategory?.trim() || null,
+        heatingAgent: heatingAgent?.trim() || null,
         sizeSqMeters: sizeSqMeters && sizeSqMeters !== '' ? Number(sizeSqMeters) : null,
         yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
         yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
@@ -146,15 +175,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create home error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorStack = error instanceof Error ? error.stack : undefined
-    
-    // Log full error details for debugging
-    console.error('Full error details:', {
-      message: errorMessage,
-      stack: errorStack,
-      error: error
-    })
-    
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
       { status: 500 }

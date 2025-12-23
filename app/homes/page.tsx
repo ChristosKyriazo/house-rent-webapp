@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { getTranslation } from '@/lib/translations'
+import { getTranslation, translateValue } from '@/lib/translations'
 
 interface Home {
   id: number
@@ -26,6 +26,7 @@ interface Home {
 
 export default function HomesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { language } = useLanguage()
   const [searchType, setSearchType] = useState<'rent' | 'buy' | null>(null)
   const [filterType, setFilterType] = useState<'manual' | 'ai' | null>(null)
@@ -37,11 +38,58 @@ export default function HomesPage() {
   const [manualFilters, setManualFilters] = useState({
     city: '',
     country: '',
-    minBedrooms: '',
-    maxBedrooms: '',
     minPrice: '',
     maxPrice: '',
+    minSize: '',
+    maxSize: '',
+    heatingCategory: '',
+    heatingAgent: '',
+    minBedrooms: '',
+    maxBedrooms: '',
+    yearBuilt: '',
   })
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [availableAreas, setAvailableAreas] = useState<string[]>([])
+  const isInitialized = useRef(false)
+
+  // Initialize state from URL parameters on mount (only once)
+  useEffect(() => {
+    if (isInitialized.current) return
+    
+    const urlSearchType = searchParams.get('type') as 'rent' | 'buy' | null
+    const urlFilterType = searchParams.get('filter') as 'manual' | 'ai' | null
+    
+    if (urlSearchType && (urlSearchType === 'rent' || urlSearchType === 'buy')) {
+      setSearchType(urlSearchType)
+    }
+    if (urlFilterType && (urlFilterType === 'manual' || urlFilterType === 'ai')) {
+      setFilterType(urlFilterType)
+    }
+    
+    isInitialized.current = true
+  }, [searchParams])
+
+  // Update URL when searchType or filterType changes (but not on initial mount)
+  useEffect(() => {
+    if (!isInitialized.current) return
+    
+    const params = new URLSearchParams()
+    if (searchType) {
+      params.set('type', searchType)
+    }
+    if (filterType) {
+      params.set('filter', filterType)
+    }
+    
+    const newSearch = params.toString()
+    const currentSearch = window.location.search.replace('?', '')
+    
+    // Only update URL if it's different to avoid unnecessary navigation
+    if (currentSearch !== newSearch) {
+      const newUrl = newSearch ? `/homes?${newSearch}` : '/homes'
+      router.replace(newUrl, { scroll: false })
+    }
+  }, [searchType, filterType, router])
 
   // Check user role on mount
   useEffect(() => {
@@ -64,6 +112,24 @@ export default function HomesPage() {
         router.push('/login')
       })
   }, [router])
+
+  // Fetch all available areas from existing listings
+  useEffect(() => {
+    fetch('/api/homes')
+      .then((res) => res.json())
+      .then((data) => {
+        const areas = new Set<string>()
+        data.homes?.forEach((home: any) => {
+          if (home.area && home.area.trim() !== '') {
+            areas.add(home.area)
+          }
+        })
+        setAvailableAreas(Array.from(areas).sort())
+      })
+      .catch((error) => {
+        console.error('Error fetching areas:', error)
+      })
+  }, [])
 
   if (checkingRole) {
     return (
@@ -116,10 +182,18 @@ export default function HomesPage() {
       const params = new URLSearchParams()
       if (manualFilters.city) params.append('city', manualFilters.city)
       if (manualFilters.country) params.append('country', manualFilters.country)
-      if (manualFilters.minBedrooms) params.append('minBedrooms', manualFilters.minBedrooms)
-      if (manualFilters.maxBedrooms) params.append('maxBedrooms', manualFilters.maxBedrooms)
       if (manualFilters.minPrice) params.append('minPrice', manualFilters.minPrice)
       if (manualFilters.maxPrice) params.append('maxPrice', manualFilters.maxPrice)
+      if (manualFilters.minSize) params.append('minSize', manualFilters.minSize)
+      if (manualFilters.maxSize) params.append('maxSize', manualFilters.maxSize)
+      if (manualFilters.heatingCategory) params.append('heatingCategory', manualFilters.heatingCategory)
+      if (manualFilters.heatingAgent) params.append('heatingAgent', manualFilters.heatingAgent)
+      if (manualFilters.minBedrooms) params.append('minBedrooms', manualFilters.minBedrooms)
+      if (manualFilters.maxBedrooms) params.append('maxBedrooms', manualFilters.maxBedrooms)
+      if (manualFilters.yearBuilt) params.append('yearBuilt', manualFilters.yearBuilt)
+      if (selectedAreas.length > 0) {
+        selectedAreas.forEach(area => params.append('areas', area))
+      }
 
       const response = await fetch(`/api/homes?${params.toString()}`)
       const data = await response.json()
@@ -201,69 +275,201 @@ export default function HomesPage() {
                 ← {getTranslation(language, 'back')}
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Πόλη</label>
-                <input
-                  type="text"
-                  value={manualFilters.city}
-                  onChange={(e) => setManualFilters({ ...manualFilters, city: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="Οποιαδήποτε πόλη"
-                />
+            <div className="space-y-4 mb-4">
+              {/* Row 1: City, Country */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'city')}</label>
+                  <input
+                    type="text"
+                    value={manualFilters.city}
+                    onChange={(e) => setManualFilters({ ...manualFilters, city: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder={getTranslation(language, 'anyCity')}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'country')}</label>
+                  <input
+                    type="text"
+                    value={manualFilters.country}
+                    onChange={(e) => setManualFilters({ ...manualFilters, country: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder={getTranslation(language, 'anyCountry')}
+                  />
+                </div>
               </div>
+
+              {/* Row 2: City Area (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Χώρα</label>
-                <input
-                  type="text"
-                  value={manualFilters.country}
-                  onChange={(e) => setManualFilters({ ...manualFilters, country: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="Οποιαδήποτε χώρα"
-                />
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'cityArea')}</label>
+                <div className="space-y-3">
+                  {/* Selected areas as chips */}
+                  {selectedAreas.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedAreas.map((area) => (
+                        <div
+                          key={area}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-[#E8D5B7] text-[#2D3748] rounded-lg"
+                        >
+                          <span className="text-sm font-medium">{translateValue(language, area)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
+                            className="text-[#2D3748] hover:text-red-600 transition-colors"
+                            aria-label={getTranslation(language, 'close')}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Area dropdown */}
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const area = e.target.value
+                      if (area && !selectedAreas.includes(area)) {
+                        setSelectedAreas([...selectedAreas, area])
+                      }
+                      e.target.value = '' // Reset dropdown
+                    }}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
+                  >
+                    <option value="">{getTranslation(language, 'selectCityArea')}</option>
+                    {availableAreas
+                      .filter(area => !selectedAreas.includes(area))
+                      .map((area) => (
+                        <option key={area} value={area}>
+                          {translateValue(language, area)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
+
+              {/* Row 3: Min Price, Max Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minPrice')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.minPrice}
+                    onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxPrice')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.maxPrice}
+                    onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder={getTranslation(language, 'any')}
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Min Size, Max Size */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minSize')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.minSize}
+                    onChange={(e) => setManualFilters({ ...manualFilters, minSize: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxSize')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.maxSize}
+                    onChange={(e) => setManualFilters({ ...manualFilters, maxSize: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder={getTranslation(language, 'any')}
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Heating Category, Heating Agent */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingCategory')}</label>
+                  <select
+                    value={manualFilters.heatingCategory}
+                    onChange={(e) => setManualFilters({ ...manualFilters, heatingCategory: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
+                  >
+                    <option value="">{getTranslation(language, 'any')}</option>
+                    <option value="central">{translateValue(language, 'central')}</option>
+                    <option value="autonomous">{translateValue(language, 'autonomous')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingAgent')}</label>
+                  <select
+                    value={manualFilters.heatingAgent}
+                    onChange={(e) => setManualFilters({ ...manualFilters, heatingAgent: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
+                  >
+                    <option value="">{getTranslation(language, 'any')}</option>
+                    <option value="oil">{translateValue(language, 'oil')}</option>
+                    <option value="natural gas">{translateValue(language, 'natural gas')}</option>
+                    <option value="electricity">{translateValue(language, 'electricity')}</option>
+                    <option value="other">{translateValue(language, 'other')}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 6: Min Bedrooms, Max Bedrooms */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minBedrooms')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.minBedrooms}
+                    onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualFilters.maxBedrooms}
+                    onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    placeholder={getTranslation(language, 'any')}
+                  />
+                </div>
+              </div>
+
+              {/* Row 7: Year Built (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Ελάχιστα Υπνοδωμάτια</label>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'yearBuilt')}</label>
                 <input
                   type="number"
-                  min="0"
-                  value={manualFilters.minBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
+                  min="1900"
+                  max={new Date().getFullYear()}
+                  value={manualFilters.yearBuilt}
+                  onChange={(e) => setManualFilters({ ...manualFilters, yearBuilt: e.target.value })}
                   className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Μέγιστα Υπνοδωμάτια</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={manualFilters.maxBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="Οποιοδήποτε"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Ελάχιστη Τιμή (€)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={manualFilters.minPrice}
-                  onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">Μέγιστη Τιμή (€)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={manualFilters.maxPrice}
-                  onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder="Οποιαδήποτε"
+                  placeholder={getTranslation(language, 'any')}
                 />
               </div>
             </div>
@@ -281,23 +487,23 @@ export default function HomesPage() {
         {searchType && filterType === 'ai' && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[#E8D5B7]">Πείτε μας τι χρειάζεστε</h2>
+              <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
               <button
                 onClick={() => setFilterType(null)}
                 className="px-3 py-1.5 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
               >
-                ← Πίσω
+                ← {getTranslation(language, 'back')}
               </button>
             </div>
             <p className="text-[#E8D5B7]/70 mb-4">
-              Περιγράψτε τι αναζητάτε και γιατί. Η AI μας θα βρει τα καλύτερα ακίνητα για εσάς.
+              {getTranslation(language, 'aiSearchDescription')}
             </p>
             <textarea
               value={aiQuery}
               onChange={(e) => setAiQuery(e.target.value)}
               className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 mb-4 resize-none"
               rows={6}
-              placeholder="Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα..."
+              placeholder={language === 'el' ? 'Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα...' : 'Example: I need a 2-bedroom apartment in Athens for my family. We want to be close to schools and parks. Budget is around 800-1000€ per month...'}
             />
             <button
               onClick={handleAISearch}
@@ -316,14 +522,16 @@ export default function HomesPage() {
               <h1 className="text-4xl font-bold text-[#E8D5B7]">
                 {getTranslation(language, 'availableProperties')} {searchType === 'rent' ? `(${getTranslation(language, 'rent')})` : `(${getTranslation(language, 'buy')})`}
               </h1>
-              <p className="text-[#E8D5B7]/70 mt-2">Βρέθηκαν {homes.length} {homes.length === 1 ? 'αγγελία' : 'αγγελίες'}</p>
+              <p className="text-[#E8D5B7]/70 mt-2">
+                {homes.length} {homes.length === 1 ? getTranslation(language, 'listing') : getTranslation(language, 'listings')} {getTranslation(language, 'found')}
+              </p>
             </div>
             {(userRole === 'owner' || userRole === 'both') && (
               <Link
                 href="/homes/new"
                 className="inline-flex items-center px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-sm shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5"
               >
-                + Νέα Αγγελία
+                + {getTranslation(language, 'newListing')}
               </Link>
             )}
           </div>
@@ -333,7 +541,7 @@ export default function HomesPage() {
         {homes.length === 0 && filterType ? (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
             <p className="text-xl text-[#E8D5B7]/70">
-              {filterType === 'manual' ? 'Δεν βρέθηκαν ακίνητα που να ταιριάζουν με τα φίλτρα σας. Δοκιμάστε να προσαρμόσετε τα κριτήρια αναζήτησης.' : 'Δεν βρέθηκαν ακίνητα. Δοκιμάστε μια διαφορετική αναζήτηση.'}
+              {filterType === 'manual' ? getTranslation(language, 'noPropertiesFound') : getTranslation(language, 'noPropertiesFoundAi')}
             </p>
           </div>
         ) : homes.length > 0 ? (
@@ -376,10 +584,10 @@ export default function HomesPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-[#E8D5B7]">
-                      {home.bedrooms} <span className="text-[#E8D5B7]/60">υπνοδ.</span>
+                      {home.bedrooms} <span className="text-[#E8D5B7]/60">{getTranslation(language, 'bedroomsShort')}</span>
                     </p>
                     <p className="text-sm font-semibold text-[#E8D5B7]">
-                      {home.bathrooms} <span className="text-[#E8D5B7]/60">μπάνια</span>
+                      {home.bathrooms} <span className="text-[#E8D5B7]/60">{getTranslation(language, 'bathroomsShort')}</span>
                     </p>
                   </div>
                 </div>

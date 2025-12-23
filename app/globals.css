@@ -200,23 +200,52 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   color: #EF4444 !important;
 }
 
-/* Aggressively remove all borders and shadows from Clerk components */
-div[class*="cl-"],
-section[class*="cl-"],
-form[class*="cl-"] {
-  border: none !important;
-  border-width: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
+        /* Aggressively remove all borders and shadows from Clerk components */
+        div[class*="cl-"],
+        section[class*="cl-"],
+        form[class*="cl-"] {
+          border: none !important;
+          border-width: 0 !important;
+          box-shadow: none !important;
+          outline: none !important;
+        }
 
-/* Remove any box shadows that might be applied via inline styles or other means */
-.cl-card,
-.cl-rootBox,
-.cl-main {
-  filter: none !important;
-  -webkit-box-shadow: none !important;
-  -moz-box-shadow: none !important;
-  box-shadow: none !important;
-}
+        /* Remove any box shadows that might be applied via inline styles or other means */
+        .cl-card,
+        .cl-rootBox,
+        .cl-main {
+          filter: none !important;
+          -webkit-box-shadow: none !important;
+          -moz-box-shadow: none !important;
+          box-shadow: none !important;
+        }
+
+        /* Modal animations */
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        .animate-scaleIn {
+          animation: scaleIn 0.3s ease-out;
+        }
 

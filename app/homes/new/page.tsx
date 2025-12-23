@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { getTranslation } from '@/lib/translations'
+import { getTranslation, translateValue } from '@/lib/translations'
 
 export default function NewHomePage() {
   const router = useRouter()
@@ -19,7 +19,8 @@ export default function NewHomePage() {
     bedrooms: '1',
     bathrooms: '1',
     floor: '',
-    heating: '',
+    heatingCategory: '',
+    heatingAgent: '',
     sizeSqMeters: '',
     yearBuilt: '',
     yearRenovated: '',
@@ -110,6 +111,8 @@ export default function NewHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          heatingCategory: formData.heatingCategory || null,
+          heatingAgent: formData.heatingAgent || null,
           photos: photos.length > 0 ? JSON.stringify(photos) : null,
         }),
       })
@@ -126,7 +129,8 @@ export default function NewHomePage() {
         return
       }
 
-      router.push('/profile')
+      // Redirect to the newly created home's detail page
+      router.push(`/homes/${data.home.key}?from=my-listings`)
     } catch (err) {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
@@ -287,9 +291,10 @@ export default function NewHomePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Price and Size Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'pricePerMonth')}</label>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'price')}</label>
                 <input
                   type="number"
                   min="0"
@@ -298,6 +303,61 @@ export default function NewHomePage() {
                   onChange={(e) => setFormData({ ...formData, pricePerMonth: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
                   placeholder="900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'sizeSqMeters')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.sizeSqMeters}
+                  onChange={(e) => setFormData({ ...formData, sizeSqMeters: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  placeholder={language === 'el' ? 'π.χ., 85' : 'e.g., 85'}
+                />
+              </div>
+            </div>
+
+            {/* Heating Category and Agent Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingCategory')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <select
+                  value={formData.heatingCategory}
+                  onChange={(e) => setFormData({ ...formData, heatingCategory: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                >
+                  <option value="">{getTranslation(language, 'any')}</option>
+                  <option value="central">{translateValue(language, 'central')}</option>
+                  <option value="autonomous">{translateValue(language, 'autonomous')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingAgent')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <select
+                  value={formData.heatingAgent}
+                  onChange={(e) => setFormData({ ...formData, heatingAgent: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                >
+                  <option value="">{getTranslation(language, 'any')}</option>
+                  <option value="oil">{translateValue(language, 'oil')}</option>
+                  <option value="natural gas">{translateValue(language, 'natural gas')}</option>
+                  <option value="electricity">{translateValue(language, 'electricity')}</option>
+                  <option value="other">{translateValue(language, 'other')}</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Floor, Bedrooms, Bathrooms Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'floor')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <input
+                  type="number"
+                  value={formData.floor}
+                  onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  placeholder={language === 'el' ? 'π.χ., 3' : 'e.g., 3'}
                 />
               </div>
               <div>
@@ -322,48 +382,8 @@ export default function NewHomePage() {
               </div>
             </div>
 
+            {/* Year Built and Year Renovated Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'floor')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
-                <input
-                  type="number"
-                  value={formData.floor}
-                  onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 3' : 'e.g., 3'}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heating')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
-                <select
-                  value={formData.heating}
-                  onChange={(e) => setFormData({ ...formData, heating: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-                >
-                  <option value="">{language === 'el' ? 'Επιλέξτε τύπο θέρμανσης' : 'Select heating type'}</option>
-                  <option value="Central">{language === 'el' ? 'Κεντρική Θέρμανση' : 'Central Heating'}</option>
-                  <option value="Electric">{language === 'el' ? 'Ηλεκτρική' : 'Electric'}</option>
-                  <option value="Gas">{language === 'el' ? 'Φυσικό Αέριο' : 'Natural Gas'}</option>
-                  <option value="Oil">{language === 'el' ? 'Πετρέλαιο' : 'Oil'}</option>
-                  <option value="Heat Pump">{language === 'el' ? 'Αντλία Θερμότητας' : 'Heat Pump'}</option>
-                  <option value="Wood/Pellet">{language === 'el' ? 'Ξύλο/Πελλέτ' : 'Wood/Pellet'}</option>
-                  <option value="Other">{language === 'el' ? 'Άλλο' : 'Other'}</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'sizeSqMeters')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.sizeSqMeters}
-                  onChange={(e) => setFormData({ ...formData, sizeSqMeters: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 85' : 'e.g., 85'}
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'yearBuilt')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
                 <input
@@ -390,6 +410,7 @@ export default function NewHomePage() {
               </div>
             </div>
 
+            {/* Available From */}
             <div>
               <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'availableFrom')}</label>
               <input

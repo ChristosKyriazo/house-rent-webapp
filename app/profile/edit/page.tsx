@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { getTranslation } from '@/lib/translations'
+import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
 
 
 export default function EditProfilePage() {
@@ -15,7 +15,6 @@ export default function EditProfilePage() {
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
-    title: '',
     occupation: '',
     role: 'user',
   })
@@ -31,8 +30,7 @@ export default function EditProfilePage() {
             dateOfBirth: data.user.dateOfBirth
               ? new Date(data.user.dateOfBirth).toISOString().split('T')[0]
               : '',
-            title: data.user.title || '',
-            occupation: data.user.occupation || '',
+            occupation: data.user.occupation ? reverseTranslateValue(data.user.occupation) : '',
             role: data.user.role || 'user',
           })
         } else {
@@ -55,7 +53,6 @@ export default function EditProfilePage() {
         body: JSON.stringify({
           name: formData.name || null,
           dateOfBirth: formData.dateOfBirth || null,
-          title: formData.title || null,
           occupation: formData.occupation || null,
           role: formData.role,
         }),
@@ -108,21 +105,6 @@ export default function EditProfilePage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'title')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span>
-              </label>
-              <select
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-              >
-                <option value="">{getTranslation(language, 'none')}</option>
-                <option value="Mr">{language === 'el' ? 'Κος' : 'Mr'}</option>
-                <option value="Mrs">{language === 'el' ? 'Κυρία' : 'Mrs'}</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
                 {getTranslation(language, 'userNameOrName')}
               </label>
               <input
@@ -157,12 +139,11 @@ export default function EditProfilePage() {
                 className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
               >
                 <option value="">{getTranslation(language, 'selectOccupation')}</option>
-                <option value="Worker">{language === 'el' ? 'Εργαζόμενος' : 'Worker'}</option>
-                <option value="Student">{language === 'el' ? 'Φοιτητής' : 'Student'}</option>
-                <option value="Professional">{language === 'el' ? 'Επαγγελματίας' : 'Professional'}</option>
-                <option value="Entrepreneur">{language === 'el' ? 'Επιχειρηματίας' : 'Entrepreneur'}</option>
-                <option value="Retired">{language === 'el' ? 'Συνταξιούχος' : 'Retired'}</option>
-                <option value="Other">{language === 'el' ? 'Άλλο' : 'Other'}</option>
+                <option value="Employed">{translateValue(language, 'Employed')}</option>
+                <option value="Student">{translateValue(language, 'Student')}</option>
+                <option value="Retired">{translateValue(language, 'Retired')}</option>
+                <option value="Unemployed">{translateValue(language, 'Unemployed')}</option>
+                <option value="Other">{translateValue(language, 'Other')}</option>
               </select>
             </div>
 

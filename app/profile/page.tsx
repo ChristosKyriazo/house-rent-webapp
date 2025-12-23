@@ -9,7 +9,6 @@ interface User {
   id: number
   email: string
   name: string | null
-  title: string | null
   dateOfBirth: string | null
   occupation: string | null
   role: string
@@ -28,8 +27,13 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [ratings, setRatings] = useState<Ratings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
+    // Check if banner was dismissed
+    const dismissed = localStorage.getItem('profileBannerDismissed') === 'true'
+    setBannerDismissed(dismissed)
+
     const fetchData = async () => {
       try {
         const [profileRes, ratingsRes] = await Promise.all([
@@ -60,6 +64,11 @@ export default function ProfilePage() {
 
     fetchData()
   }, [])
+
+  const handleDismissBanner = () => {
+    localStorage.setItem('profileBannerDismissed', 'true')
+    setBannerDismissed(true)
+  }
 
   if (loading) {
     return (
@@ -101,10 +110,8 @@ export default function ProfilePage() {
     )
   }
 
-  // Calculate username with title
+  // Calculate username
   const displayName = user.name || user.email.split('@')[0]
-  const translatedTitle = user.title ? translateValue(language, user.title) : null
-  const fullName = translatedTitle ? `${translatedTitle} ${displayName}` : displayName
   const userRole = user.role || 'user'
 
   const calculateAgeFromDob = (dobString: string | null) => {
@@ -126,22 +133,30 @@ export default function ProfilePage() {
   const computedAge = calculateAgeFromDob(user.dateOfBirth)
 
   // Check if profile is incomplete
-  const isProfileIncomplete = !user.name || !user.dateOfBirth || !user.title || !user.occupation
+  const isProfileIncomplete = !user.name || !user.dateOfBirth || !user.occupation
   const missingFields: string[] = []
   if (!user.name) missingFields.push(getTranslation(language, 'name'))
   if (!user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
-  if (!user.title) missingFields.push(getTranslation(language, 'title'))
   if (!user.occupation) missingFields.push(getTranslation(language, 'occupation'))
 
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Profile Incomplete Banner */}
-        {isProfileIncomplete && (
-          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-3xl p-6 shadow-xl">
+        {isProfileIncomplete && !bannerDismissed && (
+          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-3xl p-6 shadow-xl relative">
+            <button
+              onClick={handleDismissBanner}
+              className="absolute top-4 right-4 text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors"
+              aria-label={getTranslation(language, 'close')}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="flex items-start gap-4">
               <div className="text-3xl">⚠️</div>
-              <div className="flex-1">
+              <div className="flex-1 pr-8">
                 <h2 className="text-xl font-bold text-[#E8D5B7] mb-2">
                   {getTranslation(language, 'completeYourProfile')}
                 </h2>
@@ -180,7 +195,7 @@ export default function ProfilePage() {
               </svg>
             </div>
 
-            <h1 className="text-3xl font-bold text-[#E8D5B7] mb-6">{fullName}</h1>
+                    <h1 className="text-3xl font-bold text-[#E8D5B7] mb-6">{displayName}</h1>
           </div>
 
           {/* Ratings Section - Show based on user role */}
@@ -234,12 +249,6 @@ export default function ProfilePage() {
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'userName')}</label>
               <p className={`text-lg ${user.name ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
                 {user.name || `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
-              </p>
-            </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'title')}</label>
-              <p className={`text-lg ${user.title ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
-                {user.title ? translateValue(language, user.title) : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
               </p>
             </div>
             <div className="pb-4 border-b border-[#E8D5B7]/20">

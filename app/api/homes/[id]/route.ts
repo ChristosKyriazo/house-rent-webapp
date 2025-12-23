@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { getUserRatings } from '@/lib/ratings'
 
 export async function GET(
   request: NextRequest,
@@ -33,7 +34,18 @@ export async function GET(
       return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ home }, { status: 200 })
+    // Fetch owner ratings
+    const ownerRatings = await getUserRatings(home.owner.id)
+
+    return NextResponse.json({ 
+      home: {
+        ...home,
+        owner: {
+          ...home.owner,
+          ratings: ownerRatings,
+        }
+      }
+    }, { status: 200 })
   } catch (error) {
     console.error('Get home error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -108,7 +120,8 @@ export async function PUT(
       bedrooms,
       bathrooms,
       floor,
-      heating,
+      heatingCategory,
+      heatingAgent,
       sizeSqMeters,
       yearBuilt,
       yearRenovated,
@@ -151,7 +164,8 @@ export async function PUT(
         bedrooms: Number(bedrooms || 0),
         bathrooms: Number(bathrooms || 0),
         floor: floor && floor !== '' ? Number(floor) : null,
-        heating: heating?.trim() || null,
+        heatingCategory: heatingCategory?.trim() || null,
+        heatingAgent: heatingAgent?.trim() || null,
         sizeSqMeters: sizeSqMeters && sizeSqMeters !== '' ? Number(sizeSqMeters) : null,
         yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
         yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,

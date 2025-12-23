@@ -16,7 +16,6 @@ export async function GET() {
         email: user.email,
         name: user.name,
         dateOfBirth: user.dateOfBirth,
-        title: user.title,
         occupation: user.occupation,
         role: user.role,
         createdAt: user.createdAt,
@@ -40,7 +39,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { name, dateOfBirth, title, occupation, role } = await request.json()
+    const { name, dateOfBirth, occupation, role } = await request.json()
     const validRoles = ['owner', 'user', 'both']
     const userRole = role && validRoles.includes(role.toLowerCase()) ? role.toLowerCase() : (user.role || 'user')
 
@@ -49,7 +48,6 @@ export async function PATCH(request: NextRequest) {
       data: {
         name: name || null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        title: title || null,
         occupation: occupation || null,
         role: userRole,
       },
@@ -58,7 +56,6 @@ export async function PATCH(request: NextRequest) {
         email: true,
         name: true,
         dateOfBirth: true,
-        title: true,
         occupation: true,
         role: true,
         createdAt: true,
