@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ClerkProvider } from "@clerk/nextjs";
 import NavBar from "./components/NavBar";
 import ConditionalNavBar from "./components/ConditionalNavBar";
 import LanguageProviderWrapper from "./components/LanguageProviderWrapper";
-import LanguageToggle from "./components/LanguageToggle";
+import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
 import HtmlLangUpdater from "./components/HtmlLangUpdater";
 
 const geistSans = Geist({
@@ -32,14 +33,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <LanguageProviderWrapper>
-          <HtmlLangUpdater />
-          <ConditionalNavBar>
-            <NavBar />
-          </ConditionalNavBar>
-          <LanguageToggle />
-          {children}
-        </LanguageProviderWrapper>
+        <ClerkProvider>
+          <LanguageProviderWrapper>
+            <HtmlLangUpdater />
+            <ConditionalNavBar>
+              <NavBar />
+            </ConditionalNavBar>
+            <ConditionalLanguageToggle />
+            {children}
+          </LanguageProviderWrapper>
+        </ClerkProvider>
       </body>
     </html>
   );

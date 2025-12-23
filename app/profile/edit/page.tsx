@@ -6,21 +6,10 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 
-interface User {
-  id: string
-  email: string
-  name: string | null
-  age: number | null
-  dateOfBirth: string | null
-  title: string | null
-  occupation: string | null
-  role: string
-}
 
 export default function EditProfilePage() {
   const router = useRouter()
   const { language } = useLanguage()
-  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -33,12 +22,10 @@ export default function EditProfilePage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Fetch current user data
     fetch('/api/profile')
       .then((res) => res.json())
       .then((data) => {
         if (data.user) {
-          setUser(data.user)
           setFormData({
             name: data.user.name || '',
             dateOfBirth: data.user.dateOfBirth

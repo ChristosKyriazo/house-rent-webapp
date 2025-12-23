@@ -11,10 +11,9 @@ model User {
   id              Int       @id @default(autoincrement())
   key             String    @unique @default(cuid())
   email           String    @unique
-  password        String
   name            String?
-  age             Int?
   dateOfBirth     DateTime?
+  clerkUserId     String?   @unique
   title           String?
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
@@ -23,21 +22,8 @@ model User {
   homes           Home[]
   ratingsReceived Rating[]  @relation("RatedUser")
   ratingsGiven    Rating[]  @relation("Rater")
-  sessions        Session[]
 
   @@map("users")
-}
-
-model Session {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique @default(cuid())
-  userId    Int
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("sessions")
 }
 
 model Home {

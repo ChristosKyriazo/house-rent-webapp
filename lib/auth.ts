@@ -1,64 +1,51 @@
-import { cookies } from 'next/headers'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from './prisma'
-import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 
-// How long a session should live (here: 7 days)
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
-
-// Helper to create a session and set the cookie on the response
-export async function createSession(userId: number, response: NextResponse) {
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000)
-
-  // Create session row in DB
-  const session = await prisma.session.create({
-    data: {
-      userId,
-      expiresAt,
-    },
-  })
-
-  // Set HTTP-only cookie on the response (using session key for external reference)
-  const isProd = process.env.NODE_ENV === 'production'
-  
-  response.cookies.set('sessionId', session.key, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  })
-
-  return session
-}
-
-// Helper used in server components / API routes to get current user from cookie
+/**
+ * Resolve the current authenticated user from Clerk, and ensure we have
+ * a matching Prisma User record for app-specific data (role, occupation, etc.).
+ */
 export async function getCurrentUser() {
   try {
-    // In Next 15+ cookies() is async and returns a Promise-like object
-    const cookieStore = await cookies()
-    const sessionKey = cookieStore.get('sessionId')?.value
+    await headers() // Ensure headers are loaded for Clerk
+    const { userId } = await auth()
+    if (!userId) return null
 
-    if (!sessionKey) return null
+    // Find existing local user linked to Clerk
+    let user = await prisma.user.findUnique({ where: { clerkUserId: userId } })
+    if (user) return user
 
-    // Find session by key (external reference)
-    const session = await prisma.session.findUnique({
-      where: { key: sessionKey },
-      include: { user: true },
-    })
+    // First-time login: create local user record
+    const cUser = await currentUser()
+    if (!cUser) return null
 
-    if (!session) return null
+    const email = cUser.emailAddresses?.[0]?.emailAddress || 
+                  cUser.primaryEmailAddress?.emailAddress || 
+                  `clerk-${userId}@placeholder.local`
 
-    // Check expiration
-    if (session.expiresAt < new Date()) {
-      // Optionally delete expired session
-      await prisma.session.delete({ where: { id: session.id } })
-      return null
+    try {
+      user = await prisma.user.create({
+        data: {
+          clerkUserId: userId,
+          email,
+          name: cUser.firstName || cUser.lastName 
+            ? `${cUser.firstName || ''} ${cUser.lastName || ''}`.trim() 
+            : null,
+          role: 'user',
+        },
+      })
+      return user
+    } catch (createError: any) {
+      // Race condition: user already exists, fetch it
+      if (createError?.code === 'P2002') {
+        user = await prisma.user.findUnique({ where: { clerkUserId: userId } })
+        if (user) return user
+      }
+      throw createError
     }
-
-    return session.user
   } catch (error) {
     console.error('getCurrentUser error:', error)
-    // Return null on any error to prevent breaking the app
     return null
   }
 }

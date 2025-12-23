@@ -7,11 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    // Handle both sync and async params (Next.js 14 vs 15)
     const resolvedParams = await Promise.resolve(params)
     const homeId = resolvedParams.id
-    
-    console.log('API Route - Looking for home with ID/key:', homeId)
     
     const home = await prisma.home.findFirst({
       where: {
@@ -33,17 +30,9 @@ export async function GET(
     })
 
     if (!home) {
-      console.log('API Route - Home not found for ID/key:', homeId)
-      // Let's also check what homes exist
-      const allHomes = await prisma.home.findMany({ select: { id: true, key: true, title: true }, take: 5 })
-      console.log('API Route - Sample homes in DB:', allHomes)
-      return NextResponse.json(
-        { error: 'Home not found', searchedId: homeId },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    console.log('API Route - Found home:', { id: home.id, key: home.key, title: home.title })
     return NextResponse.json({ home }, { status: 200 })
   } catch (error) {
     console.error('Get home error:', error)

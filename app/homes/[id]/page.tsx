@@ -46,22 +46,15 @@ export default function HomeDetailPage() {
     const fetchHome = async () => {
       try {
         const homeId = params.id as string
-        console.log('Fetching home with ID:', homeId)
         const response = await fetch(`/api/homes/${homeId}`)
         
         if (!response.ok) {
-          console.error('Failed to fetch home:', response.status, response.statusText)
-          const errorData = await response.json().catch(() => ({}))
-          console.error('Error data:', errorData)
           router.push('/homes')
           return
         }
         
         const data = await response.json()
-        console.log('Home data received:', data)
-        
         if (!data.home) {
-          console.error('No home data in response')
           router.push('/homes')
           return
         }

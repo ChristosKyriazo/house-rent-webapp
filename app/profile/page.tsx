@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue } from '@/lib/translations'
@@ -11,7 +10,6 @@ interface User {
   email: string
   name: string | null
   title: string | null
-  age: number | null
   dateOfBirth: string | null
   occupation: string | null
   role: string
@@ -26,7 +24,6 @@ interface Ratings {
 }
 
 export default function ProfilePage() {
-  const router = useRouter()
   const { language } = useLanguage()
   const [user, setUser] = useState<User | null>(null)
   const [ratings, setRatings] = useState<Ratings | null>(null)
@@ -35,34 +32,34 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/profile')
-        if (!response.ok) {
-          router.push('/login')
+        const [profileRes, ratingsRes] = await Promise.all([
+          fetch('/api/profile'),
+          fetch('/api/ratings').catch(() => null)
+        ])
+        
+        if (!profileRes.ok) {
+          setUser(null)
           return
         }
-        const data = await response.json()
-        if (!data.user) {
-          router.push('/login')
-          return
-        }
-        setUser(data.user)
-
-        // Fetch ratings
-        const ratingsResponse = await fetch(`/api/ratings?userId=${data.user.id}`)
-        if (ratingsResponse.ok) {
-          const ratingsData = await ratingsResponse.json()
-          setRatings(ratingsData)
+        
+        const profileData = await profileRes.json()
+        if (profileData.user) {
+          setUser(profileData.user)
+          if (ratingsRes?.ok) {
+            const ratingsData = await ratingsRes.json()
+            setRatings(ratingsData.ratings || ratingsData)
+          }
         }
       } catch (error) {
         console.error('Error fetching profile:', error)
-        router.push('/login')
+        setUser(null)
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [router])
+  }, [])
 
   if (loading) {
     return (
@@ -72,8 +69,36 @@ export default function ProfilePage() {
     )
   }
 
+  // If no user, show a loading/error state but don't redirect
+  // This allows Clerk to handle auth and redirect if needed
+  if (!user && !loading) {
+    return (
+      <div className="min-h-screen bg-[#2D3748] flex flex-col items-center justify-center px-4">
+        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold text-[#E8D5B7] mb-4">
+            {getTranslation(language, 'welcome')}
+          </h1>
+          <p className="text-[#E8D5B7]/70 mb-6">
+            {getTranslation(language, 'or')}{' '}
+            <Link
+              href="/login"
+              className="font-semibold text-[#E8D5B7] hover:text-[#D4C19F] transition-colors underline"
+            >
+              {getTranslation(language, 'login')}
+            </Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // If still loading, show loading state
   if (!user) {
-    return null
+    return (
+      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      </div>
+    )
   }
 
   // Calculate username with title
@@ -82,7 +107,7 @@ export default function ProfilePage() {
   const fullName = translatedTitle ? `${translatedTitle} ${displayName}` : displayName
   const userRole = user.role || 'user'
 
-  const calculateAgeFromDob = (dobString: string | null, fallbackAge: number | null) => {
+  const calculateAgeFromDob = (dobString: string | null) => {
     if (dobString) {
       const dob = new Date(dobString)
       if (!isNaN(dob.getTime())) {
@@ -95,14 +120,51 @@ export default function ProfilePage() {
         return age
       }
     }
-    return fallbackAge
+    return null
   }
 
-  const computedAge = calculateAgeFromDob(user.dateOfBirth, user.age)
+  const computedAge = calculateAgeFromDob(user.dateOfBirth)
+
+  // Check if profile is incomplete
+  const isProfileIncomplete = !user.name || !user.dateOfBirth || !user.title || !user.occupation
+  const missingFields: string[] = []
+  if (!user.name) missingFields.push(getTranslation(language, 'name'))
+  if (!user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
+  if (!user.title) missingFields.push(getTranslation(language, 'title'))
+  if (!user.occupation) missingFields.push(getTranslation(language, 'occupation'))
 
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
+        {/* Profile Incomplete Banner */}
+        {isProfileIncomplete && (
+          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-3xl p-6 shadow-xl">
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">⚠️</div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'completeYourProfile')}
+                </h2>
+                <p className="text-[#E8D5B7]/80 mb-3">
+                  {getTranslation(language, 'profileIncomplete')}
+                </p>
+                {missingFields.length > 0 && (
+                  <p className="text-sm text-[#E8D5B7]/70">
+                    <span className="font-semibold">{getTranslation(language, 'missingInformation')}:</span>{' '}
+                    {missingFields.join(', ')}
+                  </p>
+                )}
+                <Link
+                  href="/profile/edit"
+                  className="inline-block mt-4 px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+                >
+                  {getTranslation(language, 'editProfile')}
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
           {/* Avatar and Basic Info */}
           <div className="flex flex-col items-center mb-8">
@@ -170,26 +232,28 @@ export default function ProfilePage() {
           <div className="space-y-4 mb-6">
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'userName')}</label>
-              <p className="text-lg text-[#E8D5B7]">{displayName}</p>
-            </div>
-            {user.title && (
-              <div className="pb-4 border-b border-[#E8D5B7]/20">
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'title')}</label>
-                <p className="text-lg text-[#E8D5B7]">{translateValue(language, user.title)}</p>
-              </div>
-            )}
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
-              <p className="text-lg text-[#E8D5B7]">
-                {typeof computedAge === 'number' ? computedAge : getTranslation(language, 'notSet')}
+              <p className={`text-lg ${user.name ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+                {user.name || `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
               </p>
             </div>
-            {user.occupation && (
-              <div className="pb-4 border-b border-[#E8D5B7]/20">
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'occupation')}</label>
-                <p className="text-lg text-[#E8D5B7]">{translateValue(language, user.occupation)}</p>
-              </div>
-            )}
+            <div className="pb-4 border-b border-[#E8D5B7]/20">
+              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'title')}</label>
+              <p className={`text-lg ${user.title ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+                {user.title ? translateValue(language, user.title) : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
+              </p>
+            </div>
+            <div className="pb-4 border-b border-[#E8D5B7]/20">
+              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
+              <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+                {typeof computedAge === 'number' ? computedAge : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add ${getTranslation(language, 'dateOfBirth')}`}
+              </p>
+            </div>
+            <div className="pb-4 border-b border-[#E8D5B7]/20">
+              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'occupation')}</label>
+              <p className={`text-lg ${user.occupation ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+                {user.occupation ? translateValue(language, user.occupation) : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
+              </p>
+            </div>
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'email')}</label>
               <p className="text-lg text-[#E8D5B7]">{user.email}</p>

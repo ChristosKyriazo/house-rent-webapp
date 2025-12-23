@@ -32,8 +32,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }
 
   const toggleLanguage = () => {
-    const newLang = language === 'el' ? 'en' : 'el'
-    setLanguage(newLang)
+    setLanguageState((currentLang) => {
+      const newLang = currentLang === 'el' ? 'en' : 'el'
+      if (mounted) {
+        localStorage.setItem('language', newLang)
+      }
+      return newLang
+    })
   }
 
   // Always provide context, but use default during SSR

@@ -6,37 +6,25 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   try {
     const user = await getCurrentUser()
-
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get full user data including age, dateOfBirth, title, and occupation
-    const fullUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        age: true,
-        dateOfBirth: true,
-        title: true,
-        occupation: true,
-        role: true,
-        createdAt: true,
-      },
-    })
-
-    return NextResponse.json({ user: fullUser }, { status: 200 })
+    return NextResponse.json({ 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        dateOfBirth: user.dateOfBirth,
+        title: user.title,
+        occupation: user.occupation,
+        role: user.role,
+        createdAt: user.createdAt,
+      }
+    }, { status: 200 })
   } catch (error) {
     console.error('Get profile error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -52,22 +40,14 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
-    const { name, age, dateOfBirth, title, occupation, role } = body
-
-    // Validate role
+    const { name, dateOfBirth, title, occupation, role } = await request.json()
     const validRoles = ['owner', 'user', 'both']
     const userRole = role && validRoles.includes(role.toLowerCase()) ? role.toLowerCase() : (user.role || 'user')
-    
-    console.log('Profile update - Role received:', role, 'Validated role:', userRole, 'Current user role:', user.role)
 
-    // Update user
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
         name: name || null,
-        // Keep supporting legacy age updates if provided, but prefer dateOfBirth
-        age: age ? Number(age) : null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         title: title || null,
         occupation: occupation || null,
@@ -77,7 +57,6 @@ export async function PATCH(request: NextRequest) {
         id: true,
         email: true,
         name: true,
-        age: true,
         dateOfBirth: true,
         title: true,
         occupation: true,
@@ -86,10 +65,7 @@ export async function PATCH(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(
-      { message: 'Profile updated', user: updatedUser },
-      { status: 200 }
-    )
+    return NextResponse.json({ message: 'Profile updated', user: updatedUser }, { status: 200 })
   } catch (error) {
     console.error('Update profile error:', error)
     return NextResponse.json(

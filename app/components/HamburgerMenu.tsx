@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { useClerk } from '@clerk/nextjs'
 
 interface HamburgerMenuProps {
   userRole: string // 'owner', 'user', or 'both'
@@ -16,6 +17,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   const [currentRole, setCurrentRole] = useState(initialRole || 'user')
   const pathname = usePathname()
   const router = useRouter()
+  const { signOut } = useClerk()
 
   // Fetch current role from API to ensure we have the latest value
   useEffect(() => {
@@ -55,9 +57,6 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       ...item,
       label: getTranslation(language, item.labelKey as keyof typeof translations.el)
     }))
-  
-  // Debug: Log menu items for troubleshooting
-  console.log('HamburgerMenu - User role:', normalizedRole, 'Menu items:', menuItems.map(i => i.label))
 
   const toggleMenu = () => {
     setIsOpen(!isOpen)
@@ -69,18 +68,9 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-      })
-      
-      if (response.ok) {
-        // Refresh router to update server components
-        router.refresh()
-        router.push('/login')
-      }
+      await signOut({ redirectUrl: '/login' })
     } catch (error) {
       console.error('Logout error:', error)
-      // Still redirect to login even if there's an error
       router.push('/login')
     }
   }

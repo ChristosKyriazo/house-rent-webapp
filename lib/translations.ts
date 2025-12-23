@@ -13,6 +13,12 @@ export const translations = {
     photos: 'Φωτογραφίες',
     noPhotos: 'Δεν υπάρχουν φωτογραφίες',
     
+    // Home Page
+    appTitle: 'House Rent',
+    appDescription: 'Βρείτε το ιδανικό σας ενοίκιο ή δημοσιεύστε την ιδιοκτησία σας',
+    signUp: 'Εγγραφή',
+    signIn: 'Σύνδεση',
+    
     // Navigation
     returnToSearch: 'Επιστροφή στην Αναζήτηση',
     
@@ -110,6 +116,9 @@ export const translations = {
     owner: 'Ιδιοκτήτης',
     user: 'Χρήστης',
     ownerAndUser: 'Ιδιοκτήτης & Χρήστης',
+    completeYourProfile: 'Ολοκληρώστε το Προφίλ σας',
+    profileIncomplete: 'Το προφίλ σας είναι ατελές. Συμπληρώστε τις πληροφορίες σας για ένα πιο πλήρες προφίλ.',
+    missingInformation: 'Λείπουν πληροφορίες',
     
     // Hamburger Menu
     menu: 'Μενού',
@@ -165,6 +174,12 @@ export const translations = {
     upload: 'Upload',
     photos: 'Photos',
     noPhotos: 'No photos available',
+    
+    // Home Page
+    appTitle: 'House Rent',
+    appDescription: 'Find your perfect rental or list your property',
+    signUp: 'Sign Up',
+    signIn: 'Sign In',
     
     // Navigation
     returnToSearch: 'Return to Search',
@@ -263,6 +278,9 @@ export const translations = {
     owner: 'Owner',
     user: 'User',
     ownerAndUser: 'Owner & User',
+    completeYourProfile: 'Complete Your Profile',
+    profileIncomplete: 'Your profile is incomplete. Fill in your information for a more complete profile.',
+    missingInformation: 'Missing information',
     
     // Hamburger Menu
     menu: 'Menu',
