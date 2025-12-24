@@ -10,6 +10,17 @@ export async function GET(request: NextRequest) {
     // Build filter object
     const where: any = {}
     
+    // Map 'buy' (from search UI) to 'sell' (in database)
+    const listingType = searchParams.get('listingType')
+    if (listingType) {
+      // When user clicks "buy" in search, filter for "sell" listings
+      if (listingType === 'buy') {
+        where.listingType = 'sell'
+      } else {
+        where.listingType = listingType
+      }
+    }
+    
     if (searchParams.get('city')) {
       where.city = { contains: searchParams.get('city') }
     }
@@ -59,7 +70,7 @@ export async function GET(request: NextRequest) {
     if (areas.length > 0) {
       where.area = { in: areas }
     }
-
+    
     const homes = await prisma.home.findMany({
       where,
       orderBy: { createdAt: 'desc' },

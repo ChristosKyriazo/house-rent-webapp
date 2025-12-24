@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -51,10 +51,44 @@ export default function HomeDetailPage() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [confirmingArea, setConfirmingArea] = useState(false)
   const [showOwnerModal, setShowOwnerModal] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+  const [showPhotoLightbox, setShowPhotoLightbox] = useState(false)
+  const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0)
+  const [thumbnailScrollPosition, setThumbnailScrollPosition] = useState(0)
+  const [thumbnailScrollRatio, setThumbnailScrollRatio] = useState(1)
+  const [sliderTrackWidth, setSliderTrackWidth] = useState(400)
+  const [isDragging, setIsDragging] = useState(false)
+  const thumbnailScrollRef = useRef<HTMLDivElement>(null)
+
+  // Parse photos safely - use useMemo to ensure consistent hook order
+  const photos = useMemo(() => {
+    if (!home || !home.photos || home.photos.trim() === '') {
+      return []
+    }
+    try {
+      const parsed = JSON.parse(home.photos)
+      return Array.isArray(parsed) ? parsed : []
+    } catch (error) {
+      console.error('Error parsing photos:', error)
+      return []
+    }
+  }, [home?.photos])
+
+  const fromMyListings = searchParams.get('from') === 'my-listings'
 
   useEffect(() => {
-    const fetchHome = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch current user profile
+        const profileResponse = await fetch('/api/profile')
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json()
+          if (profileData.user) {
+            setCurrentUserId(profileData.user.id)
+          }
+        }
+        
+        // Fetch home details
         const homeId = params.id as string
         const response = await fetch(`/api/homes/${homeId}`)
         
@@ -71,7 +105,7 @@ export default function HomeDetailPage() {
         
         setHome(data.home)
       } catch (error) {
-        console.error('Error fetching home:', error)
+        console.error('Error fetching data:', error)
         router.push('/homes')
       } finally {
         setLoading(false)
@@ -79,9 +113,40 @@ export default function HomeDetailPage() {
     }
 
     if (params.id) {
-      fetchHome()
+      fetchData()
     }
   }, [params.id, router])
+
+  // Calculate slider track width
+  useEffect(() => {
+    const updateTrackWidth = () => {
+      if (thumbnailScrollRef.current?.parentElement) {
+        setSliderTrackWidth(thumbnailScrollRef.current.parentElement.clientWidth - 32)
+      }
+    }
+    
+    updateTrackWidth()
+    window.addEventListener('resize', updateTrackWidth)
+    return () => window.removeEventListener('resize', updateTrackWidth)
+  }, [photos.length])
+
+  // Handle keyboard navigation in lightbox
+  useEffect(() => {
+    if (!showPhotoLightbox) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        setLightboxPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+      } else if (e.key === 'ArrowRight') {
+        setLightboxPhotoIndex((prev) => (prev + 1) % photos.length)
+      } else if (e.key === 'Escape') {
+        setShowPhotoLightbox(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showPhotoLightbox, photos.length])
 
   if (loading) {
     return (
@@ -95,21 +160,6 @@ export default function HomeDetailPage() {
     return null
   }
 
-  // Parse photos safely
-  let photos: string[] = []
-  try {
-    if (home.photos && home.photos.trim() !== '') {
-      photos = JSON.parse(home.photos)
-      if (!Array.isArray(photos)) {
-        photos = []
-      }
-    }
-  } catch (error) {
-    console.error('Error parsing photos:', error)
-    photos = []
-  }
-  const fromMyListings = searchParams.get('from') === 'my-listings'
-
   const nextPhoto = () => {
     if (photos.length > 0) {
       setCurrentPhotoIndex((prev) => (prev + 1) % photos.length)
@@ -120,6 +170,27 @@ export default function HomeDetailPage() {
     if (photos.length > 0) {
       setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
     }
+  }
+
+  const nextLightboxPhoto = () => {
+    if (photos.length > 0) {
+      setLightboxPhotoIndex((prev) => (prev + 1) % photos.length)
+    }
+  }
+
+  const prevLightboxPhoto = () => {
+    if (photos.length > 0) {
+      setLightboxPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+    }
+  }
+
+  const openLightbox = (index: number) => {
+    setLightboxPhotoIndex(index)
+    setShowPhotoLightbox(true)
+  }
+
+  const closeLightbox = () => {
+    setShowPhotoLightbox(false)
   }
 
   const handleConfirmArea = async () => {
@@ -143,6 +214,14 @@ export default function HomeDetailPage() {
 
   // Hard-coded area suggestion (stored as 'Nea Smirni' in DB, translated for display)
   const suggestedAreaDisplay = translateValue(language, 'Nea Smirni')
+  
+  // Determine display text for listing type
+  // Owners see "sell" for their own listings, "buy" for others
+  // Users always see "buy" for sale listings
+  const isOwner = currentUserId !== null && home.owner.id === currentUserId
+  const displayListingType = home.listingType === 'rent' 
+    ? 'rent' 
+    : (isOwner ? 'sell' : 'buy')
 
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
@@ -165,44 +244,65 @@ export default function HomeDetailPage() {
           )}
         </div>
 
-        {/* Photo Gallery and Owner Profile Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Photo Gallery - Takes 3 columns */}
-          <div className="lg:col-span-3">
+        {/* Photo Gallery - Full Width */}
+        <div>
             {photos.length > 0 ? (
-              <div className="relative bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[#E8D5B7]/20">
-                <div className="relative aspect-video">
+              <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[#E8D5B7]/20">
+                {/* Main featured photo */}
+                <div className="relative aspect-video group cursor-pointer" onClick={() => openLightbox(currentPhotoIndex)}>
                   <img
                     src={photos[currentPhotoIndex]}
                     alt={`${home.title} - Photo ${currentPhotoIndex + 1}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
+                  
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <svg className="w-16 h-16 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                      </svg>
+                    </div>
+                  </div>
                   
                   {photos.length > 1 && (
                     <>
                       <button
-                        onClick={prevPhoto}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-3 transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          prevPhoto()
+                        }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
                         aria-label="Previous photo"
                       >
-                        ←
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
                       </button>
                       <button
-                        onClick={nextPhoto}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-3 transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          nextPhoto()
+                        }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
                         aria-label="Next photo"
                       >
-                        →
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                       </button>
                       
                       {/* Photo indicators */}
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                         {photos.map((_, index) => (
                           <button
                             key={index}
-                            onClick={() => setCurrentPhotoIndex(index)}
-                            className={`w-2 h-2 rounded-full transition-all ${
-                              index === currentPhotoIndex ? 'bg-[#E8D5B7]' : 'bg-white/50'
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCurrentPhotoIndex(index)
+                            }}
+                            className={`w-2.5 h-2.5 rounded-full transition-all ${
+                              index === currentPhotoIndex ? 'bg-[#E8D5B7] w-8' : 'bg-white/60 hover:bg-white/80'
                             }`}
                             aria-label={`Go to photo ${index + 1}`}
                           />
@@ -210,12 +310,99 @@ export default function HomeDetailPage() {
                       </div>
                       
                       {/* Photo counter */}
-                      <div className="absolute top-4 right-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+                      <div className="absolute top-4 right-4 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] px-3 py-1.5 rounded-full text-sm font-medium border border-[#E8D5B7]/30">
                         {currentPhotoIndex + 1} / {photos.length}
                       </div>
                     </>
                   )}
                 </div>
+                
+                {/* Thumbnail scrollable row below main photo */}
+                {photos.length > 1 && (
+                  <div className="relative p-4 bg-[#1A202C]/40 group">
+                    <div 
+                      ref={thumbnailScrollRef}
+                      className="flex gap-2 overflow-x-auto pb-2 scroll-smooth scrollbar-hide" 
+                      id="thumbnail-scroll"
+                      onScroll={(e) => {
+                        if (isDragging) return // Skip state updates during drag for performance
+                        const container = e.currentTarget
+                        const maxScroll = container.scrollWidth - container.clientWidth
+                        const scrollPercentage = maxScroll > 0 ? (container.scrollLeft / maxScroll) * 100 : 0
+                        const ratio = maxScroll > 0 ? container.clientWidth / container.scrollWidth : 1
+                        setThumbnailScrollPosition(scrollPercentage)
+                        setThumbnailScrollRatio(ratio)
+                      }}
+                    >
+                      {photos.map((photo, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setCurrentPhotoIndex(index)}
+                          className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                            index === currentPhotoIndex
+                              ? 'border-[#E8D5B7] ring-2 ring-[#E8D5B7]/50 scale-110'
+                              : 'border-transparent hover:border-[#E8D5B7]/50 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <img
+                            src={photo}
+                            alt={`Thumbnail ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    {/* Custom slider - fixed size bar, full width track */}
+                    <div 
+                      className="absolute bottom-2 left-4 right-4 h-2 bg-[#2D3748]/80 rounded-full cursor-pointer"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const slider = e.currentTarget
+                        const scrollContainer = thumbnailScrollRef.current
+                        if (!scrollContainer) return
+                        
+                        setIsDragging(true)
+                        const rect = slider.getBoundingClientRect()
+                        const maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth
+                        if (maxScroll <= 0) {
+                          setIsDragging(false)
+                          return
+                        }
+                        
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          // Direct update for immediate response without delay
+                          const x = moveEvent.clientX - rect.left
+                          const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100))
+                          scrollContainer.scrollLeft = (percentage / 100) * maxScroll
+                          setThumbnailScrollPosition(percentage)
+                        }
+                        
+                        const handleMouseUp = () => {
+                          setIsDragging(false)
+                          document.removeEventListener('mousemove', handleMouseMove)
+                          document.removeEventListener('mouseup', handleMouseUp)
+                        }
+                        
+                        const initialX = e.clientX - rect.left
+                        const initialPercentage = Math.max(0, Math.min(100, (initialX / rect.width) * 100))
+                        scrollContainer.scrollLeft = (initialPercentage / 100) * maxScroll
+                        
+                        document.addEventListener('mousemove', handleMouseMove)
+                        document.addEventListener('mouseup', handleMouseUp)
+                      }}
+                    >
+                      <div 
+                        className={`h-full bg-[#E8D5B7] rounded-full w-16 absolute ${
+                          isDragging ? '' : 'transition-all duration-100'
+                        }`}
+                        style={{ 
+                          left: `${(thumbnailScrollPosition / 100) * (sliderTrackWidth - 64)}px`
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[#E8D5B7]/20">
@@ -239,98 +426,120 @@ export default function HomeDetailPage() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Owner Profile Banner - Takes 1 column, smaller */}
-          <div className="lg:col-span-1">
-            <div 
-              onClick={() => setShowOwnerModal(true)}
-              className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-4 shadow-xl border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 transition-all h-full flex flex-col"
-            >
-              <h2 className="text-lg font-bold text-[#E8D5B7] mb-3 text-center">{getTranslation(language, 'homeowner')}</h2>
-              <div className="flex flex-col items-center space-y-3 flex-1">
-                {/* Avatar */}
-                <div className="w-16 h-16 rounded-full bg-[#E8D5B7] flex items-center justify-center border-2 border-[#E8D5B7]/30">
-                  <span className="text-2xl font-bold text-[#2D3748]">
-                    {home.owner.name ? home.owner.name[0].toUpperCase() : home.owner.email[0].toUpperCase()}
-                  </span>
-                </div>
-                {/* Name */}
-                <p className="text-sm font-semibold text-[#E8D5B7] text-center line-clamp-2">
-                  {home.owner.name || home.owner.email.split('@')[0]}
-                </p>
-                {/* Rating */}
-                {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                  <div className="text-center mt-auto">
-                    <p className="text-lg font-bold text-[#E8D5B7] flex items-center justify-center gap-1">
-                      <span>⭐</span>
-                      {home.owner.ratings.ownerRating} / 5.0
-                    </p>
-                    <p className="text-xs text-[#E8D5B7]/60 mt-1">
-                      {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-[#E8D5B7]/60 text-center mt-auto">{getTranslation(language, 'noRatingsYet')}</p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* House Details Card - Full width, aligned with photos */}
         <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
             <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
                 <h1 className="text-4xl font-bold text-[#E8D5B7]">{home.title}</h1>
+                
+                {/* Listing Type Badge - Outside owner box, top right */}
                 <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
-                  home.listingType === 'rent' 
+                  displayListingType === 'rent' 
                     ? 'bg-[#E8D5B7] text-[#2D3748]' 
                     : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
                 }`}>
-                  {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
+                  {displayListingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, displayListingType)}`}
                 </span>
               </div>
-              <div className="text-[#E8D5B7]/70 flex flex-col gap-1 text-lg">
-                {home.street && (
+              
+              {/* Location and Owner Info in same row */}
+              <div className="flex items-start gap-4 mb-4">
+                {/* Location Info - Left side */}
+                <div className="flex-1 text-[#E8D5B7]/70 flex flex-col gap-1 text-lg">
+                  {home.street && (
+                    <p className="flex items-center gap-1">
+                      <span>📍</span>
+                      {home.street}
+                    </p>
+                  )}
                   <p className="flex items-center gap-1">
-                    <span>📍</span>
-                    {home.street}
+                    {home.city}, {home.country}
                   </p>
-                )}
-                <p className="flex items-center gap-1">
-                  {home.city}, {home.country}
-                </p>
-                {fromMyListings && !home.area && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[#E8D5B7]">
-                      {getTranslation(language, 'cityArea')}: <strong>{suggestedAreaDisplay}</strong>
-                    </span>
-                    <button
-                      onClick={handleConfirmArea}
-                      disabled={confirmingArea}
-                      className="px-3 py-1 bg-[#E8D5B7] text-[#2D3748] rounded-lg hover:bg-[#D4C19F] transition-all font-semibold text-sm disabled:opacity-50"
-                    >
-                      {confirmingArea ? getTranslation(language, 'loading') : getTranslation(language, 'confirm')}
-                    </button>
+                  {fromMyListings && !home.area && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[#E8D5B7]">
+                        {getTranslation(language, 'cityArea')}: <strong>{suggestedAreaDisplay}</strong>
+                      </span>
+                      <button
+                        onClick={handleConfirmArea}
+                        disabled={confirmingArea}
+                        className="px-3 py-1 bg-[#E8D5B7] text-[#2D3748] rounded-lg hover:bg-[#D4C19F] transition-all font-semibold text-sm disabled:opacity-50"
+                      >
+                        {confirmingArea ? getTranslation(language, 'loading') : getTranslation(language, 'confirm')}
+                      </button>
+                    </div>
+                  )}
+                  {home.area && (
+                    <p className="flex items-center gap-1 mt-2">
+                      <span className="text-[#E8D5B7]">
+                        {getTranslation(language, 'cityArea')}: <strong>{translateValue(language, home.area)}</strong>
+                      </span>
+                    </p>
+                  )}
+                </div>
+                
+                {/* Owner Profile - Right side, square */}
+                <div 
+                  onClick={() => setShowOwnerModal(true)}
+                  className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                >
+                  {/* Owner Title - At the top */}
+                  <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">{getTranslation(language, 'owner')}</h2>
+                  
+                  {/* Name and Rating - Centered and prominent */}
+                  <div className="flex flex-col items-center justify-center flex-1">
+                    {/* Name */}
+                    <p className="text-base font-semibold text-[#E8D5B7] text-center mb-2">
+                      {home.owner.name || home.owner.email.split('@')[0]}
+                    </p>
+                    
+                    {/* Rating */}
+                    {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xl font-bold text-[#E8D5B7]">
+                          {home.owner.ratings.ownerRating.toFixed(1)}
+                        </span>
+                        <div className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className={`text-sm ${i < Math.round(home.owner.ratings!.ownerRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                              ⭐
+                            </span>
+                          ))}
+                        </div>
+                        {home.owner.ratings.ownerCount > 0 && (
+                          <span className="text-xs text-[#E8D5B7]/60">
+                            {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xl font-bold text-[#E8D5B7]">
+                          4.7
+                        </span>
+                        <div className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className={`text-sm ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                              ⭐
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-                {home.area && (
-                  <p className="flex items-center gap-1 mt-2">
-                    <span className="text-[#E8D5B7]">
-                      {getTranslation(language, 'cityArea')}: <strong>{translateValue(language, home.area)}</strong>
-                    </span>
-                  </p>
-                )}
+                </div>
               </div>
+              
+              {/* Description - Below the row */}
+              {home.description && (
+                <div className="mb-6 pb-6 border-t border-b border-[#E8D5B7]/20 pt-6">
+                  <h2 className="text-lg font-semibold text-[#E8D5B7] mb-2">{getTranslation(language, 'description')}</h2>
+                  <p className="text-[#E8D5B7]/80 leading-relaxed">{home.description}</p>
+                </div>
+              )}
             </div>
-
-            {home.description && (
-              <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
-                <h2 className="text-xl font-semibold text-[#E8D5B7] mb-2">{getTranslation(language, 'description')}</h2>
-                <p className="text-[#E8D5B7]/80 leading-relaxed">{home.description}</p>
-              </div>
-            )}
 
             {/* Price, Size, Floor Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
@@ -409,6 +618,89 @@ export default function HomeDetailPage() {
             )}
           </div>
 
+        {/* Photo Lightbox Modal */}
+        {showPhotoLightbox && photos.length > 0 && (
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn"
+            onClick={closeLightbox}
+          >
+            <div 
+              className="relative max-w-7xl w-full max-h-[90vh] animate-scaleIn"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={closeLightbox}
+                className="absolute top-4 right-4 z-20 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] hover:text-white rounded-full p-3 transition-all shadow-lg hover:shadow-xl border border-[#E8D5B7]/30 hover:border-[#E8D5B7]"
+                aria-label={getTranslation(language, 'close')}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Main photo */}
+              <div className="relative bg-[#1A202C]/95 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl border border-[#E8D5B7]/30">
+                <img
+                  src={photos[lightboxPhotoIndex]}
+                  alt={`${home.title} - Photo ${lightboxPhotoIndex + 1}`}
+                  className="w-full h-auto max-h-[85vh] object-contain"
+                />
+                
+                {/* Navigation buttons */}
+                {photos.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevLightboxPhoto}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
+                      aria-label="Previous photo"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={nextLightboxPhoto}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
+                      aria-label="Next photo"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    
+                    {/* Photo counter */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] px-4 py-2 rounded-full text-sm font-medium border border-[#E8D5B7]/30">
+                      {lightboxPhotoIndex + 1} / {photos.length}
+                    </div>
+                    
+                    {/* Thumbnail strip at bottom */}
+                    <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 pb-2">
+                      {photos.map((photo, index) => (
+                        <button
+                          key={index}
+                          onClick={() => setLightboxPhotoIndex(index)}
+                          className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                            index === lightboxPhotoIndex
+                              ? 'border-[#E8D5B7] ring-2 ring-[#E8D5B7]/50'
+                              : 'border-transparent hover:border-[#E8D5B7]/50 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <img
+                            src={photo}
+                            alt={`Thumbnail ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Owner Profile Modal */}
         {showOwnerModal && (
           <div 
@@ -454,17 +746,38 @@ export default function HomeDetailPage() {
                     <div>
                       <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
                         <span>⭐</span>
-                        {home.owner.ratings.ownerRating} / 5.0
+                        {home.owner.ratings.ownerRating.toFixed(1)}
                       </p>
-                      <p className="text-sm text-[#E8D5B7]/60 mt-1">
-                        {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                      </p>
+                      <div className="flex items-center gap-1 mt-2">
+                        {[...Array(5)].map((_, i) => (
+                          <span key={i} className={`text-base ${i < Math.round(home.owner.ratings!.ownerRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                            ⭐
+                          </span>
+                        ))}
+                      </div>
+                      {home.owner.ratings.ownerCount > 0 && (
+                        <p className="text-sm text-[#E8D5B7]/60 mt-1">
+                          {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="pt-4 border-t border-[#E8D5B7]/20">
                     <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
-                    <p className="text-lg text-[#E8D5B7]/60">{getTranslation(language, 'noRatingsYet')}</p>
+                    <div>
+                      <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                        <span>⭐</span>
+                        4.7
+                      </p>
+                      <div className="flex items-center gap-1 mt-2">
+                        {[...Array(5)].map((_, i) => (
+                          <span key={i} className={`text-base ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                            ⭐
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

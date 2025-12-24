@@ -180,6 +180,7 @@ export default function HomesPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
+      if (searchType) params.append('listingType', searchType)
       if (manualFilters.city) params.append('city', manualFilters.city)
       if (manualFilters.country) params.append('country', manualFilters.country)
       if (manualFilters.minPrice) params.append('minPrice', manualFilters.minPrice)

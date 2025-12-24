@@ -26,36 +26,70 @@ export async function POST(request: NextRequest) {
 
     // Build search conditions
     // Note: SQLite doesn't support case-insensitive mode, but contains works case-insensitive by default
-    const where: any = {
-      OR: [
-        { title: { contains: queryLower } },
-        { description: { contains: queryLower } },
-        { city: { contains: queryLower } },
-        { country: { contains: queryLower } },
-      ],
+    const searchConditions = [
+      { title: { contains: queryLower } },
+      { description: { contains: queryLower } },
+      { city: { contains: queryLower } },
+      { country: { contains: queryLower } },
+    ]
+    
+    // Extract location keywords and add to search conditions
+    const locationKeywords = ['athens', 'greece', 'london', 'paris', 'berlin', 'rome', 'madrid']
+    const foundLocation = locationKeywords.find(loc => queryLower.includes(loc))
+    if (foundLocation) {
+      searchConditions.push(
+        { city: { contains: foundLocation } },
+        { country: { contains: foundLocation } }
+      )
     }
-
+    
+    // Build base where conditions
+    const baseConditions: any = {
+      OR: searchConditions,
+    }
+    
     // Try to extract numbers that might be bedrooms or price
     const numbers = query.match(/\d+/g)
     if (numbers) {
       const num = Number(numbers[0])
       if (num <= 10) {
         // Likely bedrooms
-        where.bedrooms = num
+        baseConditions.bedrooms = num
       } else if (num >= 100) {
         // Likely price
-        where.pricePerMonth = { lte: num * 1.2 } // Allow 20% variance
+        baseConditions.pricePerMonth = { lte: num * 1.2 } // Allow 20% variance
       }
     }
-
-    // Extract location keywords
-    const locationKeywords = ['athens', 'greece', 'london', 'paris', 'berlin', 'rome', 'madrid']
-    const foundLocation = locationKeywords.find(loc => queryLower.includes(loc))
-    if (foundLocation) {
-      where.OR.push(
-        { city: { contains: foundLocation } },
-        { country: { contains: foundLocation } }
-      )
+    
+    // Filter by listing type if provided
+    // Map 'buy' (from search UI) to 'sell' (in database)
+    let where: any
+    if (type) {
+      if (type === 'buy') {
+        // When user clicks "buy" in search, filter for "sell" listings
+        where = {
+          AND: [
+            baseConditions,
+            { listingType: 'sell' }
+          ]
+        }
+      } else if (type === 'rent') {
+        where = {
+          AND: [
+            baseConditions,
+            { listingType: 'rent' }
+          ]
+        }
+      } else {
+        where = {
+          AND: [
+            baseConditions,
+            { listingType: type }
+          ]
+        }
+      }
+    } else {
+      where = baseConditions
     }
 
     const homes = await prisma.home.findMany({

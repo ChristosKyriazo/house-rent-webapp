@@ -57,6 +57,29 @@ export default function NewHomePage() {
     const files = e.target.files
     if (!files || files.length === 0) return
 
+    // Check total photo limit (20 photos max)
+    const totalPhotos = photos.length + files.length
+    if (totalPhotos > 20) {
+      setError(`Maximum 20 photos allowed. You already have ${photos.length} photos. Please select ${20 - photos.length} or fewer.`)
+      e.target.value = '' // Reset input
+      return
+    }
+
+    // Validate file sizes before uploading (max 5MB per file)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    const oversizedFiles: string[] = []
+    Array.from(files).forEach((file) => {
+      if (file.size > maxSize) {
+        oversizedFiles.push(file.name)
+      }
+    })
+
+    if (oversizedFiles.length > 0) {
+      setError(`File(s) too large (max 5MB each): ${oversizedFiles.join(', ')}`)
+      e.target.value = '' // Reset input
+      return
+    }
+
     setUploadingPhotos(true)
     setError('')
 
@@ -81,6 +104,7 @@ export default function NewHomePage() {
 
       const uploadedUrls = await Promise.all(uploadPromises)
       setPhotos([...photos, ...uploadedUrls])
+      e.target.value = '' // Reset input after successful upload
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Photo upload failed')
     } finally {
