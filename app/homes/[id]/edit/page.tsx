@@ -40,6 +40,7 @@ export default function EditHomePage() {
   const [home, setHome] = useState<Home | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
   const [checkingRole, setCheckingRole] = useState(true)
   
@@ -245,6 +246,43 @@ export default function EditHomePage() {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!home) return
+    
+    if (!confirm(getTranslation(language, 'confirmDelete') || 'Are you sure you want to delete this listing?')) {
+      return
+    }
+    
+    setDeleting(true)
+    setError('')
+    
+    try {
+      const response = await fetch(`/api/homes/${home.key}`, {
+        method: 'DELETE',
+      })
+      
+      if (!response.ok) {
+        const text = await response.text()
+        let data = {}
+        try {
+          data = text ? JSON.parse(text) : {}
+        } catch {
+          data = { error: text || getTranslation(language, 'deleteFailed') }
+        }
+        setError(data.error || getTranslation(language, 'deleteFailed'))
+        setDeleting(false)
+        return
+      }
+      
+      // Redirect to my listings page
+      router.push('/homes/my-listings')
+    } catch (error) {
+      console.error('Error deleting listing:', error)
+      setError(getTranslation(language, 'deleteFailed'))
+      setDeleting(false)
     }
   }
 
@@ -561,6 +599,17 @@ export default function EditHomePage() {
               </button>
             </div>
           </form>
+          
+          {/* Delete Button */}
+          <div className="mt-8 pt-8 border-t border-red-600/30">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="w-full px-6 py-3 bg-red-600 text-white rounded-2xl hover:bg-red-700 transition-all font-semibold disabled:opacity-50"
+            >
+              {deleting ? getTranslation(language, 'loading') : getTranslation(language, 'delete')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

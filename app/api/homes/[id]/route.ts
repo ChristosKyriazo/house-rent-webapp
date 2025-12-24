@@ -188,3 +188,74 @@ export async function PUT(
   }
 }
 
+// DELETE /api/homes/[id] - delete a home listing
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user has owner role
+    const userRole = user.role || 'user'
+    if (userRole !== 'owner' && userRole !== 'both') {
+      return NextResponse.json(
+        { error: 'Only owners can delete listings' },
+        { status: 403 }
+      )
+    }
+
+    // Handle both sync and async params (Next.js 14 vs 15)
+    const resolvedParams = await Promise.resolve(params)
+    const homeId = resolvedParams.id
+
+    // Find the home listing
+    const existingHome = await prisma.home.findFirst({
+      where: {
+        OR: [
+          { key: homeId },
+          { id: isNaN(Number(homeId)) ? -1 : Number(homeId) }
+        ]
+      },
+    })
+
+    if (!existingHome) {
+      return NextResponse.json(
+        { error: 'Home listing not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check if user owns this listing
+    if (existingHome.ownerId !== user.id) {
+      return NextResponse.json(
+        { error: 'You can only delete your own listings' },
+        { status: 403 }
+      )
+    }
+
+    // Delete the home listing (cascade will handle related records)
+    await prisma.home.delete({
+      where: { id: existingHome.id },
+    })
+
+    return NextResponse.json(
+      { message: 'Home listing deleted successfully' },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error('Delete home error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json(
+      { error: 'Internal server error', details: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+

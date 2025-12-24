@@ -50,6 +50,7 @@ export default function HomesPage() {
   })
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [availableAreas, setAvailableAreas] = useState<string[]>([])
+  const [inquiries, setInquiries] = useState<number[]>([])
   const isInitialized = useRef(false)
 
   // Initialize state from URL parameters on mount (only once)
@@ -91,7 +92,7 @@ export default function HomesPage() {
     }
   }, [searchType, filterType, router])
 
-  // Check user role on mount
+  // Check user role and fetch inquiries on mount
   useEffect(() => {
     fetch('/api/profile')
       .then((res) => res.json())
@@ -107,11 +108,22 @@ export default function HomesPage() {
         }
         setUserRole(role)
         setCheckingRole(false)
+        
+        // Fetch user's inquiries
+        fetch('/api/inquiries')
+          .then((res) => res.json())
+          .then((inqData) => {
+            if (inqData.homeIds) {
+              setInquiries(inqData.homeIds)
+            }
+          })
+          .catch((err) => console.error('Error fetching inquiries:', err))
       })
       .catch(() => {
         router.push('/login')
       })
   }, [router])
+
 
   // Fetch all available areas from existing listings
   useEffect(() => {
@@ -213,7 +225,9 @@ export default function HomesPage() {
         {/* Step 1: Choose Rent or Buy */}
         {!searchType && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
-            <h2 className="text-2xl font-bold text-[#E8D5B7] mb-6 text-center">{getTranslation(language, 'whatAreYouLookingFor')}</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-[#E8D5B7] flex-1 text-center">{getTranslation(language, 'whatAreYouLookingFor')}</h2>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
               <button
                 onClick={() => setSearchType('rent')}
@@ -547,59 +561,117 @@ export default function HomesPage() {
           </div>
         ) : homes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {homes.map((home) => (
-              <Link
-                key={home.id}
-                href={`/homes/${home.key}`}
-                className="block bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transition-all transform hover:-translate-y-1 cursor-pointer"
-              >
-                <div className="mb-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h2 className="text-2xl font-bold text-[#E8D5B7] flex-1">{home.title}</h2>
-                    <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
-                      home.listingType === 'rent' 
-                        ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                        : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+            {homes.map((home) => {
+              const hasInquiry = inquiries.includes(home.id)
+              return (
+                <div
+                  key={home.id}
+                  className={`relative bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
+                    hasInquiry 
+                      ? 'border-[#E8D5B7]/10 opacity-60' 
+                      : 'border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40'
+                  }`}
+                >
+                  {/* Sticker-style Inquiry Made Banner - Horizontal through center */}
+                  {hasInquiry && (
+                    <div className="absolute top-1/2 left-1/2 z-10 transform -translate-x-1/2 -translate-y-1/2 origin-center">
+                      <div className="relative bg-red-600 text-white px-6 py-3 shadow-lg border-2 border-red-800 whitespace-nowrap"
+                        style={{
+                          clipPath: 'polygon(2% 0%, 98% 0%, 100% 5%, 98% 10%, 100% 15%, 98% 20%, 100% 25%, 98% 30%, 100% 35%, 98% 40%, 100% 45%, 98% 50%, 100% 55%, 98% 60%, 100% 65%, 98% 70%, 100% 75%, 98% 80%, 100% 85%, 98% 90%, 100% 95%, 98% 100%, 2% 100%, 0% 95%, 2% 90%, 0% 85%, 2% 80%, 0% 75%, 2% 70%, 0% 65%, 2% 60%, 0% 55%, 2% 50%, 0% 45%, 2% 40%, 0% 35%, 2% 30%, 0% 25%, 2% 20%, 0% 15%, 2% 10%, 0% 5%)',
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-lg">🏷️</span>
+                          <p className="text-sm font-black uppercase tracking-wide">
+                            {getTranslation(language, 'inquiryMade')}
+                          </p>
+                        </div>
+                        {/* Sticker shine effect */}
+                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <Link
+                    href={`/homes/${home.key}`}
+                    className="block"
+                  >
+                    
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <h2 className={`text-2xl font-bold flex-1 ${
+                          hasInquiry ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                        }`}>{home.title}</h2>
+                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
+                          home.listingType === 'rent' 
+                            ? 'bg-[#E8D5B7] text-[#2D3748]' 
+                            : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+                        }`}>
+                          {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
+                        </span>
+                      </div>
+                      <p className={`flex items-center gap-1 ${
+                        hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
+                      }`}>
+                        <span>📍</span>
+                        {home.city}, {home.country}
+                      </p>
+                    </div>
+
+                    {home.description && (
+                      <p className={`mb-4 line-clamp-2 ${
+                        hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
+                      }`}>{home.description}</p>
+                    )}
+
+                    <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
+                      hasInquiry ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
                     }`}>
-                      {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
-                    </span>
-                  </div>
-                  <p className="text-[#E8D5B7]/70 flex items-center gap-1">
-                    <span>📍</span>
-                    {home.city}, {home.country}
-                  </p>
-                </div>
+                      <div>
+                        <p className={`text-3xl font-bold ${
+                          hasInquiry ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                        }`}>
+                          €{home.pricePerMonth.toLocaleString()}
+                        </p>
+                        <p className={`text-sm ${
+                          hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                        }`}>
+                          {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${
+                          hasInquiry ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                        }`}>
+                          {home.bedrooms} <span className={`${
+                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                          }`}>{getTranslation(language, 'bedroomsShort')}</span>
+                        </p>
+                        <p className={`text-sm font-semibold ${
+                          hasInquiry ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                        }`}>
+                          {home.bathrooms} <span className={`${
+                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                          }`}>{getTranslation(language, 'bathroomsShort')}</span>
+                        </p>
+                      </div>
+                    </div>
 
-                {home.description && (
-                  <p className="text-[#E8D5B7]/80 mb-4 line-clamp-2">{home.description}</p>
-                )}
-
-                <div className="flex items-center justify-between mb-4 pt-4 border-t border-[#E8D5B7]/20">
-                  <div>
-                    <p className="text-3xl font-bold text-[#E8D5B7]">
-                      €{home.pricePerMonth.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-[#E8D5B7]/60">
-                      {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-[#E8D5B7]">
-                      {home.bedrooms} <span className="text-[#E8D5B7]/60">{getTranslation(language, 'bedroomsShort')}</span>
-                    </p>
-                    <p className="text-sm font-semibold text-[#E8D5B7]">
-                      {home.bathrooms} <span className="text-[#E8D5B7]/60">{getTranslation(language, 'bathroomsShort')}</span>
-                    </p>
-                  </div>
+                    <div className={`pt-4 border-t ${
+                      hasInquiry ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                    }`}>
+                      <p className={`text-xs ${
+                        hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                      }`}>
+                        {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
+                          hasInquiry ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                        }`}>{home.owner.name || home.owner.email}</span>
+                      </p>
+                    </div>
+                  </Link>
                 </div>
-
-                <div className="pt-4 border-t border-[#E8D5B7]/20">
-                    <p className="text-xs text-[#E8D5B7]/60">
-                    {getTranslation(language, 'publishedBy')} <span className="font-medium text-[#E8D5B7]">{home.owner.name || home.owner.email}</span>
-                  </p>
-                </div>
-              </Link>
-            ))}
+              )
+            })}
           </div>
         ) : null}
       </div>

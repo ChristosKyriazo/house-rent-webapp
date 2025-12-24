@@ -9,11 +9,17 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Classic PrismaClient for v5: no special constructor options needed.
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient()
+// Force recreation if inquiry model is missing (for hot reload scenarios)
+let prismaInstance = globalForPrisma.prisma ?? new PrismaClient()
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
+// Check if inquiry model exists, if not recreate the client
+if (!prismaInstance.inquiry) {
+  console.warn('Prisma client missing inquiry model, recreating...')
+  prismaInstance = new PrismaClient()
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = prismaInstance
+  }
 }
+
+export const prisma = prismaInstance
 

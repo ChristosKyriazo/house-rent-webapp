@@ -58,6 +58,9 @@ export default function HomeDetailPage() {
   const [thumbnailScrollRatio, setThumbnailScrollRatio] = useState(1)
   const [sliderTrackWidth, setSliderTrackWidth] = useState(400)
   const [isDragging, setIsDragging] = useState(false)
+  const [hasInquiry, setHasInquiry] = useState(false)
+  const [updatingInquiry, setUpdatingInquiry] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
 
   // Parse photos safely - use useMemo to ensure consistent hook order
@@ -81,10 +84,12 @@ export default function HomeDetailPage() {
       try {
         // Fetch current user profile
         const profileResponse = await fetch('/api/profile')
+        let profileData = null
         if (profileResponse.ok) {
-          const profileData = await profileResponse.json()
+          profileData = await profileResponse.json()
           if (profileData.user) {
             setCurrentUserId(profileData.user.id)
+            setUserRole(profileData.user.role || 'user')
           }
         }
         
@@ -104,6 +109,17 @@ export default function HomeDetailPage() {
         }
         
         setHome(data.home)
+        
+        // Check if user has an inquiry for this home
+        if (profileData && profileData.user) {
+          const inquiriesRes = await fetch('/api/inquiries')
+          if (inquiriesRes.ok) {
+            const inquiriesData = await inquiriesRes.json()
+            if (inquiriesData.homeIds) {
+              setHasInquiry(inquiriesData.homeIds.includes(data.home.id))
+            }
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
         router.push('/homes')
@@ -116,6 +132,56 @@ export default function HomeDetailPage() {
       fetchData()
     }
   }, [params.id, router])
+
+  const handleInquiry = async () => {
+    if (!home || updatingInquiry) return
+    
+    setUpdatingInquiry(true)
+    
+    try {
+      if (hasInquiry) {
+        // Remove inquiry
+        const response = await fetch(`/api/inquiries?homeId=${home.id}`, {
+          method: 'DELETE',
+        })
+        if (response.ok) {
+          setHasInquiry(false)
+        } else {
+          const text = await response.text()
+          let data = {}
+          try {
+            data = JSON.parse(text)
+          } catch {
+            data = { error: text || 'Unknown error' }
+          }
+          console.error('Failed to remove inquiry:', data, response.status)
+        }
+      } else {
+        // Create inquiry
+        const response = await fetch('/api/inquiries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ homeId: home.id }),
+        })
+        if (response.ok) {
+          setHasInquiry(true)
+        } else {
+          const text = await response.text()
+          let data = {}
+          try {
+            data = JSON.parse(text)
+          } catch {
+            data = { error: text || 'Unknown error' }
+          }
+          console.error('Failed to create inquiry:', data, response.status)
+        }
+      }
+    } catch (error) {
+      console.error('Error updating inquiry:', error)
+    } finally {
+      setUpdatingInquiry(false)
+    }
+  }
 
   // Calculate slider track width
   useEffect(() => {
@@ -614,6 +680,33 @@ export default function HomeDetailPage() {
                     day: 'numeric',
                   })}
                 </p>
+              </div>
+            )}
+
+            {/* Inquire Button - Only show for users (not owners viewing their own listings) */}
+            {home && userRole && (userRole === 'user' || userRole === 'both') && currentUserId !== home.owner.id && (
+              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+                {hasInquiry && (
+                  <p className="text-sm font-medium text-[#E8D5B7]/70 mb-4 text-center">
+                    {getTranslation(language, 'inquiryMade')}
+                  </p>
+                )}
+                <button
+                  onClick={handleInquiry}
+                  disabled={updatingInquiry}
+                  className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
+                    hasInquiry
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]'
+                  } disabled:opacity-50`}
+                >
+                  {updatingInquiry 
+                    ? getTranslation(language, 'loading')
+                    : hasInquiry 
+                      ? getTranslation(language, 'removeInquiry')
+                      : getTranslation(language, 'inquire')
+                  }
+                </button>
               </div>
             )}
           </div>

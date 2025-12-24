@@ -22,6 +22,7 @@ model User {
   homes           Home[]
   ratingsReceived Rating[]  @relation("RatedUser")
   ratingsGiven    Rating[]  @relation("Rater")
+  inquiries       Inquiry[]
 
   @@map("users")
 }
@@ -51,6 +52,7 @@ model Home {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  inquiries     Inquiry[]
 
   @@index([city])
   @@index([ownerId])
@@ -76,4 +78,20 @@ model Rating {
   @@index([ratedUserId])
   @@index([type])
   @@map("ratings")
+}
+
+model Inquiry {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @default(cuid())
+  userId    Int
+  homeId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, homeId])
+  @@index([userId])
+  @@index([homeId])
+  @@map("inquiries")
 }
