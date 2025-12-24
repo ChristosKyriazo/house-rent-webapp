@@ -11,6 +11,7 @@ export default function SignupPage() {
             routing="hash" 
             signInUrl="/login" 
             afterSignUpUrl="/profile"
+            forceRedirectUrl="/profile"
             appearance={{
               elements: {
                 rootBox: { 

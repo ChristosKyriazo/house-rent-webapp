@@ -24,14 +24,20 @@ export async function getCurrentUser() {
                   cUser.primaryEmailAddress?.emailAddress || 
                   `clerk-${userId}@placeholder.local`
 
+    // Prioritize username from Clerk, then firstName/lastName, then null
+    let name: string | null = null
+    if (cUser.username) {
+      name = cUser.username
+    } else if (cUser.firstName || cUser.lastName) {
+      name = `${cUser.firstName || ''} ${cUser.lastName || ''}`.trim()
+    }
+
     try {
       user = await prisma.user.create({
         data: {
           clerkUserId: userId,
           email,
-          name: cUser.firstName || cUser.lastName 
-            ? `${cUser.firstName || ''} ${cUser.lastName || ''}`.trim() 
-            : null,
+          name,
           role: 'user',
         },
       })

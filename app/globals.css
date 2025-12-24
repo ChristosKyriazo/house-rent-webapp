@@ -163,6 +163,32 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   pointer-events: auto !important;
 }
 
+/* Make OTP input cursor visible and blinking */
+input[data-input-otp="true"] {
+  caret-color: #E8D5B7 !important;
+  animation: blink 1s infinite !important;
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* Ensure the cursor is visible in the active OTP segment */
+.cl-otpCodeFieldInput[data-focus-within="true"]::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 1.5rem;
+  background-color: #E8D5B7;
+  animation: blink 1s infinite;
+  pointer-events: none;
+}
+
 /* Buttons */
 .cl-formButtonPrimary {
   background-color: #E8D5B7 !important;

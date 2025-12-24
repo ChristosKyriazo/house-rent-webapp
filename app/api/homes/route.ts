@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
 
 // GET /api/homes - list all homes with optional filters
 export async function GET(request: NextRequest) {

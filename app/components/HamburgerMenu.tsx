@@ -46,17 +46,39 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   const allMenuItems = [
     { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both'] },
     { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both'] },
+    { href: '/homes/inquiries', labelKey: 'inquiries', icon: '📬', roles: ['owner'] },
+    { href: '/homes/my-inquiries', labelKey: 'inquiries', icon: '📬', roles: ['user'] },
     { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both'] },
     { href: '/homes', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
   ]
 
-  // Filter menu items based on user role and add translated labels
-  const menuItems = allMenuItems
-    .filter(item => item.roles.includes(normalizedRole))
-    .map(item => ({
-      ...item,
-      label: getTranslation(language, item.labelKey as keyof typeof translations.el)
-    }))
+  // Special handling for 'both' role - show two inquiry items
+  let menuItems: Array<{
+    href: string
+    labelKey: string
+    icon: string
+    label: string
+  }> = []
+
+  if (normalizedRole === 'both') {
+    // For 'both' role, show both inquiry options
+    menuItems = [
+      { href: '/profile', labelKey: 'profile', icon: '👤', label: getTranslation(language, 'profile') },
+      { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', label: getTranslation(language, 'myListings') },
+      { href: '/homes/inquiries', labelKey: 'inquiriesAsOwner', icon: '📬', label: getTranslation(language, 'inquiriesAsOwner') },
+      { href: '/homes/my-inquiries', labelKey: 'inquiriesAsUser', icon: '📬', label: getTranslation(language, 'inquiriesAsUser') },
+      { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', label: getTranslation(language, 'publishProperty') },
+      { href: '/homes', labelKey: 'searchProperties', icon: '🔍', label: getTranslation(language, 'searchProperties') },
+    ]
+  } else {
+    // For 'owner' or 'user' role, use standard filtering
+    menuItems = allMenuItems
+      .filter(item => item.roles.includes(normalizedRole))
+      .map(item => ({
+        ...item,
+        label: getTranslation(language, item.labelKey as keyof typeof translations.el)
+      }))
+  }
 
   const toggleMenu = () => {
     setIsOpen(!isOpen)
@@ -120,7 +142,17 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
           <h2 className="text-2xl font-bold text-[#E8D5B7] mb-8">{getTranslation(language, 'menu')}</h2>
           <nav className="space-y-2 flex-1">
             {menuItems.map((item, index) => {
-              const isActive = pathname === item.href
+              // More precise active state matching
+              // Only use startsWith for paths that should have sub-routes
+              // For /homes, only match exactly (not /homes/inquiries, etc.)
+              let isActive = false
+              if (item.href === '/homes') {
+                // Only match /homes exactly, not sub-routes
+                isActive = pathname === item.href
+              } else {
+                // For other paths, match exactly or if it's a sub-route
+                isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              }
               return (
                 <Link
                   key={item.href}
