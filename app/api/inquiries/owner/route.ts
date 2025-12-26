@@ -34,10 +34,12 @@ export async function GET(request: NextRequest) {
 
     const homeIds = ownerHomes.map(home => home.id)
 
-    // Get all inquiries for these homes
+    // Get all inquiries for these homes (excluding approved and dismissed)
     const inquiries = await prisma.inquiry.findMany({
       where: {
         homeId: { in: homeIds },
+        approved: false,
+        dismissed: false,
       },
       include: {
         user: {

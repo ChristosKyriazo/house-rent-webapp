@@ -13,6 +13,7 @@ interface Inquiry {
     id: number
     name: string | null
     email: string
+    role: string
     rating: number
   }
   approved: boolean
@@ -43,6 +44,7 @@ export default function HomeInquiriesPage() {
     phone: '',
     timeSchedule: '',
   })
+  const [useContactPerson, setUseContactPerson] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,6 +90,7 @@ export default function HomeInquiriesPage() {
     setSelectedInquiryId(inquiryId)
     setShowApproveModal(true)
     setContactInfo({ phone: '', timeSchedule: '' })
+    setUseContactPerson(false)
   }
 
   const handleApproveConfirm = async () => {
@@ -95,33 +98,48 @@ export default function HomeInquiriesPage() {
 
     setProcessingId(selectedInquiryId)
     try {
+      // Prepare contact info
+      const contactInfoData = useContactPerson
+        ? {
+            useContactPerson: true,
+            contactPerson: {
+              name: 'John Doe',
+              email: 'john.doe@example.com',
+              phone: '+30 210 1234567',
+            },
+          }
+        : {
+            useContactPerson: false,
+            name: ownerProfile?.name || '',
+            email: ownerProfile?.email || '',
+            phone: contactInfo.phone,
+            timeSchedule: contactInfo.timeSchedule,
+          }
+
       const response = await fetch(`/api/inquiries/${home.key}/${selectedInquiryId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
+        body: JSON.stringify({ 
+          action: 'approve',
+          contactInfo: contactInfoData,
+        }),
       })
 
       if (!response.ok) {
         throw new Error('Failed to process inquiry')
       }
 
-      // Mark as approved
-      setInquiries(inquiries.map(inq => 
-        inq.id === selectedInquiryId ? { ...inq, approved: true } : inq
-      ))
-
-      // TODO: Send contact information to user (email/notification)
-      // For now, just log it
-      console.log('Contact info to send:', {
-        ownerName: ownerProfile?.name,
-        ownerEmail: ownerProfile?.email,
-        phone: contactInfo.phone,
-        timeSchedule: contactInfo.timeSchedule,
-      })
+      // Refresh inquiries to get updated data
+      const inquiriesRes = await fetch(`/api/inquiries/${home.key}`)
+      if (inquiriesRes.ok) {
+        const data = await inquiriesRes.json()
+        setInquiries(data.inquiries || [])
+      }
 
       setShowApproveModal(false)
       setSelectedInquiryId(null)
       setContactInfo({ phone: '', timeSchedule: '' })
+      setUseContactPerson(false)
     } catch (error) {
       console.error('Error processing inquiry:', error)
       alert(getTranslation(language, 'somethingWentWrong'))
@@ -145,8 +163,12 @@ export default function HomeInquiriesPage() {
         throw new Error('Failed to process inquiry')
       }
 
-      // Remove from list
-      setInquiries(inquiries.filter(inq => inq.id !== inquiryId))
+      // Refresh inquiries to get updated data (dismissed inquiries are marked, not deleted)
+      const inquiriesRes = await fetch(`/api/inquiries/${home.key}`)
+      if (inquiriesRes.ok) {
+        const data = await inquiriesRes.json()
+        setInquiries(data.inquiries || [])
+      }
     } catch (error) {
       console.error('Error processing inquiry:', error)
       alert(getTranslation(language, 'somethingWentWrong'))
@@ -156,12 +178,13 @@ export default function HomeInquiriesPage() {
   }
 
   const handleHireContactPerson = () => {
-    // TODO: Implement hire contact person functionality
-    alert('Hire contact person feature coming soon!')
+    setUseContactPerson(true)
+    // When hiring contact person, auto-approve with contact person info
+    handleApproveConfirm()
   }
 
-  // Find the first unapproved inquiry (oldest)
-  const unapprovedInquiries = inquiries.filter(inq => !inq.approved)
+  // Find the first unapproved and not dismissed inquiry (oldest)
+  const unapprovedInquiries = inquiries.filter(inq => !inq.approved && !inq.dismissed)
   const currentInquiry = unapprovedInquiries.length > 0 ? unapprovedInquiries[0] : null
   const currentIndex = currentInquiry ? inquiries.findIndex(inq => inq.id === currentInquiry.id) : -1
 
@@ -205,7 +228,7 @@ export default function HomeInquiriesPage() {
           </div>
         ) : (
           <>
-            {unapprovedInquiries.length === 0 && (
+            {unapprovedInquiries.length === 0 && inquiries.length > 0 && (
               <div className="bg-green-500/20 border border-green-500/50 rounded-2xl p-4 mb-6 text-center">
                 <p className="text-green-400 font-semibold">
                   {getTranslation(language, 'allInquiriesProcessed')}
@@ -213,7 +236,9 @@ export default function HomeInquiriesPage() {
               </div>
             )}
           <div className="space-y-4">
-            {inquiries.map((inquiry, index) => {
+            {inquiries
+              .filter(inq => !inq.dismissed) // Filter out dismissed inquiries
+              .map((inquiry, index) => {
               const isCurrent = inquiry.id === currentInquiry?.id
               const isApproved = inquiry.approved
               const isGrayedOut = !isCurrent && !isApproved
@@ -232,9 +257,12 @@ export default function HomeInquiriesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-xl font-bold text-[#E8D5B7]">
+                        <Link
+                          href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
+                          className="text-xl font-bold text-[#E8D5B7] hover:text-[#D4C19F] underline transition-colors cursor-pointer"
+                        >
                           {inquiry.user.name || inquiry.user.email.split('@')[0]}
-                        </h3>
+                        </Link>
                         {isApproved && (
                           <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-semibold">
                             {getTranslation(language, 'approved')}
@@ -246,23 +274,44 @@ export default function HomeInquiriesPage() {
                         <span className="text-[#E8D5B7]/70 text-sm">
                           {getTranslation(language, 'rating')}:
                         </span>
-                        <span className="text-[#E8D5B7] font-semibold">
-                          {inquiry.user.rating.toFixed(1)}
-                        </span>
-                        <div className="flex items-center gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <span
-                              key={i}
-                              className={`text-sm ${
-                                i < Math.round(inquiry.user.rating)
-                                  ? 'text-yellow-400'
-                                  : 'text-[#E8D5B7]/30'
-                              }`}
-                            >
-                              ⭐
+                        {inquiry.user.rating !== null && inquiry.user.rating !== 0 ? (
+                          <Link
+                            href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
+                            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                          >
+                            <span className="text-[#E8D5B7] font-semibold">
+                              {inquiry.user.rating.toFixed(1)}
                             </span>
-                          ))}
-                        </div>
+                            <div className="flex items-center gap-0.5">
+                              {[...Array(5)].map((_, i) => (
+                                <span
+                                  key={i}
+                                  className={`text-sm ${
+                                    i < Math.round(inquiry.user.rating)
+                                      ? 'text-yellow-400'
+                                      : 'text-[#E8D5B7]/30'
+                                  }`}
+                                >
+                                  ⭐
+                                </span>
+                              ))}
+                            </div>
+                          </Link>
+                        ) : (
+                          <>
+                            <span className="text-[#E8D5B7] font-semibold">0.0</span>
+                            <div className="flex items-center gap-0.5">
+                              {[...Array(5)].map((_, i) => (
+                                <span key={i} className="text-sm text-[#E8D5B7]/30">
+                                  ⭐
+                                </span>
+                              ))}
+                            </div>
+                            <span className="text-xs text-[#E8D5B7]/60">
+                              ({getTranslation(language, 'notRatedYet')})
+                            </span>
+                          </>
+                        )}
                       </div>
                       <p className="text-[#E8D5B7]/60 text-xs mt-2">
                         {getTranslation(language, 'inquiryDate')}:{' '}
@@ -341,6 +390,7 @@ export default function HomeInquiriesPage() {
                   setShowApproveModal(false)
                   setSelectedInquiryId(null)
                   setContactInfo({ phone: '', timeSchedule: '' })
+                  setUseContactPerson(false)
                 }}
                 className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl transition-colors"
               >
@@ -432,7 +482,10 @@ export default function HomeInquiriesPage() {
                     {getTranslation(language, 'hireContactPersonDescription')}
                   </p>
                   <button
-                    onClick={handleHireContactPerson}
+                    onClick={() => {
+                      setUseContactPerson(true)
+                      handleApproveConfirm()
+                    }}
                     className="px-8 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-lg"
                   >
                     {getTranslation(language, 'hireContactPerson')}

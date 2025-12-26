@@ -10,9 +10,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get all inquiries for this user
+    // Get all inquiries for this user (excluding approved and dismissed)
     const inquiries = await prisma.inquiry.findMany({
-      where: { userId: user.id },
+      where: { 
+        userId: user.id,
+        approved: false,
+        dismissed: false,
+      },
       include: {
         home: {
           select: {

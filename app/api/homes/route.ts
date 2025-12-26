@@ -70,7 +70,26 @@ export async function GET(request: NextRequest) {
     if (areas.length > 0) {
       where.area = { in: areas }
     }
-    
+
+    // Exclude owner's own houses if user is also an owner
+    // Also exclude finalized houses from search results
+    // Check if user is authenticated and has owner role
+    try {
+      const user = await getCurrentUser()
+      if (user) {
+        const userRole = (user.role || 'user').toLowerCase()
+        // If user is owner or both, exclude their own houses from search
+        if (userRole === 'owner' || userRole === 'both') {
+          where.ownerId = { not: user.id }
+        }
+      }
+      // Always exclude finalized houses from search
+      where.finalized = false
+    } catch (error) {
+      // If getCurrentUser fails (user not logged in), still exclude finalized houses
+      where.finalized = false
+    }
+
     const homes = await prisma.home.findMany({
       where,
       orderBy: { createdAt: 'desc' },

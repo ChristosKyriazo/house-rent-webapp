@@ -23,3 +23,5 @@ CREATE INDEX "notifications_read_idx" ON "notifications"("read");
 -- CreateIndex
 CREATE INDEX "notifications_homeId_idx" ON "notifications"("homeId");
 
+
+

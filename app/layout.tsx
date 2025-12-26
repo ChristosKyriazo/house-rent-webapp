@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
 import NavBar from "./components/NavBar";
-import ConditionalNavBar from "./components/ConditionalNavBar";
 import LanguageProviderWrapper from "./components/LanguageProviderWrapper";
 import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
-import HtmlLangUpdater from "./components/HtmlLangUpdater";
+import OTPCursorFix from "./components/OTPCursorFix";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,21 +28,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <ClerkProvider>
+    <ClerkProvider>
+      <html lang="en" className="bg-[#2D3748]">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#2D3748]`}
+        >
           <LanguageProviderWrapper>
-            <HtmlLangUpdater />
-            <ConditionalNavBar>
-              <NavBar />
-            </ConditionalNavBar>
+            <OTPCursorFix />
             <ConditionalLanguageToggle />
+            <NavBar />
             {children}
           </LanguageProviderWrapper>
-        </ClerkProvider>
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

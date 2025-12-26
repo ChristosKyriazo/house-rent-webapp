@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 
 interface Home {
@@ -27,10 +28,11 @@ interface Home {
   yearRenovated: number | null
   availableFrom: string
   photos: string | null
-  owner: {
+      owner: {
     id: number
     email: string
     name: string | null
+    role: string
     createdAt: string
     ratings?: {
       ownerRating: number | null
@@ -58,10 +60,20 @@ export default function HomeDetailPage() {
   const [thumbnailScrollRatio, setThumbnailScrollRatio] = useState(1)
   const [sliderTrackWidth, setSliderTrackWidth] = useState(400)
   const [isDragging, setIsDragging] = useState(false)
-  const [hasInquiry, setHasInquiry] = useState(false)
+  const [inquiryStatus, setInquiryStatus] = useState<'inquired' | 'approved' | 'dismissed' | null>(null)
+  const [inquiryId, setInquiryId] = useState<number | null>(null)
+  const [isFinalized, setIsFinalized] = useState(false)
+  const [finalizeRequestSent, setFinalizeRequestSent] = useState(false)
   const [updatingInquiry, setUpdatingInquiry] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
+  
+  // Determine display role for UI: if user has "both" role, use selectedRole, otherwise use actualRole or userRole
+  const displayRole = (actualRole === 'both' && selectedRole) 
+    ? selectedRole 
+    : (actualRole || userRole || 'user')
 
   // Parse photos safely - use useMemo to ensure consistent hook order
   const photos = useMemo(() => {
@@ -110,13 +122,46 @@ export default function HomeDetailPage() {
         
         setHome(data.home)
         
-        // Check if user has an inquiry for this home
+        // Check if user has an inquiry for this home and its status
         if (profileData && profileData.user) {
           const inquiriesRes = await fetch('/api/inquiries')
           if (inquiriesRes.ok) {
             const inquiriesData = await inquiriesRes.json()
-            if (inquiriesData.homeIds) {
-              setHasInquiry(inquiriesData.homeIds.includes(data.home.id))
+            if (inquiriesData.inquiryStatus) {
+              const status = inquiriesData.inquiryStatus[data.home.id] || null
+              setInquiryStatus(status)
+              
+              // Get inquiry ID if exists
+              if (inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id]) {
+                setInquiryId(inquiriesData.inquiryIds[data.home.id])
+              }
+              
+              // Check if finalized
+              if (inquiriesData.finalizedHomes && inquiriesData.finalizedHomes[data.home.id]) {
+                setIsFinalized(true)
+              }
+              
+              // If inquiry is dismissed, redirect to search page
+              if (status === 'dismissed') {
+                router.push('/homes')
+                return
+              }
+            }
+          }
+          
+          // For owners: check if they have approved inquiries for this home
+          if ((profileData.user.role === 'owner' || profileData.user.role === 'both') && data.home.owner.id === profileData.user.id) {
+            const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=owner`)
+            if (approvedInquiriesRes.ok) {
+              const approvedData = await approvedInquiriesRes.json()
+              const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.home.key === data.home.key)
+              if (approvedInquiry) {
+                setInquiryId(approvedInquiry.id)
+                setInquiryStatus('approved')
+                if (approvedInquiry.finalized) {
+                  setIsFinalized(true)
+                }
+              }
             }
           }
         }
@@ -133,19 +178,42 @@ export default function HomeDetailPage() {
     }
   }, [params.id, router])
 
+  const handleFinalize = async () => {
+    if (!home || !inquiryId || finalizing || isFinalized || finalizeRequestSent) return
+    
+    setFinalizing(true)
+    try {
+      const response = await fetch(`/api/inquiries/${home.key}/${inquiryId}/finalize`, {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        setFinalizeRequestSent(true)
+      } else {
+        const data = await response.json()
+        alert(data.error || getTranslation(language, 'finalizeFailed'))
+      }
+    } catch (error) {
+      console.error('Error finalizing:', error)
+      alert(getTranslation(language, 'finalizeFailed'))
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
   const handleInquiry = async () => {
     if (!home || updatingInquiry) return
     
     setUpdatingInquiry(true)
     
     try {
-      if (hasInquiry) {
-        // Remove inquiry
+      if (inquiryStatus === 'inquired') {
+        // Remove inquiry (only if it's not approved or dismissed)
         const response = await fetch(`/api/inquiries?homeId=${home.id}`, {
           method: 'DELETE',
         })
         if (response.ok) {
-          setHasInquiry(false)
+          setInquiryStatus(null)
         } else {
           const text = await response.text()
           let data = {}
@@ -156,15 +224,15 @@ export default function HomeDetailPage() {
           }
           console.error('Failed to remove inquiry:', data, response.status)
         }
-      } else {
-        // Create inquiry
+      } else if (!inquiryStatus) {
+        // Create inquiry (only if no inquiry exists)
         const response = await fetch('/api/inquiries', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ homeId: home.id }),
         })
         if (response.ok) {
-          setHasInquiry(true)
+          setInquiryStatus('inquired')
         } else {
           const text = await response.text()
           let data = {}
@@ -229,7 +297,7 @@ export default function HomeDetailPage() {
   const nextPhoto = () => {
     if (photos.length > 0) {
       setCurrentPhotoIndex((prev) => (prev + 1) % photos.length)
-    }
+  }
   }
 
   const prevPhoto = () => {
@@ -294,10 +362,10 @@ export default function HomeDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Back Button and Edit Button */}
         <div className="flex items-center justify-between">
-          <Link
+        <Link
             href={fromMyListings ? '/homes/my-listings' : '/homes'}
-            className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
-          >
+          className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+        >
             ← {getTranslation(language, 'returnToSearch')}
           </Link>
           {fromMyListings && (
@@ -306,7 +374,7 @@ export default function HomeDetailPage() {
               className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
             >
               {getTranslation(language, 'edit')}
-            </Link>
+        </Link>
           )}
         </div>
 
@@ -496,33 +564,33 @@ export default function HomeDetailPage() {
 
         {/* House Details Card - Full width, aligned with photos */}
         <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
-            <div className="mb-6">
+          <div className="mb-6">
               <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
-                <h1 className="text-4xl font-bold text-[#E8D5B7]">{home.title}</h1>
+              <h1 className="text-4xl font-bold text-[#E8D5B7]">{home.title}</h1>
                 
                 {/* Listing Type Badge - Outside owner box, top right */}
-                <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
+              <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
                   displayListingType === 'rent' 
-                    ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                    : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
-                }`}>
+                  ? 'bg-[#E8D5B7] text-[#2D3748]' 
+                  : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+              }`}>
                   {displayListingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, displayListingType)}`}
-                </span>
-              </div>
+              </span>
+            </div>
               
               {/* Location and Owner Info in same row */}
               <div className="flex items-start gap-4 mb-4">
                 {/* Location Info - Left side */}
                 <div className="flex-1 text-[#E8D5B7]/70 flex flex-col gap-1 text-lg">
-                  {home.street && (
-                    <p className="flex items-center gap-1">
-                      <span>📍</span>
-                      {home.street}
-                    </p>
-                  )}
-                  <p className="flex items-center gap-1">
-                    {home.city}, {home.country}
-                  </p>
+              {home.street && (
+                <p className="flex items-center gap-1">
+                  <span>📍</span>
+                  {home.street}
+                </p>
+              )}
+              <p className="flex items-center gap-1">
+                {home.city}, {home.country}
+              </p>
                   {fromMyListings && !home.area && (
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-[#E8D5B7]">
@@ -563,7 +631,10 @@ export default function HomeDetailPage() {
                     
                     {/* Rating */}
                     {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                      <div className="flex flex-col items-center gap-1">
+                      <Link
+                        href={`/profile/ratings/${home.owner.id}?type=owner`}
+                        className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
                         <span className="text-xl font-bold text-[#E8D5B7]">
                           {home.owner.ratings.ownerRating.toFixed(1)}
                         </span>
@@ -575,53 +646,56 @@ export default function HomeDetailPage() {
                           ))}
                         </div>
                         {home.owner.ratings.ownerCount > 0 && (
-                          <span className="text-xs text-[#E8D5B7]/60">
+                          <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                             {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                           </span>
                         )}
-                      </div>
+                      </Link>
                     ) : (
                       <div className="flex flex-col items-center gap-1">
                         <span className="text-xl font-bold text-[#E8D5B7]">
-                          4.7
+                          0.0
                         </span>
                         <div className="flex items-center gap-0.5">
                           {[...Array(5)].map((_, i) => (
-                            <span key={i} className={`text-sm ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                            <span key={i} className="text-sm text-[#E8D5B7]/30">
                               ⭐
                             </span>
                           ))}
                         </div>
+                        <span className="text-xs text-[#E8D5B7]/60">
+                          {getTranslation(language, 'notRatedYet')}
+                        </span>
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
-              
+            </div>
+          </div>
+
               {/* Description - Below the row */}
-              {home.description && (
+          {home.description && (
                 <div className="mb-6 pb-6 border-t border-b border-[#E8D5B7]/20 pt-6">
                   <h2 className="text-lg font-semibold text-[#E8D5B7] mb-2">{getTranslation(language, 'description')}</h2>
-                  <p className="text-[#E8D5B7]/80 leading-relaxed">{home.description}</p>
-                </div>
-              )}
+              <p className="text-[#E8D5B7]/80 leading-relaxed">{home.description}</p>
+            </div>
+          )}
             </div>
 
             {/* Price, Size, Floor Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
-              <div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
+            <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'price')}</p>
-                <p className="text-3xl font-bold text-[#E8D5B7]">
-                  €{home.pricePerMonth.toLocaleString()}
-                </p>
+              <p className="text-3xl font-bold text-[#E8D5B7]">
+                €{home.pricePerMonth.toLocaleString()}
+              </p>
               </div>
               <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
                 <p className="text-3xl font-bold text-[#E8D5B7]">
                   {home.sizeSqMeters !== null && home.sizeSqMeters !== undefined ? `${home.sizeSqMeters} m²` : '-'}
-                </p>
-              </div>
-              <div>
+              </p>
+            </div>
+            <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'floor')}</p>
                 <p className="text-3xl font-bold text-[#E8D5B7]">
                   {home.floor !== null && home.floor !== undefined ? home.floor : '-'}
@@ -631,82 +705,123 @@ export default function HomeDetailPage() {
 
             {/* Heating Category, Bedrooms, Year Built Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
-              <div>
+            <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'heatingCategory')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">
                   {home.heatingCategory ? translateValue(language, home.heatingCategory) : '-'}
                 </p>
-              </div>
+            </div>
               <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'bedrooms')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">{home.bedrooms}</p>
-              </div>
-              <div>
+          </div>
+                <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'yearBuilt')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">
                   {home.yearBuilt !== null && home.yearBuilt !== undefined ? home.yearBuilt : '-'}
                 </p>
-              </div>
-            </div>
+                </div>
+                </div>
 
             {/* Heating Agent, Bathrooms, Year Renovated Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
-              <div>
+                <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'heatingAgent')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">
                   {home.heatingAgent ? translateValue(language, home.heatingAgent) : '-'}
                 </p>
-              </div>
-              <div>
+                </div>
+                <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'bathrooms')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">{home.bathrooms}</p>
-              </div>
-              <div>
+                </div>
+                <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'yearRenovated')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">
                   {home.yearRenovated !== null && home.yearRenovated !== undefined ? home.yearRenovated : '-'}
                 </p>
-              </div>
+                </div>
             </div>
 
             {/* Available From */}
-            {home.availableFrom && (
+          {home.availableFrom && (
               <div>
                 <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'availableFrom')}</p>
                 <p className="text-2xl font-bold text-[#E8D5B7]">
                   {new Date(home.availableFrom).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+            </div>
+          )}
+
+            {/* Finalize Button - Show for both users and owners when inquiry is approved */}
+            {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && (
+              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+                <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-xl text-center">
+                  <p className="text-sm font-medium text-green-400">
+                    ✅ {getTranslation(language, 'approved')}
+                  </p>
+                </div>
+                {finalizeRequestSent ? (
+                  <button
+                    disabled
+                    className="w-full px-6 py-4 bg-green-600/50 border border-green-500/50 text-green-300 rounded-xl font-semibold text-lg transition-all cursor-not-allowed"
+                  >
+                    {getTranslation(language, 'awaitingFinalizeApproval')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFinalize}
+                    disabled={finalizing}
+                    className="w-full px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                  >
+                    {finalizing ? getTranslation(language, 'loading') : getTranslation(language, 'finalize')}
+                  </button>
+                )}
               </div>
             )}
 
             {/* Inquire Button - Only show for users (not owners viewing their own listings) */}
-            {home && userRole && (userRole === 'user' || userRole === 'both') && currentUserId !== home.owner.id && (
+            {home && displayRole === 'user' && currentUserId !== home.owner.id && inquiryStatus !== 'approved' && (
               <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
-                {hasInquiry && (
-                  <p className="text-sm font-medium text-[#E8D5B7]/70 mb-4 text-center">
-                    {getTranslation(language, 'inquiryMade')}
-                  </p>
+                {/* Status Banner */}
+                {inquiryStatus === 'inquired' && (
+                  <div className="mb-4 p-3 bg-orange-600/20 border border-orange-500/50 rounded-xl text-center">
+                    <p className="text-sm font-medium text-orange-400">
+                      🏷️ {getTranslation(language, 'inquiryMade')}
+                    </p>
+                  </div>
                 )}
-                <button
-                  onClick={handleInquiry}
-                  disabled={updatingInquiry}
-                  className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
-                    hasInquiry
-                      ? 'bg-red-600 hover:bg-red-700 text-white'
-                      : 'bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]'
-                  } disabled:opacity-50`}
-                >
-                  {updatingInquiry 
-                    ? getTranslation(language, 'loading')
-                    : hasInquiry 
-                      ? getTranslation(language, 'removeInquiry')
-                      : getTranslation(language, 'inquire')
-                  }
-                </button>
+                {inquiryStatus === 'dismissed' && (
+                  <div className="mb-4 p-3 bg-red-600/20 border border-red-500/50 rounded-xl text-center">
+                    <p className="text-sm font-medium text-red-400">
+                      ❌ {getTranslation(language, 'dismissed')}
+                    </p>
+                  </div>
+                )}
+                
+                {/* Inquire/Remove Button - Only show if inquiry is not approved or dismissed */}
+                {inquiryStatus !== 'approved' && inquiryStatus !== 'dismissed' && (
+                  <button
+                    onClick={handleInquiry}
+                    disabled={updatingInquiry}
+                    className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
+                      inquiryStatus === 'inquired'
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]'
+                    } disabled:opacity-50`}
+                  >
+                    {updatingInquiry 
+                      ? getTranslation(language, 'loading')
+                      : inquiryStatus === 'inquired'
+                        ? getTranslation(language, 'removeInquiry')
+                        : getTranslation(language, 'inquire')
+                    }
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -765,8 +880,8 @@ export default function HomeDetailPage() {
                     {/* Photo counter */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] px-4 py-2 rounded-full text-sm font-medium border border-[#E8D5B7]/30">
                       {lightboxPhotoIndex + 1} / {photos.length}
-                    </div>
-                    
+        </div>
+
                     {/* Thumbnail strip at bottom */}
                     <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 pb-2">
                       {photos.map((photo, index) => (
@@ -824,17 +939,20 @@ export default function HomeDetailPage() {
                     </span>
                   </div>
                 </div>
-                <div>
+            <div>
                   <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'name')}</label>
                   <p className="text-lg text-[#E8D5B7]">{home.owner.name || getTranslation(language, 'notProvided')}</p>
-                </div>
-                <div>
+            </div>
+            <div>
                   <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'email')}</label>
-                  <p className="text-lg text-[#E8D5B7]">{home.owner.email}</p>
-                </div>
+              <p className="text-lg text-[#E8D5B7]">{home.owner.email}</p>
+            </div>
                 {/* Rating in Modal */}
                 {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                  <div className="pt-4 border-t border-[#E8D5B7]/20">
+                  <Link
+                    href={`/profile/ratings/${home.owner.id}?type=owner`}
+                    className="pt-4 border-t border-[#E8D5B7]/20 block hover:opacity-80 transition-opacity cursor-pointer"
+                  >
                     <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
                     <div>
                       <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
@@ -849,27 +967,30 @@ export default function HomeDetailPage() {
                         ))}
                       </div>
                       {home.owner.ratings.ownerCount > 0 && (
-                        <p className="text-sm text-[#E8D5B7]/60 mt-1">
+                        <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">
                           {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                        </p>
+                        </span>
                       )}
                     </div>
-                  </div>
+                  </Link>
                 ) : (
                   <div className="pt-4 border-t border-[#E8D5B7]/20">
                     <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
-                    <div>
+            <div>
                       <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
                         <span>⭐</span>
-                        4.7
+                        0.0
                       </p>
                       <div className="flex items-center gap-1 mt-2">
                         {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                          <span key={i} className="text-base text-[#E8D5B7]/30">
                             ⭐
                           </span>
                         ))}
                       </div>
+                      <p className="text-sm text-[#E8D5B7]/60 mt-1">
+                        {getTranslation(language, 'notRatedYet')}
+                      </p>
                     </div>
                   </div>
                 )}

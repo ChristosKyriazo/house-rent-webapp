@@ -2,6 +2,8 @@
 
 import { usePathname } from 'next/navigation'
 import LanguageToggle from './LanguageToggle'
+import RoleSwitch from './RoleSwitch'
+import NotificationBell from './NotificationBell'
 
 export default function ConditionalLanguageToggle() {
   const pathname = usePathname()
@@ -11,6 +13,12 @@ export default function ConditionalLanguageToggle() {
     return null
   }
 
-  return <LanguageToggle />
+  return (
+    <div className="fixed top-4 right-4 z-[9999] flex items-center gap-2 pointer-events-none" style={{ isolation: 'isolate' }}>
+      <RoleSwitch />
+      <NotificationBell />
+      <LanguageToggle />
+    </div>
+  )
 }
 

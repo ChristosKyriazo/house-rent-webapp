@@ -22,9 +22,15 @@ export default function EditProfilePage() {
 
   useEffect(() => {
     fetch('/api/profile')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          router.push('/login')
+          return null
+        }
+        return res.json()
+      })
       .then((data) => {
-        if (data.user) {
+        if (data && data.user) {
           setFormData({
             name: data.user.name || '',
             dateOfBirth: data.user.dateOfBirth
@@ -34,10 +40,10 @@ export default function EditProfilePage() {
             role: data.user.role || 'user',
           })
         } else {
-          router.push('/login')
+          router.push('/profile')
         }
       })
-      .catch(() => router.push('/login'))
+      .catch(() => router.push('/profile'))
       .finally(() => setLoading(false))
   }, [router])
 
@@ -112,7 +118,7 @@ export default function EditProfilePage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                placeholder={language === 'el' ? 'Το όνομά σας ή όνομα χρήστη' : 'Your name or username'}
+                placeholder={getTranslation(language, 'placeholderName')}
               />
             </div>
 

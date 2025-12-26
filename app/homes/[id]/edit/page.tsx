@@ -334,7 +334,7 @@ export default function EditHomePage() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                placeholder={language === 'el' ? 'Ζεστό διαμέρισμα 2 υπνοδωματίων' : 'Cozy 2-bedroom apartment'}
+                placeholder={getTranslation(language, 'placeholderTitle')}
               />
             </div>
 
@@ -345,7 +345,7 @@ export default function EditHomePage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all resize-none text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
                 rows={4}
-                placeholder={language === 'el' ? 'Περιγράψτε το ακίνητο, τη γειτονιά, τις ανέσεις, κ.λπ.' : 'Describe the property, neighborhood, amenities, etc.'}
+                placeholder={getTranslation(language, 'placeholderDescription')}
               />
             </div>
 
@@ -430,7 +430,7 @@ export default function EditHomePage() {
                 value={formData.street}
                 onChange={(e) => setFormData({ ...formData, street: e.target.value })}
                 className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                placeholder={language === 'el' ? 'π.χ., Οδός Πατησίων 123' : 'e.g., Main Street 123'}
+                placeholder={getTranslation(language, 'placeholderStreet')}
               />
             </div>
 
@@ -443,7 +443,7 @@ export default function EditHomePage() {
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'Αθήνα' : 'Athens'}
+                  placeholder={getTranslation(language, 'placeholderCity')}
                 />
               </div>
               <div>
@@ -454,7 +454,7 @@ export default function EditHomePage() {
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'Ελλάδα' : 'Greece'}
+                  placeholder={getTranslation(language, 'placeholderCountry')}
                 />
               </div>
             </div>
@@ -481,7 +481,7 @@ export default function EditHomePage() {
                   value={formData.sizeSqMeters}
                   onChange={(e) => setFormData({ ...formData, sizeSqMeters: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 85' : 'e.g., 85'}
+                  placeholder={getTranslation(language, 'placeholderSize')}
                 />
               </div>
             </div>
@@ -525,7 +525,7 @@ export default function EditHomePage() {
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 3' : 'e.g., 3'}
+                  placeholder={getTranslation(language, 'placeholderBedrooms')}
                 />
               </div>
               <div>
@@ -561,7 +561,7 @@ export default function EditHomePage() {
                   value={formData.yearBuilt}
                   onChange={(e) => setFormData({ ...formData, yearBuilt: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 2010' : 'e.g., 2010'}
+                  placeholder={getTranslation(language, 'placeholderYearBuilt')}
                 />
               </div>
               <div>
@@ -573,7 +573,7 @@ export default function EditHomePage() {
                   value={formData.yearRenovated}
                   onChange={(e) => setFormData({ ...formData, yearRenovated: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                  placeholder={language === 'el' ? 'π.χ., 2020' : 'e.g., 2020'}
+                  placeholder={getTranslation(language, 'placeholderYearRenovated')}
                 />
               </div>
             </div>

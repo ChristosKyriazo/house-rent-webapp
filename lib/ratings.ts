@@ -13,16 +13,16 @@ export async function getUserRatings(userId: number) {
 
   const ownerAvg = ownerRatings.length > 0
     ? ownerRatings.reduce((sum, r) => sum + r.score, 0) / ownerRatings.length
-    : 4.7 // Default rating of 4.7 when no ratings exist
+    : null // Return null when no ratings exist
 
   const renterAvg = renterRatings.length > 0
     ? renterRatings.reduce((sum, r) => sum + r.score, 0) / renterRatings.length
-    : 4.7 // Default rating of 4.7 when no ratings exist
+    : null // Return null when no ratings exist
 
   return {
-    ownerRating: Number(ownerAvg.toFixed(1)),
+    ownerRating: ownerAvg !== null ? Number(ownerAvg.toFixed(1)) : null,
     ownerCount: ownerRatings.length,
-    renterRating: Number(renterAvg.toFixed(1)),
+    renterRating: renterAvg !== null ? Number(renterAvg.toFixed(1)) : null,
     renterCount: renterRatings.length,
   }
 }

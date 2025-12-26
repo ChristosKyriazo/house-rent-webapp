@@ -20,9 +20,10 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]
-  ratingsReceived Rating[]  @relation("RatedUser")
-  ratingsGiven    Rating[]  @relation("Rater")
+  ratingsReceived Rating[]       @relation("RatedUser")
+  ratingsGiven    Rating[]       @relation("Rater")
   inquiries       Inquiry[]
+  notifications   Notification[] @relation
 
   @@map("users")
 }
@@ -48,11 +49,14 @@ model Home {
   yearRenovated Int?
   availableFrom DateTime
   photos        String?  // JSON array of photo file paths/URLs
+  finalized     Boolean  @default(false) // Whether any inquiry for this home has been finalized
   ownerId       Int
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   inquiries     Inquiry[]
+
+  @@index([finalized])
 
   @@index([city])
   @@index([ownerId])
@@ -81,18 +85,46 @@ model Rating {
 }
 
 model Inquiry {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique @default(cuid())
-  userId    Int
-  homeId    Int
-  approved  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @default(cuid())
+  userId      Int
+  homeId      Int
+  approved    Boolean  @default(false)
+  dismissed   Boolean  @default(false)
+  finalized   Boolean  @default(false) // Whether the deal has been finalized
+  finalizedBy Int?     // User ID who initiated finalization (null if not finalized)
+  contactInfo String?  // JSON string with contact information (name, email, phone, timeSchedule, useContactPerson)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home        Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, homeId])
   @@index([userId])
   @@index([homeId])
+  @@index([approved])
+  @@index([dismissed])
+  @@index([finalized])
   @@map("inquiries")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique @default(cuid())
+  recipientId Int       // User who receives the notification
+  role        String    // "owner" or "user" - the role of the recipient
+  type        String    // "inquiry", "approved", "dismissed", or "finalize"
+  homeKey     String?   // Home key (for users, this is the owner's home)
+  userId      Int?      // User ID (for owners, this is the user who inquired)
+  ownerKey    String?   // Owner key (for users, this is the owner's key)
+  inquiryId   Int?      // Inquiry ID (for finalize notifications)
+  deleted     Boolean   @default(false) // Whether the notification has been deleted
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@index([deleted])
+  @@index([type])
+  @@map("notifications")
 }

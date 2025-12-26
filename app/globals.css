@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #2D3748;
+  --foreground: #E8D5B7;
 }
 
 @theme inline {
@@ -12,17 +12,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: #2D3748;
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #2D3748;
+  color: #E8D5B7;
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }
 
 /* Hide Next.js development indicator and any bottom-left logos */
@@ -163,30 +162,42 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   pointer-events: auto !important;
 }
 
-/* Make OTP input cursor visible and blinking */
+/* Make Clerk's OTP cursor visible - ensure it shows in focused inputs */
 input[data-input-otp="true"] {
   caret-color: #E8D5B7 !important;
-  animation: blink 1s infinite !important;
+  text-align: center !important;
 }
 
-@keyframes blink {
-  0%, 50% {
-    opacity: 1;
-  }
-  51%, 100% {
-    opacity: 0;
-  }
+/* Make sure focused inputs show the cursor */
+input[data-input-otp="true"]:focus {
+  caret-color: #E8D5B7 !important;
 }
 
-/* Ensure the cursor is visible in the active OTP segment */
-.cl-otpCodeFieldInput[data-focus-within="true"]::after {
-  content: '';
-  position: absolute;
-  width: 2px;
-  height: 1.5rem;
-  background-color: #E8D5B7;
-  animation: blink 1s infinite;
-  pointer-events: none;
+/* Remove any pseudo-element cursors that might appear in the middle */
+.cl-otpCodeFieldInput::after,
+.cl-otpCodeFieldInput::before,
+[data-input-otp-container="true"]::after,
+[data-input-otp-container="true"]::before,
+.cl-otpCodeFieldInputs::after,
+.cl-otpCodeFieldInputs::before {
+  display: none !important;
+  content: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide cursor on container elements - only show on actual inputs */
+[data-input-otp-container="true"] {
+  caret-color: transparent !important;
+}
+
+/* Ensure inputs inside focused containers show cursor */
+.cl-otpCodeFieldInput[data-focus-within="true"] input[data-input-otp="true"] {
+  caret-color: #E8D5B7 !important;
+}
+
+/* Make sure the first input box can receive focus and show cursor */
+.cl-otpCodeFieldInput:first-child input[data-input-otp="true"] {
+  caret-color: #E8D5B7 !important;
 }
 
 /* Buttons */

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 
 interface User {
@@ -23,22 +25,37 @@ interface Ratings {
 }
 
 export default function ProfilePage() {
+  const searchParams = useSearchParams()
   const { language } = useLanguage()
+  const { selectedRole, actualRole } = useRole()
   const [user, setUser] = useState<User | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [ratings, setRatings] = useState<Ratings | null>(null)
   const [loading, setLoading] = useState(true)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
-    // Check if banner was dismissed
-    const dismissed = localStorage.getItem('profileBannerDismissed') === 'true'
-    setBannerDismissed(dismissed)
+    // Check if banner was dismissed (only for own profile)
+    const userIdParam = searchParams.get('userId')
+    if (!userIdParam) {
+      const dismissed = localStorage.getItem('profileBannerDismissed') === 'true'
+      setBannerDismissed(dismissed)
+    } else {
+      setBannerDismissed(true) // Don't show banner for other users' profiles
+    }
 
     const fetchData = async () => {
       try {
+        const userIdParam = searchParams.get('userId')
+        const roleParam = searchParams.get('role') // Get role from query parameter
+        const profileUrl = userIdParam ? `/api/profile?userId=${userIdParam}` : '/api/profile'
+        
+        // Always fetch current user's profile to get their ID for comparison
+        const currentUserRes = userIdParam ? await fetch('/api/profile').catch(() => null) : null
+        
         const [profileRes, ratingsRes] = await Promise.all([
-          fetch('/api/profile'),
-          fetch('/api/ratings').catch(() => null)
+          fetch(profileUrl),
+          userIdParam ? null : fetch('/api/ratings').catch(() => null) // Only fetch ratings for own profile
         ])
         
         if (!profileRes.ok) {
@@ -49,9 +66,29 @@ export default function ProfilePage() {
         const profileData = await profileRes.json()
         if (profileData.user) {
           setUser(profileData.user)
-          if (ratingsRes?.ok) {
+          
+          // Get current user's ID for comparison
+          if (currentUserRes?.ok) {
+            const currentUserData = await currentUserRes.json()
+            if (currentUserData.user) {
+              setCurrentUserId(currentUserData.user.id)
+            }
+          } else if (!userIdParam) {
+            // If no userId param, this is the current user's profile
+            setCurrentUserId(profileData.user.id)
+          }
+          
+          // Only fetch ratings for own profile
+          if (!userIdParam && ratingsRes?.ok) {
             const ratingsData = await ratingsRes.json()
             setRatings(ratingsData.ratings || ratingsData)
+          } else if (userIdParam) {
+            // Fetch ratings for the viewed user
+            const userRatingsRes = await fetch(`/api/ratings?userId=${userIdParam}`).catch(() => null)
+            if (userRatingsRes?.ok) {
+              const userRatingsData = await userRatingsRes.json()
+              setRatings(userRatingsData.ratings || userRatingsData)
+            }
           }
         }
       } catch (error) {
@@ -63,7 +100,7 @@ export default function ProfilePage() {
     }
 
     fetchData()
-  }, [])
+  }, [searchParams])
 
   const handleDismissBanner = () => {
     localStorage.setItem('profileBannerDismissed', 'true')
@@ -113,6 +150,26 @@ export default function ProfilePage() {
   // Calculate username
   const displayName = user.name || user.email.split('@')[0]
   const userRole = user.role || 'user'
+  
+  // Get query parameters
+  const userIdParam = searchParams.get('userId')
+  const roleParam = searchParams.get('role')
+  
+  // Determine display role for ratings:
+  // 1. If viewing another user's profile (userId param), use the role from query param if provided
+  // 2. If user has "both" role, use selectedRole from context
+  // 3. Otherwise use actualRole or userRole
+  let displayRole: string
+  if (userIdParam && roleParam) {
+    // Viewing another user's profile with specific role
+    displayRole = roleParam
+  } else if (actualRole === 'both' && selectedRole) {
+    // Own profile with "both" role, use selected role from context
+    displayRole = selectedRole
+  } else {
+    // Default to actualRole or userRole
+    displayRole = actualRole || userRole || 'user'
+  }
 
   const calculateAgeFromDob = (dobString: string | null) => {
     if (dobString) {
@@ -132,12 +189,17 @@ export default function ProfilePage() {
 
   const computedAge = calculateAgeFromDob(user.dateOfBirth)
 
-  // Check if profile is incomplete
-  const isProfileIncomplete = !user.name || !user.dateOfBirth || !user.occupation
+  // Check if viewing own profile
+  const isOwnProfile = !userIdParam || (currentUserId !== null && user.id === currentUserId)
+
+  // Check if profile is incomplete (only for own profile)
+  const isProfileIncomplete = isOwnProfile && (!user.name || !user.dateOfBirth || !user.occupation)
   const missingFields: string[] = []
-  if (!user.name) missingFields.push(getTranslation(language, 'name'))
-  if (!user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
-  if (!user.occupation) missingFields.push(getTranslation(language, 'occupation'))
+  if (isOwnProfile) {
+    if (!user.name) missingFields.push(getTranslation(language, 'name'))
+    if (!user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
+    if (!user.occupation) missingFields.push(getTranslation(language, 'occupation'))
+  }
 
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
@@ -198,15 +260,18 @@ export default function ProfilePage() {
                     <h1 className="text-3xl font-bold text-[#E8D5B7] mb-6">{displayName}</h1>
           </div>
 
-          {/* Ratings Section - Show based on user role */}
+          {/* Ratings Section - Show based on display role */}
           {ratings && (
-            <div className={`grid gap-4 mb-6 ${userRole === 'both' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-              {/* Show owner rating only for owners or both */}
-              {(userRole === 'owner' || userRole === 'both') && (
+            <div className="grid gap-4 mb-6 grid-cols-1">
+              {/* Show owner rating only when display role is owner */}
+              {displayRole === 'owner' && (
                 <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
                   <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asOwner')}</h3>
-                  {ratings.ownerRating !== null ? (
-                    <div className="flex flex-col items-center gap-2">
+                {ratings.ownerRating !== null ? (
+                    <Link
+                      href={`/profile/ratings/${user?.id}?type=owner`}
+                      className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
                       <p className="text-2xl font-bold text-[#E8D5B7]">
                         {ratings.ownerRating.toFixed(1)}
                       </p>
@@ -218,32 +283,38 @@ export default function ProfilePage() {
                         ))}
                       </div>
                       {ratings.ownerCount > 0 && (
-                        <p className="text-xs text-[#E8D5B7]/60">
+                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                           {ratings.ownerCount} {ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                        </p>
+                        </span>
                       )}
-                    </div>
-                  ) : (
+                    </Link>
+                ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-2xl font-bold text-[#E8D5B7]">4.7</p>
+                      <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
                       <div className="flex items-center gap-0.5">
                         {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                          <span key={i} className="text-base text-[#E8D5B7]/30">
                             ⭐
                           </span>
                         ))}
                       </div>
+                      <p className="text-xs text-[#E8D5B7]/60">
+                        {getTranslation(language, 'notRatedYet')}
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Show user rating only for users or both */}
-              {(userRole === 'user' || userRole === 'both') && (
+                )}
+              </div>
+            )}
+            
+              {/* Show user rating only when display role is user */}
+              {displayRole === 'user' && (
                 <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
                   <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asUser')}</h3>
-                  {ratings.renterRating !== null ? (
-                    <div className="flex flex-col items-center gap-2">
+                {ratings.renterRating !== null ? (
+                    <Link
+                      href={`/profile/ratings/${user?.id}?type=renter`}
+                      className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
                       <p className="text-2xl font-bold text-[#E8D5B7]">
                         {ratings.renterRating.toFixed(1)}
                       </p>
@@ -255,26 +326,29 @@ export default function ProfilePage() {
                         ))}
                       </div>
                       {ratings.renterCount > 0 && (
-                        <p className="text-xs text-[#E8D5B7]/60">
+                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                           {ratings.renterCount} {ratings.renterCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                        </p>
+                        </span>
                       )}
-                    </div>
-                  ) : (
+                    </Link>
+                ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-2xl font-bold text-[#E8D5B7]">4.7</p>
+                      <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
                       <div className="flex items-center gap-0.5">
                         {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(4.7) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
+                          <span key={i} className="text-base text-[#E8D5B7]/30">
                             ⭐
                           </span>
                         ))}
                       </div>
+                      <p className="text-xs text-[#E8D5B7]/60">
+                        {getTranslation(language, 'notRatedYet')}
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+          </div>
           )}
 
           {/* Profile Information */}
@@ -282,21 +356,21 @@ export default function ProfilePage() {
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'userName')}</label>
               <p className={`text-lg ${user.name ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
-                {user.name || `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
+                {user.name || getTranslation(language, 'notSet')}
               </p>
             </div>
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
               <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
-                {typeof computedAge === 'number' ? computedAge : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add ${getTranslation(language, 'dateOfBirth')}`}
+                {typeof computedAge === 'number' ? computedAge : getTranslation(language, 'notSet')}
               </p>
             </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
+              <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'occupation')}</label>
               <p className={`text-lg ${user.occupation ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
-                {user.occupation ? translateValue(language, user.occupation) : `${getTranslation(language, 'notSet')} - ${getTranslation(language, 'editProfile')} to add`}
+                {user.occupation ? translateValue(language, user.occupation) : getTranslation(language, 'notSet')}
               </p>
-            </div>
+              </div>
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'email')}</label>
               <p className="text-lg text-[#E8D5B7]">{user.email}</p>
@@ -321,15 +395,17 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Edit Profile Button */}
-          <div className="flex justify-center pt-4">
-            <Link
-              href="/profile/edit"
-              className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl"
-            >
-              {getTranslation(language, 'editProfile')}
-            </Link>
-          </div>
+          {/* Edit Profile Button - Only show for own profile */}
+          {isOwnProfile && (
+            <div className="flex justify-center pt-4">
+              <Link
+                href="/profile/edit"
+                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl"
+              >
+                {getTranslation(language, 'editProfile')}
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

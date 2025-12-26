@@ -68,6 +68,7 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            role: true,
           },
         },
       },
@@ -87,9 +88,12 @@ export async function GET(
             id: inquiry.user.id,
             name: inquiry.user.name,
             email: inquiry.user.email,
-            rating: ratings.renterRating, // Use renter rating for users who inquire
+            role: inquiry.user.role,
+            rating: ratings.renterRating, // Use renter rating for users who inquire (null if not rated)
           },
           approved: inquiry.approved,
+          dismissed: inquiry.dismissed,
+          contactInfo: inquiry.contactInfo,
           createdAt: inquiry.createdAt,
         }
       })

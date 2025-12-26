@@ -22,3 +22,5 @@ CREATE INDEX "inquiries_userId_idx" ON "inquiries"("userId");
 -- CreateIndex
 CREATE INDEX "inquiries_homeId_idx" ON "inquiries"("homeId");
 
+
+

@@ -12,11 +12,33 @@ export async function GET(request: NextRequest) {
 
     const inquiries = await prisma.inquiry.findMany({
       where: { userId: user.id },
-      select: { homeId: true },
+      select: { 
+        id: true,
+        homeId: true,
+        approved: true,
+        dismissed: true,
+        finalized: true,
+      },
     })
 
-    const homeIds = inquiries.map(inq => inq.homeId)
-    return NextResponse.json({ homeIds }, { status: 200 })
+    // Return inquiry status and IDs for each home
+    const inquiryStatus: Record<number, 'inquired' | 'approved' | 'dismissed'> = {}
+    const inquiryIds: Record<number, number> = {}
+    const finalizedHomes: Record<number, boolean> = {}
+    
+    inquiries.forEach(inq => {
+      inquiryIds[inq.homeId] = inq.id
+      finalizedHomes[inq.homeId] = inq.finalized || false
+      if (inq.approved) {
+        inquiryStatus[inq.homeId] = 'approved'
+      } else if (inq.dismissed) {
+        inquiryStatus[inq.homeId] = 'dismissed'
+      } else {
+        inquiryStatus[inq.homeId] = 'inquired'
+      }
+    })
+
+    return NextResponse.json({ inquiryStatus, inquiryIds, finalizedHomes }, { status: 200 })
   } catch (error) {
     console.error('Get inquiries error:', error)
     return NextResponse.json(
@@ -59,12 +81,45 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get the home to find the owner
+    const home = await prisma.home.findUnique({
+      where: { id: parseInt(homeId) },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            key: true,
+          },
+        },
+      },
+    })
+
+    if (!home) {
+      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+    }
+
     const inquiry = await prisma.inquiry.create({
       data: {
         userId: user.id,
         homeId: parseInt(homeId),
       },
     })
+
+    // Create notification for the owner
+    try {
+      await prisma.notification.create({
+        data: {
+          recipientId: home.owner.id,
+          role: 'owner',
+          type: 'inquiry',
+          homeKey: home.key,
+          userId: user.id,
+        },
+      })
+    } catch (error) {
+      console.error('Failed to create notification:', error)
+      // Don't fail the inquiry creation if notification fails
+    }
 
     return NextResponse.json({ inquiry }, { status: 201 })
   } catch (error: any) {

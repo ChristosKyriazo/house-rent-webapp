@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
 
 // POST /api/homes/ai-search - AI-powered home search
 // For now, this is a simple keyword-based search
@@ -90,6 +91,30 @@ export async function POST(request: NextRequest) {
       }
     } else {
       where = baseConditions
+    }
+
+    // Exclude owner's own houses if user is also an owner
+    // Check if user is authenticated and has owner role
+    try {
+      const user = await getCurrentUser()
+      if (user) {
+        const userRole = (user.role || 'user').toLowerCase()
+        // If user is owner or both, exclude their own houses from search
+        if (userRole === 'owner' || userRole === 'both') {
+          // Add ownerId filter to existing where conditions
+          if (where.AND) {
+            where.AND.push({ ownerId: { not: user.id } })
+          } else {
+            where = {
+              ...where,
+              ownerId: { not: user.id }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // If getCurrentUser fails (user not logged in), continue without filtering
+      // This allows unauthenticated users to search
     }
 
     const homes = await prisma.home.findMany({

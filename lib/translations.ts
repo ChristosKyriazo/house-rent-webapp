@@ -2,552 +2,538 @@ export type Language = 'el' | 'en'
 
 export const translations = {
   el: {
-    // Common
-    loading: 'Φόρτωση...',
-    back: 'Πίσω',
-    edit: 'Επεξεργασία',
-    save: 'Αποθήκευση',
-    cancel: 'Ακύρωση',
-    close: 'Κλείσιμο',
-    confirm: 'Επιβεβαίωση',
-    delete: 'Διαγραφή',
-    confirmDelete: 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την αγγελία;',
-    deleteFailed: 'Η διαγραφή της αγγελίας απέτυχε',
-    upload: 'Ανέβασμα',
-    photos: 'Φωτογραφίες',
-    noPhotos: 'Δεν υπάρχουν φωτογραφίες',
-    
-    // Home Page
-    appTitle: 'House Rent',
-    appDescription: 'Βρείτε το ιδανικό σας ενοίκιο ή δημοσιεύστε την ιδιοκτησία σας',
+    // App
+    appTitle: 'Καλώς ήρθατε',
+    appDescription: 'Βρείτε το ιδανικό σπίτι για ενοικίαση ή αγορά',
     signUp: 'Εγγραφή',
     signIn: 'Σύνδεση',
+    welcome: 'Καλώς ήρθατε',
+    or: 'ή',
+    login: 'Σύνδεση',
     
     // Navigation
-    returnToSearch: 'Επιστροφή στην Αναζήτηση',
-    
-    // Listing Form
-    createListing: 'Δημιουργία Αγγελίας Ακινήτου',
-    editListing: 'Επεξεργασία Αγγελίας Ακινήτου',
-    listingDetails: 'Συμπληρώστε τις λεπτομέρειες του ακινήτου που θέλετε να δημοσιεύσετε.',
-    updateListing: 'Ενημέρωση Αγγελίας',
-    updatingListing: 'Ενημέρωση...',
-    updateListingFailed: 'Η ενημέρωση της αγγελίας απέτυχε',
-    title: 'Τίτλος',
-    description: 'Περιγραφή',
-    listingType: 'Τύπος Αγγελίας',
-    rent: 'Ενοικίαση',
-    sell: 'Πώληση',
-    buy: 'Αγορά',
-    street: 'Οδός',
-    city: 'Πόλη',
-    cityArea: 'Περιοχή',
-    selectCityArea: 'Επιλέξτε περιοχή',
-    country: 'Χώρα',
-    pricePerMonth: 'Τιμή ανά μήνα (€)',
-    bedrooms: 'Υπνοδωμάτια',
-    bathrooms: 'Μπάνια',
-    floor: 'Όροφος',
-            heatingCategory: 'Κατηγορία Θέρμανσης',
-            heatingAgent: 'Υλικό Θέρμανσης',
-    sizeSqMeters: 'Μέγεθος (m²)',
-    yearBuilt: 'Έτος Κατασκευής',
-    yearRenovated: 'Έτος Ανακαίνισης',
-    availableFrom: 'Διαθέσιμο από',
-    uploadPhotos: 'Ανέβασμα Φωτογραφιών',
-    optional: 'προαιρετικό',
-    
-    // Detail Page
-    price: 'Τιμή',
-    perMonth: 'ανά μήνα',
-    totalPrice: 'συνολική τιμή',
-            ownerProfile: 'Προφίλ Ιδιοκτήτη',
-            homeowner: 'Ιδιοκτήτης',
-    name: 'Όνομα',
-    email: 'Email',
-    memberSince: 'Μέλος από',
-    notProvided: 'Δεν δόθηκε',
-    
-    // My Listings
-    myListings: 'Οι Αγγελίες μου',
-    manageListings: 'Διαχειριστείτε όλες τις αγγελίες ακινήτων σας',
-    newListing: 'Νέα Αγγελία',
-    noListings: 'Δεν έχετε δημοσιεύσει ακόμα καμία αγγελία.',
-    publishedOn: 'Δημοσιεύτηκε στις',
-    
-    // Errors
-    somethingWentWrong: 'Κάτι πήγε στραβά. Παρακαλώ δοκιμάστε ξανά.',
-    createListingFailed: 'Η δημιουργία της αγγελίας απέτυχε',
-    
-    // Search Page
-    whatAreYouLookingFor: 'Τι αναζητάτε;',
-    howDoYouWantToSearch: 'Πώς θέλετε να αναζητήσετε;',
-    back: 'Πίσω',
-    manualFilter: 'Χειροκίνητο Φίλτρο',
-    aiSearch: 'AI Αναζήτηση',
-    filterByFeatures: 'Φίλτρο ανά Χαρακτηριστικά',
-    availableProperties: 'Διαθέσιμα Ακίνητα',
-    foundListings: 'Βρέθηκαν {count} {count === 1 ? "αγγελία" : "αγγελίες"}',
-    newListing: 'Νέα Αγγελία',
-    listing: 'αγγελία',
-    listings: 'αγγελίες',
-    found: 'βρέθηκαν',
-    bedroomsShort: 'υπνοδ.',
-    bathroomsShort: 'μπάνια',
-    noPropertiesFound: 'Δεν βρέθηκαν ακίνητα που να ταιριάζουν με τα φίλτρα σας. Δοκιμάστε να προσαρμόσετε τα κριτήρια αναζήτησης.',
-    noPropertiesFoundAi: 'Δεν βρέθηκαν ακίνητα. Δοκιμάστε μια διαφορετική αναζήτηση.',
-    inquire: 'Ενδιαφέρομαι',
-    removeInquiry: 'Δεν ενδιαφέρομαι',
-    inquiryMade: 'Ενδιαφέρον εκδηλώθηκε',
-    inquiries: 'Αιτήματα ενδιαφέροντος',
-    inquiry: 'Αίτημα ενδιαφέροντος',
-    totalInquiries: 'Σύνολο {count} ερωτήσεων',
-    noInquiries: 'Δεν υπάρχουν ερωτήσεις',
-    noInquiriesForListings: 'Δεν υπάρχουν ερωτήσεις για τα ακίνητά σας',
-    noInquiriesForThisHome: 'Δεν υπάρχουν ερωτήσεις για αυτό το ακίνητο',
-    usersWhoInquired: 'Χρήστες που δήλωσαν ενδιαφέρον',
-    viewMyListings: 'Προβολή Αγγελιών',
-    approve: 'Έγκριση',
-    dismiss: 'Απόρριψη',
-    approved: 'Εγκεκριμένο',
-    allInquiriesProcessed: 'Όλες οι ερωτήσεις έχουν επεξεργαστεί',
-    backToInquiries: 'Επιστροφή στις Ερωτήσεις',
-    inquiryDate: 'Ημερομηνία',
-    pendingApproval: 'Αναμονή έγκρισης',
-    inquiriesAsOwner: 'Αιτήματα ως Ιδιοκτήτης',
-    inquiriesAsUser: 'Αιτήματα ως Χρήστης',
-    sendContactInfo: 'Αποστολή Στοιχείων Επικοινωνίας',
-    phone: 'Τηλέφωνο',
-    enterPhone: 'Εισάγετε τηλέφωνο',
-    timeSchedule: 'Πρόγραμμα Διαθεσιμότητας',
-    enterTimeSchedule: 'Εισάγετε το πρόγραμμα διαθεσιμότητάς σας',
-    sendAndApprove: 'Αποστολή και Έγκριση',
-    hireContactPerson: 'Πρόσληψη Επικοινωνίας',
-    hireContactPersonDescription: 'Προσλάβετε έναν επαγγελματία για να διαχειριστεί την επικοινωνία με τους ενδιαφερόμενους',
-    tellUsWhatYouNeed: 'Πείτε μας τι χρειάζεστε',
-    aiSearchDescription: 'Περιγράψτε τι αναζητάτε και γιατί. Η AI μας θα βρει τα καλύτερα ακίνητα για εσάς.',
-    applyFilters: 'Εφαρμογή Φίλτρων',
-    searching: 'Αναζήτηση...',
-    searchingWithAi: 'Αναζήτηση με AI...',
-    anyCity: 'Οποιαδήποτε πόλη',
-    anyCountry: 'Οποιαδήποτε χώρα',
-    minBedrooms: 'Ελάχιστα Υπνοδωμάτια',
-    maxBedrooms: 'Μέγιστα Υπνοδωμάτια',
-    minSize: 'Ελάχιστο Μέγεθος (m²)',
-    maxSize: 'Μέγιστο Μέγεθος (m²)',
-    minPrice: 'Ελάχιστη Τιμή (€)',
-    maxPrice: 'Μέγιστη Τιμή (€)',
-    any: 'Οποιοδήποτε',
-    publishedBy: 'Δημοσιεύτηκε από',
-    perMonth: 'ανά μήνα',
-    totalPrice: 'συνολική τιμή',
-    
-    // Profile Page
-    asOwner: 'Ως Ιδιοκτήτης',
-    asUser: 'Ως Χρήστης',
-    noRatingsYet: 'Δεν υπάρχουν αξιολογήσεις ακόμα',
-    rating: 'αξιολόγηση',
-    ratings: 'αξιολογήσεις',
-    userName: 'Όνομα Χρήστη',
-    age: 'Ηλικία',
-    dateOfBirth: 'Ημερομηνία Γέννησης',
-    notSet: 'Δεν έχει οριστεί',
-    occupation: 'Επάγγελμα',
-    role: 'Ρόλος',
-    memberSince: 'Μέλος από',
-    editProfile: 'Επεξεργασία Προφίλ',
-    owner: 'Ιδιοκτήτης',
-    user: 'Χρήστης',
-    ownerAndUser: 'Ιδιοκτήτης & Χρήστης',
-    completeYourProfile: 'Ολοκληρώστε το Προφίλ σας',
-    profileIncomplete: 'Το προφίλ σας είναι ατελές. Συμπληρώστε τις πληροφορίες σας για ένα πιο πλήρες προφίλ.',
-    missingInformation: 'Λείπουν πληροφορίες',
-    
-    // Hamburger Menu
     menu: 'Μενού',
     profile: 'Προφίλ',
     myListings: 'Οι Αγγελίες μου',
+    manageListings: 'Διαχειριστείτε τις αγγελίες σας',
+    noListings: 'Δεν έχετε δημοσιεύσει αγγελίες ακόμα',
+    publishedOn: 'Δημοσιεύτηκε στις',
     publishProperty: 'Δημοσίευση Ακινήτου',
     searchProperties: 'Αναζήτηση Ακινήτων',
+    inquiries: 'Αιτήματα ενδιαφέροντος',
+    approvedInquiries: 'Εγκεκριμένα Αιτήματα',
+    approvedInquiry: 'Εγκεκριμένο Αίτημα',
+    noApprovedInquiries: 'Δεν υπάρχουν εγκεκριμένα αιτήματα',
+    viewInquiries: 'Προβολή Αιτημάτων',
     logout: 'Αποσύνδεση',
-    showMenu: 'Εμφάνιση μενού',
+    showMenu: 'Εμφάνιση Μενού',
     
-    // Edit Profile Page
+    // Search
+    whatAreYouLookingFor: 'Τι ψάχνετε;',
+    rent: 'Ενοικίαση',
+    buy: 'Αγορά',
+    howDoYouWantToSearch: 'Πώς θέλετε να αναζητήσετε;',
+    manualFilter: 'Χειροκίνητο Φίλτρο',
+    aiSearch: 'AI Αναζήτηση',
+    filterByFeatures: 'Φιλτράρισμα κατά Χαρακτηριστικά',
+    back: 'Πίσω',
+    city: 'Πόλη',
+    country: 'Χώρα',
+    anyCity: 'Οποιαδήποτε πόλη',
+    anyCountry: 'Οποιαδήποτε χώρα',
+    cityArea: 'Περιοχή',
+    selectCityArea: 'Επιλέξτε περιοχή',
+    minPrice: 'Ελάχιστη Τιμή',
+    maxPrice: 'Μέγιστη Τιμή',
+    minSize: 'Ελάχιστο Μέγεθος',
+    maxSize: 'Μέγιστο Μέγεθος',
+    heatingCategory: 'Κατηγορία Θέρμανσης',
+    heatingAgent: 'Μέσο Θέρμανσης',
+    minBedrooms: 'Ελάχιστα Υπνοδωμάτια',
+    maxBedrooms: 'Μέγιστα Υπνοδωμάτια',
+    yearBuilt: 'Έτος Κατασκευής',
+    any: 'Οποιοδήποτε',
+    applyFilters: 'Εφαρμογή Φίλτρων',
+    searching: 'Αναζήτηση...',
+    tellUsWhatYouNeed: 'Πείτε μας τι χρειάζεστε',
+    aiSearchDescription: 'Περιγράψτε με λέξεις τι ψάχνετε και το AI θα βρει τα κατάλληλα ακίνητα για εσάς.',
+    searchingWithAi: 'Αναζήτηση με AI...',
+    availableProperties: 'Διαθέσιμα Ακίνητα',
+    listing: 'αγγελία',
+    listings: 'αγγελίες',
+    found: 'βρέθηκαν',
+    noPropertiesFound: 'Δεν βρέθηκαν ακίνητα',
+    noPropertiesFoundAi: 'Δεν βρέθηκαν ακίνητα με βάση την περιγραφή σας',
+    newListing: 'Νέα Αγγελία',
+    publishedBy: 'Δημοσιεύτηκε από',
+    
+    // Property Details
+    returnToSearch: 'Επιστροφή στην Αναζήτηση',
+    edit: 'Επεξεργασία',
+    noPhotos: 'Δεν υπάρχουν φωτογραφίες',
+    owner: 'Ιδιοκτήτης',
+    user: 'Χρήστης',
+    description: 'Περιγραφή',
+    price: 'Τιμή',
+    sizeSqMeters: 'Μέγεθος (m²)',
+    floor: 'Όροφος',
+    bedrooms: 'Υπνοδωμάτια',
+    bedroomsShort: 'υπν.',
+    bathrooms: 'Μπάνια',
+    bathroomsShort: 'μπάν.',
+    yearRenovated: 'Έτος Ανακαίνισης',
+    availableFrom: 'Διαθέσιμο από',
+    perMonth: '/ μήνα',
+    totalPrice: 'Συνολική Τιμή',
+    close: 'Κλείσιμο',
+    ownerProfile: 'Προφίλ Ιδιοκτήτη',
+    notProvided: 'Δεν δόθηκε',
+    asOwner: 'Ως Ιδιοκτήτης',
+    asUser: 'Ως Χρήστης',
+    rating: 'αξιολόγηση',
+    ratings: 'αξιολογήσεις',
+    
+    // Inquiries
+    inquiryMade: 'Έχετε δηλώσει ενδιαφέρον',
+    inquiryMadeBanner: 'ΕΧΕΤΕ ΔΗΛΩΣΕΙ ΕΝΔΙΑΦΕΡΟΝ', // Uppercase for banners (no accents)
+    inquire: 'Δήλωση Ενδιαφέροντος',
+    removeInquiry: 'Αφαίρεση Ενδιαφέροντος',
+    approved: 'Εγκεκριμένο',
+    approvedBanner: 'ΕΓΚΕΚΡΙΜΕΝΟ', // Uppercase for banners (no accents)
+    dismissed: 'Απορριφθέν',
+    dismissedBanner: 'ΑΠΟΡΡΙΦΘΕΝ', // Uppercase for banners (no accents)
+    inquiryDate: 'Ημερομηνία Αίτησης',
+    approvedOn: 'Εγκρίθηκε στις',
+    contactInformation: 'Στοιχεία Επικοινωνίας',
+    sendContactInfo: 'Αποστολή Στοιχείων Επικοινωνίας',
+    sendAndApprove: 'Αποστολή και Έγκριση',
+    hireContactPerson: 'Πρόσληψη Επικοινωνίας',
+    hireContactPersonDescription: 'Προσλάβετε έναν επαγγελματία για να χειρίζεται τις επικοινωνίες',
+    approve: 'Έγκριση',
+    inquiry: 'Αίτημα',
+    totalInquiries: '{count} αιτήματα',
+    noInquiries: 'Δεν υπάρχουν αιτήματα',
+    noInquiriesForListings: 'Δεν υπάρχουν αιτήματα για τις αγγελίες σας',
+    noInquiriesForThisHome: 'Δεν υπάρχουν αιτήματα για αυτό το ακίνητο',
+    viewMyListings: 'Προβολή Αγγελιών μου',
+    allInquiriesProcessed: 'Όλα τα αιτήματα έχουν επεξεργαστεί',
+    pendingApproval: 'Σε αναμονή έγκρισης',
+    finalize: 'Οριστικοποίηση',
+    finalizeRequestSent: 'Αίτημα οριστικοποίησης στάλθηκε',
+    finalizeFailed: 'Αποτυχία οριστικοποίησης',
+    awaitingFinalizeApproval: 'Σε αναμονή έγκρισης οριστικοποίησης',
+    dealFinalized: 'Η συμφωνία οριστικοποιήθηκε',
+    finalizeDeal: 'Οριστικοποίηση Συμφωνίας',
+    finalizeDealDescription: 'Είστε σίγουροι ότι θέλετε να οριστικοποιήσετε αυτή τη συμφωνία;',
+    approveFinalization: 'Επιβεβαίωση Οριστικοποίησης',
+    dismissFinalization: 'Απόρριψη Οριστικοποίησης',
+    dealDone: 'ΣΥΜΦΩΝΙΑ ΟΛΟΚΛΗΡΩΘΗΚΕ',
+    propertyInformation: 'Πληροφορίες Ακινήτου',
+    senderInformation: 'Πληροφορίες Αποστολέα',
+    rateOwner: 'Αξιολόγηση Ιδιοκτήτη',
+    rateUser: 'Αξιολόγηση Χρήστη',
+    rateOwnerDescription: 'Αξιολογήστε τους ιδιοκτήτες με τους οποίους ολοκληρώσατε συμφωνίες',
+    rateUserDescription: 'Αξιολογήστε τους χρήστες με τους οποίους ολοκληρώσατε συμφωνίες',
+    noFinalizedInquiries: 'Δεν υπάρχουν ολοκληρωμένες συμφωνίες προς αξιολόγηση',
+    rated: 'Αξιολογήθηκε',
+    rateNow: 'Αξιολόγηση Τώρα',
+    comment: 'Σχόλιο',
+    commentPlaceholder: 'Γράψτε ένα σχόλιο (προαιρετικό)',
+    submitRating: 'Υποβολή Αξιολόγησης',
+    submitting: 'Υποβολή...',
+    ratingFailed: 'Αποτυχία υποβολής αξιολόγησης',
+    property: 'Ακίνητο',
+    notRatedYet: 'Δεν έχει αξιολογηθεί ακόμα',
+    
+    // Notifications
+    notifications: 'Ειδοποιήσεις',
+    noNotifications: 'Δεν υπάρχουν ειδοποιήσεις',
+    
+    // Profile
+    name: 'Όνομα',
+    email: 'Email',
+    phone: 'Τηλέφωνο',
+    timeSchedule: 'Πρόγραμμα Διαθεσιμότητας',
+    enterPhone: 'Εισάγετε τηλέφωνο',
+    enterTimeSchedule: 'Εισάγετε πρόγραμμα διαθεσιμότητας',
+    role: 'Ρόλος',
+    ownerAndUser: 'Ιδιοκτήτης & Χρήστης',
+    memberSince: 'Μέλος από',
+    editProfile: 'Επεξεργασία Προφίλ',
     editProfileTitle: 'Επεξεργασία Προφίλ',
-    userNameOrName: 'Όνομα Χρήστη / Όνομα',
-    selectOccupation: 'Επιλέξτε επάγγελμα',
-    none: 'Κανένα',
+    cancel: 'Ακύρωση',
+    userNameOrName: 'Όνομα ή Όνομα Χρήστη',
+    userName: 'Όνομα Χρήστη',
+    age: 'Ηλικία',
+    dateOfBirth: 'Ημερομηνία Γέννησης',
+    yourDateOfBirth: 'Η ημερομηνία γέννησής σας',
+    occupation: 'Επάγγελμα',
+    optional: 'Προαιρετικό',
+    selectOccupation: 'Επιλέξτε Επάγγελμα',
+    completeYourProfile: 'Ολοκληρώστε το Προφίλ σας',
+    profileIncomplete: 'Το προφίλ σας δεν είναι πλήρες. Συμπληρώστε τις πληροφορίες σας για καλύτερη εμπειρία.',
+    missingInformation: 'Λείπουν',
+    notSet: 'Δεν έχει οριστεί',
+    userSearchProperties: 'Χρήστης - Αναζήτηση Ακινήτων',
+    ownerPublishProperties: 'Ιδιοκτήτης - Δημοσίευση Ακινήτων',
+    ownerAndUserFull: 'Ιδιοκτήτης & Χρήστης - Πλήρης Πρόσβαση',
     saving: 'Αποθήκευση...',
     saveChanges: 'Αποθήκευση Αλλαγών',
-    profileUpdateFailed: 'Η ενημέρωση του προφίλ απέτυχε',
-    userSearchProperties: 'Χρήστης (Αναζήτηση Ακινήτων)',
-    ownerPublishProperties: 'Ιδιοκτήτης (Δημοσίευση Ακινήτων)',
-    ownerAndUserFull: 'Ιδιοκτήτης & Χρήστης',
+    profileUpdateFailed: 'Αποτυχία ενημέρωσης προφίλ',
     
-    // Login Page
-    welcome: 'Καλώς ήρθατε',
-    or: 'Ή',
-    createNewAccount: 'δημιουργήστε νέο λογαριασμό',
-    emailAddress: 'Διεύθυνση Email',
-    password: 'Κωδικός',
-    login: 'Σύνδεση',
-    loggingIn: 'Σύνδεση...',
-    loginFailed: 'Η σύνδεση απέτυχε',
+    // Create/Edit Listing
+    createListing: 'Δημοσίευση Αγγελίας',
+    createListingFailed: 'Αποτυχία δημιουργίας αγγελίας',
+    editListing: 'Επεξεργασία Αγγελίας',
+    listingDetails: 'Συμπληρώστε τις λεπτομέρειες της αγγελίας σας',
+    listingType: 'Τύπος Αγγελίας',
+    title: 'Τίτλος',
+    uploadPhotos: 'Ανέβασμα Φωτογραφιών',
+    upload: 'Ανέβασμα',
+    sell: 'Πώληση',
+    street: 'Οδός',
+    updatingListing: 'Ενημέρωση...',
+    updateListing: 'Ενημέρωση Αγγελίας',
+    delete: 'Διαγραφή',
+    confirmDelete: 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την αγγελία;',
+    deleteFailed: 'Αποτυχία διαγραφής αγγελίας',
+    updateListingFailed: 'Αποτυχία ενημέρωσης αγγελίας',
     
-    // Signup Page
-    createAccount: 'Δημιουργία λογαριασμού',
-    signInToExisting: 'συνδεθείτε στον υπάρχοντα λογαριασμό σας',
-    signup: 'Εγγραφή',
-    creatingAccount: 'Δημιουργία λογαριασμού...',
-    signupFailed: 'Η εγγραφή απέτυχε',
-    required: 'απαιτείται',
-    yourName: 'Το όνομά σας',
-    yourAge: 'Η ηλικία σας',
-    yourDateOfBirth: 'Η ημερομηνία γέννησής σας',
-    both: 'Και τα δύο',
+    // Common
+    loading: 'Φόρτωση...',
+    somethingWentWrong: 'Κάτι πήγε στραβά',
+    confirm: 'Επιβεβαίωση',
+    goBack: 'Πίσω',
+    allRatings: 'Όλες οι Αξιολογήσεις',
+    noRatingsYet: 'Δεν υπάρχουν αξιολογήσεις ακόμα',
+    invalidParameters: 'Μη έγκυρες παράμετροι',
+    
+    // Occupations
+    Employed: 'Εργαζόμενος',
+    Student: 'Φοιτητής',
+    Retired: 'Συνταξιούχος',
+    Unemployed: 'Άνεργος',
+    Other: 'Άλλο',
+    
+    // Placeholders
+    placeholderName: 'Το όνομά σας ή όνομα χρήστη',
+    placeholderTitle: 'Ζεστό διαμέρισμα 2 υπνοδωματίων',
+    placeholderDescription: 'Περιγράψτε το ακίνητο, τη γειτονιά, τις ανέσεις, κ.λπ.',
+    placeholderStreet: 'π.χ., Οδός Πατησίων 123',
+    placeholderCity: 'Αθήνα',
+    placeholderCountry: 'Ελλάδα',
+    placeholderSize: 'π.χ., 85',
+    placeholderBedrooms: 'π.χ., 3',
+    placeholderYearBuilt: 'π.χ., 2010',
+    placeholderYearRenovated: 'π.χ., 2020',
+    
+    // Areas (common Greek areas)
+    'Nea Smirni': 'Νέα Σμύρνη',
+    'Kallithea': 'Καλλιθέα',
+    'Palaio Faliro': 'Παλαιό Φάληρο',
+    'Alimos': 'Άλιμος',
+    'Glyfada': 'Γλυφάδα',
+    'Voula': 'Βούλα',
+    'Vouliagmeni': 'Βουλιαγμένη',
+    
+    // Heating
+    central: 'Κεντρική',
+    autonomous: 'Αυτόνομη',
+    oil: 'Μάζουτα',
+    'natural gas': 'Φυσικό Αέριο',
+    electricity: 'Ηλεκτρική',
+    other: 'Άλλο',
   },
   en: {
-    // Common
-    loading: 'Loading...',
-    back: 'Back',
-    edit: 'Edit',
-    save: 'Save',
-    cancel: 'Cancel',
-    close: 'Close',
-    confirm: 'Confirm',
-    delete: 'Delete',
-    confirmDelete: 'Are you sure you want to delete this listing?',
-    deleteFailed: 'Failed to delete listing',
-    upload: 'Upload',
-    photos: 'Photos',
-    noPhotos: 'No photos available',
-    
-    // Home Page
-    appTitle: 'House Rent',
-    appDescription: 'Find your perfect rental or list your property',
+    // App
+    appTitle: 'Welcome',
+    appDescription: 'Find your ideal home for rent or purchase',
     signUp: 'Sign Up',
     signIn: 'Sign In',
+    welcome: 'Welcome',
+    or: 'or',
+    login: 'Login',
     
     // Navigation
-    returnToSearch: 'Return to Search',
-    
-    // Listing Form
-    createListing: 'Create Property Listing',
-    editListing: 'Edit Property Listing',
-    listingDetails: 'Fill in the details of the property you want to publish.',
-    updateListing: 'Update Listing',
-    updatingListing: 'Updating...',
-    updateListingFailed: 'Failed to update listing',
-    title: 'Title',
-    description: 'Description',
-    listingType: 'Listing Type',
-    rent: 'Rent',
-    sell: 'Sell',
-    buy: 'Buy',
-    street: 'Street',
-    city: 'City',
-    cityArea: 'City Area',
-    selectCityArea: 'Select area',
-    country: 'Country',
-    pricePerMonth: 'Price per month (€)',
-    bedrooms: 'Bedrooms',
-    bathrooms: 'Bathrooms',
-    floor: 'Floor',
-            heatingCategory: 'Heating Category',
-            heatingAgent: 'Heating Agent',
-    sizeSqMeters: 'Size (m²)',
-    yearBuilt: 'Year Built',
-    yearRenovated: 'Year Renovated',
-    availableFrom: 'Available From',
-    uploadPhotos: 'Upload Photos',
-    optional: 'optional',
-    
-    // Detail Page
-    price: 'Price',
-    perMonth: 'per month',
-    totalPrice: 'total price',
-            ownerProfile: 'Owner Profile',
-            homeowner: 'Homeowner',
-    name: 'Name',
-    email: 'Email',
-    memberSince: 'Member Since',
-    notProvided: 'Not provided',
-    
-    // My Listings
-    myListings: 'My Listings',
-    manageListings: 'Manage all your property listings',
-    newListing: 'New Listing',
-    noListings: "You haven't published any listings yet.",
-    publishedOn: 'Published on',
-    
-    // Errors
-    somethingWentWrong: 'Something went wrong. Please try again.',
-    createListingFailed: 'Failed to create listing',
-    
-    // Search Page
-    whatAreYouLookingFor: 'What are you looking for?',
-    howDoYouWantToSearch: 'How do you want to search?',
-    back: 'Back',
-    manualFilter: 'Manual Filter',
-    aiSearch: 'AI Search',
-    filterByFeatures: 'Filter by Features',
-    availableProperties: 'Available Properties',
-    foundListings: 'Found {count} {count === 1 ? "listing" : "listings"}',
-    newListing: 'New Listing',
-    listing: 'listing',
-    listings: 'listings',
-    found: 'found',
-    bedroomsShort: 'bedr.',
-    bathroomsShort: 'bathr.',
-    noPropertiesFound: 'No properties found matching your filters. Try adjusting your search criteria.',
-    noPropertiesFoundAi: 'No properties found. Try a different search.',
-    inquire: 'Inquire',
-    removeInquiry: 'Remove inquiry',
-    inquiryMade: 'Inquiry made',
-    inquiries: 'Inquiries',
-    inquiry: 'inquiry',
-    totalInquiries: 'Total {count} inquiries',
-    noInquiries: 'No inquiries',
-    noInquiriesForListings: 'No inquiries for your listings',
-    noInquiriesForThisHome: 'No inquiries for this home',
-    usersWhoInquired: 'Users who inquired',
-    viewMyListings: 'View My Listings',
-    approve: 'Approve',
-    dismiss: 'Dismiss',
-    approved: 'Approved',
-    allInquiriesProcessed: 'All inquiries have been processed',
-    backToInquiries: 'Back to Inquiries',
-    inquiryDate: 'Date',
-    pendingApproval: 'Pending approval',
-    inquiriesAsOwner: 'Inquiries as Owner',
-    inquiriesAsUser: 'Inquiries as User',
-    sendContactInfo: 'Send Contact Information',
-    phone: 'Phone',
-    enterPhone: 'Enter phone number',
-    timeSchedule: 'Time Schedule',
-    enterTimeSchedule: 'Enter your availability schedule',
-    sendAndApprove: 'Send and Approve',
-    hireContactPerson: 'Hire Contact Person',
-    hireContactPersonDescription: 'Hire a professional to manage communication with interested parties',
-    tellUsWhatYouNeed: 'Tell us what you need',
-    aiSearchDescription: 'Describe what you\'re looking for and why. Our AI will find the best properties for you.',
-    applyFilters: 'Apply Filters',
-    searching: 'Searching...',
-    searchingWithAi: 'Searching with AI...',
-    anyCity: 'Any city',
-    anyCountry: 'Any country',
-    minBedrooms: 'Min Bedrooms',
-    maxBedrooms: 'Max Bedrooms',
-    minSize: 'Min Size (m²)',
-    maxSize: 'Max Size (m²)',
-    minPrice: 'Min Price (€)',
-    maxPrice: 'Max Price (€)',
-    any: 'Any',
-    publishedBy: 'Published by',
-    perMonth: 'per month',
-    totalPrice: 'total price',
-    
-    // Profile Page
-    asOwner: 'As Owner',
-    asUser: 'As User',
-    noRatingsYet: 'No ratings yet',
-    rating: 'rating',
-    ratings: 'ratings',
-    userName: 'User Name',
-    age: 'Age',
-    dateOfBirth: 'Date of Birth',
-    notSet: 'Not set',
-    occupation: 'Occupation',
-    role: 'Role',
-    memberSince: 'Member Since',
-    editProfile: 'Edit Profile',
-    owner: 'Owner',
-    user: 'User',
-    ownerAndUser: 'Owner & User',
-    completeYourProfile: 'Complete Your Profile',
-    profileIncomplete: 'Your profile is incomplete. Fill in your information for a more complete profile.',
-    missingInformation: 'Missing information',
-    
-    // Hamburger Menu
     menu: 'Menu',
     profile: 'Profile',
     myListings: 'My Listings',
+    manageListings: 'Manage your listings',
+    noListings: 'You have not published any listings yet',
+    publishedOn: 'Published on',
     publishProperty: 'Publish Property',
     searchProperties: 'Search Properties',
+    inquiries: 'Inquiries',
+    approvedInquiries: 'Approved Inquiries',
+    approvedInquiry: 'Approved Inquiry',
+    noApprovedInquiries: 'No approved inquiries',
+    viewInquiries: 'View Inquiries',
     logout: 'Logout',
-    showMenu: 'Show menu',
+    showMenu: 'Show Menu',
     
-    // Edit Profile Page
+    // Search
+    whatAreYouLookingFor: 'What are you looking for?',
+    rent: 'Rent',
+    buy: 'Buy',
+    howDoYouWantToSearch: 'How do you want to search?',
+    manualFilter: 'Manual Filter',
+    aiSearch: 'AI Search',
+    filterByFeatures: 'Filter by Features',
+    back: 'Back',
+    city: 'City',
+    country: 'Country',
+    anyCity: 'Any city',
+    anyCountry: 'Any country',
+    cityArea: 'Area',
+    selectCityArea: 'Select area',
+    minPrice: 'Min Price',
+    maxPrice: 'Max Price',
+    minSize: 'Min Size',
+    maxSize: 'Max Size',
+    heatingCategory: 'Heating Category',
+    heatingAgent: 'Heating Agent',
+    minBedrooms: 'Min Bedrooms',
+    maxBedrooms: 'Max Bedrooms',
+    yearBuilt: 'Year Built',
+    any: 'Any',
+    applyFilters: 'Apply Filters',
+    searching: 'Searching...',
+    tellUsWhatYouNeed: 'Tell us what you need',
+    aiSearchDescription: 'Describe in words what you are looking for and AI will find the right properties for you.',
+    searchingWithAi: 'Searching with AI...',
+    availableProperties: 'Available Properties',
+    listing: 'listing',
+    listings: 'listings',
+    found: 'found',
+    noPropertiesFound: 'No properties found',
+    noPropertiesFoundAi: 'No properties found based on your description',
+    newListing: 'New Listing',
+    publishedBy: 'Published by',
+    
+    // Property Details
+    returnToSearch: 'Return to Search',
+    edit: 'Edit',
+    noPhotos: 'No photos',
+    owner: 'Owner',
+    user: 'User',
+    description: 'Description',
+    price: 'Price',
+    sizeSqMeters: 'Size (m²)',
+    floor: 'Floor',
+    bedrooms: 'Bedrooms',
+    bedroomsShort: 'bed',
+    bathrooms: 'Bathrooms',
+    bathroomsShort: 'bath',
+    yearRenovated: 'Year Renovated',
+    availableFrom: 'Available From',
+    perMonth: '/ month',
+    totalPrice: 'Total Price',
+    close: 'Close',
+    ownerProfile: 'Owner Profile',
+    notProvided: 'Not provided',
+    asOwner: 'As Owner',
+    asUser: 'As User',
+    rating: 'rating',
+    ratings: 'ratings',
+    
+    // Inquiries
+    inquiryMade: 'You have inquired',
+    inquiryMadeBanner: 'YOU HAVE INQUIRED', // Uppercase for banners
+    inquire: 'Inquire',
+    removeInquiry: 'Remove Inquiry',
+    approved: 'Approved',
+    approvedBanner: 'APPROVED', // Uppercase for banners
+    dismissed: 'Dismissed',
+    dismissedBanner: 'DISMISSED', // Uppercase for banners
+    inquiryDate: 'Inquiry Date',
+    approvedOn: 'Approved on',
+    contactInformation: 'Contact Information',
+    sendContactInfo: 'Send Contact Information',
+    sendAndApprove: 'Send and Approve',
+    hireContactPerson: 'Hire Contact Person',
+    hireContactPersonDescription: 'Hire a professional to handle communications',
+    approve: 'Approve',
+    inquiry: 'Inquiry',
+    totalInquiries: '{count} inquiries',
+    noInquiries: 'No inquiries',
+    noInquiriesForListings: 'No inquiries for your listings',
+    noInquiriesForThisHome: 'No inquiries for this property',
+    viewMyListings: 'View My Listings',
+    allInquiriesProcessed: 'All inquiries have been processed',
+    pendingApproval: 'Pending approval',
+    finalize: 'Finalize',
+    finalizeRequestSent: 'Finalization request sent',
+    finalizeFailed: 'Finalization failed',
+    awaitingFinalizeApproval: 'Awaiting Finalize Approval',
+    dealFinalized: 'Deal Finalized',
+    finalizeDeal: 'Finalize Deal',
+    finalizeDealDescription: 'Are you sure you want to finalize this deal?',
+    approveFinalization: 'Approve Finalization',
+    dismissFinalization: 'Dismiss Finalization',
+    dealDone: 'DEAL DONE',
+    propertyInformation: 'Property Information',
+    senderInformation: 'Sender Information',
+    rateOwner: 'Rate Owner',
+    rateUser: 'Rate User',
+    rateOwnerDescription: 'Rate owners you have finalized deals with',
+    rateUserDescription: 'Rate users you have finalized deals with',
+    noFinalizedInquiries: 'No finalized deals to rate',
+    rated: 'Rated',
+    rateNow: 'Rate Now',
+    comment: 'Comment',
+    commentPlaceholder: 'Write a comment (optional)',
+    submitRating: 'Submit Rating',
+    submitting: 'Submitting...',
+    ratingFailed: 'Failed to submit rating',
+    property: 'Property',
+    propertyInformation: 'Property Information',
+    senderInformation: 'Sender Information',
+    rateOwner: 'Rate Owner',
+    rateUser: 'Rate User',
+    rateOwnerDescription: 'Rate owners you have finalized deals with',
+    rateUserDescription: 'Rate users you have finalized deals with',
+    noFinalizedInquiries: 'No finalized deals to rate',
+    rated: 'Rated',
+    rateNow: 'Rate Now',
+    rating: 'Rating',
+    comment: 'Comment',
+    commentPlaceholder: 'Write a comment (optional)',
+    submitRating: 'Submit Rating',
+    submitting: 'Submitting...',
+    ratingFailed: 'Failed to submit rating',
+    property: 'Property',
+    notRatedYet: 'Not rated yet',
+    
+    // Notifications
+    notifications: 'Notifications',
+    noNotifications: 'No notifications',
+    
+    // Profile
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    timeSchedule: 'Time Schedule',
+    enterPhone: 'Enter phone',
+    enterTimeSchedule: 'Enter time schedule',
+    role: 'Role',
+    ownerAndUser: 'Owner & User',
+    memberSince: 'Member since',
+    editProfile: 'Edit Profile',
     editProfileTitle: 'Edit Profile',
-    userNameOrName: 'User Name / Name',
-    selectOccupation: 'Select occupation',
-    none: 'None',
+    cancel: 'Cancel',
+    userNameOrName: 'Name or Username',
+    userName: 'Username',
+    age: 'Age',
+    dateOfBirth: 'Date of Birth',
+    yourDateOfBirth: 'Your date of birth',
+    occupation: 'Occupation',
+    optional: 'Optional',
+    selectOccupation: 'Select Occupation',
+    completeYourProfile: 'Complete Your Profile',
+    profileIncomplete: 'Your profile is incomplete. Fill in your information for a better experience.',
+    missingInformation: 'Missing',
+    notSet: 'Not set',
+    userSearchProperties: 'User - Search Properties',
+    ownerPublishProperties: 'Owner - Publish Properties',
+    ownerAndUserFull: 'Owner & User - Full Access',
     saving: 'Saving...',
     saveChanges: 'Save Changes',
-    profileUpdateFailed: 'Profile update failed',
-    userSearchProperties: 'User (Search Properties)',
-    ownerPublishProperties: 'Owner (Publish Properties)',
-    ownerAndUserFull: 'Owner & User',
+    profileUpdateFailed: 'Failed to update profile',
     
-    // Login Page
-    welcome: 'Welcome',
-    or: 'Or',
-    createNewAccount: 'create a new account',
-    emailAddress: 'Email Address',
-    password: 'Password',
-    login: 'Sign In',
-    loggingIn: 'Signing in...',
-    loginFailed: 'Login failed',
+    // Create/Edit Listing
+    createListing: 'Publish Listing',
+    createListingFailed: 'Failed to create listing',
+    editListing: 'Edit Listing',
+    listingDetails: 'Fill in your listing details',
+    listingType: 'Listing Type',
+    title: 'Title',
+    uploadPhotos: 'Upload Photos',
+    upload: 'Upload',
+    sell: 'Sell',
+    street: 'Street',
+    updatingListing: 'Updating...',
+    updateListing: 'Update Listing',
+    delete: 'Delete',
+    confirmDelete: 'Are you sure you want to delete this listing?',
+    deleteFailed: 'Failed to delete listing',
+    updateListingFailed: 'Failed to update listing',
     
-    // Signup Page
-    createAccount: 'Create Account',
-    signInToExisting: 'sign in to your existing account',
-    signup: 'Sign Up',
-    creatingAccount: 'Creating account...',
-    signupFailed: 'Sign up failed',
-    required: 'required',
-    yourName: 'Your name',
-    yourAge: 'Your age',
-    yourDateOfBirth: 'Your date of birth',
-    both: 'Both',
+    // Common
+    loading: 'Loading...',
+    somethingWentWrong: 'Something went wrong',
+    confirm: 'Confirm',
+    goBack: 'Go Back',
+    allRatings: 'All Ratings',
+    noRatingsYet: 'No ratings yet',
+    invalidParameters: 'Invalid parameters',
+    
+    // Occupations
+    Employed: 'Employed',
+    Student: 'Student',
+    Retired: 'Retired',
+    Unemployed: 'Unemployed',
+    Other: 'Other',
+    
+    // Placeholders
+    placeholderName: 'Your name or username',
+    placeholderTitle: 'Cozy 2-bedroom apartment',
+    placeholderDescription: 'Describe the property, neighborhood, amenities, etc.',
+    placeholderStreet: 'e.g., Main Street 123',
+    placeholderCity: 'Athens',
+    placeholderCountry: 'Greece',
+    placeholderSize: 'e.g., 85',
+    placeholderBedrooms: 'e.g., 3',
+    placeholderYearBuilt: 'e.g., 2010',
+    placeholderYearRenovated: 'e.g., 2020',
+    
+    // Areas (keep same for English)
+    'Nea Smirni': 'Nea Smirni',
+    'Kallithea': 'Kallithea',
+    'Palaio Faliro': 'Palaio Faliro',
+    'Alimos': 'Alimos',
+    'Glyfada': 'Glyfada',
+    'Voula': 'Voula',
+    'Vouliagmeni': 'Vouliagmeni',
+    
+    // Heating
+    central: 'Central',
+    autonomous: 'Autonomous',
+    oil: 'Oil',
+    'natural gas': 'Natural Gas',
+    electricity: 'Electricity',
+    other: 'Other',
   },
+} as const
+
+export function getTranslation(language: Language, key: keyof typeof translations.el): string {
+  return translations[language][key] || translations.el[key] || key
 }
 
-export function getTranslation(lang: Language, key: keyof typeof translations.el): string {
-  return translations[lang][key] || key
-}
-
-// Translation map for user-entered values (heating types, occupations, titles, etc.)
-const valueTranslations: Record<string, { el: string; en: string }> = {
-  // Heating Category
-  'central': { el: 'Κεντρική', en: 'Central' },
-  'autonomous': { el: 'Αυτόνομη', en: 'Autonomous' },
-  
-  // Heating Agent
-  'oil': { el: 'Πετρέλαιο', en: 'Oil' },
-  'natural gas': { el: 'Φυσικό Αέριο', en: 'Natural Gas' },
-  'electricity': { el: 'Ρεύμα', en: 'Electricity' },
-  'other': { el: 'Άλλο', en: 'Other' },
-  
-  // Titles
-  'Mr': { el: 'Κος', en: 'Mr' },
-  'Mrs': { el: 'Κυρία', en: 'Mrs' },
-  
-  // Occupations
-  'Employed': { el: 'Εργαζόμενος', en: 'Employed' },
-  'Worker': { el: 'Εργαζόμενος', en: 'Employed' }, // Backward compatibility
-  'Student': { el: 'Φοιτητής', en: 'Student' },
-  'Retired': { el: 'Συνταξιούχος', en: 'Retired' },
-  'Unemployed': { el: 'Άνεργος', en: 'Unemployed' },
-  // Note: 'Other' for occupations is already covered in heating types above
-  
-  // City Areas
-  'Nea Smirni': { el: 'Νέα Σμύρνη', en: 'Nea Smirni' },
-  'Νέα Σμύρνη': { el: 'Νέα Σμύρνη', en: 'Nea Smirni' },
-}
-
-/**
- * Translates user-entered values (like heating types, city areas) based on current language
- * Returns the original value if no translation is found
- * Handles both directions: can translate from English to Greek or Greek to English
- * Case-insensitive matching for better reliability
- */
-export function translateValue(lang: Language, value: string | null | undefined): string {
+export function translateValue(language: Language, value: string | null | undefined): string {
   if (!value) return ''
-  
-  const trimmedValue = value.trim()
-  if (!trimmedValue) return ''
-  
-  const lowerValue = trimmedValue.toLowerCase()
-  
-  // Special case: "Worker" should map to "Employed" for backward compatibility
-  if (trimmedValue === 'Worker' || lowerValue === 'worker') {
-    return valueTranslations['Employed']?.[lang] || 'Employed'
+  const key = value as keyof typeof translations.el
+  if (translations[language][key]) {
+    return translations[language][key]
   }
-  
-  // First, try direct lookup (case-sensitive)
-  let translation = valueTranslations[trimmedValue]
-  if (translation) {
-    return translation[lang]
+  if (translations.el[key]) {
+    return translations.el[key]
   }
-  
-  // Try case-insensitive lookup by key
-  for (const [key, trans] of Object.entries(valueTranslations)) {
-    if (key.toLowerCase() === lowerValue) {
-      // Special case: if we find "Worker" key, use "Employed" translation
-      if (key === 'Worker') {
-        return valueTranslations['Employed']?.[lang] || 'Employed'
-      }
-      return trans[lang]
-    }
-  }
-  
-  // If not found, try reverse lookup (find the key that has this value in the other language)
-  // This handles cases where the value might already be in the target language
-  for (const [key, trans] of Object.entries(valueTranslations)) {
-    // Check if the value matches the English translation
-    if (trans.en.toLowerCase() === lowerValue) {
-      // Special case: if this is "Worker", return "Employed" translation
-      if (key === 'Worker') {
-        return valueTranslations['Employed']?.[lang] || 'Employed'
-      }
-      return lang === 'el' ? trans.el : trans.en
-    }
-    // Check if the value matches the Greek translation
-    if (trans.el.toLowerCase() === lowerValue) {
-      // Special case: if this is "Worker", return "Employed" translation
-      if (key === 'Worker') {
-        return valueTranslations['Employed']?.[lang] || 'Employed'
-      }
-      return lang === 'el' ? trans.el : trans.en
-    }
-  }
-  
-  // Return original value if no translation found
-  return trimmedValue
+  return value
 }
 
-/**
- * Translates a value from the current display language back to its canonical (English) key.
- * Useful for sending translated UI values back to the API in a consistent format.
- */
-export function reverseTranslateValue(value: string | null | undefined): string {
-  if (!value) return ''
-
-  const trimmedValue = value.trim()
-  if (!trimmedValue) return ''
-
-  const lowerValue = trimmedValue.toLowerCase()
-
-  // Special case: "Worker" should map to "Employed" for backward compatibility
-  if (trimmedValue === 'Worker' || lowerValue === 'worker') {
-    return 'Employed'
-  }
-
-  // Check if the value is already an English key
-  if (valueTranslations[trimmedValue] && valueTranslations[trimmedValue].en === trimmedValue) {
-    return trimmedValue
-  }
-
-  // Check if the value is a Greek translation - find the English key
-  for (const [key, trans] of Object.entries(valueTranslations)) {
-    if (trans.el.toLowerCase() === lowerValue || trans.el === trimmedValue) {
-      // Special case: if we find "Worker" key, return "Employed" instead
-      if (key === 'Worker') {
-        return 'Employed'
+export function reverseTranslateValue(translatedValue: string | null | undefined): string {
+  if (!translatedValue) return ''
+  
+  // Search through both language translations to find the key
+  for (const lang of ['el', 'en'] as Language[]) {
+    const langTranslations = translations[lang]
+    for (const [key, value] of Object.entries(langTranslations)) {
+      if (value === translatedValue) {
+        return key
       }
-      return key // Return the English key
-    }
-    // Also check case-insensitive
-    if (trans.en.toLowerCase() === lowerValue && trans.en !== trimmedValue) {
-      if (key === 'Worker') {
-        return 'Employed'
-      }
-      return key
     }
   }
-
-  // Return original if no reverse translation found
-  return trimmedValue
+  
+  // If not found, return the original value (might already be a key)
+  return translatedValue
 }
-

@@ -1,5 +1,6 @@
 import { getCurrentUser } from '@/lib/auth'
 import HamburgerMenu from './HamburgerMenu'
+import RoleInitializer from './RoleInitializer'
 
 // Force dynamic rendering to ensure fresh auth state
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,12 @@ export default async function NavBar() {
     }
 
     const userRole = (user.role || 'user').toLowerCase()
-    return <HamburgerMenu userRole={userRole} />
+    return (
+      <>
+        <RoleInitializer userRole={userRole} />
+        <HamburgerMenu userRole={userRole} />
+      </>
+    )
   } catch (error) {
     // Silently fail - navbar just won't show if there's an error
     console.error('NavBar error:', error)
