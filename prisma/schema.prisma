@@ -29,32 +29,39 @@ model User {
 }
 
 model Home {
-  id            Int      @id @default(autoincrement())
-  key           String   @unique @default(cuid())
-  title         String
-  description   String?
-  street        String?
-  city          String
-  country       String
-  area          String?  // City area (e.g., "Nea Smirni")
-  listingType   String   @default("rent")
-  pricePerMonth Int
-  bedrooms      Int
-  bathrooms     Int
-  floor         Int?
-  heatingCategory String?  // "central" or "autonomous"
-  heatingAgent   String?   // "oil", "natural gas", "electricity", "other"
-  sizeSqMeters  Int?
-  yearBuilt     Int?
-  yearRenovated Int?
-  availableFrom DateTime
-  photos        String?  // JSON array of photo file paths/URLs
-  finalized     Boolean  @default(false) // Whether any inquiry for this home has been finalized
-  ownerId       Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  inquiries     Inquiry[]
+  id                Int      @id @default(autoincrement())
+  key               String   @unique @default(cuid())
+  title             String
+  description       String?
+  street            String?
+  city              String
+  country           String
+  area              String?  // City area (e.g., "Nea Smirni")
+  listingType       String   @default("rent")
+  pricePerMonth     Int
+  bedrooms          Int
+  bathrooms         Int
+  floor             Int?
+  heatingCategory   String?  // "central" or "autonomous"
+  heatingAgent      String?  // "oil", "natural gas", "electricity", "other"
+  sizeSqMeters      Int?
+  yearBuilt         Int?
+  yearRenovated     Int?
+  availableFrom     DateTime
+  photos            String?  // JSON array of photo file paths/URLs
+  finalized         Boolean  @default(false) // Whether any inquiry for this home has been finalized
+  closestMetro      Float?   // Distance to closest metro (in km or minutes)
+  closestBus        Float?   // Distance to closest bus stop (in km or minutes)
+  closestSchool     Float?   // Distance to closest school (in km or minutes)
+  closestKindergarten Float? // Distance to closest kindergarten (in km or minutes)
+  closestHospital   Float?  // Distance to closest hospital (in km or minutes)
+  closestPark       Float?   // Distance to closest park (in km or minutes)
+  parking           Boolean? // Whether parking is available (yes/no)
+  ownerId           Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  inquiries         Inquiry[]
 
   @@index([finalized])
 
@@ -127,4 +134,22 @@ model Notification {
   @@index([deleted])
   @@index([type])
   @@map("notifications")
+}
+
+model Area {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @default(cuid())
+  name      String   // Area name (e.g., "Nea Smirni")
+  nameGreek String?  // Area name in Greek
+  city      String?  // Optional city filter
+  country   String?  // Optional country filter
+  safety    Float?   // Safety rating (0-10 or similar scale)
+  vibe      String?  // Vibe description (e.g., "family-friendly", "vibrant", "quiet")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([city])
+  @@index([country])
+  @@map("areas")
 }

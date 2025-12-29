@@ -116,6 +116,7 @@ export async function PUT(
       street,
       city,
       country,
+      area,
       listingType,
       pricePerMonth,
       bedrooms,
@@ -123,6 +124,7 @@ export async function PUT(
       floor,
       heatingCategory,
       heatingAgent,
+      parking,
       sizeSqMeters,
       yearBuilt,
       yearRenovated,
@@ -131,7 +133,7 @@ export async function PUT(
     } = body
 
     // Minimal validation
-    if (!title || !city || !country || !pricePerMonth) {
+    if (!title || !city || !country || !pricePerMonth || !sizeSqMeters) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -160,6 +162,7 @@ export async function PUT(
         street: street?.trim() || null,
         city: city.trim(),
         country: country.trim(),
+        area: area?.trim() || null,
         listingType: listingType || 'rent',
         pricePerMonth: Number(pricePerMonth),
         bedrooms: Number(bedrooms || 0),
@@ -167,7 +170,10 @@ export async function PUT(
         floor: floor && floor !== '' ? Number(floor) : null,
         heatingCategory: heatingCategory?.trim() || null,
         heatingAgent: heatingAgent?.trim() || null,
-        sizeSqMeters: sizeSqMeters && sizeSqMeters !== '' ? Number(sizeSqMeters) : null,
+        parking: parking === undefined || parking === null 
+          ? null 
+          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
+        sizeSqMeters: Number(sizeSqMeters),
         yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
         yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
         availableFrom: availableFromDate,

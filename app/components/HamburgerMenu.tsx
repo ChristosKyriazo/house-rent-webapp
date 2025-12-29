@@ -16,6 +16,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
   const [isOpen, setIsOpen] = useState(false)
+  const [hasFinalizedInquiries, setHasFinalizedInquiries] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { signOut } = useClerk()
@@ -29,6 +30,27 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
 
   // Normalize role to lowercase for comparison
   const normalizedRole = displayRole.toLowerCase()
+
+  // Check if user has finalized inquiries
+  useEffect(() => {
+    const checkFinalizedInquiries = async () => {
+      try {
+        const roleParam = normalizedRole === 'owner' ? 'owner' : 'user'
+        const response = await fetch(`/api/inquiries/finalized?role=${roleParam}`)
+        if (response.ok) {
+          const data = await response.json()
+          setHasFinalizedInquiries(data.finalizedInquiries && data.finalizedInquiries.length > 0)
+        }
+      } catch (error) {
+        console.error('Error checking finalized inquiries:', error)
+        setHasFinalizedInquiries(false)
+      }
+    }
+
+    if (normalizedRole === 'owner' || normalizedRole === 'user') {
+      checkFinalizedInquiries()
+    }
+  }, [normalizedRole])
 
   // Define all possible menu items with translations
   // Inquiries item will be dynamically set based on selected role
@@ -74,21 +96,23 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       label: getTranslation(language, 'approvedInquiries')
     })
 
-    // Add rating pages after approved inquiries
-    if (normalizedRole === 'owner') {
-      menuItems.splice(insertIndex + 2, 0, {
-        href: '/homes/rate-user',
-        labelKey: 'rateUser',
-        icon: '⭐',
-        label: getTranslation(language, 'rateUser')
-      })
-    } else if (normalizedRole === 'user') {
-      menuItems.splice(insertIndex + 2, 0, {
-        href: '/homes/rate-owner',
-        labelKey: 'rateOwner',
-        icon: '⭐',
-        label: getTranslation(language, 'rateOwner')
-      })
+    // Add rating pages after approved inquiries (only if user has finalized inquiries)
+    if (hasFinalizedInquiries) {
+      if (normalizedRole === 'owner') {
+        menuItems.splice(insertIndex + 2, 0, {
+          href: '/homes/rate-user',
+          labelKey: 'rateUser',
+          icon: '⭐',
+          label: getTranslation(language, 'rateUser')
+        })
+      } else if (normalizedRole === 'user') {
+        menuItems.splice(insertIndex + 2, 0, {
+          href: '/homes/rate-owner',
+          labelKey: 'rateOwner',
+          icon: '⭐',
+          label: getTranslation(language, 'rateOwner')
+        })
+      }
     }
   }
 

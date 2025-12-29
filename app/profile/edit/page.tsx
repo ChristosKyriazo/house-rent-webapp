@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
+import { useClerk } from '@clerk/nextjs'
 
 
 export default function EditProfilePage() {
   const router = useRouter()
   const { language } = useLanguage()
+  const { signOut } = useClerk()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: '',
@@ -77,6 +81,38 @@ export default function EditProfilePage() {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true)
+      return
+    }
+
+    setDeleting(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.error || getTranslation(language, 'accountDeletionFailed'))
+        setDeleting(false)
+        setShowDeleteConfirm(false)
+        return
+      }
+
+      // Account deleted successfully, sign out and redirect
+      await signOut({ redirectUrl: '/login' })
+    } catch (err) {
+      console.error('Error deleting account:', err)
+      setError(getTranslation(language, 'somethingWentWrong'))
+      setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -178,6 +214,41 @@ export default function EditProfilePage() {
               </button>
             </div>
           </form>
+
+          {/* Delete Account Section */}
+          <div className="mt-8 pt-8 border-t border-red-500/30">
+            <h2 className="text-xl font-bold text-red-400 mb-4">{getTranslation(language, 'dangerZone')}</h2>
+            <p className="text-[#E8D5B7]/70 text-sm mb-4">{getTranslation(language, 'deleteAccountDescription')}</p>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="px-6 py-3 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-all font-semibold text-sm border border-red-500/30 disabled:opacity-50"
+              >
+                {getTranslation(language, 'deleteAccount')}
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-red-400 font-semibold">{getTranslation(language, 'deleteAccountConfirm')}</p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm disabled:opacity-50"
+                  >
+                    {getTranslation(language, 'cancel')}
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={deleting}
+                    className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold text-sm disabled:opacity-50"
+                  >
+                    {deleting ? getTranslation(language, 'deleting') : getTranslation(language, 'confirmDeleteAccount')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       street,
       city,
       country,
+      area,
       listingType,
       pricePerMonth,
       bedrooms,
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
       floor,
       heatingCategory,
       heatingAgent,
+      parking,
       sizeSqMeters,
       yearBuilt,
       yearRenovated,
@@ -153,7 +155,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Minimal validation
-    if (!title || !city || !country || !pricePerMonth) {
+    if (!title || !city || !country || !pricePerMonth || !sizeSqMeters) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -174,6 +176,12 @@ export async function POST(request: NextRequest) {
       availableFromDate = new Date()
     }
 
+    // Generate dummy distance values (will be replaced by Google API in the future)
+    const generateDummyDistance = () => {
+      // Random distance between 0.1 and 5.0 km
+      return Math.round((Math.random() * 4.9 + 0.1) * 10) / 10
+    }
+
     const home = await prisma.home.create({
       data: {
         title: title.trim(),
@@ -181,7 +189,7 @@ export async function POST(request: NextRequest) {
         street: street?.trim() || null,
         city: city.trim(),
         country: country.trim(),
-        area: null, // Will be set to 'Nea Smirni' after creation, confirmed by owner
+        area: area?.trim() || null,
         listingType: listingType || 'rent',
         pricePerMonth: Number(pricePerMonth),
         bedrooms: Number(bedrooms || 0),
@@ -189,11 +197,21 @@ export async function POST(request: NextRequest) {
         floor: floor && floor !== '' ? Number(floor) : null,
         heatingCategory: heatingCategory?.trim() || null,
         heatingAgent: heatingAgent?.trim() || null,
-        sizeSqMeters: sizeSqMeters && sizeSqMeters !== '' ? Number(sizeSqMeters) : null,
+        parking: parking === undefined || parking === null 
+          ? null 
+          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
+        sizeSqMeters: Number(sizeSqMeters),
         yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
         yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
         availableFrom: availableFromDate,
         photos: photos || null,
+        // Dummy distance values (will be populated from Google API in the future)
+        closestMetro: generateDummyDistance(),
+        closestBus: generateDummyDistance(),
+        closestSchool: generateDummyDistance(),
+        closestKindergarten: generateDummyDistance(),
+        closestHospital: generateDummyDistance(),
+        closestPark: generateDummyDistance(),
         ownerId: user.id,
       },
     })
@@ -205,6 +223,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create home error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error('Error details:', errorDetails)
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
       { status: 500 }

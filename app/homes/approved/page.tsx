@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
+import { getAreaName } from '@/lib/area-utils'
 
 interface ApprovedInquiry {
   id: number
@@ -55,6 +56,7 @@ export default function ApprovedInquiriesPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [expandedInquiry, setExpandedInquiry] = useState<number | null>(null)
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null }>>([])
 
   // Determine display role
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -96,6 +98,18 @@ export default function ApprovedInquiriesPage() {
 
     fetchData()
   }, [router])
+
+  // Fetch areas for translation
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAreas(data.areas || [])
+      })
+      .catch((error) => {
+        console.error('Error fetching areas:', error)
+      })
+  }, [])
 
   if (loading) {
     return (
@@ -153,7 +167,7 @@ export default function ApprovedInquiriesPage() {
                         <p className="text-[#E8D5B7]/70 text-sm mb-3">
                           📍 {inquiry.home.street && `${inquiry.home.street}, `}
                           {inquiry.home.city}, {inquiry.home.country}
-                          {inquiry.home.area && ` • ${translateValue(language, inquiry.home.area)}`}
+                          {inquiry.home.area && ` • ${getAreaName(inquiry.home.area, areas, language)}`}
                         </p>
                       </Link>
                       

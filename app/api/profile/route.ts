@@ -100,3 +100,33 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+// DELETE /api/profile - delete current user's account
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser()
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      )
+    }
+
+    // Delete the user from database (cascade deletes will handle related records)
+    await prisma.user.delete({
+      where: { id: user.id },
+    })
+
+    // Note: Clerk user deletion should be handled on the client side
+    // after successful database deletion, as we need the Clerk session
+
+    return NextResponse.json({ message: 'Account deleted successfully' }, { status: 200 })
+  } catch (error) {
+    console.error('Delete account error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+

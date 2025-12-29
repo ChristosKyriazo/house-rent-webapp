@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
+import { getAreaName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -23,11 +24,18 @@ interface Home {
   floor: number | null
   heatingCategory: string | null
   heatingAgent: string | null
+  parking: boolean | null
   sizeSqMeters: number | null
   yearBuilt: number | null
   yearRenovated: number | null
   availableFrom: string
   photos: string | null
+  closestMetro: number | null
+  closestBus: number | null
+  closestSchool: number | null
+  closestKindergarten: number | null
+  closestHospital: number | null
+  closestPark: number | null
       owner: {
     id: number
     email: string
@@ -51,7 +59,6 @@ export default function HomeDetailPage() {
   const [home, setHome] = useState<Home | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
-  const [confirmingArea, setConfirmingArea] = useState(false)
   const [showOwnerModal, setShowOwnerModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [showPhotoLightbox, setShowPhotoLightbox] = useState(false)
@@ -67,6 +74,7 @@ export default function HomeDetailPage() {
   const [updatingInquiry, setUpdatingInquiry] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; safety: number | null; vibe: string | null }>>([])
   const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
   
@@ -91,92 +99,93 @@ export default function HomeDetailPage() {
 
   const fromMyListings = searchParams.get('from') === 'my-listings'
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch current user profile
-        const profileResponse = await fetch('/api/profile')
-        let profileData = null
-        if (profileResponse.ok) {
-          profileData = await profileResponse.json()
-          if (profileData.user) {
-            setCurrentUserId(profileData.user.id)
-            setUserRole(profileData.user.role || 'user')
+  const fetchHomeData = async () => {
+    try {
+      // Fetch current user profile
+      const profileResponse = await fetch('/api/profile')
+      let profileData = null
+      if (profileResponse.ok) {
+        profileData = await profileResponse.json()
+        if (profileData.user) {
+          setCurrentUserId(profileData.user.id)
+          setUserRole(profileData.user.role || 'user')
+        }
+      }
+      
+      // Fetch home details
+      const homeId = params.id as string
+      const response = await fetch(`/api/homes/${homeId}`, { cache: 'no-store' })
+      
+      if (!response.ok) {
+        router.push('/homes')
+        return
+      }
+      
+      const data = await response.json()
+      if (!data.home) {
+        router.push('/homes')
+        return
+      }
+      
+      setHome(data.home)
+      
+      // Check if user has an inquiry for this home and its status
+      if (profileData && profileData.user) {
+        const inquiriesRes = await fetch('/api/inquiries')
+        if (inquiriesRes.ok) {
+          const inquiriesData = await inquiriesRes.json()
+          if (inquiriesData.inquiryStatus) {
+            const status = inquiriesData.inquiryStatus[data.home.id] || null
+            setInquiryStatus(status)
+            
+            // Get inquiry ID if exists
+            if (inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id]) {
+              setInquiryId(inquiriesData.inquiryIds[data.home.id])
+            }
+            
+            // Check if finalized
+            if (inquiriesData.finalizedHomes && inquiriesData.finalizedHomes[data.home.id]) {
+              setIsFinalized(true)
+            }
+            
+            // If inquiry is dismissed, redirect to search page
+            if (status === 'dismissed') {
+              router.push('/homes')
+              return
+            }
           }
         }
         
-        // Fetch home details
-        const homeId = params.id as string
-        const response = await fetch(`/api/homes/${homeId}`)
-        
-        if (!response.ok) {
-          router.push('/homes')
-          return
-        }
-        
-        const data = await response.json()
-        if (!data.home) {
-          router.push('/homes')
-          return
-        }
-        
-        setHome(data.home)
-        
-        // Check if user has an inquiry for this home and its status
-        if (profileData && profileData.user) {
-          const inquiriesRes = await fetch('/api/inquiries')
-          if (inquiriesRes.ok) {
-            const inquiriesData = await inquiriesRes.json()
-            if (inquiriesData.inquiryStatus) {
-              const status = inquiriesData.inquiryStatus[data.home.id] || null
-              setInquiryStatus(status)
-              
-              // Get inquiry ID if exists
-              if (inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id]) {
-                setInquiryId(inquiriesData.inquiryIds[data.home.id])
-              }
-              
-              // Check if finalized
-              if (inquiriesData.finalizedHomes && inquiriesData.finalizedHomes[data.home.id]) {
+        // For owners: check if they have approved inquiries for this home
+        if ((profileData.user.role === 'owner' || profileData.user.role === 'both') && data.home.owner.id === profileData.user.id) {
+          const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=owner`)
+          if (approvedInquiriesRes.ok) {
+            const approvedData = await approvedInquiriesRes.json()
+            const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.home.key === data.home.key)
+            if (approvedInquiry) {
+              setInquiryId(approvedInquiry.id)
+              setInquiryStatus('approved')
+              if (approvedInquiry.finalized) {
                 setIsFinalized(true)
               }
-              
-              // If inquiry is dismissed, redirect to search page
-              if (status === 'dismissed') {
-                router.push('/homes')
-                return
-              }
-            }
-          }
-          
-          // For owners: check if they have approved inquiries for this home
-          if ((profileData.user.role === 'owner' || profileData.user.role === 'both') && data.home.owner.id === profileData.user.id) {
-            const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=owner`)
-            if (approvedInquiriesRes.ok) {
-              const approvedData = await approvedInquiriesRes.json()
-              const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.home.key === data.home.key)
-              if (approvedInquiry) {
-                setInquiryId(approvedInquiry.id)
-                setInquiryStatus('approved')
-                if (approvedInquiry.finalized) {
-                  setIsFinalized(true)
-                }
-              }
             }
           }
         }
-      } catch (error) {
-        console.error('Error fetching data:', error)
-        router.push('/homes')
-      } finally {
-        setLoading(false)
       }
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      router.push('/homes')
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     if (params.id) {
-      fetchData()
+      fetchHomeData()
     }
   }, [params.id, router])
+
 
   const handleFinalize = async () => {
     if (!home || !inquiryId || finalizing || isFinalized || finalizeRequestSent) return
@@ -282,6 +291,18 @@ export default function HomeDetailPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showPhotoLightbox, photos.length])
 
+  // Fetch areas for translation
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAreas(data.areas || [])
+      })
+      .catch((error) => {
+        console.error('Error fetching areas:', error)
+      })
+  }, [])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
@@ -327,27 +348,6 @@ export default function HomeDetailPage() {
     setShowPhotoLightbox(false)
   }
 
-  const handleConfirmArea = async () => {
-    if (!home) return
-    setConfirmingArea(true)
-    try {
-      const response = await fetch(`/api/homes/${home.key}/confirm-area`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setHome({ ...home, area: data.area })
-      }
-    } catch (error) {
-      console.error('Error confirming area:', error)
-    } finally {
-      setConfirmingArea(false)
-    }
-  }
-
-  // Hard-coded area suggestion (stored as 'Nea Smirni' in DB, translated for display)
-  const suggestedAreaDisplay = translateValue(language, 'Nea Smirni')
   
   // Determine display text for listing type
   // Owners see "sell" for their own listings, "buy" for others
@@ -362,10 +362,10 @@ export default function HomeDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Back Button and Edit Button */}
         <div className="flex items-center justify-between">
-        <Link
+          <Link
             href={fromMyListings ? '/homes/my-listings' : '/homes'}
-          className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
-        >
+            className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+          >
             ← {getTranslation(language, 'returnToSearch')}
           </Link>
           {fromMyListings && (
@@ -374,7 +374,7 @@ export default function HomeDetailPage() {
               className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
             >
               {getTranslation(language, 'edit')}
-        </Link>
+            </Link>
           )}
         </div>
 
@@ -591,27 +591,32 @@ export default function HomeDetailPage() {
               <p className="flex items-center gap-1">
                 {home.city}, {home.country}
               </p>
-                  {fromMyListings && !home.area && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[#E8D5B7]">
-                        {getTranslation(language, 'cityArea')}: <strong>{suggestedAreaDisplay}</strong>
-                      </span>
-                      <button
-                        onClick={handleConfirmArea}
-                        disabled={confirmingArea}
-                        className="px-3 py-1 bg-[#E8D5B7] text-[#2D3748] rounded-lg hover:bg-[#D4C19F] transition-all font-semibold text-sm disabled:opacity-50"
-                      >
-                        {confirmingArea ? getTranslation(language, 'loading') : getTranslation(language, 'confirm')}
-                      </button>
-                    </div>
-                  )}
-                  {home.area && (
-                    <p className="flex items-center gap-1 mt-2">
-                      <span className="text-[#E8D5B7]">
-                        {getTranslation(language, 'cityArea')}: <strong>{translateValue(language, home.area)}</strong>
-                      </span>
-                    </p>
-                  )}
+                  {home.area && (() => {
+                    const areaData = areas.find(a => a.name === home.area)
+                    return (
+                      <div className="mt-2 flex flex-col gap-1">
+                        <p className="flex items-center gap-1">
+                          <span className="text-[#E8D5B7]">
+                            {getTranslation(language, 'cityArea')}: <strong>{getAreaName(home.area, areas, language)}</strong>
+                          </span>
+                        </p>
+                        {areaData && (
+                          <>
+                            {areaData.vibe && (
+                              <p className="flex items-center gap-1 text-[#E8D5B7]">
+                                {getTranslation(language, 'vibe')}: <strong>{areaData.vibe}</strong>
+                              </p>
+                            )}
+                            {areaData.safety != null && (
+                              <p className="flex items-center gap-1 text-[#E8D5B7]">
+                                {getTranslation(language, 'safety')}: <strong>{areaData.safety.toFixed(1)}/10</strong>
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
                 
                 {/* Owner Profile - Right side, square */}
@@ -742,6 +747,61 @@ export default function HomeDetailPage() {
                 </p>
                 </div>
             </div>
+
+            {/* Parking Row - Different style */}
+            {home.parking !== null && home.parking !== undefined && (
+              <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
+                <p className="text-sm text-[#E8D5B7]/70">
+                  {getTranslation(language, 'parking')}: {home.parking === true ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
+                </p>
+              </div>
+            )}
+
+            {/* Distance Information */}
+            {((home.closestMetro != null) || (home.closestBus != null) || (home.closestSchool != null) || 
+              (home.closestKindergarten != null) || (home.closestHospital != null) || (home.closestPark != null)) && (
+              <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
+                <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'distances')}</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {home.closestMetro != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🚇 {getTranslation(language, 'closestMetro')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestMetro.toFixed(1)} km</p>
+                    </div>
+                  )}
+                  {home.closestBus != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🚌 {getTranslation(language, 'closestBus')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestBus.toFixed(1)} km</p>
+                    </div>
+                  )}
+                  {home.closestSchool != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🏫 {getTranslation(language, 'closestSchool')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestSchool.toFixed(1)} km</p>
+                    </div>
+                  )}
+                  {home.closestKindergarten != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🎒 {getTranslation(language, 'closestKindergarten')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestKindergarten.toFixed(1)} km</p>
+                    </div>
+                  )}
+                  {home.closestHospital != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestHospital.toFixed(1)} km</p>
+                    </div>
+                  )}
+                  {home.closestPark != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🌳 {getTranslation(language, 'closestPark')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestPark.toFixed(1)} km</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Available From */}
           {home.availableFrom && (

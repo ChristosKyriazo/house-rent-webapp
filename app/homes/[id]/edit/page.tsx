@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
+import { findMostSimilarArea, getAreaName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -14,6 +15,7 @@ interface Home {
   street: string | null
   city: string
   country: string
+  area: string | null
   listingType: string
   pricePerMonth: number
   bedrooms: number
@@ -21,6 +23,7 @@ interface Home {
   floor: number | null
   heatingCategory: string | null
   heatingAgent: string | null
+  parking: boolean | null
   sizeSqMeters: number | null
   yearBuilt: number | null
   yearRenovated: number | null
@@ -50,6 +53,7 @@ export default function EditHomePage() {
     street: '',
     city: '',
     country: '',
+    area: '',
     listingType: 'rent',
     pricePerMonth: '',
     bedrooms: '1',
@@ -57,6 +61,7 @@ export default function EditHomePage() {
     floor: '',
     heatingCategory: '',
     heatingAgent: '',
+    parking: '',
     sizeSqMeters: '',
     yearBuilt: '',
     yearRenovated: '',
@@ -64,6 +69,10 @@ export default function EditHomePage() {
   })
   const [photos, setPhotos] = useState<string[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; key: string; name: string; nameGreek: string | null; city: string | null; country: string | null }>>([])
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false)
+  const [areaSearchQuery, setAreaSearchQuery] = useState('')
+  const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
 
   // Check user role and ownership on mount
   useEffect(() => {
@@ -112,6 +121,7 @@ export default function EditHomePage() {
           street: fetchedHome.street || '',
           city: fetchedHome.city || '',
           country: fetchedHome.country || '',
+          area: fetchedHome.area || '',
           listingType: fetchedHome.listingType || 'rent',
           pricePerMonth: fetchedHome.pricePerMonth?.toString() || '',
           bedrooms: fetchedHome.bedrooms?.toString() || '1',
@@ -119,6 +129,7 @@ export default function EditHomePage() {
           floor: fetchedHome.floor?.toString() || '',
           heatingCategory: fetchedHome.heatingCategory ? reverseTranslateValue(fetchedHome.heatingCategory) : '',
           heatingAgent: fetchedHome.heatingAgent ? reverseTranslateValue(fetchedHome.heatingAgent) : '',
+          parking: fetchedHome.parking === true ? 'yes' : fetchedHome.parking === false ? 'no' : '',
           sizeSqMeters: fetchedHome.sizeSqMeters?.toString() || '',
           yearBuilt: fetchedHome.yearBuilt?.toString() || '',
           yearRenovated: fetchedHome.yearRenovated?.toString() || '',
@@ -126,6 +137,9 @@ export default function EditHomePage() {
             ? new Date(fetchedHome.availableFrom).toISOString().split('T')[0]
             : '',
         })
+        
+        // Set area search query with translated name if area exists
+        // This will be set after areas are fetched in the other useEffect
         
         // Parse and set photos
         if (fetchedHome.photos) {
@@ -147,7 +161,43 @@ export default function EditHomePage() {
     }
     
     checkAccess()
-  }, [params.id, router])
+  }, [params.id, router, language])
+
+  // Fetch all areas on mount for similarity matching and set area display
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAllAreas(data.areas || [])
+        // If home has an area, set the translated display name
+        if (home && home.area) {
+          const areas = data.areas || []
+          const translatedName = getAreaName(home.area, areas, language)
+          setAreaSearchQuery(translatedName)
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching all areas:', error)
+      })
+  }, [home, language])
+
+  // Search areas function
+  const searchAreas = async (query: string) => {
+    if (query.length < 1) {
+      setAreaSuggestions([])
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/areas/search?q=${encodeURIComponent(query)}&limit=10`)
+      if (response.ok) {
+        const data = await response.json()
+        setAreaSuggestions(data.areas || [])
+      }
+    } catch (error) {
+      console.error('Error searching areas:', error)
+    }
+  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -217,6 +267,15 @@ export default function EditHomePage() {
     setError('')
     setSaving(true)
 
+    // If user typed an area but didn't select from dropdown, find most similar
+    let finalArea = formData.area
+    if (formData.area && formData.area.trim().length > 0) {
+      const mostSimilar = findMostSimilarArea(formData.area, allAreas)
+      if (mostSimilar) {
+        finalArea = mostSimilar.name
+      }
+    }
+
     try {
       const homeId = params.id as string
       const response = await fetch(`/api/homes/${homeId}`, {
@@ -224,20 +283,31 @@ export default function EditHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          area: finalArea || null,
           heatingCategory: formData.heatingCategory || null,
           heatingAgent: formData.heatingAgent || null,
+          parking: formData.parking === 'yes' ? true : formData.parking === 'no' ? false : null,
           photos: photos.length > 0 ? JSON.stringify(photos) : null,
         }),
       })
 
-      const data = await response.json()
+      let data: any = {}
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        // If response is not JSON, try to get text
+        const text = await response.text()
+        console.error('Failed to parse JSON response:', text)
+        setError(getTranslation(language, 'updateListingFailed'))
+        return
+      }
 
       if (!response.ok) {
         const errorMsg = data.details 
           ? `${data.error || getTranslation(language, 'updateListingFailed')}: ${data.details}`
           : data.error || getTranslation(language, 'updateListingFailed')
         setError(errorMsg)
-        console.error('Update listing error:', data)
+        console.error('Update listing error:', { status: response.status, data })
         return
       }
 
@@ -459,6 +529,80 @@ export default function EditHomePage() {
               </div>
             </div>
 
+            {/* Area Autocomplete */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'cityArea')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={areaSearchQuery}
+                  onChange={(e) => {
+                    const query = e.target.value
+                    setAreaSearchQuery(query)
+                    // Don't update formData.area immediately - wait for selection or auto-match
+                    if (query.length > 0) {
+                      setShowAreaDropdown(true)
+                      searchAreas(query)
+                    } else {
+                      setShowAreaDropdown(false)
+                      setAreaSuggestions([])
+                      setFormData({ ...formData, area: '' })
+                    }
+                  }}
+                  onFocus={() => {
+                    if (areaSearchQuery.length > 0) {
+                      setShowAreaDropdown(true)
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay to allow click on dropdown items
+                    setTimeout(() => {
+                      setShowAreaDropdown(false)
+                      // If user typed but didn't select, try to find most similar
+                      if (areaSearchQuery && areaSearchQuery.trim().length > 0 && !formData.area) {
+                        const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
+                        if (mostSimilar) {
+                          setFormData({ ...formData, area: mostSimilar.name })
+                          const displayName = language === 'el' && mostSimilar.nameGreek ? mostSimilar.nameGreek : mostSimilar.name
+                          setAreaSearchQuery(displayName)
+                        } else {
+                          // No match found, use what they typed
+                          setFormData({ ...formData, area: areaSearchQuery })
+                        }
+                      }
+                    }, 200)
+                  }}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  placeholder={getTranslation(language, 'selectCityArea')}
+                />
+                {showAreaDropdown && areaSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {areaSuggestions.map((area) => (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() => {
+                          // Store English name in formData, but display translated name
+                          setFormData({ ...formData, area: area.name })
+                          const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          setAreaSearchQuery(displayName)
+                          setShowAreaDropdown(false)
+                        }}
+                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                      >
+                        <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                        {(area.city || area.country) && (
+                          <div className="text-sm text-[#E8D5B7]/60">
+                            {[area.city, area.country].filter(Boolean).join(', ')}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Price and Size Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -474,10 +618,11 @@ export default function EditHomePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'sizeSqMeters')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'sizeSqMeters')}</label>
                 <input
                   type="number"
                   min="0"
+                  required
                   value={formData.sizeSqMeters}
                   onChange={(e) => setFormData({ ...formData, sizeSqMeters: e.target.value })}
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
@@ -548,6 +693,20 @@ export default function EditHomePage() {
                   className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
                 />
               </div>
+            </div>
+
+            {/* Parking */}
+            <div>
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'parking')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <select
+                value={formData.parking}
+                onChange={(e) => setFormData({ ...formData, parking: e.target.value })}
+                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+              >
+                <option value="">{getTranslation(language, 'any')}</option>
+                <option value="yes">{getTranslation(language, 'yes')}</option>
+                <option value="no">{getTranslation(language, 'no')}</option>
+              </select>
             </div>
 
             {/* Year Built and Year Renovated Row */}
