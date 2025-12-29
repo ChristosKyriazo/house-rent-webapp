@@ -80,7 +80,21 @@ export default function NewHomePage() {
     }
 
     try {
-      const response = await fetch(`/api/areas/search?q=${encodeURIComponent(query)}&limit=10`)
+      // Build query params with city and country filters if provided
+      const params = new URLSearchParams({
+        q: query,
+        limit: '10',
+      })
+      
+      if (formData.city && formData.city.trim().length > 0) {
+        params.append('city', formData.city.trim())
+      }
+      
+      if (formData.country && formData.country.trim().length > 0) {
+        params.append('country', formData.country.trim())
+      }
+
+      const response = await fetch(`/api/areas/search?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
         setAreaSuggestions(data.areas || [])
