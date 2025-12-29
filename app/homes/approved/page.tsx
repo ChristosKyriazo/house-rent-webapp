@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
 
 interface ApprovedInquiry {
   id: number
@@ -56,7 +56,7 @@ export default function ApprovedInquiriesPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [expandedInquiry, setExpandedInquiry] = useState<number | null>(null)
-  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null }>>([])
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
 
   // Determine display role
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -166,7 +166,7 @@ export default function ApprovedInquiriesPage() {
                         </h2>
                         <p className="text-[#E8D5B7]/70 text-sm mb-3">
                           📍 {inquiry.home.street && `${inquiry.home.street}, `}
-                          {inquiry.home.city}, {inquiry.home.country}
+                          {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
                           {inquiry.home.area && ` • ${getAreaName(inquiry.home.area, areas, language)}`}
                         </p>
                       </Link>

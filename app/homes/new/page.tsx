@@ -172,10 +172,18 @@ export default function NewHomePage() {
 
     // If user typed an area but didn't select from dropdown, find most similar
     let finalArea = formData.area
-    if (formData.area && formData.area.trim().length > 0) {
-      const mostSimilar = findMostSimilarArea(formData.area, allAreas)
+    // If formData.area is empty but areaSearchQuery has a value, use that for similarity matching
+    const areaToMatch = formData.area && formData.area.trim().length > 0 
+      ? formData.area 
+      : (areaSearchQuery && areaSearchQuery.trim().length > 0 ? areaSearchQuery : null)
+    
+    if (areaToMatch) {
+      const mostSimilar = findMostSimilarArea(areaToMatch, allAreas)
       if (mostSimilar) {
         finalArea = mostSimilar.name
+      } else if (!formData.area) {
+        // If no match found and formData.area is empty, use what they typed
+        finalArea = areaSearchQuery
       }
     }
 
@@ -407,15 +415,26 @@ export default function NewHomePage() {
                     setTimeout(() => {
                       setShowAreaDropdown(false)
                       // If user typed but didn't select, try to find most similar
-                      if (areaSearchQuery && areaSearchQuery.trim().length > 0 && !formData.area) {
-                        const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
-                        if (mostSimilar) {
-                          setFormData({ ...formData, area: mostSimilar.name })
-                          const displayName = language === 'el' && mostSimilar.nameGreek ? mostSimilar.nameGreek : mostSimilar.name
-                          setAreaSearchQuery(displayName)
-                        } else {
-                          // No match found, use what they typed
-                          setFormData({ ...formData, area: areaSearchQuery })
+                      if (areaSearchQuery && areaSearchQuery.trim().length > 0) {
+                        // Check if the current formData.area matches what's displayed
+                        const currentAreaName = formData.area ? 
+                          (allAreas.find(a => a.name === formData.area)?.name || formData.area) : null
+                        const currentDisplayName = currentAreaName ? 
+                          (language === 'el' && allAreas.find(a => a.name === currentAreaName)?.nameGreek 
+                            ? allAreas.find(a => a.name === currentAreaName)!.nameGreek 
+                            : currentAreaName) : null
+                        
+                        // Only run similarity matching if the query is different from what's stored
+                        if (areaSearchQuery !== currentDisplayName) {
+                          const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
+                          if (mostSimilar) {
+                            setFormData({ ...formData, area: mostSimilar.name })
+                            const displayName = language === 'el' && mostSimilar.nameGreek ? mostSimilar.nameGreek : mostSimilar.name
+                            setAreaSearchQuery(displayName)
+                          } else {
+                            // No match found, use what they typed
+                            setFormData({ ...formData, area: areaSearchQuery })
+                          }
                         }
                       }
                     }, 200)

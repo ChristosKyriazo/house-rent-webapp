@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
+import { getCityName, getCountryName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -57,6 +58,7 @@ export default function HomesPage() {
   })
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [availableAreas, setAvailableAreas] = useState<string[]>([])
+  const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
   const isInitialized = useRef(false)
 
@@ -147,6 +149,18 @@ export default function HomesPage() {
       })
       .catch((error) => {
         console.error('Error fetching areas:', error)
+      })
+  }, [])
+
+  // Fetch areas for city/country translation
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAreas(data.areas || [])
+      })
+      .catch((error) => {
+        console.error('Error fetching areas for translation:', error)
       })
   }, [])
 
@@ -639,7 +653,7 @@ export default function HomesPage() {
                           status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
                         }`}>
                           <span>📍</span>
-                          {home.city}, {home.country}
+                          {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                         </p>
                       </div>
 
@@ -716,7 +730,7 @@ export default function HomesPage() {
                           status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
                         }`}>
                           <span>📍</span>
-                          {home.city}, {home.country}
+                          {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                         </p>
                       </div>
 

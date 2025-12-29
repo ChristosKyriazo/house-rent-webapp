@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -74,7 +74,7 @@ export default function HomeDetailPage() {
   const [updatingInquiry, setUpdatingInquiry] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; safety: number | null; vibe: string | null }>>([])
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null; safety: number | null; vibe: string | null }>>([])
   const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
   
@@ -589,10 +589,14 @@ export default function HomeDetailPage() {
                 </p>
               )}
               <p className="flex items-center gap-1">
-                {home.city}, {home.country}
+                {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
               </p>
                   {home.area && (() => {
-                    const areaData = areas.find(a => a.name === home.area)
+                    // Find area by matching name or nameGreek (case-insensitive)
+                    const areaData = areas.find(a => 
+                      a.name?.toLowerCase() === home.area?.toLowerCase() || 
+                      a.nameGreek?.toLowerCase() === home.area?.toLowerCase()
+                    )
                     return (
                       <div className="mt-2 flex flex-col gap-1">
                         <p className="flex items-center gap-1">

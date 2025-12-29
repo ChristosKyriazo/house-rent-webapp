@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { getCityName, getCountryName } from '@/lib/area-utils'
 
 interface HomeWithInquiries {
   home: {
@@ -25,6 +26,7 @@ export default function OwnerInquiriesPage() {
   const [totalInquiries, setTotalInquiries] = useState(0)
   const [loading, setLoading] = useState(true)
   const [checkingRole, setCheckingRole] = useState(true)
+  const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -68,6 +70,18 @@ export default function OwnerInquiriesPage() {
 
     fetchData()
   }, [router])
+
+  // Fetch areas for city/country translation
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAreas(data.areas || [])
+      })
+      .catch((error) => {
+        console.error('Error fetching areas for translation:', error)
+      })
+  }, [])
 
   if (checkingRole || loading) {
     return (
@@ -118,7 +132,7 @@ export default function OwnerInquiriesPage() {
                     </h2>
                     <p className="text-[#E8D5B7]/70">
                       {home.street && `${home.street}, `}
-                      {home.city}, {home.country}
+                      {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     </p>
                   </div>
                   <div className="text-right ml-4">

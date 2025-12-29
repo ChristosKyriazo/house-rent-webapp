@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -30,7 +30,7 @@ export default function UserInquiriesPage() {
   const [homes, setHomes] = useState<Home[]>([])
   const [totalInquiries, setTotalInquiries] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null }>>([])
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -145,7 +145,7 @@ export default function UserInquiriesPage() {
                   </h2>
                   <p className="text-[#E8D5B7]/70 text-sm mb-3">
                     📍 {home.street && `${home.street}, `}
-                    {home.city}, {home.country}
+                    {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     {home.area && ` • ${getAreaName(home.area, areas, language)}`}
                   </p>
 

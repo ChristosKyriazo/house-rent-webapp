@@ -99,3 +99,51 @@ export function getAreaName(
   return areaData.name
 }
 
+/**
+ * Get city name based on language
+ * Looks up the city in the areas table to find Greek translation
+ */
+export function getCityName(
+  city: string | null,
+  areas: Array<{ city: string | null; cityGreek: string | null }>,
+  language: 'el' | 'en'
+): string {
+  if (!city) return ''
+  
+  // Find an area with matching city
+  const areaData = areas.find(a => a.city === city)
+  
+  if (!areaData) return city
+  
+  // Return Greek name if language is Greek and it exists, otherwise return original city
+  if (language === 'el' && areaData.cityGreek) {
+    return areaData.cityGreek
+  }
+  
+  return city
+}
+
+/**
+ * Get country name based on language
+ * Looks up the country in the areas table to find Greek translation
+ */
+export function getCountryName(
+  country: string | null,
+  areas: Array<{ country: string | null; countryGreek: string | null }>,
+  language: 'el' | 'en'
+): string {
+  if (!country) return ''
+  
+  // Find an area with matching country
+  const areaData = areas.find(a => a.country === country)
+  
+  if (!areaData) return country
+  
+  // Return Greek name if language is Greek and it exists, otherwise return original country
+  if (language === 'el' && areaData.countryGreek) {
+    return areaData.countryGreek
+  }
+  
+  return country
+}
+

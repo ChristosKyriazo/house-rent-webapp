@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
+import { getCityName, getCountryName } from '@/lib/area-utils'
 
 interface FinalizedInquiry {
   id: number
@@ -38,6 +39,7 @@ export default function RateOwnerPage() {
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
 
   const displayRole = (actualRole === 'both' && selectedRole) 
     ? selectedRole 
@@ -69,6 +71,18 @@ export default function RateOwnerPage() {
 
     fetchData()
   }, [router, displayRole])
+
+  // Fetch areas for city/country translation
+  useEffect(() => {
+    fetch('/api/areas')
+      .then((res) => res.json())
+      .then((data) => {
+        setAreas(data.areas || [])
+      })
+      .catch((error) => {
+        console.error('Error fetching areas for translation:', error)
+      })
+  }, [])
 
   const handleSubmitRating = async () => {
     if (!selectedInquiry || submitting) return
@@ -154,7 +168,7 @@ export default function RateOwnerPage() {
                     </h3>
                     <p className="text-[#E8D5B7]/70 mb-3">
                       📍 {inquiry.home.street && `${inquiry.home.street}, `}
-                      {inquiry.home.city}, {inquiry.home.country}
+                      {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
                     </p>
                     <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
                       <p className="text-sm text-[#E8D5B7]/70 mb-1">
