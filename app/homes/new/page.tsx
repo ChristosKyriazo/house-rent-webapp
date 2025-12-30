@@ -252,12 +252,34 @@ export default function NewHomePage() {
       })
 
       let data: any = {}
+      const contentType = response.headers.get('content-type')
+      const hasJsonContent = contentType && contentType.includes('application/json')
+      
       try {
-        data = await response.json()
-      } catch (parseError) {
-        // If response is not JSON, try to get text
         const text = await response.text()
-        console.error('Failed to parse JSON response:', text)
+        
+        if (hasJsonContent) {
+          if (text && text.trim().length > 0) {
+            try {
+              data = JSON.parse(text)
+            } catch (parseError) {
+              console.error('Failed to parse JSON response:', parseError)
+              console.error('Response text:', text)
+              setError(getTranslation(language, 'createListingFailed'))
+              return
+            }
+          } else {
+            console.warn('Empty JSON response body')
+            data = {}
+          }
+        } else {
+          // Not JSON, log the text
+          console.error('Non-JSON response:', text)
+          setError(text || getTranslation(language, 'createListingFailed'))
+          return
+        }
+      } catch (readError) {
+        console.error('Could not read response:', readError)
         setError(getTranslation(language, 'createListingFailed'))
         return
       }
@@ -268,7 +290,13 @@ export default function NewHomePage() {
           ? `${data.error || getTranslation(language, 'createListingFailed')}: ${data.details}`
           : data.error || getTranslation(language, 'createListingFailed')
         setError(errorMsg)
-        console.error('Create listing error:', { status: response.status, data })
+        console.error('Create listing error:', { 
+          status: response.status, 
+          statusText: response.statusText,
+          data,
+          contentType: response.headers.get('content-type'),
+          body: JSON.stringify(data)
+        })
         return
       }
 

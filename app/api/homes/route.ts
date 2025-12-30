@@ -442,49 +442,88 @@ export async function POST(request: NextRequest) {
       return Math.round((Math.random() * 4.9 + 0.1) * 10) / 10
     }
 
-    const home = await prisma.home.create({
-      data: {
-        title: title.trim(),
-        description: description?.trim() || null,
-        street: street?.trim() || null,
-        city: city.trim(),
-        country: country.trim(),
-        area: area?.trim() || null,
-        listingType: listingType || 'rent',
-        pricePerMonth: Number(pricePerMonth),
-        bedrooms: Number(bedrooms || 0),
-        bathrooms: Number(bathrooms || 0),
-        floor: floor && floor !== '' ? Number(floor) : null,
-        heatingCategory: heatingCategory?.trim() || null,
-        heatingAgent: heatingAgent?.trim() || null,
-        parking: parking === undefined || parking === null 
-          ? null 
-          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
-        sizeSqMeters: Number(sizeSqMeters),
-        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
-        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
-        availableFrom: availableFromDate,
-        photos: photos || null,
-        // Dummy distance values (will be populated from Google API in the future)
-        closestMetro: generateDummyDistance(),
-        closestBus: generateDummyDistance(),
-        closestSchool: generateDummyDistance(),
-        closestKindergarten: generateDummyDistance(),
-        closestHospital: generateDummyDistance(),
-        closestPark: generateDummyDistance(),
-        ownerId: user.id,
-      },
-    })
+    // Retry logic for SQLite database locks
+    const createHomeWithRetry = async (maxRetries = 3, delay = 100) => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await prisma.home.create({
+            data: {
+              title: title.trim(),
+              description: description?.trim() || null,
+              street: street?.trim() || null,
+              city: city.trim(),
+              country: country.trim(),
+              area: area?.trim() || null,
+              listingType: listingType || 'rent',
+              pricePerMonth: Number(pricePerMonth),
+              bedrooms: Number(bedrooms || 0),
+              bathrooms: Number(bathrooms || 0),
+              floor: floor && floor !== '' ? Number(floor) : null,
+              heatingCategory: heatingCategory?.trim() || null,
+              heatingAgent: heatingAgent?.trim() || null,
+              parking: parking === undefined || parking === null 
+                ? null 
+                : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
+              sizeSqMeters: Number(sizeSqMeters),
+              yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
+              yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+              availableFrom: availableFromDate,
+              photos: photos || null,
+              // Dummy distance values (will be populated from Google API in the future)
+              closestMetro: generateDummyDistance(),
+              closestBus: generateDummyDistance(),
+              closestSchool: generateDummyDistance(),
+              closestKindergarten: generateDummyDistance(),
+              closestHospital: generateDummyDistance(),
+              closestPark: generateDummyDistance(),
+              ownerId: user.id,
+            },
+          })
+        } catch (error: any) {
+          const isLockError = error?.code === 'SQLITE_BUSY' || 
+                             error?.message?.includes('database is locked') ||
+                             error?.message?.includes('timeout')
+          
+          if (isLockError && attempt < maxRetries) {
+            const waitTime = delay * Math.pow(2, attempt - 1) // Exponential backoff
+            console.warn(`Database lock detected, retrying in ${waitTime}ms (attempt ${attempt}/${maxRetries})...`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+            continue
+          }
+          throw error
+        }
+      }
+      throw new Error('Failed to create home after retries')
+    }
+
+    const home = await createHomeWithRetry()
 
     return NextResponse.json(
       { message: 'Home created', home },
       { status: 201 }
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create home error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     const errorDetails = error instanceof Error ? error.stack : String(error)
     console.error('Error details:', errorDetails)
+    
+    // Check for database lock/timeout errors
+    const isLockError = error?.code === 'SQLITE_BUSY' || 
+                       error?.message?.includes('database is locked') ||
+                       error?.message?.includes('timeout') ||
+                       error?.message?.includes('Operations timed out')
+    
+    if (isLockError) {
+      return NextResponse.json(
+        { 
+          error: 'Database is currently locked', 
+          details: 'The database is being accessed by another application (e.g., DBeaver). Please close any database tools and try again.' 
+        },
+        { status: 503 } // Service Unavailable
+      )
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
       { status: 500 }
