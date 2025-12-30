@@ -34,7 +34,7 @@ export default function NotificationBell() {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await fetch('/api/notifications')
+        const response = await fetch(`/api/notifications?language=${language}`)
         if (response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
@@ -57,7 +57,7 @@ export default function NotificationBell() {
     // Refresh notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [language])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -86,6 +86,14 @@ export default function NotificationBell() {
       router.push('/homes/approved')
     } else if (notification.type === 'dismissed') {
       router.push('/homes/my-inquiries')
+    } else if (notification.type === 'rate') {
+      // Redirect to rating page based on role
+      // Owner rates user, User rates owner
+      if (displayRole === 'owner' || (actualRole === 'both' && selectedRole === 'owner')) {
+        router.push('/homes/rate-user')
+      } else {
+        router.push('/homes/rate-owner')
+      }
     }
   }
 

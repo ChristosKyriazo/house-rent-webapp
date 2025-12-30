@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -15,11 +15,14 @@ interface Home {
   description: string | null
   city: string
   country: string
+  area: string | null
   listingType: string
   pricePerMonth: number
   bedrooms: number
   bathrooms: number
+  sizeSqMeters: number | null
   availableFrom: string | null
+  createdAt: string
   owner: {
     email: string
     name: string | null
@@ -56,9 +59,17 @@ export default function HomesPage() {
     maxBedrooms: '',
     yearBuilt: '',
   })
+  const [excludeInquired, setExcludeInquired] = useState(false)
+  const [excludeApproved, setExcludeApproved] = useState(false)
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
-  const [availableAreas, setAvailableAreas] = useState<string[]>([])
+  const [areaSearchQuery, setAreaSearchQuery] = useState('')
+  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false)
+  const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
+  const [showFilters, setShowFilters] = useState(true)
+  const [showOrderDropdown, setShowOrderDropdown] = useState(false)
+  const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
   const isInitialized = useRef(false)
 
@@ -134,23 +145,6 @@ export default function HomesPage() {
   }, [router])
 
 
-  // Fetch all available areas from existing listings
-  useEffect(() => {
-    fetch('/api/homes')
-      .then((res) => res.json())
-      .then((data) => {
-        const areas = new Set<string>()
-        data.homes?.forEach((home: any) => {
-          if (home.area && home.area.trim() !== '') {
-            areas.add(home.area)
-          }
-        })
-        setAvailableAreas(Array.from(areas).sort())
-      })
-      .catch((error) => {
-        console.error('Error fetching areas:', error)
-      })
-  }, [])
 
   // Fetch areas for city/country translation
   useEffect(() => {
@@ -163,6 +157,48 @@ export default function HomesPage() {
         console.error('Error fetching areas for translation:', error)
       })
   }, [])
+
+  // Close order dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (showOrderDropdown && !target.closest('.order-dropdown-container')) {
+        setShowOrderDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showOrderDropdown])
+
+  // Search areas function
+  const searchAreas = async (query: string) => {
+    if (query.length < 1) {
+      setAreaSuggestions([])
+      return
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: '10',
+      })
+      
+      if (manualFilters.city) params.append('city', manualFilters.city)
+      if (manualFilters.country) params.append('country', manualFilters.country)
+
+      const response = await fetch(`/api/areas/search?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        // Filter out already selected areas
+        const filtered = (data.areas || []).filter((area: { name: string }) => !selectedAreas.includes(area.name))
+        setAreaSuggestions(filtered)
+      }
+    } catch (error) {
+      console.error('Error searching areas:', error)
+    }
+  }
 
   if (checkingRole) {
     return (
@@ -200,6 +236,8 @@ export default function HomesPage() {
       })
       const data = await response.json()
       setHomes(data.homes || [])
+      // Collapse filters after search
+      setShowFilters(false)
     } catch (error) {
       console.error('Error with AI search:', error)
       // Fallback to showing all homes if AI search fails
@@ -228,17 +266,20 @@ export default function HomesPage() {
       if (selectedAreas.length > 0) {
         selectedAreas.forEach(area => params.append('areas', area))
       }
+      if (excludeInquired) params.append('excludeInquired', 'true')
+      if (excludeApproved) params.append('excludeApproved', 'true')
 
       const response = await fetch(`/api/homes?${params.toString()}`)
       const data = await response.json()
       setHomes(data.homes || [])
+      // Collapse filters after search
+      setShowFilters(false)
     } catch (error) {
       console.error('Error filtering homes:', error)
     } finally {
       setLoading(false)
     }
   }
-
 
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
@@ -300,7 +341,7 @@ export default function HomesPage() {
         )}
 
         {/* Manual Filter Form */}
-        {searchType && filterType === 'manual' && (
+        {searchType && filterType === 'manual' && showFilters && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'filterByFeatures')}</h2>
@@ -348,7 +389,7 @@ export default function HomesPage() {
                           key={area}
                           className="flex items-center gap-2 px-3 py-1.5 bg-[#E8D5B7] text-[#2D3748] rounded-lg"
                         >
-                          <span className="text-sm font-medium">{translateValue(language, area)}</span>
+                          <span className="text-sm font-medium">{getAreaName(area, allAreas, language)}</span>
                           <button
                             type="button"
                             onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
@@ -363,27 +404,55 @@ export default function HomesPage() {
                       ))}
                     </div>
                   )}
-                  {/* Area dropdown */}
-                  <select
-                    value=""
-                    onChange={(e) => {
-                      const area = e.target.value
-                      if (area && !selectedAreas.includes(area)) {
-                        setSelectedAreas([...selectedAreas, area])
-                      }
-                      e.target.value = '' // Reset dropdown
-                    }}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
-                  >
-                    <option value="">{getTranslation(language, 'selectCityArea')}</option>
-                    {availableAreas
-                      .filter(area => !selectedAreas.includes(area))
-                      .map((area) => (
-                        <option key={area} value={area}>
-                          {translateValue(language, area)}
-                        </option>
-                      ))}
-                  </select>
+                  {/* Area autocomplete with multi-select */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={areaSearchQuery}
+                      onChange={(e) => {
+                        const query = e.target.value
+                        setAreaSearchQuery(query)
+                        if (query.length > 0) {
+                          setShowAreaDropdown(true)
+                          searchAreas(query)
+                        } else {
+                          setShowAreaDropdown(false)
+                          setAreaSuggestions([])
+                        }
+                      }}
+                      onFocus={() => {
+                        if (areaSearchQuery.length > 0) {
+                          setShowAreaDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setShowAreaDropdown(false), 200)
+                      }}
+                      className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                      placeholder={getTranslation(language, 'selectCityArea')}
+                    />
+                    {showAreaDropdown && areaSuggestions.length > 0 && (
+                      <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                        {areaSuggestions.map((area) => (
+                          <button
+                            key={area.id}
+                            type="button"
+                            onClick={() => {
+                              if (!selectedAreas.includes(area.name)) {
+                                setSelectedAreas([...selectedAreas, area.name])
+                              }
+                              setAreaSearchQuery('')
+                              setShowAreaDropdown(false)
+                              setAreaSuggestions([])
+                            }}
+                            className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                          >
+                            <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -508,6 +577,32 @@ export default function HomesPage() {
                   placeholder={getTranslation(language, 'any')}
                 />
               </div>
+
+              {/* Row 8: Exclude Filters (checkboxes) */}
+              <div className="space-y-3 pt-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={excludeInquired}
+                    onChange={(e) => setExcludeInquired(e.target.checked)}
+                    className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                  />
+                  <span className="text-sm font-medium text-[#E8D5B7]">
+                    {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={excludeApproved}
+                    onChange={(e) => setExcludeApproved(e.target.checked)}
+                    className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                  />
+                  <span className="text-sm font-medium text-[#E8D5B7]">
+                    {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
+                  </span>
+                </label>
+              </div>
             </div>
             <button
               onClick={handleManualFilter}
@@ -520,7 +615,7 @@ export default function HomesPage() {
         )}
 
         {/* AI Search Form */}
-        {searchType && filterType === 'ai' && (
+        {searchType && filterType === 'ai' && showFilters && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
@@ -548,6 +643,104 @@ export default function HomesPage() {
             >
               {loading ? getTranslation(language, 'searchingWithAi') : getTranslation(language, 'aiSearch')}
             </button>
+          </div>
+        )}
+
+        {/* Filters and Order Buttons */}
+        {filterType && (
+          <div className="flex gap-4 mb-6">
+            <div className="relative">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+              >
+                {getTranslation(language, 'filters') || 'Filters'}
+              </button>
+            </div>
+            <div className="relative order-dropdown-container">
+              <button
+                onClick={() => setShowOrderDropdown(!showOrderDropdown)}
+                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+              >
+                {getTranslation(language, 'order') || 'Order'}
+              </button>
+              {showOrderDropdown && (
+                <div className="absolute z-10 mt-2 w-64 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl overflow-hidden">
+                  <button
+                    onClick={() => {
+                      setSortOrder('price-asc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'priceAscending') || 'Price Ascending'}</span>
+                    {sortOrder === 'price-asc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortOrder('price-desc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'priceDescending') || 'Price Descending'}</span>
+                    {sortOrder === 'price-desc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortOrder('size-asc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'sizeAscending') || 'Size Ascending'}</span>
+                    {sortOrder === 'size-asc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortOrder('size-desc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'sizeDescending') || 'Size Descending'}</span>
+                    {sortOrder === 'size-desc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortOrder('date-asc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'dateAscending') || 'Date of Publish Ascending'}</span>
+                    {sortOrder === 'date-asc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSortOrder('date-desc')
+                      setShowOrderDropdown(false)
+                    }}
+                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors flex items-center justify-between"
+                  >
+                    <span>{getTranslation(language, 'dateDescending') || 'Date of Publish Descending'}</span>
+                    {sortOrder === 'date-desc' && (
+                      <span className="text-[#E8D5B7]">✓</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -582,7 +775,27 @@ export default function HomesPage() {
           </div>
         ) : homes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {homes.map((home) => {
+            {[...homes].sort((a, b) => {
+              if (!sortOrder) return 0
+              if (sortOrder === 'price-asc') {
+                return a.pricePerMonth - b.pricePerMonth
+              } else if (sortOrder === 'price-desc') {
+                return b.pricePerMonth - a.pricePerMonth
+              } else if (sortOrder === 'size-asc') {
+                const aSize = a.sizeSqMeters || 0
+                const bSize = b.sizeSqMeters || 0
+                return aSize - bSize
+              } else if (sortOrder === 'size-desc') {
+                const aSize = a.sizeSqMeters || 0
+                const bSize = b.sizeSqMeters || 0
+                return bSize - aSize
+              } else if (sortOrder === 'date-asc') {
+                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              } else if (sortOrder === 'date-desc') {
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              }
+              return 0
+            }).map((home) => {
               const status = inquiryStatus[home.id]
               const hasInquiry = status === 'inquired'
               const isApproved = status === 'approved'
@@ -653,6 +866,11 @@ export default function HomesPage() {
                           status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
                         }`}>
                           <span>📍</span>
+                          {home.area && (
+                            <>
+                              {getAreaName(home.area, allAreas, language)}, 
+                            </>
+                          )}
                           {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                         </p>
                       </div>
@@ -730,6 +948,11 @@ export default function HomesPage() {
                           status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
                         }`}>
                           <span>📍</span>
+                          {home.area && (
+                            <>
+                              {getAreaName(home.area, allAreas, language)}, 
+                            </>
+                          )}
                           {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                         </p>
                       </div>

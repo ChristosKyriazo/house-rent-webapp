@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
         where: {
           homeId: { in: homeIds },
           approved: true,
+          finalized: false, // Exclude finalized inquiries
         },
         select: {
           id: true,
@@ -139,6 +140,7 @@ export async function GET(request: NextRequest) {
         where: {
           userId: user.id,
           approved: true,
+          finalized: false, // Exclude finalized inquiries
         },
         select: {
           id: true,

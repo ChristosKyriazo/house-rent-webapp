@@ -35,11 +35,35 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   useEffect(() => {
     const checkFinalizedInquiries = async () => {
       try {
-        const roleParam = normalizedRole === 'owner' ? 'owner' : 'user'
-        const response = await fetch(`/api/inquiries/finalized?role=${roleParam}`)
-        if (response.ok) {
-          const data = await response.json()
-          setHasFinalizedInquiries(data.finalizedInquiries && data.finalizedInquiries.length > 0)
+        // Check for finalized inquiries based on the display role
+        // If role is 'both', check both owner and user roles
+        if (normalizedRole === 'both') {
+          const [ownerRes, userRes] = await Promise.all([
+            fetch('/api/inquiries/finalized?role=owner'),
+            fetch('/api/inquiries/finalized?role=user')
+          ])
+          
+          let ownerHasFinalized = false
+          let userHasFinalized = false
+          
+          if (ownerRes.ok) {
+            const ownerData = await ownerRes.json()
+            ownerHasFinalized = ownerData.finalizedInquiries && ownerData.finalizedInquiries.length > 0
+          }
+          
+          if (userRes.ok) {
+            const userData = await userRes.json()
+            userHasFinalized = userData.finalizedInquiries && userData.finalizedInquiries.length > 0
+          }
+          
+          setHasFinalizedInquiries(ownerHasFinalized || userHasFinalized)
+        } else {
+          const roleParam = normalizedRole === 'owner' ? 'owner' : 'user'
+          const response = await fetch(`/api/inquiries/finalized?role=${roleParam}`)
+          if (response.ok) {
+            const data = await response.json()
+            setHasFinalizedInquiries(data.finalizedInquiries && data.finalizedInquiries.length > 0)
+          }
         }
       } catch (error) {
         console.error('Error checking finalized inquiries:', error)
@@ -47,7 +71,8 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       }
     }
 
-    if (normalizedRole === 'owner' || normalizedRole === 'user') {
+    // Always check if role is owner, user, or both
+    if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both') {
       checkFinalizedInquiries()
     }
   }, [normalizedRole])
@@ -74,12 +99,17 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   // Add inquiries item based on display role
   // For owner: link to /homes/inquiries
   // For user: link to /homes/my-inquiries
-  if (normalizedRole === 'owner' || normalizedRole === 'user') {
-    const inquiriesHref = normalizedRole === 'owner' ? '/homes/inquiries' : '/homes/my-inquiries'
-    // Insert inquiries after my-listings if owner, or after profile if user
-    const insertIndex = normalizedRole === 'owner' 
-      ? menuItems.findIndex(item => item.href === '/homes/my-listings') + 1
-      : menuItems.findIndex(item => item.href === '/profile') + 1
+  if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both') {
+    let inquiriesHref = '/homes/my-inquiries'
+    let insertIndex = menuItems.findIndex(item => item.href === '/profile') + 1
+    
+    if (normalizedRole === 'owner' || (normalizedRole === 'both' && selectedRole === 'owner')) {
+      inquiriesHref = '/homes/inquiries'
+      insertIndex = menuItems.findIndex(item => item.href === '/homes/my-listings') + 1
+      if (insertIndex === 0) {
+        insertIndex = menuItems.findIndex(item => item.href === '/profile') + 1
+      }
+    }
     
     menuItems.splice(insertIndex, 0, {
       href: inquiriesHref,
@@ -96,9 +126,12 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       label: getTranslation(language, 'approvedInquiries')
     })
 
-    // Add rating pages after approved inquiries (only if user has finalized inquiries)
+    // Add rating pages after approved inquiries (always show for users with finalized inquiries)
+    // This allows re-rating at intervals (e.g., every 6 months)
+    // Show "Rate Owner" when viewing as user, "Rate User" when viewing as owner
     if (hasFinalizedInquiries) {
       if (normalizedRole === 'owner') {
+        // Owner rates the user/renter
         menuItems.splice(insertIndex + 2, 0, {
           href: '/homes/rate-user',
           labelKey: 'rateUser',
@@ -106,12 +139,32 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
           label: getTranslation(language, 'rateUser')
         })
       } else if (normalizedRole === 'user') {
+        // User rates the owner
         menuItems.splice(insertIndex + 2, 0, {
           href: '/homes/rate-owner',
           labelKey: 'rateOwner',
           icon: '⭐',
           label: getTranslation(language, 'rateOwner')
         })
+      } else if (normalizedRole === 'both') {
+        // For 'both' role, show rating option based on selectedRole
+        // If selectedRole is 'owner', show "Rate User"
+        // If selectedRole is 'user', show "Rate Owner"
+        if (selectedRole === 'owner') {
+          menuItems.splice(insertIndex + 2, 0, {
+            href: '/homes/rate-user',
+            labelKey: 'rateUser',
+            icon: '⭐',
+            label: getTranslation(language, 'rateUser')
+          })
+        } else if (selectedRole === 'user') {
+          menuItems.splice(insertIndex + 2, 0, {
+            href: '/homes/rate-owner',
+            labelKey: 'rateOwner',
+            icon: '⭐',
+            label: getTranslation(language, 'rateOwner')
+          })
+        }
       }
     }
   }

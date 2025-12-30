@@ -166,12 +166,49 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Get the home to find the owner and homeKey for notification deletion
+    const home = await prisma.home.findUnique({
+      where: { id: parseInt(homeId) },
+      select: {
+        id: true,
+        key: true,
+        ownerId: true,
+      },
+    })
+
+    if (!home) {
+      return NextResponse.json(
+        { error: 'Home not found' },
+        { status: 404 }
+      )
+    }
+
+    // Delete the inquiry
     await prisma.inquiry.deleteMany({
       where: {
         userId: user.id,
         homeId: parseInt(homeId),
       },
     })
+
+    // Delete the owner's notification for this inquiry
+    try {
+      await prisma.notification.updateMany({
+        where: {
+          recipientId: home.ownerId,
+          type: 'inquiry',
+          homeKey: home.key,
+          userId: user.id,
+          deleted: false,
+        },
+        data: {
+          deleted: true,
+        },
+      })
+    } catch (error) {
+      console.error('Failed to delete inquiry notification:', error)
+      // Don't fail the inquiry deletion if notification deletion fails
+    }
 
     return NextResponse.json({ message: 'Inquiry removed' }, { status: 200 })
   } catch (error) {

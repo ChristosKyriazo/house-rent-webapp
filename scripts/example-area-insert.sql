@@ -77,3 +77,4 @@ INSERT INTO areas (
   'Touristic, historic'
 );
 
+

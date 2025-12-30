@@ -217,38 +217,50 @@ export default function EditProfilePage() {
 
           {/* Delete Account Section */}
           <div className="mt-8 pt-8 border-t border-red-500/30">
-            <h2 className="text-xl font-bold text-red-400 mb-4">{getTranslation(language, 'dangerZone')}</h2>
-            <p className="text-[#E8D5B7]/70 text-sm mb-4">{getTranslation(language, 'deleteAccountDescription')}</p>
-            {!showDeleteConfirm ? (
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="px-6 py-3 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-all font-semibold text-sm border border-red-500/30 disabled:opacity-50"
-              >
-                {getTranslation(language, 'deleteAccount')}
-              </button>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-red-400 font-semibold">{getTranslation(language, 'deleteAccountConfirm')}</p>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              className="px-6 py-3 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-all font-semibold text-sm border border-red-500/30 disabled:opacity-50"
+            >
+              {getTranslation(language, 'deleteAccount')}
+            </button>
+          </div>
+
+          {/* Delete Account Confirmation Modal */}
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+              <div className="bg-[#1A202C] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                <div className="text-center mb-6">
+                  <div className="text-6xl mb-4">⚠️</div>
+                  <h2 className="text-2xl font-bold text-red-400 mb-4">
+                    {getTranslation(language, 'deleteAccount')}
+                  </h2>
+                  <p className="text-red-300 font-semibold text-lg mb-2">
+                    {getTranslation(language, 'deleteAccountConfirm')}
+                  </p>
+                  <p className="text-[#E8D5B7]/70 text-sm">
+                    {getTranslation(language, 'deleteAccountDescription')}
+                  </p>
+                </div>
                 <div className="flex gap-4">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
                     disabled={deleting}
-                    className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm disabled:opacity-50"
+                    className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm disabled:opacity-50"
                   >
                     {getTranslation(language, 'cancel')}
                   </button>
                   <button
                     onClick={handleDeleteAccount}
                     disabled={deleting}
-                    className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold text-sm disabled:opacity-50"
+                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold text-sm disabled:opacity-50 shadow-lg shadow-red-600/50"
                   >
                     {deleting ? getTranslation(language, 'deleting') : getTranslation(language, 'confirmDeleteAccount')}
                   </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

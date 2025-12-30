@@ -184,21 +184,37 @@ export default function NewHomePage() {
     setError('')
     setLoading(true)
 
-    // If user typed an area but didn't select from dropdown, find most similar
-    let finalArea = formData.area
-    // If formData.area is empty but areaSearchQuery has a value, use that for similarity matching
-    const areaToMatch = formData.area && formData.area.trim().length > 0 
-      ? formData.area 
-      : (areaSearchQuery && areaSearchQuery.trim().length > 0 ? areaSearchQuery : null)
+    // Always ensure we have a valid area name from the database
+    let finalArea: string | null = null
     
-    if (areaToMatch) {
-      const mostSimilar = findMostSimilarArea(areaToMatch, allAreas)
+    // First, check if formData.area is already a valid area name from the database
+    if (formData.area && formData.area.trim().length > 0) {
+      const isValidArea = allAreas.some(a => a.name === formData.area.trim())
+      if (isValidArea) {
+        // formData.area is already a valid area name, use it
+        finalArea = formData.area.trim()
+      } else {
+        // formData.area exists but is not a valid area name, try to find closest match
+        const mostSimilar = findMostSimilarArea(formData.area, allAreas)
+        if (mostSimilar) {
+          finalArea = mostSimilar.name
+        }
+      }
+    }
+    
+    // If we still don't have a valid area, try matching from areaSearchQuery
+    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
       if (mostSimilar) {
         finalArea = mostSimilar.name
-      } else if (!formData.area) {
-        // If no match found and formData.area is empty, use what they typed
-        finalArea = areaSearchQuery
       }
+    }
+    
+    // Only use what they typed if no match was found and we have something
+    // But prefer to leave it null if no valid match
+    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      // Last resort: use what they typed (but this shouldn't happen if they clicked a suggestion)
+      finalArea = areaSearchQuery.trim()
     }
 
     try {
@@ -462,12 +478,23 @@ export default function NewHomePage() {
                       <button
                         key={area.id}
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
                           // Store English name in formData, but display translated name
-                          setFormData({ ...formData, area: area.name })
                           const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
+                          // Ensure the area is set correctly
+                          setTimeout(() => {
+                            setFormData(prev => {
+                              if (prev.area !== area.name) {
+                                return { ...prev, area: area.name }
+                              }
+                              return prev
+                            })
+                          }, 0)
                         }}
                         className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
                       >

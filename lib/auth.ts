@@ -17,7 +17,19 @@ export async function getCurrentUser() {
     if (user) return user
 
     // First-time login: create local user record
-    const cUser = await currentUser()
+    let cUser
+    try {
+      cUser = await currentUser()
+    } catch (clerkError: any) {
+      // Handle Clerk "Not Found" errors gracefully
+      // This can happen if the user was deleted from Clerk but still has a session
+      if (clerkError?.status === 404 || clerkError?.message?.includes('Not Found')) {
+        console.warn('Clerk user not found, but session exists. User may have been deleted.')
+        return null
+      }
+      throw clerkError
+    }
+    
     if (!cUser) return null
 
     const email = cUser.emailAddresses?.[0]?.emailAddress || 

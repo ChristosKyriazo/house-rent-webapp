@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { clerkClient } from '@clerk/nextjs/server'
 
 // GET /api/profile - get current user's profile or a specific user by userId query param
 export async function GET(request: NextRequest) {
@@ -112,13 +113,23 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    const clerkUserId = user.clerkUserId
+
     // Delete the user from database (cascade deletes will handle related records)
     await prisma.user.delete({
       where: { id: user.id },
     })
 
-    // Note: Clerk user deletion should be handled on the client side
-    // after successful database deletion, as we need the Clerk session
+    // Delete the user from Clerk
+    if (clerkUserId) {
+      try {
+        const clerk = await clerkClient()
+        await clerk.users.deleteUser(clerkUserId)
+      } catch (clerkError) {
+        console.error('Error deleting user from Clerk:', clerkError)
+        // Continue even if Clerk deletion fails - database is already deleted
+      }
+    }
 
     return NextResponse.json({ message: 'Account deleted successfully' }, { status: 200 })
   } catch (error) {

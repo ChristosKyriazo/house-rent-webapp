@@ -185,6 +185,43 @@ export async function PATCH(
         }
       }
 
+      // Delete inquiry notifications for the owner when inquiry is approved
+      // This ensures the inquiry notification is automatically deleted when approved
+      try {
+        await prisma.notification.updateMany({
+          where: {
+            homeKey: inquiryWithDetails?.home.key,
+            type: 'inquiry',
+            recipientId: user.id,
+            deleted: false, // Only delete if not already deleted
+          },
+          data: {
+            deleted: true,
+          },
+        })
+      } catch (error) {
+        console.error('Failed to delete inquiry notifications:', error)
+      }
+
+      // Delete inquiry notifications for the user when inquiry is approved
+      if (inquiryWithDetails) {
+        try {
+          await prisma.notification.updateMany({
+            where: {
+              homeKey: inquiryWithDetails.home.key,
+              type: 'inquiry',
+              recipientId: inquiryWithDetails.user.id,
+              deleted: false,
+            },
+            data: {
+              deleted: true,
+            },
+          })
+        } catch (error) {
+          console.error('Failed to delete user inquiry notifications:', error)
+        }
+      }
+
       return NextResponse.json(
         { message: 'Inquiry approved', approved: true },
         { status: 200 }

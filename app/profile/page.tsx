@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
+import StarRating from '@/app/components/StarRating'
 
 interface User {
   id: number
@@ -275,13 +276,7 @@ export default function ProfilePage() {
                       <p className="text-2xl font-bold text-[#E8D5B7]">
                         {ratings.ownerRating.toFixed(1)}
                       </p>
-                      <div className="flex items-center gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(ratings.ownerRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
-                            ⭐
-                          </span>
-                        ))}
-                      </div>
+                      <StarRating rating={ratings.ownerRating!} size="base" />
                       {ratings.ownerCount > 0 && (
                         <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                           {ratings.ownerCount} {ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
@@ -291,13 +286,7 @@ export default function ProfilePage() {
                 ) : (
                     <div className="flex flex-col items-center gap-2">
                       <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
-                      <div className="flex items-center gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className="text-base text-[#E8D5B7]/30">
-                            ⭐
-                          </span>
-                        ))}
-                      </div>
+                      <StarRating rating={0} size="base" />
                       <p className="text-xs text-[#E8D5B7]/60">
                         {getTranslation(language, 'notRatedYet')}
                       </p>
@@ -318,13 +307,7 @@ export default function ProfilePage() {
                       <p className="text-2xl font-bold text-[#E8D5B7]">
                         {ratings.renterRating.toFixed(1)}
                       </p>
-                      <div className="flex items-center gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(ratings.renterRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
-                            ⭐
-                          </span>
-                        ))}
-                      </div>
+                      <StarRating rating={ratings.renterRating!} size="base" />
                       {ratings.renterCount > 0 && (
                         <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                           {ratings.renterCount} {ratings.renterCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
@@ -334,13 +317,7 @@ export default function ProfilePage() {
                 ) : (
                     <div className="flex flex-col items-center gap-2">
                       <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
-                      <div className="flex items-center gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className="text-base text-[#E8D5B7]/30">
-                            ⭐
-                          </span>
-                        ))}
-                      </div>
+                      <StarRating rating={0} size="base" />
                       <p className="text-xs text-[#E8D5B7]/60">
                         {getTranslation(language, 'notRatedYet')}
                       </p>

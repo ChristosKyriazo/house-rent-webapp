@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import StarRating from '@/app/components/StarRating'
 
 interface Rating {
   id: number
@@ -124,21 +125,8 @@ export default function UserRatingsPage() {
                       >
                         {rating.rater.name || rating.rater.email.split('@')[0]}
                       </Link>
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <span
-                            key={i}
-                            className={`text-lg ${
-                              i < rating.score
-                                ? 'text-yellow-400'
-                                : 'text-[#E8D5B7]/30'
-                            }`}
-                          >
-                            ⭐
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-lg font-bold text-[#E8D5B7]">
+                      <StarRating rating={rating.score} size="lg" />
+                      <span className="text-lg font-bold text-[#E8D5B7] ml-2">
                         {rating.score.toFixed(1)}
                       </span>
                     </div>

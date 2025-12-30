@@ -4,52 +4,37 @@ import { useEffect } from 'react'
 
 export default function OTPCursorFix() {
   useEffect(() => {
-    // Function to focus the first OTP input
-    const focusFirstOTPInput = () => {
-      // Try multiple times with increasing delays to catch Clerk's dynamic rendering
-      const attempts = [50, 100, 200, 300, 500, 1000]
-      
-      attempts.forEach((delay) => {
-        setTimeout(() => {
-          // Find all OTP inputs
-          const inputs = document.querySelectorAll('input[data-input-otp="true"]') as NodeListOf<HTMLInputElement>
-          
-          if (inputs.length > 0) {
-            const firstInput = inputs[0]
-            // Only focus if no input is currently focused or if the focused one is not the first
-            const currentlyFocused = document.activeElement as HTMLInputElement
-            if (!currentlyFocused || currentlyFocused !== firstInput) {
-              firstInput.focus()
-              // Also try to set cursor position to start
-              firstInput.setSelectionRange(0, 0)
-            }
-          }
-        }, delay)
-      })
-    }
-
-    // Try to focus immediately
-    focusFirstOTPInput()
-
-    // Also try when the DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', focusFirstOTPInput)
-    } else {
-      focusFirstOTPInput()
-    }
-
-    // Watch for OTP inputs being added dynamically
-    const observer = new MutationObserver(() => {
+    // Just fix the visual cursor to show in the first box where typing actually happens
+    const fixCursorVisual = () => {
       const inputs = document.querySelectorAll('input[data-input-otp="true"]') as NodeListOf<HTMLInputElement>
-      if (inputs.length > 0) {
-        const firstInput = inputs[0]
-        const currentlyFocused = document.activeElement as HTMLInputElement
-        // Only focus first input if nothing is focused or something else is focused
-        if (!currentlyFocused || (currentlyFocused !== firstInput && !currentlyFocused.hasAttribute('data-input-otp'))) {
-          firstInput.focus()
-          firstInput.setSelectionRange(0, 0)
-        }
+      
+      if (inputs.length === 0) return
+      
+      const firstInput = inputs[0]
+      const currentlyFocused = document.activeElement as HTMLInputElement
+      
+      // If first input is the one receiving input, make sure cursor is visible there
+      if (currentlyFocused === firstInput || (!currentlyFocused && firstInput)) {
+        // Ensure first input shows cursor
+        firstInput.style.caretColor = '#E8D5B7'
+        
+        // Hide cursor on other inputs
+        inputs.forEach((input, index) => {
+          if (index > 0) {
+            input.style.caretColor = 'transparent'
+          }
+        })
       }
+    }
+
+    // Watch for focus changes and fix cursor visual
+    const handleFocus = () => {
+      fixCursorVisual()
+    }
+
+    // Watch for OTP inputs being added
+    const observer = new MutationObserver(() => {
+      fixCursorVisual()
     })
 
     observer.observe(document.body, {
@@ -57,9 +42,19 @@ export default function OTPCursorFix() {
       subtree: true,
     })
 
+    // Listen for focus events
+    document.addEventListener('focus', handleFocus, true)
+    document.addEventListener('focusin', handleFocus, true)
+
+    // Initial fix
+    fixCursorVisual()
+    const interval = setInterval(fixCursorVisual, 100)
+
     return () => {
       observer.disconnect()
-      document.removeEventListener('DOMContentLoaded', focusFirstOTPInput)
+      clearInterval(interval)
+      document.removeEventListener('focus', handleFocus, true)
+      document.removeEventListener('focusin', handleFocus, true)
     }
   }, [])
 

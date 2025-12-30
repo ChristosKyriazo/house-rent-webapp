@@ -44,6 +44,7 @@ export default function EditHomePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [error, setError] = useState('')
   const [checkingRole, setCheckingRole] = useState(true)
   
@@ -281,21 +282,37 @@ export default function EditHomePage() {
     setError('')
     setSaving(true)
 
-    // If user typed an area but didn't select from dropdown, find most similar
-    let finalArea = formData.area
-    // If formData.area is empty but areaSearchQuery has a value, use that for similarity matching
-    const areaToMatch = formData.area && formData.area.trim().length > 0 
-      ? formData.area 
-      : (areaSearchQuery && areaSearchQuery.trim().length > 0 ? areaSearchQuery : null)
+    // Always ensure we have a valid area name from the database
+    let finalArea: string | null = null
     
-    if (areaToMatch) {
-      const mostSimilar = findMostSimilarArea(areaToMatch, allAreas)
+    // First, check if formData.area is already a valid area name from the database
+    if (formData.area && formData.area.trim().length > 0) {
+      const isValidArea = allAreas.some(a => a.name === formData.area.trim())
+      if (isValidArea) {
+        // formData.area is already a valid area name, use it
+        finalArea = formData.area.trim()
+      } else {
+        // formData.area exists but is not a valid area name, try to find closest match
+        const mostSimilar = findMostSimilarArea(formData.area, allAreas)
+        if (mostSimilar) {
+          finalArea = mostSimilar.name
+        }
+      }
+    }
+    
+    // If we still don't have a valid area, try matching from areaSearchQuery
+    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
       if (mostSimilar) {
         finalArea = mostSimilar.name
-      } else if (!formData.area) {
-        // If no match found and formData.area is empty, use what they typed
-        finalArea = areaSearchQuery
       }
+    }
+    
+    // Only use what they typed if no match was found and we have something
+    // But prefer to leave it null if no valid match
+    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      // Last resort: use what they typed (but this shouldn't happen if they clicked a suggestion)
+      finalArea = areaSearchQuery.trim()
     }
 
     try {
@@ -344,9 +361,11 @@ export default function EditHomePage() {
   const handleDelete = async () => {
     if (!home) return
     
-    if (!confirm(getTranslation(language, 'confirmDelete') || 'Are you sure you want to delete this listing?')) {
-      return
-    }
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!home) return
     
     setDeleting(true)
     setError('')
@@ -366,6 +385,7 @@ export default function EditHomePage() {
         }
         setError(data.error || getTranslation(language, 'deleteFailed'))
         setDeleting(false)
+        setShowDeleteConfirm(false)
         return
       }
       
@@ -375,6 +395,7 @@ export default function EditHomePage() {
       console.error('Error deleting listing:', error)
       setError(getTranslation(language, 'deleteFailed'))
       setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -580,8 +601,12 @@ export default function EditHomePage() {
                     // Delay to allow click on dropdown items
                     setTimeout(() => {
                       setShowAreaDropdown(false)
-                      // If user typed but didn't select, try to find most similar
-                      if (areaSearchQuery && areaSearchQuery.trim().length > 0) {
+                      // Only process if dropdown was not clicked (i.e., user actually blurred)
+                      // Check if formData.area is already set to a valid area name
+                      const hasValidArea = formData.area && allAreas.some(a => a.name === formData.area)
+                      
+                      if (!hasValidArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
+                        // If user typed but didn't select, try to find most similar
                         // Check if the current formData.area matches what's displayed
                         const currentAreaName = formData.area ? 
                           (allAreas.find(a => a.name === formData.area)?.name || formData.area) : null
@@ -594,12 +619,12 @@ export default function EditHomePage() {
                         if (areaSearchQuery !== currentDisplayName) {
                           const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
                           if (mostSimilar) {
-                            setFormData({ ...formData, area: mostSimilar.name })
+                            setFormData(prev => ({ ...prev, area: mostSimilar.name }))
                             const displayName = language === 'el' && mostSimilar.nameGreek ? mostSimilar.nameGreek : mostSimilar.name
                             setAreaSearchQuery(displayName)
                           } else {
                             // No match found, use what they typed
-                            setFormData({ ...formData, area: areaSearchQuery })
+                            setFormData(prev => ({ ...prev, area: areaSearchQuery }))
                           }
                         }
                       }
@@ -614,12 +639,23 @@ export default function EditHomePage() {
                       <button
                         key={area.id}
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
                           // Store English name in formData, but display translated name
-                          setFormData({ ...formData, area: area.name })
                           const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
+                          // Ensure the area is set correctly
+                          setTimeout(() => {
+                            setFormData(prev => {
+                              if (prev.area !== area.name) {
+                                return { ...prev, area: area.name }
+                              }
+                              return prev
+                            })
+                          }, 0)
                         }}
                         className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
                       >
@@ -804,6 +840,44 @@ export default function EditHomePage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Listing Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#1A202C] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h2 className="text-2xl font-bold text-red-400 mb-4">
+                {getTranslation(language, 'delete')}
+              </h2>
+              <p className="text-red-300 font-semibold text-lg mb-2">
+                {getTranslation(language, 'confirmDelete')}
+              </p>
+              {home && (
+                <p className="text-[#E8D5B7]/70 text-sm">
+                  {getTranslation(language, 'listingDetails')}: <strong>{home.title}</strong>
+                </p>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm disabled:opacity-50"
+              >
+                {getTranslation(language, 'cancel')}
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold text-sm disabled:opacity-50 shadow-lg shadow-red-600/50"
+              >
+                {deleting ? getTranslation(language, 'loading') : getTranslation(language, 'delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

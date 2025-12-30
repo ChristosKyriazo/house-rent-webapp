@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { translations } from '@/lib/translations'
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
@@ -9,6 +10,11 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Get language from query parameter (default to 'en')
+    const searchParams = request.nextUrl.searchParams
+    const language = (searchParams.get('language') || 'en') as 'el' | 'en'
+    const t = translations[language]
 
     // Get all non-deleted notifications for this user
     const notifications = await prisma.notification.findMany({
@@ -82,21 +88,23 @@ export async function GET(request: NextRequest) {
       const homeTitle = notif.homeKey ? homeMap.get(notif.homeKey) : null
       
       let message = ''
+      const propertyTitle = homeTitle || (notif.type === 'inquiry' ? t.yourProperty : t.theProperty)
+      
       if (notif.type === 'inquiry') {
         // For owners: show who inquired
         if (notif.userId) {
           const inquiryUser = userMap.get(notif.userId)
-          const userName = inquiryUser?.name || inquiryUser?.email.split('@')[0] || 'A user'
-          message = `${userName} has inquired for ${homeTitle || 'your property'}`
+          const userName = inquiryUser?.name || inquiryUser?.email.split('@')[0] || t.aUser
+          message = t.notificationInquiry.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
         } else {
-          message = `New inquiry for ${homeTitle || 'your property'}`
+          message = t.notificationInquiryGeneric.replace('{propertyTitle}', propertyTitle)
         }
       } else if (notif.type === 'approved') {
         // For users: show their inquiry was approved
-        message = `Your inquiry for ${homeTitle || 'the property'} has been approved`
+        message = t.notificationApproved.replace('{propertyTitle}', propertyTitle)
       } else if (notif.type === 'dismissed') {
         // For users: show their inquiry was dismissed
-        message = `Your inquiry for ${homeTitle || 'the property'} has been dismissed`
+        message = t.notificationDismissed.replace('{propertyTitle}', propertyTitle)
       } else if (notif.type === 'finalize') {
         // For finalize: show who wants to finalize
         if (notif.inquiryId) {
@@ -104,13 +112,38 @@ export async function GET(request: NextRequest) {
           if (inquiry) {
             // Determine sender: if recipient is owner, sender is user; if recipient is user, sender is owner
             const sender = notif.role === 'owner' ? inquiry.user : inquiry.home.owner
-            const senderName = sender.name || sender.email.split('@')[0] || 'Someone'
-            message = `${senderName} wants to finalize the deal for ${homeTitle || 'the property'}`
+            const senderName = sender.name || sender.email.split('@')[0] || t.someone
+            message = t.notificationFinalize.replace('{senderName}', senderName).replace('{propertyTitle}', propertyTitle)
           } else {
-            message = `Someone wants to finalize the deal for ${homeTitle || 'the property'}`
+            message = t.notificationFinalizeGeneric.replace('{propertyTitle}', propertyTitle)
           }
         } else {
-          message = `Finalization request for ${homeTitle || 'the property'}`
+          message = t.notificationFinalizeRequest.replace('{propertyTitle}', propertyTitle)
+        }
+      } else if (notif.type === 'rate') {
+        // For rate: prompt user to rate the other party
+        if (notif.inquiryId) {
+          const inquiry = inquiryMap.get(notif.inquiryId)
+          if (inquiry) {
+            // Determine who to rate: if recipient is owner, rate the user; if recipient is user, rate the owner
+            const toRate = notif.role === 'owner' ? inquiry.user : inquiry.home.owner
+            const toRateName = toRate.name || toRate.email.split('@')[0] || t.someone
+            message = t.notificationRate.replace('{userName}', toRateName).replace('{propertyTitle}', propertyTitle)
+          } else {
+            // Fallback based on role
+            if (notif.role === 'owner') {
+              message = t.notificationRateUser.replace('{propertyTitle}', propertyTitle)
+            } else {
+              message = t.notificationRateOwner.replace('{propertyTitle}', propertyTitle)
+            }
+          }
+        } else {
+          // Fallback based on role
+          if (notif.role === 'owner') {
+            message = t.notificationRateUser.replace('{propertyTitle}', propertyTitle)
+          } else {
+            message = t.notificationRateOwner.replace('{propertyTitle}', propertyTitle)
+          }
         }
       }
 

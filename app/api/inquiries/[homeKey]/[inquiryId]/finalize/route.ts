@@ -148,11 +148,18 @@ export async function PATCH(
             id: true,
             key: true,
             ownerId: true,
+            owner: {
+              select: {
+                id: true,
+                key: true,
+              },
+            },
           },
         },
         user: {
           select: {
             id: true,
+            key: true,
           },
         },
       },
@@ -200,6 +207,77 @@ export async function PATCH(
         },
       })
 
+      // Delete approval notifications for the user when finalized
+      // This ensures the approval notification is automatically deleted when house is finalized
+      try {
+        await prisma.notification.updateMany({
+          where: {
+            homeKey: inquiry.home.key,
+            type: 'approved',
+            recipientId: inquiry.user.id,
+            deleted: false, // Only delete if not already deleted
+          },
+          data: {
+            deleted: true,
+          },
+        })
+      } catch (error) {
+        console.error('Failed to delete approval notifications:', error)
+      }
+
+      // Create rating prompt notifications for both parties
+      // Check if they've already rated each other for this finalized inquiry
+      try {
+        // Check if user has already rated the owner
+        const userRating = await prisma.rating.findFirst({
+          where: {
+            raterId: inquiry.user.id,
+            ratedUserId: inquiry.home.ownerId,
+            type: 'owner',
+          },
+        })
+
+        // Check if owner has already rated the user
+        const ownerRating = await prisma.rating.findFirst({
+          where: {
+            raterId: inquiry.home.ownerId,
+            ratedUserId: inquiry.user.id,
+            type: 'renter',
+          },
+        })
+
+        // Create rating notification for user (to rate owner) if not already rated
+        if (!userRating) {
+          await prisma.notification.create({
+            data: {
+              recipientId: inquiry.user.id,
+              role: 'user',
+              type: 'rate',
+              homeKey: inquiry.home.key,
+              ownerKey: inquiry.home.owner.key,
+              inquiryId: inquiry.id,
+            },
+          })
+        }
+
+        // Create rating notification for owner (to rate user) if not already rated
+        if (!ownerRating) {
+          await prisma.notification.create({
+            data: {
+              recipientId: inquiry.home.ownerId,
+              role: 'owner',
+              type: 'rate',
+              homeKey: inquiry.home.key,
+              userId: inquiry.user.id,
+              inquiryId: inquiry.id,
+            },
+          })
+        }
+      } catch (error) {
+        console.error('Failed to create rating notifications:', error)
+        // Don't fail the finalization if rating notification creation fails
+      }
+
       return NextResponse.json(
         { message: 'Deal finalized', finalized: true },
         { status: 200 }
@@ -230,6 +308,7 @@ export async function PATCH(
     )
   }
 }
+
 
 
 

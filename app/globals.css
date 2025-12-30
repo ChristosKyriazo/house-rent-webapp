@@ -164,13 +164,19 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
 
 /* Make Clerk's OTP cursor visible - ensure it shows in focused inputs */
 input[data-input-otp="true"] {
-  caret-color: #E8D5B7 !important;
+  caret-color: transparent !important;
   text-align: center !important;
 }
 
-/* Make sure focused inputs show the cursor */
-input[data-input-otp="true"]:focus {
+/* Make sure first input shows cursor when it's the active one */
+input[data-input-otp="true"]:first-of-type,
+.cl-otpCodeFieldInput:first-child input[data-input-otp="true"] {
   caret-color: #E8D5B7 !important;
+}
+
+/* Hide cursor on other inputs */
+input[data-input-otp="true"]:not(:first-of-type) {
+  caret-color: transparent !important;
 }
 
 /* Remove any pseudo-element cursors that might appear in the middle */

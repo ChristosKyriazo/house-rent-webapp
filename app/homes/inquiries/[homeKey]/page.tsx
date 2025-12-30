@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import { getCityName, getCountryName } from '@/lib/area-utils'
+import StarRating from '@/app/components/StarRating'
 
 interface Inquiry {
   id: number
@@ -296,31 +297,12 @@ export default function HomeInquiriesPage() {
                             <span className="text-[#E8D5B7] font-semibold">
                               {inquiry.user.rating.toFixed(1)}
                             </span>
-                            <div className="flex items-center gap-0.5">
-                              {[...Array(5)].map((_, i) => (
-                                <span
-                                  key={i}
-                                  className={`text-sm ${
-                                    i < Math.round(inquiry.user.rating)
-                                      ? 'text-yellow-400'
-                                      : 'text-[#E8D5B7]/30'
-                                  }`}
-                                >
-                                  ⭐
-                                </span>
-                              ))}
-                            </div>
+                            <StarRating rating={inquiry.user.rating} size="sm" />
                           </Link>
                         ) : (
                           <>
                             <span className="text-[#E8D5B7] font-semibold">0.0</span>
-                            <div className="flex items-center gap-0.5">
-                              {[...Array(5)].map((_, i) => (
-                                <span key={i} className="text-sm text-[#E8D5B7]/30">
-                                  ⭐
-                                </span>
-                              ))}
-                            </div>
+                            <StarRating rating={0} size="sm" />
                             <span className="text-xs text-[#E8D5B7]/60">
                               ({getTranslation(language, 'notRatedYet')})
                             </span>

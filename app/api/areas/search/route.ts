@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+/**
+ * Remove Greek diacritics (accents) from a string for matching purposes
+ * This allows "νεα" to match "Νέα" and "νεα σμυρνη" to match "Νέα Σμύρνη"
+ */
+function removeGreekAccents(str: string): string {
+  const accentMap: Record<string, string> = {
+    // Lowercase with accents
+    'ά': 'α', 'έ': 'ε', 'ή': 'η', 'ί': 'ι', 'ό': 'ο', 'ύ': 'υ', 'ώ': 'ω',
+    'ὰ': 'α', 'ὲ': 'ε', 'ὴ': 'η', 'ὶ': 'ι', 'ὸ': 'ο', 'ὺ': 'υ', 'ὼ': 'ω',
+    'ᾶ': 'α', 'ῆ': 'η', 'ῖ': 'ι', 'ῦ': 'υ', 'ῶ': 'ω',
+    'ᾳ': 'α', 'ῃ': 'η', 'ῳ': 'ω',
+    // Uppercase with accents
+    'Ά': 'Α', 'Έ': 'Ε', 'Ή': 'Η', 'Ί': 'Ι', 'Ό': 'Ο', 'Ύ': 'Υ', 'Ώ': 'Ω',
+    'Ὰ': 'Α', 'Ὲ': 'Ε', 'Ὴ': 'Η', 'Ὶ': 'Ι', 'Ὸ': 'Ο', 'Ὺ': 'Υ', 'Ὼ': 'Ω',
+    'ᾼ': 'Α', 'ῌ': 'Η', 'ῼ': 'Ω',
+  }
+  
+  return str
+    .split('')
+    .map(char => accentMap[char] || char)
+    .join('')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove any remaining combining diacritical marks
+}
+
 // GET /api/areas/search?q=query&limit=10&city=Athens&country=Greece
 export async function GET(request: NextRequest) {
   try {
@@ -67,33 +92,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build where clause with optional city and country filters
-    const whereClause: any = {
-      name: {
-        contains: query,
-      },
-    }
-
+    // Build base where clause for city and country filters
+    const baseWhere: any = {}
+    
     // Add filters only if they were found in the database
-    if (cityFilter) {
-      whereClause.AND = whereClause.AND || []
-      whereClause.AND.push(cityFilter)
+    if (cityFilter || countryFilter) {
+      baseWhere.AND = []
+      if (cityFilter) {
+        baseWhere.AND.push(cityFilter)
+      }
+      if (countryFilter) {
+        baseWhere.AND.push(countryFilter)
+      }
     }
 
-    if (countryFilter) {
-      whereClause.AND = whereClause.AND || []
-      whereClause.AND.push(countryFilter)
-    }
-
-    // Search for areas that match the query and filters
-    // For SQLite, we'll use contains which is case-sensitive, but that's acceptable
-    // For PostgreSQL in production, we could use mode: 'insensitive'
-    const areas = await prisma.area.findMany({
-      where: whereClause,
-      take: limit,
-      orderBy: {
-        name: 'asc',
-      },
+    // Fetch all areas (or filtered areas) and filter in JavaScript for case-insensitive matching
+    // This is necessary because SQLite's contains is case-sensitive and doesn't handle Greek well
+    let allAreas = await prisma.area.findMany({
+      where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
       select: {
         id: true,
         key: true,
@@ -107,6 +123,59 @@ export async function GET(request: NextRequest) {
         vibe: true,
       },
     })
+
+    // Filter areas with case-insensitive and accent-insensitive matching for both English and Greek names
+    const queryLower = query.toLowerCase().trim()
+    const queryNormalized = removeGreekAccents(queryLower)
+    
+    const filteredAreas = allAreas.filter(area => {
+      // Check English name (case-insensitive)
+      const nameMatch = area.name?.toLowerCase().includes(queryLower) || false
+      
+      // Check Greek name (case-insensitive and accent-insensitive)
+      const nameGreekLower = area.nameGreek?.toLowerCase() || ''
+      const nameGreekNormalized = removeGreekAccents(nameGreekLower)
+      const nameGreekMatch = nameGreekLower.includes(queryLower) || nameGreekNormalized.includes(queryNormalized)
+      
+      return nameMatch || nameGreekMatch
+    })
+
+    // Remove duplicates by area name (keep first occurrence)
+    const seenNames = new Set<string>()
+    const uniqueAreas = filteredAreas.filter(area => {
+      if (!area.name) return false
+      if (seenNames.has(area.name)) {
+        return false
+      }
+      seenNames.add(area.name)
+      return true
+    })
+
+    // Sort and limit results
+    const areas = uniqueAreas
+      .sort((a, b) => {
+        // Prioritize matches that start with the query (with or without accents)
+        const aNameLower = a.name?.toLowerCase() || ''
+        const aNameGreekLower = a.nameGreek?.toLowerCase() || ''
+        const aNameGreekNormalized = removeGreekAccents(aNameGreekLower)
+        
+        const bNameLower = b.name?.toLowerCase() || ''
+        const bNameGreekLower = b.nameGreek?.toLowerCase() || ''
+        const bNameGreekNormalized = removeGreekAccents(bNameGreekLower)
+        
+        const aStarts = aNameLower.startsWith(queryLower) || 
+                       aNameGreekLower.startsWith(queryLower) || 
+                       aNameGreekNormalized.startsWith(queryNormalized)
+        const bStarts = bNameLower.startsWith(queryLower) || 
+                       bNameGreekLower.startsWith(queryLower) || 
+                       bNameGreekNormalized.startsWith(queryNormalized)
+        
+        if (aStarts && !bStarts) return -1
+        if (!aStarts && bStarts) return 1
+        // Then sort alphabetically
+        return (a.name || '').localeCompare(b.name || '')
+      })
+      .slice(0, limit)
 
     return NextResponse.json({ areas })
   } catch (error) {

@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import StarRating from '@/app/components/StarRating'
 
 interface Home {
   id: number
@@ -592,11 +593,25 @@ export default function HomeDetailPage() {
                 {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
               </p>
                   {home.area && (() => {
-                    // Find area by matching name or nameGreek (case-insensitive)
-                    const areaData = areas.find(a => 
-                      a.name?.toLowerCase() === home.area?.toLowerCase() || 
-                      a.nameGreek?.toLowerCase() === home.area?.toLowerCase()
-                    )
+                    // Find area by matching name or nameGreek (case-insensitive, trim whitespace)
+                    const homeAreaNormalized = home.area?.trim().toLowerCase()
+                    let areaData = areas.find(a => {
+                      const nameMatch = a.name?.trim().toLowerCase() === homeAreaNormalized
+                      const nameGreekMatch = a.nameGreek?.trim().toLowerCase() === homeAreaNormalized
+                      return nameMatch || nameGreekMatch
+                    })
+                    
+                    // If exact match not found, try partial match
+                    if (!areaData) {
+                      areaData = areas.find(a => {
+                        const nameMatch = a.name?.trim().toLowerCase().includes(homeAreaNormalized) || 
+                                         homeAreaNormalized.includes(a.name?.trim().toLowerCase() || '')
+                        const nameGreekMatch = a.nameGreek?.trim().toLowerCase().includes(homeAreaNormalized) || 
+                                              homeAreaNormalized.includes(a.nameGreek?.trim().toLowerCase() || '')
+                        return nameMatch || nameGreekMatch
+                      })
+                    }
+                    
                     return (
                       <div className="mt-2 flex flex-col gap-1">
                         <p className="flex items-center gap-1">
@@ -647,13 +662,7 @@ export default function HomeDetailPage() {
                         <span className="text-xl font-bold text-[#E8D5B7]">
                           {home.owner.ratings.ownerRating.toFixed(1)}
                         </span>
-                        <div className="flex items-center gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <span key={i} className={`text-sm ${i < Math.round(home.owner.ratings!.ownerRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
-                              ⭐
-                            </span>
-                          ))}
-                        </div>
+                        <StarRating rating={home.owner.ratings!.ownerRating!} size="sm" />
                         {home.owner.ratings.ownerCount > 0 && (
                           <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
                             {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
@@ -851,22 +860,6 @@ export default function HomeDetailPage() {
             {/* Inquire Button - Only show for users (not owners viewing their own listings) */}
             {home && displayRole === 'user' && currentUserId !== home.owner.id && inquiryStatus !== 'approved' && (
               <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
-                {/* Status Banner */}
-                {inquiryStatus === 'inquired' && (
-                  <div className="mb-4 p-3 bg-orange-600/20 border border-orange-500/50 rounded-xl text-center">
-                    <p className="text-sm font-medium text-orange-400">
-                      🏷️ {getTranslation(language, 'inquiryMade')}
-                    </p>
-                  </div>
-                )}
-                {inquiryStatus === 'dismissed' && (
-                  <div className="mb-4 p-3 bg-red-600/20 border border-red-500/50 rounded-xl text-center">
-                    <p className="text-sm font-medium text-red-400">
-                      ❌ {getTranslation(language, 'dismissed')}
-                    </p>
-                  </div>
-                )}
-                
                 {/* Inquire/Remove Button - Only show if inquiry is not approved or dismissed */}
                 {inquiryStatus !== 'approved' && inquiryStatus !== 'dismissed' && (
                   <button
@@ -1023,12 +1016,8 @@ export default function HomeDetailPage() {
                         <span>⭐</span>
                         {home.owner.ratings.ownerRating.toFixed(1)}
                       </p>
-                      <div className="flex items-center gap-1 mt-2">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-base ${i < Math.round(home.owner.ratings!.ownerRating!) ? 'text-yellow-400' : 'text-[#E8D5B7]/30'}`}>
-                            ⭐
-                          </span>
-                        ))}
+                      <div className="mt-2">
+                        <StarRating rating={home.owner.ratings!.ownerRating!} size="base" />
                       </div>
                       {home.owner.ratings.ownerCount > 0 && (
                         <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">

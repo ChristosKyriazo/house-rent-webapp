@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
+/**
+ * Remove Greek diacritics (accents) from a string for matching purposes
+ */
+function removeGreekAccents(str: string): string {
+  const accentMap: Record<string, string> = {
+    'ά': 'α', 'έ': 'ε', 'ή': 'η', 'ί': 'ι', 'ό': 'ο', 'ύ': 'υ', 'ώ': 'ω',
+    'ὰ': 'α', 'ὲ': 'ε', 'ὴ': 'η', 'ὶ': 'ι', 'ὸ': 'ο', 'ὺ': 'υ', 'ὼ': 'ω',
+    'ᾶ': 'α', 'ῆ': 'η', 'ῖ': 'ι', 'ῦ': 'υ', 'ῶ': 'ω',
+    'ᾳ': 'α', 'ῃ': 'η', 'ῳ': 'ω',
+    'Ά': 'Α', 'Έ': 'Ε', 'Ή': 'Η', 'Ί': 'Ι', 'Ό': 'Ο', 'Ύ': 'Υ', 'Ώ': 'Ω',
+    'Ὰ': 'Α', 'Ὲ': 'Ε', 'Ὴ': 'Η', 'Ὶ': 'Ι', 'Ὸ': 'Ο', 'Ὺ': 'Υ', 'Ὼ': 'Ω',
+    'ᾼ': 'Α', 'ῌ': 'Η', 'ῼ': 'Ω',
+  }
+  
+  return str
+    .split('')
+    .map(char => accentMap[char] || char)
+    .join('')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
 // GET /api/homes - list all homes with optional filters
 export async function GET(request: NextRequest) {
   try {
@@ -21,12 +43,53 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    if (searchParams.get('city')) {
-      where.city = { contains: searchParams.get('city') }
-    }
+    // Handle city filter with Greek/English matching
+    // We'll fetch all homes first and filter in JavaScript for proper Greek/English matching
+    const cityParam = searchParams.get('city')
+    const shouldFilterCity = cityParam && cityParam.trim().length > 0
     
-    if (searchParams.get('country')) {
-      where.country = { contains: searchParams.get('country') }
+    // Handle country filter with Greek/English matching
+    const countryParam = searchParams.get('country')
+    if (countryParam && countryParam.trim().length > 0) {
+      const countrySearch = countryParam.trim().toLowerCase()
+      const countrySearchNormalized = removeGreekAccents(countrySearch)
+      
+      // Fetch all areas to find matching countries
+      const allAreas = await prisma.area.findMany({
+        select: { country: true, countryGreek: true },
+        distinct: ['country'],
+      })
+      
+      // Find all matching country names (English or Greek)
+      const matchingCountries = new Set<string>()
+      allAreas.forEach(area => {
+        if (area.country) {
+          const countryLower = area.country.toLowerCase()
+          const countryNormalized = removeGreekAccents(countryLower)
+          if (countryLower.includes(countrySearch) || countryNormalized.includes(countrySearchNormalized)) {
+            matchingCountries.add(area.country)
+          }
+        }
+        if (area.countryGreek) {
+          const countryGreekLower = area.countryGreek.toLowerCase()
+          const countryGreekNormalized = removeGreekAccents(countryGreekLower)
+          if (countryGreekLower.includes(countrySearch) || countryGreekNormalized.includes(countrySearchNormalized)) {
+            // Find the English country name for this Greek country
+            const englishCountry = allAreas.find(a => a.countryGreek === area.countryGreek)?.country
+            if (englishCountry) {
+              matchingCountries.add(englishCountry)
+            }
+          }
+        }
+      })
+      
+      if (matchingCountries.size > 0) {
+        // Filter by matching country names
+        where.country = { in: Array.from(matchingCountries) }
+      } else {
+        // If no match found in areas, try direct match
+        where.country = { contains: countryParam }
+      }
     }
     
     if (searchParams.get('minBedrooms')) {
@@ -74,13 +137,14 @@ export async function GET(request: NextRequest) {
     // Exclude owner's own houses if user is also an owner
     // Also exclude finalized houses from search results
     // Check if user is authenticated and has owner role
+    let currentUser = null
     try {
-      const user = await getCurrentUser()
-      if (user) {
-        const userRole = (user.role || 'user').toLowerCase()
+      currentUser = await getCurrentUser()
+      if (currentUser) {
+        const userRole = (currentUser.role || 'user').toLowerCase()
         // If user is owner or both, exclude their own houses from search
         if (userRole === 'owner' || userRole === 'both') {
-          where.ownerId = { not: user.id }
+          where.ownerId = { not: currentUser.id }
         }
       }
       // Always exclude finalized houses from search
@@ -90,7 +154,62 @@ export async function GET(request: NextRequest) {
       where.finalized = false
     }
 
-    const homes = await prisma.home.findMany({
+    // Handle exclude filters for inquired and approved listings
+    const excludeInquired = searchParams.get('excludeInquired') === 'true'
+    const excludeApproved = searchParams.get('excludeApproved') === 'true'
+    
+    let excludeHomeIds: number[] = []
+    if ((excludeInquired || excludeApproved) && currentUser) {
+      // Fetch user's inquiries to get home IDs to exclude
+      const userInquiries = await prisma.inquiry.findMany({
+        where: {
+          userId: currentUser.id,
+        },
+        select: {
+          homeId: true,
+          approved: true,
+          dismissed: true,
+          finalized: true,
+        },
+      })
+
+      if (excludeInquired) {
+        // Exclude homes where user has inquired (not dismissed, not finalized)
+        const inquiredHomeIds = userInquiries
+          .filter(inq => !inq.dismissed && !inq.finalized)
+          .map(inq => inq.homeId)
+        excludeHomeIds.push(...inquiredHomeIds)
+      }
+
+      if (excludeApproved) {
+        // Exclude homes where user has approved inquiries (not dismissed, not finalized)
+        const approvedHomeIds = userInquiries
+          .filter(inq => inq.approved && !inq.dismissed && !inq.finalized)
+          .map(inq => inq.homeId)
+        excludeHomeIds.push(...approvedHomeIds)
+      }
+
+      // Remove duplicates
+      excludeHomeIds = [...new Set(excludeHomeIds)]
+    }
+
+    // Remove city/country from where clause - we'll filter in JavaScript for proper Greek/English matching
+    if (shouldFilterCity) {
+      delete where.city
+    }
+    if (countryParam && countryParam.trim().length > 0) {
+      delete where.country
+    }
+
+    // Fetch all areas to get city/country translations for matching (before fetching homes)
+    const allAreas = await prisma.area.findMany({
+      select: { city: true, cityGreek: true, country: true, countryGreek: true },
+    })
+
+    // Note: We'll apply exclude filters in JavaScript after city/country filtering
+    // to ensure they work correctly with the JavaScript-based filtering
+
+    let homes = await prisma.home.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -99,6 +218,147 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+
+    // Create maps for quick lookup
+    const cityMap = new Map<string, Set<string>>() // Greek city -> Set of English cities
+    const countryMap = new Map<string, Set<string>>() // Greek country -> Set of English countries
+    
+    allAreas.forEach(area => {
+      if (area.city && area.cityGreek) {
+        if (!cityMap.has(area.cityGreek)) {
+          cityMap.set(area.cityGreek, new Set())
+        }
+        cityMap.get(area.cityGreek)!.add(area.city)
+      }
+      if (area.country && area.countryGreek) {
+        if (!countryMap.has(area.countryGreek)) {
+          countryMap.set(area.countryGreek, new Set())
+        }
+        countryMap.get(area.countryGreek)!.add(area.country)
+      }
+    })
+
+    // Filter by city with Greek/English matching
+    if (shouldFilterCity) {
+      const citySearch = cityParam!.trim().toLowerCase()
+      const citySearchNormalized = removeGreekAccents(citySearch)
+      
+      // Create bidirectional maps for city translations from areas
+      const greekToEnglishCity = new Map<string, string>()
+      const englishToGreekCity = new Map<string, string>()
+      allAreas.forEach(area => {
+        if (area.city && area.cityGreek) {
+          greekToEnglishCity.set(area.cityGreek.toLowerCase(), area.city)
+          englishToGreekCity.set(area.city.toLowerCase(), area.cityGreek)
+        }
+      })
+      
+      // Filter homes directly - check if home's city matches search
+      // This is the primary matching method
+      homes = homes.filter(home => {
+        if (!home.city) return false
+        
+        const homeCityLower = home.city.toLowerCase()
+        const homeCityNormalized = removeGreekAccents(homeCityLower)
+        
+        // Direct match: check if home's city (normalized) contains the search term
+        if (homeCityLower.includes(citySearch) || homeCityNormalized.includes(citySearchNormalized)) {
+          return true
+        }
+        
+        // Translation match: check if search term matches a translation of the home's city
+        // If home has Greek city, check if search matches English translation
+        const englishEquivalent = greekToEnglishCity.get(homeCityLower)
+        if (englishEquivalent) {
+          const englishLower = englishEquivalent.toLowerCase()
+          const englishNormalized = removeGreekAccents(englishLower)
+          if (englishLower.includes(citySearch) || englishNormalized.includes(citySearchNormalized)) {
+            return true
+          }
+        }
+        
+        // If home has English city, check if search matches Greek translation
+        const greekEquivalent = englishToGreekCity.get(homeCityLower)
+        if (greekEquivalent) {
+          const greekLower = greekEquivalent.toLowerCase()
+          const greekNormalized = removeGreekAccents(greekLower)
+          if (greekLower.includes(citySearch) || greekNormalized.includes(citySearchNormalized)) {
+            return true
+          }
+        }
+        
+        // Reverse check: check if search term (as Greek or English) matches home's city
+        // If search is "athens", check if it matches "Αθήνα" via translation
+        const searchAsGreek = englishToGreekCity.get(citySearch)
+        if (searchAsGreek) {
+          const searchGreekLower = searchAsGreek.toLowerCase()
+          if (homeCityLower === searchGreekLower || homeCityNormalized === removeGreekAccents(searchGreekLower)) {
+            return true
+          }
+        }
+        
+        const searchAsEnglish = greekToEnglishCity.get(citySearch)
+        if (searchAsEnglish) {
+          const searchEnglishLower = searchAsEnglish.toLowerCase()
+          if (homeCityLower === searchEnglishLower || homeCityNormalized === removeGreekAccents(searchEnglishLower)) {
+            return true
+          }
+        }
+        
+        return false
+      })
+    }
+    
+    // Filter by country with Greek/English matching
+    if (countryParam && countryParam.trim().length > 0) {
+      const countrySearch = countryParam.trim().toLowerCase()
+      const countrySearchNormalized = removeGreekAccents(countrySearch)
+      
+      // Find all English country names that match
+      const matchingEnglishCountries = new Set<string>()
+      
+      const allCountries = new Set<string>()
+      homes.forEach(home => {
+        if (home.country) allCountries.add(home.country)
+      })
+      allAreas.forEach(area => {
+        if (area.country) allCountries.add(area.country)
+      })
+      
+      allCountries.forEach(englishCountry => {
+        const countryLower = englishCountry.toLowerCase()
+        const countryNormalized = removeGreekAccents(countryLower)
+        
+        // Check if English country matches
+        if (countryLower.includes(countrySearch) || countryNormalized.includes(countrySearchNormalized)) {
+          matchingEnglishCountries.add(englishCountry)
+        }
+        
+        // Check if any Greek translation matches
+        allAreas.forEach(area => {
+          if (area.country === englishCountry && area.countryGreek) {
+            const countryGreekLower = area.countryGreek.toLowerCase()
+            const countryGreekNormalized = removeGreekAccents(countryGreekLower)
+            if (countryGreekLower.includes(countrySearch) || countryGreekNormalized.includes(countrySearchNormalized)) {
+              matchingEnglishCountries.add(englishCountry)
+            }
+          }
+        })
+      })
+      
+      // Filter homes by matching countries
+      if (matchingEnglishCountries.size > 0) {
+        homes = homes.filter(home => home.country && matchingEnglishCountries.has(home.country))
+      } else {
+        // No match found, return empty
+        homes = []
+      }
+    }
+    
+    // Apply exclude filters in JavaScript after all other filtering
+    if (excludeHomeIds.length > 0) {
+      homes = homes.filter(home => !excludeHomeIds.includes(home.id))
+    }
 
     return NextResponse.json({ homes }, { status: 200 })
   } catch (error) {
