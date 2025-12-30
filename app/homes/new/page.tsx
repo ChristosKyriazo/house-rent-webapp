@@ -38,6 +38,7 @@ export default function NewHomePage() {
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [searchingAreas, setSearchingAreas] = useState(false)
 
   // Check user role on mount
   useEffect(() => {
@@ -76,9 +77,12 @@ export default function NewHomePage() {
   const searchAreas = async (query: string) => {
     if (query.length < 1) {
       setAreaSuggestions([])
+      setShowAreaDropdown(false)
+      setSearchingAreas(false)
       return
     }
 
+    setSearchingAreas(true)
     try {
       // Build query params with city and country filters if provided
       const params = new URLSearchParams({
@@ -94,13 +98,29 @@ export default function NewHomePage() {
         params.append('country', formData.country.trim())
       }
 
-      const response = await fetch(`/api/areas/search?${params.toString()}`)
+      const url = `/api/areas/search?${params.toString()}`
+      
+      const response = await fetch(url)
+      
       if (response.ok) {
         const data = await response.json()
-        setAreaSuggestions(data.areas || [])
+        const areas = data.areas || []
+        setAreaSuggestions(areas)
+        // Update dropdown visibility based on results
+        // Only show if there are actual suggestions
+        const shouldShow = areas.length > 0
+        setShowAreaDropdown(shouldShow)
+      } else {
+        // If API call fails, hide dropdown and clear suggestions
+        setAreaSuggestions([])
+        setShowAreaDropdown(false)
       }
     } catch (error) {
       console.error('Error searching areas:', error)
+      setAreaSuggestions([])
+      setShowAreaDropdown(false)
+    } finally {
+      setSearchingAreas(false)
     }
   }
 
@@ -427,6 +447,8 @@ export default function NewHomePage() {
                     setAreaSearchQuery(query)
                     // Don't update formData.area immediately - wait for selection or auto-match
                     if (query.length > 0) {
+                      // Show dropdown immediately while searching (optimistic UI)
+                      // searchAreas will update it based on actual results
                       setShowAreaDropdown(true)
                       searchAreas(query)
                     } else {
@@ -437,7 +459,13 @@ export default function NewHomePage() {
                   }}
                   onFocus={() => {
                     if (areaSearchQuery.length > 0) {
-                      setShowAreaDropdown(true)
+                      // If there are already suggestions, show dropdown
+                      // Otherwise trigger a new search
+                      if (areaSuggestions.length > 0) {
+                        setShowAreaDropdown(true)
+                      } else {
+                        searchAreas(areaSearchQuery)
+                      }
                     }
                   }}
                   onBlur={() => {
@@ -473,7 +501,7 @@ export default function NewHomePage() {
                   placeholder={getTranslation(language, 'selectCityArea')}
                 />
                 {showAreaDropdown && areaSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {areaSuggestions.map((area) => (
                       <button
                         key={area.id}

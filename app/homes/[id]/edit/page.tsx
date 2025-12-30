@@ -186,6 +186,7 @@ export default function EditHomePage() {
   const searchAreas = async (query: string) => {
     if (query.length < 1) {
       setAreaSuggestions([])
+      setShowAreaDropdown(false)
       return
     }
 
@@ -207,10 +208,20 @@ export default function EditHomePage() {
       const response = await fetch(`/api/areas/search?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
-        setAreaSuggestions(data.areas || [])
+        const areas = data.areas || []
+        setAreaSuggestions(areas)
+        // Show dropdown if there are suggestions
+        setShowAreaDropdown(areas.length > 0)
+      } else {
+        // If API call fails, hide dropdown and clear suggestions
+        setAreaSuggestions([])
+        setShowAreaDropdown(false)
+        console.error('Failed to search areas:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Error searching areas:', error)
+      setAreaSuggestions([])
+      setShowAreaDropdown(false)
     }
   }
 

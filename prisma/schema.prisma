@@ -85,9 +85,10 @@ model Rating {
   ratedUser   User     @relation("RatedUser", fields: [ratedUserId], references: [id], onDelete: Cascade)
   rater       User     @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
 
-  @@unique([raterId, ratedUserId, type])
+  // Removed unique constraint to allow multiple ratings between same users over time
   @@index([ratedUserId])
   @@index([type])
+  @@index([raterId, ratedUserId, type]) // Index for efficient queries
   @@map("ratings")
 }
 

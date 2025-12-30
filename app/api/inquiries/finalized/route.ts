@@ -90,6 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check which ones already have ratings
+    // Since we allow multiple ratings, check if there's at least one rating
     const inquiryIds = finalizedInquiries.map(iq => iq.id)
     const existingRatings = await prisma.rating.findMany({
       where: {
@@ -99,11 +100,21 @@ export async function GET(request: NextRequest) {
     })
 
     const ratedUserIds = new Set(existingRatings.map(r => r.ratedUserId))
+    // Get the most recent rating for each user (for the re-rating button logic)
+    const ratingMap = new Map<number, Date>()
+    existingRatings.forEach(rating => {
+      const existing = ratingMap.get(rating.ratedUserId)
+      // Store the most recent rating date (createdAt, since we're creating new ratings now)
+      if (!existing || new Date(rating.createdAt) > existing) {
+        ratingMap.set(rating.ratedUserId, new Date(rating.createdAt))
+      }
+    })
 
     // Format response
     const formattedInquiries = finalizedInquiries.map(inquiry => {
       const otherUser = effectiveRole === 'owner' ? inquiry.user : inquiry.home.owner
       const alreadyRated = ratedUserIds.has(otherUser.id)
+      const lastRatingDate = ratingMap.get(otherUser.id)
 
       return {
         id: inquiry.id,
@@ -117,6 +128,8 @@ export async function GET(request: NextRequest) {
         },
         finalizedAt: inquiry.updatedAt,
         alreadyRated: alreadyRated,
+        // Use the most recent rating's creation date for re-rating button logic
+        lastRatingDate: lastRatingDate ? lastRatingDate.toISOString() : undefined,
       }
     })
 

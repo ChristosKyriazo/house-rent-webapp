@@ -1,0 +1,307 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useLanguage } from '@/app/contexts/LanguageContext'
+import { getTranslation } from '@/lib/translations'
+import StarRating from '@/app/components/StarRating'
+
+interface Rating {
+  id: number
+  key: string
+  score: number
+  comment: string | null
+  createdAt: string
+  updatedAt: string
+  inquiryId: number
+  homeKey: string
+  homeTitle: string
+  ratingType?: string // 'owner' or 'renter' - helps determine the type when editing
+  rater: {
+    id: number
+    name: string | null
+    email: string
+  }
+  ratedUser: {
+    id: number
+    name: string | null
+    email: string
+  }
+}
+
+export default function HomeRatingsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const { language } = useLanguage()
+  const [ratings, setRatings] = useState<Rating[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [editingRating, setEditingRating] = useState<Rating | null>(null)
+  const [editScore, setEditScore] = useState(5)
+  const [editComment, setEditComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+
+  const homeKey = params.homeKey as string
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get current user ID
+        const profileRes = await fetch('/api/profile')
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          if (profileData.user) {
+            setCurrentUserId(profileData.user.id)
+          }
+        }
+
+        // Fetch ratings for this home
+        const response = await fetch(`/api/ratings/home/${homeKey}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch ratings')
+        }
+        const data = await response.json()
+        setRatings(data.ratings || [])
+      } catch (err) {
+        console.error('Error fetching ratings:', err)
+        setError(getTranslation(language, 'somethingWentWrong'))
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (homeKey) {
+      fetchData()
+    }
+  }, [homeKey, language])
+
+  // Check if rating can be edited (within 1 week of creation)
+  // Note: Since we now create new ratings instead of updating, we only check createdAt
+  const canEditRating = (rating: Rating) => {
+    if (!currentUserId || rating.rater.id !== currentUserId) return false
+    const now = new Date()
+    const ratingDate = new Date(rating.createdAt)
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    return ratingDate > oneWeekAgo
+  }
+
+  const handleEdit = (rating: Rating) => {
+    setEditingRating(rating)
+    setEditScore(rating.score)
+    setEditComment(rating.comment || '')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingRating || submitting) return
+
+    setSubmitting(true)
+    try {
+      // Update the existing rating using PUT endpoint
+      const response = await fetch(`/api/ratings/update/${editingRating.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          score: editScore,
+          comment: editComment.trim() || null,
+        }),
+      })
+
+      if (response.ok) {
+        // Refresh ratings
+        const ratingsRes = await fetch(`/api/ratings/home/${homeKey}`)
+        if (ratingsRes.ok) {
+          const data = await ratingsRes.json()
+          setRatings(data.ratings || [])
+        }
+        setEditingRating(null)
+        setEditComment('')
+        setEditScore(5)
+      } else {
+        const data = await response.json()
+        alert(data.error || getTranslation(language, 'ratingFailed'))
+      }
+    } catch (error) {
+      console.error('Error updating rating:', error)
+      alert(getTranslation(language, 'ratingFailed'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-[#E8D5B7] text-xl mb-4">{error}</p>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold"
+          >
+            {getTranslation(language, 'goBack')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Filter ratings to show only those made by current user
+  const myRatings = ratings.filter(rating => rating.rater.id === currentUserId)
+
+  return (
+    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <button
+            onClick={() => router.back()}
+            className="mb-4 text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors flex items-center gap-2"
+          >
+            <span>←</span>
+            <span>{getTranslation(language, 'goBack')}</span>
+          </button>
+          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+            {getTranslation(language, 'houseRatings') || 'House Ratings'}
+          </h1>
+          {ratings.length > 0 && (
+            <p className="text-[#E8D5B7]/70">
+              {ratings[0].homeTitle}
+            </p>
+          )}
+        </div>
+
+        {myRatings.length === 0 ? (
+          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
+            <p className="text-xl text-[#E8D5B7]/70">
+              {getTranslation(language, 'noRatingsForThisHouse') || 'No ratings for this house yet'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {myRatings.map((rating) => {
+              const canEdit = canEditRating(rating)
+              const isEditing = editingRating?.id === rating.id
+
+              return (
+                <div
+                  key={rating.id}
+                  className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20"
+                >
+                  {!isEditing ? (
+                    <>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-lg font-semibold text-[#E8D5B7]">
+                              {getTranslation(language, 'rated')}: {rating.ratedUser.name || rating.ratedUser.email.split('@')[0]}
+                            </span>
+                            <StarRating rating={rating.score} size="lg" />
+                            <span className="text-lg font-bold text-[#E8D5B7] ml-2">
+                              {rating.score.toFixed(1)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-[#E8D5B7]/60">
+                            {new Date(rating.createdAt).toLocaleDateString(
+                              language === 'el' ? 'el-GR' : 'en-US',
+                              { year: 'numeric', month: 'long', day: 'numeric' }
+                            )}
+                            {rating.updatedAt !== rating.createdAt && (
+                              <span className="ml-2">
+                                ({getTranslation(language, 'updated')} {new Date(rating.updatedAt).toLocaleDateString(
+                                  language === 'el' ? 'el-GR' : 'en-US',
+                                  { year: 'numeric', month: 'long', day: 'numeric' }
+                                )})
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleEdit(rating)}
+                            className="ml-4 px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold whitespace-nowrap"
+                          >
+                            {getTranslation(language, 'edit') || 'Edit'}
+                          </button>
+                        )}
+                      </div>
+                      {rating.comment && (
+                        <div className="mt-4 pt-4 border-t border-[#E8D5B7]/20">
+                          <p className="text-[#E8D5B7]/80">{rating.comment}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-[#E8D5B7] mb-3">
+                          {getTranslation(language, 'rating')}:
+                        </label>
+                        <div className="flex items-center gap-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => setEditScore(star)}
+                              className={`text-4xl transition-transform hover:scale-110 ${
+                                star <= editScore ? 'text-yellow-400' : 'text-[#E8D5B7]/30'
+                              }`}
+                            >
+                              ⭐
+                            </button>
+                          ))}
+                          <span className="ml-4 text-lg font-semibold text-[#E8D5B7]">
+                            {editScore}/5
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                          {getTranslation(language, 'comment')}:
+                        </label>
+                        <textarea
+                          value={editComment}
+                          onChange={(e) => setEditComment(e.target.value)}
+                          className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 resize-none"
+                          rows={4}
+                          placeholder={getTranslation(language, 'commentPlaceholder')}
+                        />
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={submitting}
+                          className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold disabled:opacity-50"
+                        >
+                          {submitting ? getTranslation(language, 'saving') : getTranslation(language, 'save')}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingRating(null)
+                            setEditComment('')
+                            setEditScore(5)
+                          }}
+                          className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold"
+                        >
+                          {getTranslation(language, 'cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+

@@ -102,20 +102,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create or update rating (using upsert for unique constraint)
-    const rating = await prisma.rating.upsert({
-      where: {
-        raterId_ratedUserId_type: {
-          raterId: user.id,
-          ratedUserId: parseInt(ratedUserId),
-          type: type,
-        },
-      },
-      update: {
-        score: score,
-        comment: comment || null,
-      },
-      create: {
+    // Always create a new rating (allow multiple ratings between same users)
+    // Note: This requires removing the unique constraint from the schema
+    const rating = await prisma.rating.create({
+      data: {
         raterId: user.id,
         ratedUserId: parseInt(ratedUserId),
         type: type,

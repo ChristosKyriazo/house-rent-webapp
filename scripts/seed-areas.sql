@@ -107,3 +107,4 @@ INSERT INTO areas (id, "key", name, nameGreek, city, cityGreek, country, country
 (83, 'ckb7p8q9r0000uvwxyzab1cdef', 'Rio', 'Ρίο', 'Patra', 'Πάτρα', 'Greece', 'Ελλάδα', NULL, NULL, '2025-12-29 21:25:00', '2025-12-29 21:25:00');
 
 
+

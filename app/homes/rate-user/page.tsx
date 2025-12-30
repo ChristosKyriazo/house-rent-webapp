@@ -27,6 +27,7 @@ interface FinalizedInquiry {
   }
   finalizedAt: string
   alreadyRated: boolean
+  lastRatingDate?: string // Date when rating was last created/updated
 }
 
 export default function RateUserPage() {
@@ -101,14 +102,22 @@ export default function RateUserPage() {
       })
 
       if (response.ok) {
-        // Update the inquiry to mark as rated
-        setFinalizedInquiries(prev => 
-          prev.map(inq => 
-            inq.id === selectedInquiry.id 
-              ? { ...inq, alreadyRated: true }
-              : inq
+        // Refresh the inquiries list to get updated lastRatingDate
+        // This ensures the "Rate Again" button disappears immediately after rating
+        const inquiriesRes = await fetch(`/api/inquiries/finalized?role=${actualRole || 'user'}`)
+        if (inquiriesRes.ok) {
+          const inquiriesData = await inquiriesRes.json()
+          setFinalizedInquiries(inquiriesData.finalizedInquiries || [])
+        } else {
+          // Fallback: Update the inquiry to mark as rated
+          setFinalizedInquiries(prev => 
+            prev.map(inq => 
+              inq.id === selectedInquiry.id 
+                ? { ...inq, alreadyRated: true, lastRatingDate: new Date().toISOString() }
+                : inq
+            )
           )
-        )
+        }
         setSelectedInquiry(null)
         setComment('')
         setRating(5)
@@ -156,49 +165,75 @@ export default function RateUserPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {finalizedInquiries.map((inquiry) => (
-              <div
-                key={inquiry.id}
-                className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-[#E8D5B7] mb-2">
-                      {inquiry.home.title}
-                    </h3>
-                    <p className="text-[#E8D5B7]/70 mb-3">
-                      📍 {inquiry.home.street && `${inquiry.home.street}, `}
-                      {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
-                    </p>
-                    <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">
-                        {getTranslation(language, 'user')}:
-                      </p>
-                      <p className="text-lg font-semibold text-[#E8D5B7]">
-                        {inquiry.otherUser.name || inquiry.otherUser.email.split('@')[0]}
-                      </p>
-                      <p className="text-sm text-[#E8D5B7]/60">
-                        {inquiry.otherUser.email}
-                      </p>
+            {finalizedInquiries.map((inquiry) => {
+              // Check if re-rating is available (1 minute after last rating - creation or update)
+              const canReRate = inquiry.alreadyRated && inquiry.lastRatingDate && (() => {
+                const now = new Date()
+                const ratingDate = new Date(inquiry.lastRatingDate) // This is updatedAt if rating was updated, otherwise createdAt
+                // 1 minute for testing (1 * 60 * 1000)
+                // For production: 6 months = 6 * 30 * 24 * 60 * 60 * 1000
+                const reRateInterval = 1 * 60 * 1000 // 1 minute for testing
+                const nextReRateDate = new Date(ratingDate.getTime() + reRateInterval)
+                return now >= nextReRateDate
+              })()
+
+              return (
+                <div key={inquiry.id} className="space-y-3">
+                  <Link
+                    href={`/homes/ratings/${inquiry.home.key}`}
+                    className="block bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20 transition-all duration-300 hover:scale-105 hover:border-[#E8D5B7]/40 hover:shadow-2xl cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-2xl font-bold text-[#E8D5B7] mb-2">
+                          {inquiry.home.title}
+                        </h3>
+                        <p className="text-[#E8D5B7]/70 mb-3">
+                          📍 {inquiry.home.street && `${inquiry.home.street}, `}
+                          {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
+                        </p>
+                        <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
+                          <p className="text-sm text-[#E8D5B7]/70 mb-1">
+                            {getTranslation(language, 'user')}:
+                          </p>
+                          <p className="text-lg font-semibold text-[#E8D5B7]">
+                            {inquiry.otherUser.name || inquiry.otherUser.email.split('@')[0]}
+                          </p>
+                          <p className="text-sm text-[#E8D5B7]/60">
+                            {inquiry.otherUser.email}
+                          </p>
+                        </div>
+                      </div>
+                      {inquiry.alreadyRated && (
+                        <span className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ml-4">
+                          ✓ {getTranslation(language, 'rated')}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  {inquiry.alreadyRated && (
-                    <span className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ml-4">
-                      ✓ {getTranslation(language, 'rated')}
-                    </span>
+                  </Link>
+                  
+                  {/* Small re-rating button below if eligible */}
+                  {canReRate && (
+                    <button
+                      onClick={() => setSelectedInquiry(inquiry)}
+                      className="w-full px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+                    >
+                      {getTranslation(language, 'rateAgain') || 'Rate Again'}
+                    </button>
+                  )}
+                  
+                  {/* Rate Now button if not rated yet */}
+                  {!inquiry.alreadyRated && (
+                    <button
+                      onClick={() => setSelectedInquiry(inquiry)}
+                      className="w-full px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+                    >
+                      {getTranslation(language, 'rateNow')}
+                    </button>
                   )}
                 </div>
-
-                {!inquiry.alreadyRated && (
-                  <button
-                    onClick={() => setSelectedInquiry(inquiry)}
-                    className="w-full px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
-                  >
-                    {getTranslation(language, 'rateNow')}
-                  </button>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
