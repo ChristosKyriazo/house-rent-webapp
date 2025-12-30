@@ -46,3 +46,4 @@ INSERT INTO areas (
 -- But if you're using Prisma migrations, you can omit it and Prisma will generate it
 
 
+
