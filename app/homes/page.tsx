@@ -93,7 +93,7 @@ export default function HomesPage() {
     
     isInitialized.current = true
   }, [searchParams])
-
+  
   // Clear AI search results when filterType changes or is removed from URL
   useEffect(() => {
     if (!isInitialized.current) return
@@ -177,35 +177,6 @@ export default function HomesPage() {
       })
   }, [])
 
-  // Clear AI search results when filterType changes or is removed from URL
-  useEffect(() => {
-    if (!isInitialized.current) return
-    
-    const urlFilterType = searchParams.get('filter') as 'manual' | 'ai' | null
-    
-    // If filterType is removed from URL or changed, clear AI search
-    if (isAISearchActive && (urlFilterType !== 'ai' || filterType !== 'ai')) {
-      setIsAISearchActive(false)
-      setAiQuery('')
-      setHomes([])
-      setShowFilters(true)
-    }
-  }, [searchParams, filterType, isAISearchActive])
-
-  // Clear AI search results when navigating back (browser back button)
-  useEffect(() => {
-    const handlePopState = () => {
-      if (isAISearchActive) {
-        setIsAISearchActive(false)
-        setAiQuery('')
-        setHomes([])
-        setShowFilters(true)
-      }
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [isAISearchActive])
 
   // Close order dropdown when clicking outside
   useEffect(() => {
@@ -281,6 +252,8 @@ export default function HomesPage() {
         body: JSON.stringify({
           query: aiQuery,
           type: searchType,
+          excludeInquired,
+          excludeApproved,
         }),
       })
       const data = await response.json()
@@ -301,6 +274,7 @@ export default function HomesPage() {
     setAiQuery('') // Clear the query
     setHomes([]) // Clear results
     setShowFilters(true) // Show filters section again
+    // State will be saved automatically by useEffect
   }
 
   const handleManualFilter = async () => {
@@ -340,7 +314,7 @@ export default function HomesPage() {
   return (
     <div className="min-h-screen bg-[#2D3748] py-12 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Step 1: Choose Rent or Buy */}
+        {/* Step 1: Choose Rent or Buy - Only show if no search type selected */}
         {!searchType && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
@@ -693,6 +667,33 @@ export default function HomesPage() {
               rows={6}
               placeholder={language === 'el' ? 'Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα...' : 'Example: I need a 2-bedroom apartment in Athens for my family. We want to be close to schools and parks. Budget is around 800-1000€ per month...'}
             />
+            
+            {/* Exclude Filters (checkboxes) */}
+            <div className="space-y-3 mb-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={excludeInquired}
+                  onChange={(e) => setExcludeInquired(e.target.checked)}
+                  className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                />
+                <span className="text-sm font-medium text-[#E8D5B7]">
+                  {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
+                </span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={excludeApproved}
+                  onChange={(e) => setExcludeApproved(e.target.checked)}
+                  className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                />
+                <span className="text-sm font-medium text-[#E8D5B7]">
+                  {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
+                </span>
+              </label>
+            </div>
+            
             <button
               onClick={handleAISearch}
               disabled={loading || !aiQuery.trim()}
@@ -703,9 +704,21 @@ export default function HomesPage() {
           </div>
         )}
 
-        {/* "Use AI for another search" Button - Show when AI search is active */}
+        {/* Back Button and "Use AI for another search" Button - Show when AI search is active */}
         {searchType && filterType === 'ai' && isAISearchActive && (
-          <div className="mb-6">
+          <div className="mb-6 flex items-center gap-4">
+            <button
+              onClick={() => {
+                setFilterType(null)
+                setIsAISearchActive(false)
+                setAiQuery('')
+                setHomes([])
+                setShowFilters(true)
+              }}
+              className="px-6 py-3 bg-[#2D3748] border border-[#E8D5B7]/30 text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] hover:border-[#E8D5B7] transition-all font-semibold"
+            >
+              ← {getTranslation(language, 'back')}
+            </button>
             <button
               onClick={handleNewAISearch}
               className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
@@ -903,7 +916,7 @@ export default function HomesPage() {
                           ? 'bg-yellow-500/90 text-white border-yellow-600'
                           : 'bg-orange-500/90 text-white border-orange-600'
                       }`}>
-                        {home.matchPercentage}% Match
+                        {home.matchPercentage.toFixed(1)}% Match
                       </div>
                     </div>
                   )}

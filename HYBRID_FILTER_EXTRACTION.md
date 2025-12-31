@@ -242,3 +242,5 @@ To test the hybrid approach:
 3. **Add more patterns** for common queries
 4. **Optimize AI prompt** for even cheaper extraction
 
+
+

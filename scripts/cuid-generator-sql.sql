@@ -53,5 +53,42 @@ FROM (
 
 
 
+insert into homes 
+values
+((select max(id)+1 from homes)
+,'cl' || lower(substr(hex(randomblob(12)), 1, 24))
+,'home '||(select max(id)+1 from homes)
+,'description'
+,'Pantazi '||(select max(id)+1 from homes)
+,'Thessaloniki'
+,'Greece'
+,(select name from areas where id in (SELECT abs(random() % 40) + 1))
+,'rent'
+,(select abs(random() % 1000) + 200)
+,(select abs(random() % 5) + 1)
+,(select abs(random() % 5) + 1)
+,(select abs(random() % 5) + 1)
+,'autonomous'
+,'natural gas'
+,(select abs(random() % 1000) + 200)
+,(select abs(random() % 2020) + 1)
+,null
+,'1767190611731'
+,null
+,0
+,(SELECT abs(random() % 20) + 0.1)
+,(SELECT abs(random() % 20) + 0.1)
+,(SELECT abs(random() % 20) + 0.1)
+,(SELECT abs(random() % 20) + 0.1)
+,(SELECT abs(random() % 20) + 0.1)
+,(SELECT abs(random() % 20) + 0.1)
+,null
+,1
+,'1767190611731'
+,'1767190611731'
+,(SELECT abs(random() % 20) + 0.1)
+,'C'
+)
+
 
 
