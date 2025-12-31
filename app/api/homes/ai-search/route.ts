@@ -546,16 +546,25 @@ CRITICAL: Missing Information Handling:
 - Properties with the requested information should score higher than those without it
 - Missing information (null/undefined) should score higher than explicitly false values
 - This applies to ALL attributes: parking, heating, floor, year built, size, amenities, DISTANCES, etc.
-- DISTANCE-SPECIFIC: If the user query mentions proximity/distance requirements (e.g., "close to metro", "near school", "far from hospital", "within 2km of park"), properties with null distance values for those amenities should be PENALIZED (subtract 15-25 points) and placed LAST in priority, but still included in results
+- DISTANCE-SPECIFIC: If the user query mentions proximity/distance requirements (e.g., "close to metro", "near school", "near uni", "far from hospital", "within 2km of park"):
+  * Properties with null distance values should be PENALIZED (subtract 15-25 points) and placed LAST in priority
+  * CRITICAL: Properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
+  * Distance should be a PRIMARY ranking factor when proximity is mentioned (major influence on match percentage)
+  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%, null = 50-60%
 - Example: User asks "athens parking" → Athens houses WITH parking (parking: true) get 90-100%, Athens houses with MISSING parking info (parking: null) get 70-80%, Athens houses WITHOUT parking (parking: false) get 50-60%
 - Example: User asks "athens garage" → Same logic as parking (garage = parking)
 - Example: User asks "athens central heating" → Houses WITH central heating get 90-100%, houses with MISSING heating info (heatingCategory: null) get 70-80%, houses with different heating get 50-60%
-- Example: User asks "athens close to metro" → Athens houses WITH metro distance (closestMetro: 0.5) get 90-100%, Athens houses with MISSING metro distance (closestMetro: null) get 60-75% and should be placed LAST in results
-- Example: User asks "athens near school" → Athens houses WITH school distance (closestSchool: 1.2) get 90-100%, Athens houses with MISSING school distance (closestSchool: null) get 60-75% and should be placed LAST in results
+- Example: User asks "athens close to metro" → Athens houses WITH metro distance: closestMetro 0.5km gets 95-100%, 1km gets 90-95%, 2km gets 80-90%, 5km gets 60-75%, null gets 50-60% (SMALLER distances = HIGHER scores)
+- Example: User asks "athens near school" → Athens houses WITH school distance: closestSchool 0.5km gets 95-100%, 1km gets 90-95%, 2km gets 80-90%, 5km gets 60-75%, null gets 50-60% (SMALLER distances = HIGHER scores)
+- Example: User asks "near uni" or "close to university" → Houses with closestUniversity 0.5km get 95-100%, 1km get 90-95%, 2km get 80-90%, 5km get 60-75%, null get 50-60% (SMALLER distances = HIGHER scores)
 
 Consider ALL attributes when calculating match:
 - Location (city, country, area) - exact match = 100% if ONLY location is mentioned
 - CRITICAL: Greek and English location names are EQUIVALENT - "athens" = "Αθήνα", "thessaloniki" = "Θεσσαλονίκη", "greece" = "Ελλάδα", etc. Do NOT penalize match percentage if the query uses one language and the property data uses the other. They should be treated as 100% match for location purposes.
+- DISTANCE/PROXIMITY - When query mentions "near", "close to", "within X km", etc.:
+  * Properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
+  * Distance should be a PRIMARY ranking factor (major influence on match percentage)
+  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%
 - Area safety (0-10 scale) - ONLY use as a prominent factor when query mentions: kids, children, elderly, seniors, elderly people, people in need, vulnerable, family with children, etc. If NOT mentioned, safety should have MINIMAL influence (1-5 points difference at most, not a major factor)
 - Area vibe (e.g., "family-friendly", "vibrant", "quiet") - match vibe keywords from query but give a little bit more importance to the first word of vibe and then the second
 - Price, size, bedrooms, bathrooms - match if mentioned in query
@@ -590,7 +599,12 @@ CRITICAL: GREEK/ENGLISH LOCATION EQUIVALENCE - Greek and English location names 
 
 MISSING INFORMATION: If a property has null/undefined values for attributes the user requested, PENALIZE it (subtract 10-20 points) but DO NOT exclude it. Properties with missing info should score lower than those with the information.
 
-DISTANCE-SPECIFIC RULE: If the query mentions proximity/distance requirements (e.g., "close to metro", "near school", "within X km of Y"), properties with null distance values for those specific amenities should be PENALIZED more heavily (subtract 15-25 points) and placed LAST in priority. They should still be included in results but ranked lower than properties with distance information.
+DISTANCE-SPECIFIC RULE: If the query mentions proximity/distance requirements (e.g., "close to metro", "near school", "near uni", "within X km of Y"):
+1. Properties with null distance values for those specific amenities should be PENALIZED more heavily (subtract 15-25 points) and placed LAST in priority
+2. CRITICAL: When "near", "close to", or proximity is mentioned, properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
+3. Example: Query "near uni" → House 0.5km from university should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 5km should score 60-75%
+4. The closer the distance, the higher the match percentage should be
+5. Distance should be a PRIMARY factor when proximity is mentioned in the query
 
 Examples:
 - Query "athens" → ALL Athens properties (whether city is "Athens" or "Αθήνα") MUST get 100% (they all match the location, no other criteria)
@@ -604,6 +618,14 @@ Examples:
 - Query "athens safe" → Safety should have MINIMAL influence (1-5 points difference) since no vulnerable groups are mentioned - Focus on other criteria instead
 - Query "athens" → Safety should have MINIMAL influence (1-5 points difference) - All Athens properties should score similarly regardless of safety
 - Query "athens 2 bedrooms" → Athens properties with 2 bedrooms get 100%, others get lower scores
+- Query "i am a student looking for a house in athens near uni and nightlife parties" → 
+  * Athens properties with closestUniversity 0.5-1km get 95-100% (very close to uni, high priority)
+  * Athens properties with closestUniversity 1-2km get 85-95% (close to uni)
+  * Athens properties with closestUniversity 2-5km get 70-85% (moderate distance, lower priority)
+  * Athens properties with closestUniversity >5km get 60-75% (far from uni, much lower priority)
+  * Properties with vibrant/student-friendly vibe should get bonus points
+  * Properties with null closestUniversity get 50-60% (missing distance info, lowest priority)
+  * DISTANCE TO UNIVERSITY IS THE PRIMARY FACTOR - closer = higher score
 
 Return JSON:
 {
