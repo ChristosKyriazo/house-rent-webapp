@@ -30,15 +30,9 @@ if (!prismaInstance.inquiry) {
 // SQLite uses PRAGMA busy_timeout to handle locks
 if (process.env.DATABASE_URL?.includes('sqlite') || process.env.DATABASE_URL?.includes('.db')) {
   // Set busy timeout to 30 seconds (30000ms) for SQLite to handle concurrent access
-  // Execute PRAGMA after connection
-  prismaInstance.$connect()
-    .then(() => {
-      // Set busy_timeout to wait up to 30 seconds for locks to clear
-      return prismaInstance.$executeRawUnsafe('PRAGMA busy_timeout = 30000')
-    })
-    .catch((err) => {
-      console.error('Prisma connection error:', err)
-    })
+  // Note: We set this via connection string instead of PRAGMA to avoid errors
+  // The connection string should include: ?busy_timeout=30000
+  // For now, we'll rely on the connection string or default timeout
 }
 
 export const prisma = prismaInstance

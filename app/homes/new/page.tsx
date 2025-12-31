@@ -28,6 +28,7 @@ export default function NewHomePage() {
     yearBuilt: '',
     yearRenovated: '',
     availableFrom: '',
+    energyClass: '',
   })
   const [photos, setPhotos] = useState<string[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
@@ -39,6 +40,7 @@ export default function NewHomePage() {
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [searchingAreas, setSearchingAreas] = useState(false)
+  const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
 
   // Check user role on mount
   useEffect(() => {
@@ -208,13 +210,15 @@ export default function NewHomePage() {
     let finalArea: string | null = null
     
     // First, check if formData.area is already a valid area name from the database
+    // This should be the case if user clicked on a suggestion from the dropdown
     if (formData.area && formData.area.trim().length > 0) {
       const isValidArea = allAreas.some(a => a.name === formData.area.trim())
       if (isValidArea) {
-        // formData.area is already a valid area name, use it
+        // formData.area is already a valid area name, use it directly (user selected from dropdown)
         finalArea = formData.area.trim()
       } else {
         // formData.area exists but is not a valid area name, try to find closest match
+        // But only if user didn't explicitly select from dropdown (shouldn't happen, but safety check)
         const mostSimilar = findMostSimilarArea(formData.area, allAreas)
         if (mostSimilar) {
           finalArea = mostSimilar.name
@@ -223,10 +227,21 @@ export default function NewHomePage() {
     }
     
     // If we still don't have a valid area, try matching from areaSearchQuery
+    // This is a fallback for when user typed but didn't select
     if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
-      const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
-      if (mostSimilar) {
-        finalArea = mostSimilar.name
+      // First try exact match by display name (Greek or English)
+      const matchedArea = allAreas.find(a => 
+        a.name === areaSearchQuery.trim() || 
+        (a.nameGreek && a.nameGreek === areaSearchQuery.trim())
+      )
+      if (matchedArea) {
+        finalArea = matchedArea.name
+      } else {
+        // Last resort: try similarity matching
+        const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
+        if (mostSimilar) {
+          finalArea = mostSimilar.name
+        }
       }
     }
     
@@ -247,6 +262,7 @@ export default function NewHomePage() {
           heatingCategory: formData.heatingCategory || null,
           heatingAgent: formData.heatingAgent || null,
           parking: formData.parking === 'yes' ? true : formData.parking === 'no' ? false : null,
+          energyClass: formData.energyClass || null,
           photos: photos.length > 0 ? JSON.stringify(photos) : null,
         }),
       })
@@ -483,6 +499,7 @@ export default function NewHomePage() {
                       setShowAreaDropdown(false)
                       setAreaSuggestions([])
                       setFormData({ ...formData, area: '' })
+                      setAreaSelectedFromDropdown(false) // Reset flag when clearing
                     }
                   }}
                   onFocus={() => {
@@ -500,6 +517,11 @@ export default function NewHomePage() {
                     // Delay to allow click on dropdown items
                     setTimeout(() => {
                       setShowAreaDropdown(false)
+                      // If user explicitly selected from dropdown, don't override their choice
+                      if (areaSelectedFromDropdown) {
+                        setAreaSelectedFromDropdown(false) // Reset flag
+                        return
+                      }
                       // If user typed but didn't select, try to find most similar
                       if (areaSearchQuery && areaSearchQuery.trim().length > 0) {
                         // Check if the current formData.area matches what's displayed
@@ -542,6 +564,7 @@ export default function NewHomePage() {
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
+                          setAreaSelectedFromDropdown(true) // Mark that user explicitly selected from dropdown
                           // Ensure the area is set correctly
                           setTimeout(() => {
                             setFormData(prev => {
@@ -623,6 +646,26 @@ export default function NewHomePage() {
                   <option value="other">{translateValue(language, 'other')}</option>
                 </select>
               </div>
+            </div>
+
+            {/* Energy Class */}
+            <div>
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'energyClass')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <select
+                value={formData.energyClass}
+                onChange={(e) => setFormData({ ...formData, energyClass: e.target.value })}
+                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+              >
+                <option value="">{getTranslation(language, 'any')}</option>
+                <option value="A+">A+</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="G">G</option>
+              </select>
             </div>
 
             {/* Floor, Bedrooms, Bathrooms Row */}

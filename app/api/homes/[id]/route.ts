@@ -130,6 +130,7 @@ export async function PUT(
       yearRenovated,
       availableFrom,
       photos,
+      energyClass,
     } = body
 
     // Minimal validation
@@ -178,6 +179,7 @@ export async function PUT(
         yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
         availableFrom: availableFromDate,
         photos: photos || null,
+        energyClass: energyClass?.trim() || null,
       },
     })
 

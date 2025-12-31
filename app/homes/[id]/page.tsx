@@ -37,6 +37,8 @@ interface Home {
   closestKindergarten: number | null
   closestHospital: number | null
   closestPark: number | null
+  closestUniversity: number | null
+  energyClass: string | null
       owner: {
     id: number
     email: string
@@ -623,7 +625,7 @@ export default function HomeDetailPage() {
                           <>
                             {areaData.vibe && (
                               <p className="flex items-center gap-1 text-[#E8D5B7]">
-                                {getTranslation(language, 'vibe')}: <strong>{areaData.vibe}</strong>
+                                {getTranslation(language, 'vibe')}: <strong>{translateValue(language, areaData.vibe)}</strong>
                               </p>
                             )}
                             {areaData.safety != null && (
@@ -761,18 +763,26 @@ export default function HomeDetailPage() {
                 </div>
             </div>
 
-            {/* Parking Row - Different style */}
-            {home.parking !== null && home.parking !== undefined && (
+            {/* Energy Class and Parking - Together */}
+            {(home.energyClass || (home.parking !== null && home.parking !== undefined)) && (
               <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
-                <p className="text-sm text-[#E8D5B7]/70">
-                  {getTranslation(language, 'parking')}: {home.parking === true ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
-                </p>
+                {home.energyClass && (
+                  <p className="text-sm text-[#E8D5B7]/70 mb-1">
+                    {getTranslation(language, 'energyClass')}: {home.energyClass}
+                  </p>
+                )}
+                {home.parking !== null && home.parking !== undefined && (
+                  <p className="text-sm text-[#E8D5B7]/70">
+                    {getTranslation(language, 'parking')}: {home.parking === true ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Distance Information */}
+            {/* Distance Information - Always show to display university distance */}
             {((home.closestMetro != null) || (home.closestBus != null) || (home.closestSchool != null) || 
-              (home.closestKindergarten != null) || (home.closestHospital != null) || (home.closestPark != null)) && (
+              (home.closestKindergarten != null) || (home.closestHospital != null) || (home.closestPark != null) ||
+              true) && ( // Always show section to display university distance
               <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
                 <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'distances')}</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -788,12 +798,25 @@ export default function HomeDetailPage() {
                       <p className="text-xl font-bold text-[#E8D5B7]">{home.closestBus.toFixed(1)} km</p>
                     </div>
                   )}
+                  {home.closestPark != null && (
+                    <div>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🌳 {getTranslation(language, 'closestPark')}</p>
+                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestPark.toFixed(1)} km</p>
+                    </div>
+                  )}
                   {home.closestSchool != null && (
                     <div>
                       <p className="text-sm text-[#E8D5B7]/70 mb-1">🏫 {getTranslation(language, 'closestSchool')}</p>
                       <p className="text-xl font-bold text-[#E8D5B7]">{home.closestSchool.toFixed(1)} km</p>
                     </div>
                   )}
+                  {/* University distance - always show, display "-" if null */}
+                  <div>
+                    <p className="text-sm text-[#E8D5B7]/70 mb-1">🎓 {getTranslation(language, 'closestUniversity')}</p>
+                    <p className="text-xl font-bold text-[#E8D5B7]">
+                      {home.closestUniversity != null ? `${home.closestUniversity.toFixed(1)} km` : '-'}
+                    </p>
+                  </div>
                   {home.closestKindergarten != null && (
                     <div>
                       <p className="text-sm text-[#E8D5B7]/70 mb-1">🎒 {getTranslation(language, 'closestKindergarten')}</p>
@@ -804,12 +827,6 @@ export default function HomeDetailPage() {
                     <div>
                       <p className="text-sm text-[#E8D5B7]/70 mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>
                       <p className="text-xl font-bold text-[#E8D5B7]">{home.closestHospital.toFixed(1)} km</p>
-                    </div>
-                  )}
-                  {home.closestPark != null && (
-                    <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🌳 {getTranslation(language, 'closestPark')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestPark.toFixed(1)} km</p>
                     </div>
                   )}
                 </div>

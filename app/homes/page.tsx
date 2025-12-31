@@ -23,6 +23,9 @@ interface Home {
   sizeSqMeters: number | null
   availableFrom: string | null
   createdAt: string
+  energyClass: string | null
+  closestUniversity: number | null
+  matchPercentage?: number // AI match percentage
   owner: {
     email: string
     name: string | null
@@ -46,6 +49,7 @@ export default function HomesPage() {
     ? selectedRole 
     : (actualRole || userRole || 'user')
   const [aiQuery, setAiQuery] = useState('')
+  const [isAISearchActive, setIsAISearchActive] = useState(false) // Track if AI search has been performed
   const [manualFilters, setManualFilters] = useState({
     city: '',
     country: '',
@@ -89,6 +93,21 @@ export default function HomesPage() {
     
     isInitialized.current = true
   }, [searchParams])
+
+  // Clear AI search results when filterType changes or is removed from URL
+  useEffect(() => {
+    if (!isInitialized.current) return
+    
+    const urlFilterType = searchParams.get('filter') as 'manual' | 'ai' | null
+    
+    // If filterType is removed from URL or changed, clear AI search
+    if (isAISearchActive && (urlFilterType !== 'ai' || filterType !== 'ai')) {
+      setIsAISearchActive(false)
+      setAiQuery('')
+      setHomes([])
+      setShowFilters(true)
+    }
+  }, [searchParams, filterType, isAISearchActive])
 
   // Update URL when searchType or filterType changes (but not on initial mount)
   useEffect(() => {
@@ -157,6 +176,36 @@ export default function HomesPage() {
         console.error('Error fetching areas for translation:', error)
       })
   }, [])
+
+  // Clear AI search results when filterType changes or is removed from URL
+  useEffect(() => {
+    if (!isInitialized.current) return
+    
+    const urlFilterType = searchParams.get('filter') as 'manual' | 'ai' | null
+    
+    // If filterType is removed from URL or changed, clear AI search
+    if (isAISearchActive && (urlFilterType !== 'ai' || filterType !== 'ai')) {
+      setIsAISearchActive(false)
+      setAiQuery('')
+      setHomes([])
+      setShowFilters(true)
+    }
+  }, [searchParams, filterType, isAISearchActive])
+
+  // Clear AI search results when navigating back (browser back button)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isAISearchActive) {
+        setIsAISearchActive(false)
+        setAiQuery('')
+        setHomes([])
+        setShowFilters(true)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [isAISearchActive])
 
   // Close order dropdown when clicking outside
   useEffect(() => {
@@ -236,8 +285,8 @@ export default function HomesPage() {
       })
       const data = await response.json()
       setHomes(data.homes || [])
-      // Collapse filters after search
-      setShowFilters(false)
+      setIsAISearchActive(true) // Mark AI search as active
+      setShowFilters(false) // Hide filters section
     } catch (error) {
       console.error('Error with AI search:', error)
       // Fallback to showing all homes if AI search fails
@@ -245,6 +294,13 @@ export default function HomesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleNewAISearch = () => {
+    setIsAISearchActive(false) // Reset AI search state
+    setAiQuery('') // Clear the query
+    setHomes([]) // Clear results
+    setShowFilters(true) // Show filters section again
   }
 
   const handleManualFilter = async () => {
@@ -615,7 +671,8 @@ export default function HomesPage() {
         )}
 
         {/* AI Search Form */}
-        {searchType && filterType === 'ai' && showFilters && (
+        {/* AI Search Input - Show when not active */}
+        {searchType && filterType === 'ai' && showFilters && !isAISearchActive && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
@@ -646,8 +703,20 @@ export default function HomesPage() {
           </div>
         )}
 
-        {/* Filters and Order Buttons */}
-        {filterType && (
+        {/* "Use AI for another search" Button - Show when AI search is active */}
+        {searchType && filterType === 'ai' && isAISearchActive && (
+          <div className="mb-6">
+            <button
+              onClick={handleNewAISearch}
+              className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+            >
+              {getTranslation(language, 'useAIForAnotherSearch')}
+            </button>
+          </div>
+        )}
+
+        {/* Filters and Order Buttons - Hide when AI search is selected */}
+        {filterType === 'manual' && (
           <div className="flex gap-4 mb-6">
             <div className="relative">
               <button
@@ -824,6 +893,21 @@ export default function HomesPage() {
                       : 'border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40'
                   }`}
                 >
+                  {/* AI Match Percentage Badge - Top Right */}
+                  {home.matchPercentage !== undefined && (
+                    <div className="absolute top-4 right-4 z-20">
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
+                        home.matchPercentage >= 80 
+                          ? 'bg-green-500/90 text-white border-green-600' 
+                          : home.matchPercentage >= 60
+                          ? 'bg-yellow-500/90 text-white border-yellow-600'
+                          : 'bg-orange-500/90 text-white border-orange-600'
+                      }`}>
+                        {home.matchPercentage}% Match
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Sticker-style Status Banner - Horizontal through center */}
                   {status && (
                     <div className="absolute top-1/2 left-1/2 z-10 transform -translate-x-1/2 -translate-y-1/2 origin-center">
@@ -995,6 +1079,21 @@ export default function HomesPage() {
                           </p>
                         </div>
                       </div>
+
+                      {/* Energy Class - Only if provided, styled like parking */}
+                      {home.energyClass && (
+                        <div className={`mb-4 pt-4 border-t ${
+                          status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                        }`}>
+                          <p className={`text-xs ${
+                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                          }`}>
+                            {getTranslation(language, 'energyClass')}: <span className={`font-medium ${
+                              status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            }`}>{home.energyClass}</span>
+                          </p>
+                        </div>
+                      )}
 
                       <div className={`pt-4 border-t ${
                         status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'

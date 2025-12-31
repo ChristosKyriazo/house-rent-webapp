@@ -28,6 +28,7 @@ interface Home {
   yearBuilt: number | null
   yearRenovated: number | null
   availableFrom: string
+  energyClass: string | null
   photos: string | null
   owner: {
     id: number
@@ -67,6 +68,7 @@ export default function EditHomePage() {
     yearBuilt: '',
     yearRenovated: '',
     availableFrom: '',
+    energyClass: '',
   })
   const [photos, setPhotos] = useState<string[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
@@ -137,6 +139,7 @@ export default function EditHomePage() {
           availableFrom: fetchedHome.availableFrom 
             ? new Date(fetchedHome.availableFrom).toISOString().split('T')[0]
             : '',
+          energyClass: fetchedHome.energyClass || '',
         })
         
         // Set area search query with translated name if area exists
@@ -337,17 +340,19 @@ export default function EditHomePage() {
           heatingCategory: formData.heatingCategory || null,
           heatingAgent: formData.heatingAgent || null,
           parking: formData.parking === 'yes' ? true : formData.parking === 'no' ? false : null,
+          energyClass: formData.energyClass || null,
           photos: photos.length > 0 ? JSON.stringify(photos) : null,
         }),
       })
 
+      // Read response body as text first (can only be read once)
+      const responseText = await response.text()
       let data: any = {}
+      
       try {
-        data = await response.json()
+        data = responseText ? JSON.parse(responseText) : {}
       } catch (parseError) {
-        // If response is not JSON, try to get text
-        const text = await response.text()
-        console.error('Failed to parse JSON response:', text)
+        console.error('Failed to parse JSON response:', responseText)
         setError(getTranslation(language, 'updateListingFailed'))
         return
       }
@@ -357,7 +362,12 @@ export default function EditHomePage() {
           ? `${data.error || getTranslation(language, 'updateListingFailed')}: ${data.details}`
           : data.error || getTranslation(language, 'updateListingFailed')
         setError(errorMsg)
-        console.error('Update listing error:', { status: response.status, data })
+        console.error('Update listing error:', { 
+          status: response.status, 
+          statusText: response.statusText,
+          data,
+          responseText 
+        })
         return
       }
 
@@ -739,6 +749,26 @@ export default function EditHomePage() {
                   <option value="other">{translateValue(language, 'other')}</option>
                 </select>
               </div>
+            </div>
+
+            {/* Energy Class */}
+            <div>
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'energyClass')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <select
+                value={formData.energyClass}
+                onChange={(e) => setFormData({ ...formData, energyClass: e.target.value })}
+                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+              >
+                <option value="">{getTranslation(language, 'any')}</option>
+                <option value="A+">A+</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+                <option value="E">E</option>
+                <option value="F">F</option>
+                <option value="G">G</option>
+              </select>
             </div>
 
             {/* Floor, Bedrooms, Bathrooms Row */}

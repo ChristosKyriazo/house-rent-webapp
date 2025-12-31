@@ -56,7 +56,9 @@ model Home {
   closestKindergarten Float? // Distance to closest kindergarten (in km or minutes)
   closestHospital   Float?  // Distance to closest hospital (in km or minutes)
   closestPark       Float?   // Distance to closest park (in km or minutes)
+  closestUniversity Float?   // Distance to closest university (in km or minutes)
   parking           Boolean? // Whether parking is available (yes/no)
+  energyClass       String?  // Energy class: "A+", "A", "B", "C", "D", "E", "F", "G"
   ownerId           Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -155,4 +157,25 @@ model Area {
   @@index([city])
   @@index([country])
   @@map("areas")
+}
+
+model AISearchLog {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique @default(cuid())
+  userId                Int?     // User who made the search (optional, can be null for unauthenticated)
+  userQuery             String   // Original user query
+  filterExtractionPrompt String? // System prompt for filter extraction
+  filterExtractionResponse String? // AI response for filter extraction
+  extractedFilters      String?  // JSON string of extracted filters
+  homesCountBeforeFilter Int     // Number of homes before filtering
+  homesCountAfterFilter  Int     // Number of homes after filtering
+  matchCalculationPrompt String? // System prompt for match calculation
+  matchCalculationResponse String? // AI response for match calculation
+  finalHomesCount       Int     // Final number of homes returned
+  error                 String? // Error message if any
+  createdAt             DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ai_search_logs")
 }

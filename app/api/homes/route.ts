@@ -412,6 +412,7 @@ export async function POST(request: NextRequest) {
       yearRenovated,
       availableFrom,
       photos,
+      energyClass,
     } = body
 
     // Minimal validation
@@ -476,6 +477,8 @@ export async function POST(request: NextRequest) {
               closestKindergarten: generateDummyDistance(),
               closestHospital: generateDummyDistance(),
               closestPark: generateDummyDistance(),
+              closestUniversity: generateDummyDistance(), // Auto-generated like other distances
+              energyClass: energyClass?.trim() || null,
               ownerId: user.id,
             },
           })

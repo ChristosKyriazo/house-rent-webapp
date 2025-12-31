@@ -50,6 +50,10 @@ export const translations = {
     closestKindergarten: 'Κοντινότερο Νηπιαγωγείο',
     closestHospital: 'Κοντινότερο Νοσοκομείο',
     closestPark: 'Κοντινότερο Πάρκο',
+    closestUniversity: 'Κοντινότερο Πανεπιστήμιο',
+    energyClass: 'Ενεργειακή Κλάση',
+    distanceToUniversity: 'Απόσταση από Πανεπιστήμιο',
+    placeholderDistance: 'km',
     vibe: 'Ατμόσφαιρα',
     safety: 'Ασφάλεια',
     minPrice: 'Ελάχιστη Τιμή',
@@ -83,6 +87,7 @@ export const translations = {
     tellUsWhatYouNeed: 'Πείτε μας τι χρειάζεστε',
     aiSearchDescription: 'Περιγράψτε με λέξεις τι ψάχνετε και το AI θα βρει τα κατάλληλα ακίνητα για εσάς.',
     searchingWithAi: 'Αναζήτηση με AI...',
+    useAIForAnotherSearch: 'Χρήση AI για νέα αναζήτηση',
     availableProperties: 'Διαθέσιμα Ακίνητα',
     listing: 'αγγελία',
     listings: 'αγγελίες',
@@ -303,6 +308,26 @@ export const translations = {
     'natural gas': 'Φυσικό Αέριο',
     electricity: 'Ηλεκτρική',
     other: 'Άλλο',
+    
+    // Vibe values
+    'family-friendly': 'Οικογενειακό',
+    'Family-friendly': 'Οικογενειακό',
+    'vibrant': 'Ζωντανό',
+    'Vibrant': 'Ζωντανό',
+    'quiet': 'Ήσυχο',
+    'Quiet': 'Ήσυχο',
+    'upscale': 'Αριστοκρατικό',
+    'Upscale': 'Αριστοκρατικό',
+    'touristic': 'Τουριστικό',
+    'Touristic': 'Τουριστικό',
+    'historic': 'Ιστορικό',
+    'Historic': 'Ιστορικό',
+    'urban': 'Αστικό',
+    'Urban': 'Αστικό',
+    'student': 'Φοιτητικό',
+    'Student': 'Φοιτητικό',
+    'Upscale, vibrant': 'Αριστοκρατικό, Ζωντανό',
+    'Touristic, historic': 'Τουριστικό, Ιστορικό',
   },
   en: {
     // App
@@ -353,6 +378,10 @@ export const translations = {
     closestKindergarten: 'Closest Kindergarten',
     closestHospital: 'Closest Hospital',
     closestPark: 'Closest Park',
+    closestUniversity: 'Closest University',
+    energyClass: 'Energy Class',
+    distanceToUniversity: 'Distance to University',
+    placeholderDistance: 'km',
     vibe: 'Vibe',
     safety: 'Safety',
     minPrice: 'Min Price',
@@ -386,6 +415,7 @@ export const translations = {
     tellUsWhatYouNeed: 'Tell us what you need',
     aiSearchDescription: 'Describe in words what you are looking for and AI will find the right properties for you.',
     searchingWithAi: 'Searching with AI...',
+    useAIForAnotherSearch: 'Use AI for another search',
     availableProperties: 'Available Properties',
     listing: 'listing',
     listings: 'listings',
@@ -609,6 +639,26 @@ export const translations = {
     'natural gas': 'Natural Gas',
     electricity: 'Electricity',
     other: 'Other',
+    
+    // Vibe values
+    'family-friendly': 'Family-friendly',
+    'Family-friendly': 'Family-friendly',
+    'vibrant': 'Vibrant',
+    'Vibrant': 'Vibrant',
+    'quiet': 'Quiet',
+    'Quiet': 'Quiet',
+    'upscale': 'Upscale',
+    'Upscale': 'Upscale',
+    'touristic': 'Touristic',
+    'Touristic': 'Touristic',
+    'historic': 'Historic',
+    'Historic': 'Historic',
+    'urban': 'Urban',
+    'Urban': 'Urban',
+    'student': 'Student',
+    'Student': 'Student',
+    'Upscale, vibrant': 'Upscale, vibrant',
+    'Touristic, historic': 'Touristic, historic',
   },
 } as const
 
@@ -616,16 +666,57 @@ export function getTranslation(language: Language, key: keyof typeof translation
   return translations[language][key] || translations.el[key] || key
 }
 
-export function translateValue(language: Language, value: string | null | undefined): string {
+function translateSingleValue(language: Language, value: string): string {
   if (!value) return ''
-  const key = value as keyof typeof translations.el
+  
+  // Try exact match first
+  let key = value.trim() as keyof typeof translations.el
   if (translations[language][key]) {
     return translations[language][key]
   }
   if (translations.el[key]) {
     return translations.el[key]
   }
-  return value
+  
+  // Try case-insensitive match for vibe values (common values that might have different casing)
+  const trimmed = value.trim()
+  const lowerValue = trimmed.toLowerCase()
+  const capitalizedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+  
+  // Try lowercase version
+  key = lowerValue as keyof typeof translations.el
+  if (translations[language][key]) {
+    return translations[language][key]
+  }
+  if (translations.el[key]) {
+    return translations.el[key]
+  }
+  
+  // Try capitalized version
+  key = capitalizedValue as keyof typeof translations.el
+  if (translations[language][key]) {
+    return translations[language][key]
+  }
+  if (translations.el[key]) {
+    return translations.el[key]
+  }
+  
+  return trimmed
+}
+
+export function translateValue(language: Language, value: string | null | undefined): string {
+  if (!value) return ''
+  
+  // Handle comma-separated values (e.g., "Urban,Student" or "Urban, Student")
+  if (value.includes(',')) {
+    return value
+      .split(',')
+      .map(part => translateSingleValue(language, part))
+      .join(', ')
+  }
+  
+  // Single value
+  return translateSingleValue(language, value)
 }
 
 export function reverseTranslateValue(translatedValue: string | null | undefined): string {
