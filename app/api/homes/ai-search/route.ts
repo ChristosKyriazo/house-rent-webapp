@@ -562,9 +562,11 @@ Consider ALL attributes when calculating match:
 - Location (city, country, area) - exact match = 100% if ONLY location is mentioned
 - CRITICAL: Greek and English location names are EQUIVALENT - "athens" = "Αθήνα", "thessaloniki" = "Θεσσαλονίκη", "greece" = "Ελλάδα", etc. Do NOT penalize match percentage if the query uses one language and the property data uses the other. They should be treated as 100% match for location purposes.
 - DISTANCE/PROXIMITY - When query mentions "near", "close to", "within X km", etc.:
-  * Properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
-  * Distance should be a PRIMARY ranking factor (major influence on match percentage)
-  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%
+  * DISTANCE IS THE ABSOLUTE PRIMARY FACTOR - it OVERRIDES all other factors (vibe, area type, etc.)
+  * Properties with SMALLER distance values should ALWAYS score HIGHER than properties with LARGER distance values, REGARDLESS of other attributes
+  * Other factors (vibe, area type) can only create small variations (2-5 points) WITHIN the same distance range
+  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%, 5.6km = 55-70%
+  * A house 1km away should NEVER score lower than a house 5.6km away when proximity is mentioned
 - Area safety (0-10 scale) - ONLY use as a prominent factor when query mentions: kids, children, elderly, seniors, elderly people, people in need, vulnerable, family with children, etc. If NOT mentioned, safety should have MINIMAL influence (1-5 points difference at most, not a major factor)
 - Area vibe (e.g., "family-friendly", "vibrant", "quiet") - match vibe keywords from query but give a little bit more importance to the first word of vibe and then the second
 - Price, size, bedrooms, bathrooms - match if mentioned in query
@@ -601,10 +603,11 @@ MISSING INFORMATION: If a property has null/undefined values for attributes the 
 
 DISTANCE-SPECIFIC RULE: If the query mentions proximity/distance requirements (e.g., "close to metro", "near school", "near uni", "within X km of Y"):
 1. Properties with null distance values for those specific amenities should be PENALIZED more heavily (subtract 15-25 points) and placed LAST in priority
-2. CRITICAL: When "near", "close to", or proximity is mentioned, properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
-3. Example: Query "near uni" → House 0.5km from university should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 5km should score 60-75%
-4. The closer the distance, the higher the match percentage should be
-5. Distance should be a PRIMARY factor when proximity is mentioned in the query
+2. CRITICAL: When "near", "close to", or proximity is mentioned, properties with SMALLER distance values should ALWAYS score HIGHER than properties with LARGER distance values, REGARDLESS of other factors (vibe, safety, etc.)
+3. DISTANCE IS THE PRIMARY RANKING FACTOR - Other factors (vibe, area type, etc.) should only create small variations WITHIN the same distance range, but should NEVER cause a farther property to score higher than a closer one
+4. Example: Query "near uni" → House 0.5km from university should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 5km should score 60-75%, house 5.6km should score 55-70%
+5. A house 1km away should ALWAYS score higher (90-95%) than a house 5.6km away (55-70%), even if the 5.6km house has better vibe or other attributes
+6. The closer the distance, the higher the match percentage should be - this is NON-NEGOTIABLE when proximity is mentioned
 
 Examples:
 - Query "athens" → ALL Athens properties (whether city is "Athens" or "Αθήνα") MUST get 100% (they all match the location, no other criteria)
@@ -619,13 +622,15 @@ Examples:
 - Query "athens" → Safety should have MINIMAL influence (1-5 points difference) - All Athens properties should score similarly regardless of safety
 - Query "athens 2 bedrooms" → Athens properties with 2 bedrooms get 100%, others get lower scores
 - Query "i am a student looking for a house in athens near uni and nightlife parties" → 
-  * Athens properties with closestUniversity 0.5-1km get 95-100% (very close to uni, high priority)
+  * DISTANCE TO UNIVERSITY IS THE ABSOLUTE PRIMARY FACTOR - it OVERRIDES all other factors
+  * Athens properties with closestUniversity 0.5-1km get 90-100% (very close to uni, highest priority)
   * Athens properties with closestUniversity 1-2km get 85-95% (close to uni)
   * Athens properties with closestUniversity 2-5km get 70-85% (moderate distance, lower priority)
-  * Athens properties with closestUniversity >5km get 60-75% (far from uni, much lower priority)
-  * Properties with vibrant/student-friendly vibe should get bonus points
+  * Athens properties with closestUniversity 5-6km get 55-70% (far from uni, much lower priority)
+  * Athens properties with closestUniversity >6km get 50-65% (very far from uni, lowest priority)
+  * Properties with vibrant/student-friendly vibe can add 2-5 bonus points WITHIN the same distance range, but should NEVER make a 5.6km house score higher than a 1km house
   * Properties with null closestUniversity get 50-60% (missing distance info, lowest priority)
-  * DISTANCE TO UNIVERSITY IS THE PRIMARY FACTOR - closer = higher score
+  * CRITICAL: A house 1km away (Kerameikos) should ALWAYS score 85-95%, while a house 5.6km away (Neos Kosmos) should ALWAYS score 55-70%, regardless of area vibe or other attributes
 
 Return JSON:
 {
@@ -711,6 +716,55 @@ Return JSON:
       homesData.forEach(home => {
         matchMap.set(home.id, 100)
       })
+    }
+
+    // Post-process: Enforce distance-based ranking when proximity is mentioned
+    // Check if query mentions proximity to university
+    const mentionsUniversityProximity = 
+      /near\s+(uni|university|universities)/i.test(query) ||
+      /close\s+to\s+(uni|university|universities)/i.test(query) ||
+      /(uni|university).*near/i.test(query) ||
+      /(uni|university).*close/i.test(query)
+    
+    if (mentionsUniversityProximity) {
+      console.log('University proximity detected in query - enforcing distance-based ranking')
+      
+      // Get all homes with university distance
+      const homesWithUniDistance = homes.filter(h => h.closestUniversity !== null && h.closestUniversity !== undefined)
+      
+      if (homesWithUniDistance.length > 0) {
+        // Sort by distance (closest first)
+        homesWithUniDistance.sort((a, b) => (a.closestUniversity || Infinity) - (b.closestUniversity || Infinity))
+        
+        // Assign distance-based scores: closer = higher score
+        homesWithUniDistance.forEach((home, index) => {
+          const distance = home.closestUniversity || Infinity
+          let distanceScore = 0
+          
+          if (distance <= 0.5) distanceScore = 98
+          else if (distance <= 1.0) distanceScore = 93
+          else if (distance <= 2.0) distanceScore = 85
+          else if (distance <= 3.0) distanceScore = 75
+          else if (distance <= 5.0) distanceScore = 65
+          else if (distance <= 6.0) distanceScore = 60
+          else distanceScore = 55
+          
+          // Get AI's original score
+          const aiScore = matchMap.get(home.id) || 50
+          
+          // Distance is PRIMARY: use distance score as base, add small bonus from AI (max 5 points)
+          const finalScore = Math.min(100, distanceScore + Math.min(5, Math.max(0, aiScore - 50) / 10))
+          
+          console.log(`Home ${home.id} (${home.area}): distance=${distance}km, distanceScore=${distanceScore}, aiScore=${aiScore}, finalScore=${finalScore}`)
+          matchMap.set(home.id, finalScore)
+        })
+        
+        // Homes without university distance get penalized
+        homes.filter(h => h.closestUniversity === null || h.closestUniversity === undefined).forEach(home => {
+          const aiScore = matchMap.get(home.id) || 50
+          matchMap.set(home.id, Math.max(50, Math.min(60, aiScore - 20))) // Penalize by 20 points, cap at 60%
+        })
+      }
     }
 
     // Attach match percentages to homes and sort by match percentage (highest first)

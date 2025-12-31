@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 
 interface Home {
   id: number
@@ -15,6 +15,7 @@ interface Home {
   street: string | null
   city: string
   country: string
+  area: string | null
   listingType: string
   pricePerMonth: number
   bedrooms: number
@@ -30,7 +31,7 @@ export default function MyListingsPage() {
   const [userHomes, setUserHomes] = useState<Home[]>([])
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('user')
-  const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
+  const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -159,6 +160,7 @@ export default function MyListingsPage() {
                       <p className="text-[#E8D5B7]/70 flex items-center gap-1 mb-2">
                         <span>📍</span>
                         {home.street && <span>{home.street}, </span>}
+                        {home.area && <span>{getAreaName(home.area, areas, language)}, </span>}
                         {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                       </p>
                       {home.description && (
