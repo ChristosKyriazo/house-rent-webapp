@@ -53,7 +53,6 @@ model Home {
   closestMetro      Float?   // Distance to closest metro (in km or minutes)
   closestBus        Float?   // Distance to closest bus stop (in km or minutes)
   closestSchool     Float?   // Distance to closest school (in km or minutes)
-  closestKindergarten Float? // Distance to closest kindergarten (in km or minutes)
   closestHospital   Float?  // Distance to closest hospital (in km or minutes)
   closestPark       Float?   // Distance to closest park (in km or minutes)
   closestUniversity Float?   // Distance to closest university (in km or minutes)
@@ -178,4 +177,16 @@ model AISearchLog {
   @@index([userId])
   @@index([createdAt])
   @@map("ai_search_logs")
+}
+
+model University {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @default(cuid())
+  name        String   // University name
+  city        String   // City where the university is located
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([city])
+  @@map("universities")
 }

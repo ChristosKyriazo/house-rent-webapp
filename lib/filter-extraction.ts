@@ -47,8 +47,6 @@ interface ExtractedFilters {
   maxClosestBus?: number
   minClosestSchool?: number
   maxClosestSchool?: number
-  minClosestKindergarten?: number
-  maxClosestKindergarten?: number
   minClosestHospital?: number
   maxClosestHospital?: number
   minClosestPark?: number
@@ -322,8 +320,6 @@ Structure:
   "maxClosestBus": 1.0 or null,
   "minClosestSchool": 0.5 or null,
   "maxClosestSchool": 2.0 or null,
-  "minClosestKindergarten": 0.5 or null,
-  "maxClosestKindergarten": 2.0 or null,
   "minClosestHospital": 1.0 or null,
   "maxClosestHospital": 5.0 or null,
   "minClosestPark": 0.5 or null,
@@ -363,11 +359,11 @@ Rules:
 - Heating category: Central or Autonomous
 - Heating agent: Natural gas, Oil, Electricity, Other
 - Parking: True or False
-- Proximity to destinations (metro, bus, school, kindergarten, hospital, park):
+- Proximity to destinations (metro, bus, school, hospital, park):
   * "close to metro" or "near metro" or "metro nearby" → minClosestMetro: 0, maxClosestMetro: null (user wants close, no upper limit specified)
   * "at most 1 km from metro" or "within 1 km of metro" → maxClosestMetro: 1.0, minClosestMetro: null
   * "at least 0.5 km from metro" → minClosestMetro: 0.5, maxClosestMetro: null
-  * Same logic applies to: bus, school, kindergarten, hospital, park
+  * Same logic applies to: bus, school, hospital, park
   * IMPORTANT: When user describes destinations as "close", "near", "nearby", "close to", set min to 0 (they want it close, starting from 0)
 - Return null for unspecified fields
 - Always return location names in English format (e.g., "Athens" not "Αθήνα", "Greece" not "Ελλάδα")

@@ -399,11 +399,6 @@ export async function POST(request: NextRequest) {
         home.closestSchool === null || home.closestSchool <= extractedFilters.maxClosestSchool!
       )
     }
-    if (extractedFilters.maxClosestKindergarten !== undefined && extractedFilters.maxClosestKindergarten !== null) {
-      homes = homes.filter(home => 
-        home.closestKindergarten === null || home.closestKindergarten <= extractedFilters.maxClosestKindergarten!
-      )
-    }
     if (extractedFilters.maxClosestHospital !== undefined && extractedFilters.maxClosestHospital !== null) {
       homes = homes.filter(home => 
         home.closestHospital === null || home.closestHospital <= extractedFilters.maxClosestHospital!
@@ -683,7 +678,6 @@ export async function POST(request: NextRequest) {
         closestMetro: home.closestMetro,
         closestBus: home.closestBus,
         closestSchool: home.closestSchool,
-        closestKindergarten: home.closestKindergarten,
         closestHospital: home.closestHospital,
         closestPark: home.closestPark,
         closestUniversity: home.closestUniversity,
@@ -986,7 +980,7 @@ Return JSON:
     }
 
     // Post-process: Enforce distance-based ranking with priority system
-    // Priority order: metro > bus > university > school > park > kindergarten > hospital
+    // Priority order: metro > bus > university > school > park > hospital
     // Metro and bus are ALWAYS considered (even if not mentioned) as they help house value
     
     // Helper function to calculate distance score
@@ -1027,25 +1021,23 @@ Return JSON:
     const mentionsSchool = /school|schools|education/i.test(query)
     // Park is mentioned OR user has pets (pets need parks)
     const mentionsPark = /park|parks|playground|playgrounds|nature|green|greenery|kids?\s+can\s+play/i.test(query) || hasPets
-    const mentionsKindergarten = /kindergarten|kindergartens|nursery|nurseries/i.test(query)
     // Hospital is mentioned OR user has elderly/people in need (they need hospitals)
     const mentionsHospital = /hospital|hospitals|medical|clinic/i.test(query) || hasElderlyOrPeopleInNeed
     
     // Priority weights (higher = more important when multiple are mentioned)
-    // Priority order: metro(7) > bus(6) > university(5) > school(4) > park(3) > kindergarten(2) > hospital(1)
+    // Priority order: metro(6) > bus(5) > university(4) > school(3) > park(2) > hospital(1)
     const distancePriorities: Array<{
       name: string
-      field: 'closestMetro' | 'closestBus' | 'closestUniversity' | 'closestSchool' | 'closestPark' | 'closestKindergarten' | 'closestHospital'
+      field: 'closestMetro' | 'closestBus' | 'closestUniversity' | 'closestSchool' | 'closestPark' | 'closestHospital'
       mentioned: boolean
       alwaysConsider: boolean
       priority: number
     }> = [
-      { name: 'metro', field: 'closestMetro', mentioned: mentionsMetro, alwaysConsider: true, priority: 7 },
-      { name: 'bus', field: 'closestBus', mentioned: mentionsBus, alwaysConsider: true, priority: 6 },
-      { name: 'university', field: 'closestUniversity', mentioned: mentionsUniversity, alwaysConsider: false, priority: 5 },
-      { name: 'school', field: 'closestSchool', mentioned: mentionsSchool, alwaysConsider: false, priority: 4 },
-      { name: 'park', field: 'closestPark', mentioned: mentionsPark, alwaysConsider: false, priority: 3 },
-      { name: 'kindergarten', field: 'closestKindergarten', mentioned: mentionsKindergarten, alwaysConsider: false, priority: 2 },
+      { name: 'metro', field: 'closestMetro', mentioned: mentionsMetro, alwaysConsider: true, priority: 6 },
+      { name: 'bus', field: 'closestBus', mentioned: mentionsBus, alwaysConsider: true, priority: 5 },
+      { name: 'university', field: 'closestUniversity', mentioned: mentionsUniversity, alwaysConsider: false, priority: 4 },
+      { name: 'school', field: 'closestSchool', mentioned: mentionsSchool, alwaysConsider: false, priority: 3 },
+      { name: 'park', field: 'closestPark', mentioned: mentionsPark, alwaysConsider: false, priority: 2 },
       { name: 'hospital', field: 'closestHospital', mentioned: mentionsHospital, alwaysConsider: false, priority: 1 },
     ]
     

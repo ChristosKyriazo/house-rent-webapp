@@ -34,7 +34,6 @@ interface Home {
   closestMetro: number | null
   closestBus: number | null
   closestSchool: number | null
-  closestKindergarten: number | null
   closestHospital: number | null
   closestPark: number | null
   closestUniversity: number | null
@@ -781,7 +780,7 @@ export default function HomeDetailPage() {
 
             {/* Distance Information - Always show to display university distance */}
             {((home.closestMetro != null) || (home.closestBus != null) || (home.closestSchool != null) || 
-              (home.closestKindergarten != null) || (home.closestHospital != null) || (home.closestPark != null) ||
+              (home.closestHospital != null) || (home.closestPark != null) ||
               true) && ( // Always show section to display university distance
               <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
                 <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'distances')}</h2>
@@ -817,12 +816,6 @@ export default function HomeDetailPage() {
                       {home.closestUniversity != null ? `${home.closestUniversity.toFixed(1)} km` : '-'}
                     </p>
                   </div>
-                  {home.closestKindergarten != null && (
-                    <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🎒 {getTranslation(language, 'closestKindergarten')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestKindergarten.toFixed(1)} km</p>
-                    </div>
-                  )}
                   {home.closestHospital != null && (
                     <div>
                       <p className="text-sm text-[#E8D5B7]/70 mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>

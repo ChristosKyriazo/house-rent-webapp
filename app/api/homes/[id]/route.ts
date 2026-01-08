@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
+import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
 
 export async function GET(
   request: NextRequest,
@@ -155,32 +156,109 @@ export async function PUT(
       availableFromDate = new Date()
     }
 
+    // Check if address has changed - only recalculate distances if it has
+    const addressChanged = hasAddressChanged(
+      existingHome.street,
+      existingHome.area,
+      existingHome.city,
+      street?.trim() || null,
+      area?.trim() || null,
+      city.trim()
+    )
+
+    // Prepare update data
+    const updateData: any = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      street: street?.trim() || null,
+      city: city.trim(),
+      country: country.trim(),
+      area: area?.trim() || null,
+      listingType: listingType || 'rent',
+      pricePerMonth: Number(pricePerMonth),
+      bedrooms: Number(bedrooms || 0),
+      bathrooms: Number(bathrooms || 0),
+      floor: floor && floor !== '' ? Number(floor) : null,
+      heatingCategory: heatingCategory?.trim() || null,
+      heatingAgent: heatingAgent?.trim() || null,
+      parking: parking === undefined || parking === null 
+        ? null 
+        : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
+      sizeSqMeters: Number(sizeSqMeters),
+      yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
+      yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+      availableFrom: availableFromDate,
+      photos: photos || null,
+      energyClass: energyClass?.trim() || null,
+    }
+
+    // Only recalculate distances if address changed
+    if (addressChanged) {
+      console.log('Address changed, recalculating distances:', {
+        old: { street: existingHome.street, area: existingHome.area, city: existingHome.city },
+        new: { street: street?.trim() || null, area: area?.trim() || null, city: city.trim() }
+      })
+
+      try {
+        const distanceResult = await calculatePropertyDistances(
+          street?.trim() || null,
+          area?.trim() || null,
+          city.trim(),
+          country.trim()
+        )
+        
+        console.log('Distance recalculation completed:')
+        console.log('Property coordinates:', distanceResult.propertyCoordinates)
+        console.log('Distances (km):', {
+          closestMetro: distanceResult.closestMetro,
+          closestBus: distanceResult.closestBus,
+          closestSchool: distanceResult.closestSchool,
+          closestHospital: distanceResult.closestHospital,
+          closestPark: distanceResult.closestPark,
+          closestUniversity: distanceResult.closestUniversity,
+        })
+        console.log('\n📍 Location Details for Verification:')
+        if (distanceResult.propertyCoordinates) {
+          console.log(`Property: https://www.google.com/maps?q=${distanceResult.propertyCoordinates.lat},${distanceResult.propertyCoordinates.lng}`)
+        }
+        if (distanceResult.closestMetroLocation) {
+          console.log(`Metro (${distanceResult.closestMetroName || 'N/A'}): ${distanceResult.closestMetro}km - https://www.google.com/maps?q=${distanceResult.closestMetroLocation.lat},${distanceResult.closestMetroLocation.lng}`)
+        }
+        if (distanceResult.closestBusLocation) {
+          console.log(`Bus (${distanceResult.closestBusName || 'N/A'}): ${distanceResult.closestBus}km - https://www.google.com/maps?q=${distanceResult.closestBusLocation.lat},${distanceResult.closestBusLocation.lng}`)
+        }
+        if (distanceResult.closestSchoolLocation) {
+          console.log(`School (${distanceResult.closestSchoolName || 'N/A'}): ${distanceResult.closestSchool}km - https://www.google.com/maps?q=${distanceResult.closestSchoolLocation.lat},${distanceResult.closestSchoolLocation.lng}`)
+        }
+        if (distanceResult.closestHospitalLocation) {
+          console.log(`Hospital (${distanceResult.closestHospitalName || 'N/A'}): ${distanceResult.closestHospital}km - https://www.google.com/maps?q=${distanceResult.closestHospitalLocation.lat},${distanceResult.closestHospitalLocation.lng}`)
+        }
+        if (distanceResult.closestParkLocation) {
+          console.log(`Park (${distanceResult.closestParkName || 'N/A'}): ${distanceResult.closestPark}km - https://www.google.com/maps?q=${distanceResult.closestParkLocation.lat},${distanceResult.closestParkLocation.lng}`)
+        }
+        if (distanceResult.closestUniversityLocation) {
+          console.log(`University (${distanceResult.closestUniversityName || 'N/A'}): ${distanceResult.closestUniversity}km - https://www.google.com/maps?q=${distanceResult.closestUniversityLocation.lat},${distanceResult.closestUniversityLocation.lng}`)
+        }
+
+        // Update distance fields
+        updateData.closestMetro = distanceResult.closestMetro
+        updateData.closestBus = distanceResult.closestBus
+        updateData.closestSchool = distanceResult.closestSchool
+        updateData.closestHospital = distanceResult.closestHospital
+        updateData.closestPark = distanceResult.closestPark
+        updateData.closestUniversity = distanceResult.closestUniversity
+      } catch (error) {
+        console.error('Error recalculating distances (keeping existing values):', error)
+        // Don't update distance fields if API fails - keep existing values
+      }
+    } else {
+      console.log('Address unchanged, skipping distance recalculation')
+      // Keep existing distance values - don't include them in updateData
+    }
+
     const updatedHome = await prisma.home.update({
       where: { id: existingHome.id },
-      data: {
-        title: title.trim(),
-        description: description?.trim() || null,
-        street: street?.trim() || null,
-        city: city.trim(),
-        country: country.trim(),
-        area: area?.trim() || null,
-        listingType: listingType || 'rent',
-        pricePerMonth: Number(pricePerMonth),
-        bedrooms: Number(bedrooms || 0),
-        bathrooms: Number(bathrooms || 0),
-        floor: floor && floor !== '' ? Number(floor) : null,
-        heatingCategory: heatingCategory?.trim() || null,
-        heatingAgent: heatingAgent?.trim() || null,
-        parking: parking === undefined || parking === null 
-          ? null 
-          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
-        sizeSqMeters: Number(sizeSqMeters),
-        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
-        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
-        availableFrom: availableFromDate,
-        photos: photos || null,
-        energyClass: energyClass?.trim() || null,
-      },
+      data: updateData,
     })
 
     return NextResponse.json(

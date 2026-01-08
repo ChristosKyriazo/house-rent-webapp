@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { calculatePropertyDistances } from '@/lib/google-maps'
 
 /**
  * Remove Greek diacritics (accents) from a string for matching purposes
@@ -437,10 +438,68 @@ export async function POST(request: NextRequest) {
       availableFromDate = new Date()
     }
 
-    // Generate dummy distance values (will be replaced by Google API in the future)
-    const generateDummyDistance = () => {
-      // Random distance between 0.1 and 5.0 km
-      return Math.round((Math.random() * 4.9 + 0.1) * 10) / 10
+    // Calculate distances using Google Maps API (7 API calls: 1 geocoding + 6 places in parallel)
+    let distances = {
+      closestMetro: null,
+      closestBus: null,
+      closestSchool: null,
+      closestHospital: null,
+      closestPark: null,
+      closestUniversity: null,
+    }
+
+    let distanceDetails: any = null
+
+    try {
+      console.log('Calculating distances for new property:', { street, area, city, country })
+      const distanceResult = await calculatePropertyDistances(
+        street?.trim() || null,
+        area?.trim() || null,
+        city.trim(),
+        country.trim()
+      )
+      
+      // Extract just the distances for database storage
+      distances = {
+        closestMetro: distanceResult.closestMetro,
+        closestBus: distanceResult.closestBus,
+        closestSchool: distanceResult.closestSchool,
+        closestHospital: distanceResult.closestHospital,
+        closestPark: distanceResult.closestPark,
+        closestUniversity: distanceResult.closestUniversity,
+      }
+      
+      // Store full details for logging/verification
+      distanceDetails = distanceResult
+      
+      console.log('Distance calculation completed:')
+      console.log('Property coordinates:', distanceResult.propertyCoordinates)
+      console.log('Distances (km):', distances)
+      console.log('\n📍 Location Details for Verification:')
+      if (distanceResult.propertyCoordinates) {
+        console.log(`Property: https://www.google.com/maps?q=${distanceResult.propertyCoordinates.lat},${distanceResult.propertyCoordinates.lng}`)
+      }
+      if (distanceResult.closestMetroLocation) {
+        console.log(`Metro (${distanceResult.closestMetroName || 'N/A'}): ${distanceResult.closestMetro}km - https://www.google.com/maps?q=${distanceResult.closestMetroLocation.lat},${distanceResult.closestMetroLocation.lng}`)
+      }
+      if (distanceResult.closestBusLocation) {
+        console.log(`Bus (${distanceResult.closestBusName || 'N/A'}): ${distanceResult.closestBus}km - https://www.google.com/maps?q=${distanceResult.closestBusLocation.lat},${distanceResult.closestBusLocation.lng}`)
+      }
+      if (distanceResult.closestSchoolLocation) {
+        console.log(`School (${distanceResult.closestSchoolName || 'N/A'}): ${distanceResult.closestSchool}km - https://www.google.com/maps?q=${distanceResult.closestSchoolLocation.lat},${distanceResult.closestSchoolLocation.lng}`)
+      }
+      if (distanceResult.closestHospitalLocation) {
+        console.log(`Hospital (${distanceResult.closestHospitalName || 'N/A'}): ${distanceResult.closestHospital}km - https://www.google.com/maps?q=${distanceResult.closestHospitalLocation.lat},${distanceResult.closestHospitalLocation.lng}`)
+      }
+      if (distanceResult.closestParkLocation) {
+        console.log(`Park (${distanceResult.closestParkName || 'N/A'}): ${distanceResult.closestPark}km - https://www.google.com/maps?q=${distanceResult.closestParkLocation.lat},${distanceResult.closestParkLocation.lng}`)
+      }
+      if (distanceResult.closestUniversityLocation) {
+        console.log(`University (${distanceResult.closestUniversityName || 'N/A'}): ${distanceResult.closestUniversity}km - https://www.google.com/maps?q=${distanceResult.closestUniversityLocation.lat},${distanceResult.closestUniversityLocation.lng}`)
+      }
+    } catch (error) {
+      console.error('Error calculating distances (continuing with null values):', error)
+      // Continue with null distances if API fails - don't block home creation
     }
 
     // Retry logic for SQLite database locks
@@ -470,14 +529,13 @@ export async function POST(request: NextRequest) {
               yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
               availableFrom: availableFromDate,
               photos: photos || null,
-              // Dummy distance values (will be populated from Google API in the future)
-              closestMetro: generateDummyDistance(),
-              closestBus: generateDummyDistance(),
-              closestSchool: generateDummyDistance(),
-              closestKindergarten: generateDummyDistance(),
-              closestHospital: generateDummyDistance(),
-              closestPark: generateDummyDistance(),
-              closestUniversity: generateDummyDistance(), // Auto-generated like other distances
+              // Distance values from Google Maps API
+              closestMetro: distances.closestMetro,
+              closestBus: distances.closestBus,
+              closestSchool: distances.closestSchool,
+              closestHospital: distances.closestHospital,
+              closestPark: distances.closestPark,
+              closestUniversity: distances.closestUniversity,
               energyClass: energyClass?.trim() || null,
               ownerId: user.id,
             },

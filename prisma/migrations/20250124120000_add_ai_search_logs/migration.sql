@@ -27,3 +27,5 @@ CREATE INDEX "ai_search_logs_createdAt_idx" ON "ai_search_logs"("createdAt");
 
 
 
+
+

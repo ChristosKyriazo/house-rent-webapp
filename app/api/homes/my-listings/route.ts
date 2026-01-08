@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
               },
             })
 
-    // Parse photos from JSON strings
+    // Parse photos from JSON strings and serialize dates
     const formattedHomes = homes.map(home => {
       let photos: string[] = []
       if (home.photos) {
@@ -48,6 +48,9 @@ export async function GET(request: NextRequest) {
       return {
         ...home,
         photos: photos,
+        createdAt: home.createdAt.toISOString(),
+        updatedAt: home.updatedAt.toISOString(),
+        availableFrom: home.availableFrom.toISOString(),
       }
     })
 

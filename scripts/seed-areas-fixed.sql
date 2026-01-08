@@ -114,3 +114,5 @@ INSERT INTO areas (id, "key", name, nameGreek, city, cityGreek, country, country
 
 
 
+
+
