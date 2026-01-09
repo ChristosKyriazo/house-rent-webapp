@@ -264,8 +264,8 @@ export default function ProfilePage() {
           {/* Ratings Section - Show based on display role */}
           {ratings && (
             <div className="grid gap-4 mb-6 grid-cols-1">
-              {/* Show owner rating only when display role is owner */}
-              {displayRole === 'owner' && (
+              {/* Show owner rating only when display role is owner or broker */}
+              {(displayRole === 'owner' || displayRole === 'broker') && (
                 <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
                   <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asOwner')}</h3>
                 {ratings.ownerRating !== null ? (
@@ -358,6 +358,7 @@ export default function ProfilePage() {
                 {user.role === 'owner' && `🏠 ${getTranslation(language, 'owner')}`}
                 {user.role === 'user' && `👤 ${getTranslation(language, 'user')}`}
                 {user.role === 'both' && `🔄 ${getTranslation(language, 'ownerAndUser')}`}
+                {user.role === 'broker' && `🏢 Μεσιτικό`}
               </p>
             </div>
             <div>

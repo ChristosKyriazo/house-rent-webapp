@@ -69,6 +69,32 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { name, dateOfBirth, occupation, role } = await request.json()
+    
+    // If user is a broker, they cannot change their role
+    if (user.role === 'broker') {
+      // Only update other fields, keep role as 'broker'
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: name || null,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          occupation: occupation || null,
+          role: 'broker', // Keep broker role
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          dateOfBirth: true,
+          occupation: true,
+          role: true,
+          createdAt: true,
+        },
+      })
+      return NextResponse.json({ message: 'Profile updated', user: updatedUser }, { status: 200 })
+    }
+
+    // For non-broker users, only allow changing to user/owner/both (not broker)
     const validRoles = ['owner', 'user', 'both']
     const userRole = role && validRoles.includes(role.toLowerCase()) ? role.toLowerCase() : (user.role || 'user')
 

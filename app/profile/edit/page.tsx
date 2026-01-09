@@ -22,6 +22,7 @@ export default function EditProfilePage() {
     occupation: '',
     role: 'user',
   })
+  const [currentRole, setCurrentRole] = useState<string>('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -35,13 +36,15 @@ export default function EditProfilePage() {
       })
       .then((data) => {
         if (data && data.user) {
+          const userRole = data.user.role || 'user'
+          setCurrentRole(userRole)
           setFormData({
             name: data.user.name || '',
             dateOfBirth: data.user.dateOfBirth
               ? new Date(data.user.dateOfBirth).toISOString().split('T')[0]
               : '',
             occupation: data.user.occupation ? reverseTranslateValue(data.user.occupation) : '',
-            role: data.user.role || 'user',
+            role: userRole === 'broker' ? 'owner' : userRole, // Show 'owner' in form if broker, but track actual role
           })
         } else {
           router.push('/profile')
@@ -189,20 +192,35 @@ export default function EditProfilePage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'role')}
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-              >
-                <option value="user">👤 {getTranslation(language, 'userSearchProperties')}</option>
-                <option value="owner">🏠 {getTranslation(language, 'ownerPublishProperties')}</option>
-                <option value="both">🔄 {getTranslation(language, 'ownerAndUserFull')}</option>
-              </select>
-            </div>
+            {/* Only show role field if user is not a broker */}
+            {currentRole !== 'broker' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'role')}
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                >
+                  <option value="user">👤 {getTranslation(language, 'userSearchProperties')}</option>
+                  <option value="owner">🏠 {getTranslation(language, 'ownerPublishProperties')}</option>
+                  <option value="both">🔄 {getTranslation(language, 'ownerAndUserFull')}</option>
+                </select>
+              </div>
+            )}
+
+            {/* Show read-only broker role info if user is a broker */}
+            {currentRole === 'broker' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'role')}
+                </label>
+                <div className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748]/50 rounded-2xl text-[#E8D5B7]/70">
+                  🏢 Μεσιτικό (Δεν μπορεί να αλλάξει)
+                </div>
+              </div>
+            )}
 
             <div className="pt-4">
               <button

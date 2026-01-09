@@ -182,7 +182,8 @@ function isValidPlaceType(place: any, requiredType: string): boolean {
  */
 async function findClosestPlace(
   coordinates: Coordinates,
-  placeType: string
+  placeType: string,
+  radius: number = 5000 // Default 5km radius
 ): Promise<PlaceWithDistance> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
@@ -190,8 +191,8 @@ async function findClosestPlace(
   }
 
   try {
-    // Build Places API Nearby Search URL (20km radius)
-    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=20000&type=${placeType}&key=${apiKey}`
+    // Build Places API Nearby Search URL (default 5km radius, can be overridden)
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=${radius}&type=${placeType}&key=${apiKey}`
 
     const response = await fetch(url)
     const data = await response.json()
