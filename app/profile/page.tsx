@@ -375,14 +375,14 @@ export default function ProfilePage() {
 
           {/* Edit Profile Button - Only show for own profile */}
           {isOwnProfile && (
-            <div className="flex justify-center pt-4">
-              <Link
-                href="/profile/edit"
-                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl"
-              >
+          <div className="flex justify-center pt-4">
+            <Link
+              href="/profile/edit"
+              className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl"
+            >
                 {getTranslation(language, 'editProfile')}
-              </Link>
-            </div>
+            </Link>
+          </div>
           )}
         </div>
       </div>

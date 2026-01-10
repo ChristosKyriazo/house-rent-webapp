@@ -77,8 +77,8 @@ export async function getCurrentUser() {
           }
         } else if (meta?.target?.includes('clerkUserId')) {
           // User with this clerkUserId already exists - fetch it
-          user = await prisma.user.findUnique({ where: { clerkUserId: userId } })
-          if (user) return user
+        user = await prisma.user.findUnique({ where: { clerkUserId: userId } })
+        if (user) return user
         }
       }
       throw createError

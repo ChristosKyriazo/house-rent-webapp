@@ -86,11 +86,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Extract hard filters using AI only
-    const extractedFiltersResult = await extractFiltersHybrid(query, openai)
-    console.log('Extracted filters:', JSON.stringify(extractedFiltersResult, null, 2))
+    const extractedFiltersResult: any = await extractFiltersHybrid(query, openai)
     
-    // Extract the filters (without the prompt/response fields) for use in filtering
-    const extractedFilters: any = { ...extractedFiltersResult }
+    // Extract the filters and reasoning
+    let extractedFilters: any = {}
+    let filterReasoning: any = {}
+    
+    // Handle new format with reasoning
+    if (extractedFiltersResult.filters) {
+      extractedFilters = extractedFiltersResult.filters
+      filterReasoning = extractedFiltersResult.reasoning || {}
+    } else {
+      // Fallback to old format (no reasoning)
+      extractedFilters = { ...extractedFiltersResult }
+      filterReasoning = {}
+    }
+    
+    // Remove prompt/response fields
     delete extractedFilters.filterExtractionPrompt
     delete extractedFilters.filterExtractionResponse
     
@@ -102,15 +114,19 @@ export async function POST(request: NextRequest) {
     // Step 2: Build database query with extracted filters
     let where: any = {}
     
-    // Filter by listing type if provided
-    if (type) {
-      if (type === 'buy') {
+    // Filter by listing type if provided (from request or extracted filters)
+    // Check both camelCase (listingType) and lowercase (listingtype) from AI response
+    const listingTypeFilter = extractedFilters.listingType || (extractedFilters as any).listingtype || type
+    if (listingTypeFilter) {
+      const listingTypeLower = listingTypeFilter.toLowerCase()
+      if (listingTypeLower === 'buy') {
         where.listingType = 'sell'
-      } else if (type === 'rent') {
+      } else if (listingTypeLower === 'rent') {
         where.listingType = 'rent'
       } else {
-        where.listingType = type
+        where.listingType = listingTypeLower
       }
+      console.log(`Filtering by listing type: ${listingTypeFilter} -> ${where.listingType}`)
     }
 
     // Apply ALL extracted filters to database query (skip null values)
@@ -319,6 +335,51 @@ export async function POST(request: NextRequest) {
       console.log(`After city filter "${extractedFilters.city}": ${homes.length} homes remaining`)
       console.log(`Filtered city variations:`, Array.from(allCityVariations))
       console.log(`Sample home cities:`, homes.slice(0, 5).map(h => h.city))
+      
+      // If no homes found with city filter, check if the city name might actually be an area
+      if (homes.length === 0 && !extractedFilters.area) {
+        console.log(`WARNING: No homes found for city "${extractedFilters.city}". Checking if it might be an area...`)
+        // Check if this city name exists as an area in the database
+        const cityNameLower = extractedFilters.city.toLowerCase()
+        const cityNameNormalized = removeGreekAccents(cityNameLower)
+        const matchingArea = allAreas.find(a => {
+          if (a.name) {
+            const areaNameLower = a.name.toLowerCase()
+            const areaNameNormalized = removeGreekAccents(areaNameLower)
+            if (areaNameLower === cityNameLower || areaNameNormalized === cityNameNormalized) return true
+          }
+          if (a.nameGreek) {
+            const areaNameGreekLower = a.nameGreek.toLowerCase()
+            const areaNameGreekNormalized = removeGreekAccents(areaNameGreekLower)
+            if (areaNameGreekLower === cityNameLower || areaNameGreekNormalized === cityNameNormalized) return true
+          }
+          return false
+        })
+        if (matchingArea) {
+          console.log(`Found "${extractedFilters.city}" as an area in database. City: ${matchingArea.city}, Name: ${matchingArea.name}, NameGreek: ${matchingArea.nameGreek}`)
+          console.log(`Treating "${extractedFilters.city}" as area filter instead of city filter.`)
+          // Remove city filter and add as area filter
+          extractedFilters.area = matchingArea.name || matchingArea.nameGreek || extractedFilters.city
+          const oldCity = extractedFilters.city
+          extractedFilters.city = null
+          // Re-fetch homes without city filter (we'll apply area filter next)
+          // Need to rebuild where clause without city
+          const whereWithoutCity = { ...where }
+          // Remove any city-related filters from where clause (there shouldn't be any, but just in case)
+          homes = await prisma.home.findMany({
+            where: whereWithoutCity,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              owner: {
+                select: { id: true, email: true, name: true },
+              },
+            },
+          })
+          console.log(`Re-fetched ${homes.length} homes after converting "${oldCity}" from city to area filter`)
+        } else {
+          console.log(`"${extractedFilters.city}" not found as an area in database`)
+        }
+      }
     }
 
     // Filter homes by country with Greek/English matching (skip if null)
@@ -362,6 +423,13 @@ export async function POST(request: NextRequest) {
         areaNameMap.get(filterArea)!.forEach(name => possibleAreaNames.add(name))
       }
       
+      // Also add normalized variations
+      possibleAreaNames.forEach(name => {
+        possibleAreaNames.add(removeGreekAccents(name))
+      })
+      possibleAreaNames.add(filterAreaNormalized)
+      
+      const beforeCount = homes.length
       homes = homes.filter(home => {
         if (!home.area) return false
         const homeArea = home.area.toLowerCase().trim()
@@ -372,6 +440,7 @@ export async function POST(request: NextRequest) {
         
         // Normalized match
         if (homeAreaNormalized === filterAreaNormalized) return true
+        if (possibleAreaNames.has(homeAreaNormalized)) return true
         
         // Check bidirectional mapping
         if (areaNameMap.has(homeArea) && areaNameMap.get(homeArea)!.has(filterArea)) return true
@@ -379,36 +448,36 @@ export async function POST(request: NextRequest) {
         
         return false
       })
+      
+      console.log(`After area filter "${extractedFilters.area}": ${beforeCount} -> ${homes.length} homes remaining`)
+      console.log(`Filtered area variations:`, Array.from(possibleAreaNames))
+      console.log(`Sample home areas:`, homes.slice(0, 5).map(h => h.area))
+      
+      // If no homes found, check if area might have been extracted as city instead
+      if (homes.length === 0 && !extractedFilters.city) {
+        console.log(`WARNING: No homes found for area "${extractedFilters.area}". Checking if it might be a city...`)
+        // Try to find if this area name exists in the areas table and what city it belongs to
+        const matchingArea = allAreas.find(a => 
+          (a.name && a.name.toLowerCase() === filterArea) ||
+          (a.nameGreek && a.nameGreek.toLowerCase() === filterArea) ||
+          (a.name && removeGreekAccents(a.name.toLowerCase()) === filterAreaNormalized) ||
+          (a.nameGreek && removeGreekAccents(a.nameGreek.toLowerCase()) === filterAreaNormalized)
+        )
+        if (matchingArea) {
+          console.log(`Found area "${extractedFilters.area}" in database. City: ${matchingArea.city}, Name: ${matchingArea.name}, NameGreek: ${matchingArea.nameGreek}`)
+        } else {
+          console.log(`Area "${extractedFilters.area}" not found in areas table`)
+        }
+      }
     }
 
-    // Apply distance filters (after fetching homes)
-    // IMPORTANT: Do NOT exclude houses with null distances - include them but they will be penalized in AI scoring
-    // Only filter houses that have distance values that don't meet the criteria
-    if (extractedFilters.maxClosestMetro !== undefined && extractedFilters.maxClosestMetro !== null) {
-      homes = homes.filter(home => 
-        home.closestMetro === null || home.closestMetro <= extractedFilters.maxClosestMetro!
-      )
-    }
-    if (extractedFilters.maxClosestBus !== undefined && extractedFilters.maxClosestBus !== null) {
-      homes = homes.filter(home => 
-        home.closestBus === null || home.closestBus <= extractedFilters.maxClosestBus!
-      )
-    }
-    if (extractedFilters.maxClosestSchool !== undefined && extractedFilters.maxClosestSchool !== null) {
-      homes = homes.filter(home => 
-        home.closestSchool === null || home.closestSchool <= extractedFilters.maxClosestSchool!
-      )
-    }
-    if (extractedFilters.maxClosestHospital !== undefined && extractedFilters.maxClosestHospital !== null) {
-      homes = homes.filter(home => 
-        home.closestHospital === null || home.closestHospital <= extractedFilters.maxClosestHospital!
-      )
-    }
-    if (extractedFilters.maxClosestPark !== undefined && extractedFilters.maxClosestPark !== null) {
-      homes = homes.filter(home => 
-        home.closestPark === null || home.closestPark <= extractedFilters.maxClosestPark!
-      )
-    }
+    // NOTE: Distance categories are NO LONGER used as hard filters
+    // Instead, they are used only for scoring/ranking in post-processing
+    // All homes are returned, but match percentages are adjusted based on distance categories
+    // - Essential: Extra importance to 0-1km, good importance to 1-2km, less importance beyond
+    // - Strong: Even importance to 0-2km, less importance beyond
+    // - Avoid: Penalize homes within 3km, reward homes further away
+    // - Not important/Not mentioned: No distance-based scoring
 
     // Apply exclude filters for inquired and approved listings BEFORE AI processing
     // Note: excludeInquired and excludeApproved come from the request body
@@ -668,6 +737,7 @@ export async function POST(request: NextRequest) {
         bathrooms: home.bathrooms,
         floor: home.floor,
         floorHeight: isHighFloor ? 'high' : isLowFloor ? 'low' : null, // 'high', 'low', or null
+        hasElevator: null, // Elevator information not stored in database - will be penalized in scoring if required
         heatingCategory: home.heatingCategory || '',
         heatingAgent: home.heatingAgent || '',
         sizeSqMeters: home.sizeSqMeters,
@@ -696,46 +766,58 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Check if only location filters were extracted (city, country, area)
-    // AND the query is simple (just location, no other semantic meaning)
-    // If so, all matching properties should get 100%
+    // Check if ONLY hard filters were extracted (no soft criteria)
+    // Hard filters: location (city/country/area), price, bedrooms, bathrooms, size, floor, year built/renovated, 
+    // heating category/agent, parking, listing type, distance categories
+    // Soft criteria: safety, vibe, visual features, owner rating, description matching, etc.
+    // If ONLY hard filters are present, all matching properties should get 100%
+    
+    const hasHardFilters = 
+      extractedFilters.city || extractedFilters.country || extractedFilters.area ||
+      extractedFilters.listingType || (extractedFilters as any).listingtype ||
+      extractedFilters.minPrice || extractedFilters.maxPrice ||
+      extractedFilters.minBedrooms || extractedFilters.maxBedrooms ||
+      extractedFilters.minBathrooms || extractedFilters.maxBathrooms ||
+      extractedFilters.minSize || extractedFilters.maxSize ||
+      extractedFilters.parking !== undefined ||
+      extractedFilters.heatingCategory || extractedFilters.heatingAgent ||
+      extractedFilters.minFloor || extractedFilters.maxFloor ||
+      extractedFilters.minYearBuilt || extractedFilters.maxYearBuilt ||
+      extractedFilters.minYearRenovated || extractedFilters.maxYearRenovated ||
+      (extractedFilters.Metro && extractedFilters.Metro !== 'Not mentioned') ||
+      (extractedFilters.Bus && extractedFilters.Bus !== 'Not mentioned') ||
+      (extractedFilters.School && extractedFilters.School !== 'Not mentioned') ||
+      (extractedFilters.Hospital && extractedFilters.Hospital !== 'Not mentioned') ||
+      (extractedFilters.Park && extractedFilters.Park !== 'Not mentioned') ||
+      (extractedFilters.University && extractedFilters.University !== 'Not mentioned')
+    
+    // Check if query mentions soft criteria (safety, vibe, visual, etc.)
     const queryLower = query.toLowerCase().trim()
-    const isSimpleLocationQuery = 
-      queryLower === extractedFilters.city?.toLowerCase() ||
-      queryLower === extractedFilters.country?.toLowerCase() ||
-      queryLower === extractedFilters.area?.toLowerCase() ||
-      (extractedFilters.city && queryLower.includes(extractedFilters.city.toLowerCase()) && queryLower.split(/\s+/).length <= 2)
+    const mentionsSoftCriteria = 
+      /safe|safety|secure|vibrant|quiet|family-friendly|upscale|suburban|urban|coastal|seaside|near water|beautiful|nice looking|modern|traditional|aesthetic|view|views|sea view|mountain view|city view|balcony|terrace|garden|pool|rating|rated|review/i.test(queryLower) ||
+      /kids|children|elderly|seniors|people in need|vulnerable|disabled|student|students|nightlife|parties/i.test(queryLower)
     
-    const hasOnlyLocationFilters = 
-      (extractedFilters.city || extractedFilters.country || extractedFilters.area) &&
-      !extractedFilters.minPrice && !extractedFilters.maxPrice &&
-      !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
-      !extractedFilters.minBathrooms && !extractedFilters.maxBathrooms &&
-      !extractedFilters.minSize && !extractedFilters.maxSize &&
-      extractedFilters.parking === undefined &&
-      !extractedFilters.heatingCategory && !extractedFilters.heatingAgent &&
-      !extractedFilters.minFloor && !extractedFilters.maxFloor &&
-      !extractedFilters.minYearBuilt && !extractedFilters.maxYearBuilt &&
-      !extractedFilters.minYearRenovated && !extractedFilters.maxYearRenovated
-    
-    // Only force 100% if query is simple (just location) AND only location filters extracted
-    const shouldForce100 = hasOnlyLocationFilters && isSimpleLocationQuery
+    // If we have hard filters but NO soft criteria mentioned, force 100% for all matches
+    // This means the user only specified hard requirements (location, price, size, etc.) 
+    // and all properties matching those hard filters should be considered equally good (100%)
+    const shouldForce100 = hasHardFilters && !mentionsSoftCriteria
 
     // Create AI prompt to calculate match percentages
     // Use the ORIGINAL user query and compare against ALL house data (including safety/vibe)
-    const systemPrompt = `Calculate match percentage (0-100) for each property by comparing the user's original query against ALL property attributes.
+    const systemPrompt = `Calculate match percentage (0-100) for each property by comparing the user's original query against ALL property attributes. Return JSON with match percentages AND reasoning for each percentage.
 
-CRITICAL RULE: If the user query ONLY mentions something that matches 100% with a value of the properties (e.g., "athens", "athens greece", "i want a house with 1 bathroom") and ALL properties in the list match that information, they MUST ALL get 100% match.
+    CRITICAL RULE: If the user query ONLY mentions something that matches 100% with a value of the properties (e.g., "athens", "athens greece", "i want a house with 1 bathroom") and ALL properties in the list match that information, they MUST ALL get 100% match.
 
-SCORING DISTRIBUTION RULE: When multiple properties match the query, distribute scores across a RANGE (e.g., 60-100%), NOT binary (100% or 0%). Properties should have DIFFERENT scores based on how well they match, with the best matches getting 85-100%, good matches getting 70-85%, acceptable matches getting 60-70%, and poor matches getting 50-60%. Only use 0% for properties that completely don't match the query.
+    SCORING DISTRIBUTION RULE: When multiple properties match the query, distribute scores across a RANGE (e.g., 60-100%), NOT binary (100% or 0%). Properties should have DIFFERENT scores based on how well they match, with the best matches getting 85-100%, good matches getting 70-85%, acceptable matches getting 60-70%, and poor matches getting 50-60%. Only use 0% for properties that completely don't match the query.
 
 IMPORTANT RULES:
-- Compare the user's query against ALL property data: location, price, size, bedrooms, bathrooms, floor, heating, parking, year built/renovated, availability, area safety, area vibe, owner rating, proximity to amenities, listing type, description
+- Compare the user's query against ALL property data: location, price, size, bedrooms, bathrooms, floor, heating, parking, year built/renovated, availability, area safety, area vibe, owner rating, listing type, description
+- NOTE: Distance/proximity to amenities (metro, bus, school, hospital, park, university) is already handled by filtering and will be scored separately in post-processing. Focus on other attributes when calculating match percentages.
 - If the user query ONLY mentions specific information that describe a house (e.g., "athens","i want 1 bathroom","i want the house to be on the second floor) → ALL matching properties get 100%
 - If the user query mentions location + soft criteria (e.g., "athens children", "athens family") → Consider area vibe and safety scores, properties with matching vibe/safety score higher
 - SAFETY RULE: Area safety should ONLY be a prominent factor when the query specifically mentions: kids, children, elderly, seniors, elderly people, people in need, vulnerable, family with children, etc. If safety is NOT specifically mentioned in relation to these groups, do NOT let safety significantly influence match percentages (only minor influence, 1-5 points difference at most)
 - If the user query mentions specific features (e.g., "athens parking", "athens 2 bedrooms") → Consider those specific attributes
-- Properties have already been filtered by hard filters (city, price, bedrooms, etc.), so focus on matching the semantic meaning of the query
+- Properties have already been filtered by hard filters (city, price, bedrooms, listing type, distances, etc.), so focus on matching the semantic meaning of the query
 
 CRITICAL: Missing Information Handling:
 - If a property has null/undefined/missing values for attributes the user requested (e.g., user asks for "parking" but property has parking: null, or user asks for "garage" but property has parking: null), DO NOT exclude it from results
@@ -743,13 +825,7 @@ CRITICAL: Missing Information Handling:
 - Properties with the requested information should score higher than those without it
 - Missing information (null/undefined) should score higher than explicitly false values
 - This applies to ALL attributes: parking, heating, floor, year built, size, amenities, DISTANCES, etc.
-- DISTANCE-SPECIFIC: If the user query mentions proximity/distance requirements (e.g., "close to metro", "near school", "easy access to schools", "near uni", "kids can play near", "playground nearby", "far from hospital", "within 2km of park"):
-  * Properties with null distance values should be PENALIZED (subtract 15-25 points) and placed LAST in priority
-  * CRITICAL: Properties with SMALLER distance values should score HIGHER than properties with LARGER distance values
-  * Distance should be a PRIMARY ranking factor when proximity is mentioned (major influence on match percentage)
-  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%, null = 50-60%
-  * Example: "easy access to schools" or "near school" → closestSchool 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 3km = 70-80%, 5km = 60-70%, null = 50-60%
-  * Example: "kids can play near" or "playground nearby" or "park nearby" → closestPark 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 3km = 70-80%, 5km = 60-70%, null = 50-60%
+- DISTANCE-SPECIFIC: Distance/proximity to amenities is already handled by filtering and will be scored in post-processing. You do NOT need to heavily weight distances in your scoring - focus on other attributes. However, you can still consider distance as a minor factor (1-5 points difference) when comparing properties, but it should NOT be the primary factor since it's handled separately.
 - Example: User asks "athens parking" → Athens houses WITH parking (parking: true) get 90-100%, Athens houses with MISSING parking info (parking: null) get 70-80%, Athens houses WITHOUT parking (parking: false) get 50-60%
 - Example: User asks "athens garage" → Same logic as parking (garage = parking)
 - CRITICAL: When parking is marked as "essential", "required", "must have", "need", "necessary", or similar strong language:
@@ -759,29 +835,18 @@ CRITICAL: Missing Information Handling:
   * Properties without parking should NEVER be the top result when parking is essential
   * Example: "parking is essential" → House with parking: 90-100%, House with null parking: 40-55%, House without parking: 20-35%
 - Example: User asks "athens central heating" → Houses WITH central heating get 90-100%, houses with MISSING heating info (heatingCategory: null) get 70-80%, houses with different heating get 50-60%
-- Example: User asks "athens close to metro" → Athens houses WITH metro distance: closestMetro 0.5km gets 95-100%, 1km gets 90-95%, 2km gets 80-90%, 5km gets 60-75%, null gets 50-60% (SMALLER distances = HIGHER scores)
-- Example: User asks "athens near school" or "easy access to schools" → Athens houses WITH school distance: closestSchool 0.5km gets 95-100%, 1km gets 90-95%, 2km gets 80-90%, 3km gets 70-80%, 5km gets 60-70%, null gets 50-60% (SMALLER distances = HIGHER scores)
-- Example: User asks "near uni" or "close to university" → Houses with closestUniversity 0.5km get 95-100%, 1km get 90-95%, 2km get 80-90%, 5km get 60-75%, null get 50-60% (SMALLER distances = HIGHER scores)
-- Example: User asks "kids can play near" or mentions playground/park → Houses with closestPark 0.5km get 95-100%, 1km get 90-95%, 2km get 80-90%, 3km get 70-80%, 5km get 60-70%, null get 50-60% (SMALLER distances = HIGHER scores)
+- NOTE: Distance/proximity to amenities is already handled by filtering and post-processing. Focus on other attributes when scoring.
 
 Consider ALL attributes when calculating match:
 - Location (city, country, area) - exact match = 100% if ONLY location is mentioned
 - CRITICAL: Greek and English location names are EQUIVALENT - "athens" = "Αθήνα", "thessaloniki" = "Θεσσαλονίκη", "greece" = "Ελλάδα", etc. Do NOT penalize match percentage if the query uses one language and the property data uses the other. They should be treated as 100% match for location purposes.
-- DISTANCE/PROXIMITY - When query mentions "near", "close to", "easy access to", "within X km", "kids can play near", "playground nearby", etc.:
-  * DISTANCE IS THE ABSOLUTE PRIMARY FACTOR - it OVERRIDES all other factors (vibe, area type, etc.)
-  * Properties with SMALLER distance values should ALWAYS score HIGHER than properties with LARGER distance values, REGARDLESS of other attributes
-  * Other factors (vibe, area type) can only create small variations (2-5 points) WITHIN the same distance range
-  * Example: "near uni" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 5km = 60-75%, 5.6km = 55-70%
-  * Example: "easy access to schools" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 3km = 70-80%, 5km = 60-70%
-  * Example: "kids can play near" or "playground nearby" → 0.5km = 95-100%, 1km = 90-95%, 2km = 80-90%, 3km = 70-80%, 5km = 60-70%
-  * A house 1km away should NEVER score lower than a house 5.6km away when proximity is mentioned
-  * When kids/children are mentioned AND school/park proximity is mentioned, school and park distances become PRIMARY factors alongside safety
-  * SPECIAL CASE - PETS: When user mentions pets (dog, cat, animal, etc.), park distance should be given EXTRA BONUS points (+10 points) even if park is not explicitly mentioned, as pets need parks for exercise
-  * SPECIAL CASE - ELDERLY/PEOPLE IN NEED: When user mentions elderly, seniors, people in need, vulnerable, disabled, etc., hospital distance should be given EXTRA BONUS points (+10 points) even if hospital is not explicitly mentioned, as they may need medical access
+- Preferred areas: If the user mentions areas as preferences (e.g., "like Filothei, Psychiko, Ekali"), properties in those preferred areas should get a BONUS of 10-15 points. Properties in other areas should NOT be penalized, they just don't get the bonus. This is a preference boost, not a filter.
+- DISTANCE/PROXIMITY - Distance/proximity to amenities (metro, bus, school, hospital, park, university) is already handled by filtering and will be scored separately in post-processing. You should focus on other attributes (location, price, size, bedrooms, bathrooms, floor, heating, parking, year built/renovated, area safety, area vibe, owner rating, listing type, description) when calculating match percentages. Distance can be a minor consideration (1-5 points) but should NOT be the primary factor.
 - Area safety (0-10 scale) - ONLY use as a prominent factor when query mentions: kids, children, elderly, seniors, elderly people, people in need, vulnerable, family with children, etc. If NOT mentioned, safety should have MINIMAL influence (1-5 points difference at most, not a major factor)
 - Area vibe (e.g., "family-friendly", "vibrant", "quiet") - match vibe keywords from query but give a little bit more importance to the first word of vibe and then the second
 - Area characteristics (isSuburban, isUrban, isUpscale, isNearWater) - match if query mentions these characteristics (e.g., "suburban", "urban", "upscale", "near water", "coastal", "seaside")
 - Floor height (high/low) - match if query mentions floor height preferences (e.g., "high floors", "upper floors", "low floor", "ground floor")
+- Elevator requirements - If user requires elevator for floors above a certain level (e.g., "elevator if above 2nd floor"), properties on those floors WITHOUT elevator information should be PENALIZED heavily (subtract 20-30 points). Properties on ground/first floor are not affected. Properties on 2nd floor and above with missing elevator info should score significantly lower when elevator is required.
 - Photo analysis (visual features) - if photoAnalysis is provided, use it to match visual queries (view, looks, appearance, style, design, balcony, terrace, garden, pool, etc.). Properties with matching visual features from photos should score higher. If hasPhotos is false, penalize slightly for visual queries.
 - Price, size, bedrooms, bathrooms - match if mentioned in query
 - Parking, heating, amenities - match if mentioned in query, PENALIZE if missing (null/undefined)
@@ -822,16 +887,7 @@ CRITICAL: GREEK/ENGLISH LOCATION EQUIVALENCE - Greek and English location names 
 
 MISSING INFORMATION: If a property has null/undefined values for attributes the user requested, PENALIZE it (subtract 10-20 points) but DO NOT exclude it. Properties with missing info should score lower than those with the information.
 
-DISTANCE-SPECIFIC RULE: If the query mentions proximity/distance requirements (e.g., "close to metro", "near school", "easy access to schools", "near uni", "kids can play near", "playground nearby", "within X km of Y"):
-1. Properties with null distance values for those specific amenities should be PENALIZED more heavily (subtract 15-25 points) and placed LAST in priority
-2. CRITICAL: When "near", "close to", "easy access to", "kids can play near", or proximity is mentioned, properties with SMALLER distance values should ALWAYS score HIGHER than properties with LARGER distance values, REGARDLESS of other factors (vibe, safety, etc.)
-3. DISTANCE IS THE PRIMARY RANKING FACTOR - Other factors (vibe, area type, etc.) should only create small variations WITHIN the same distance range, but should NEVER cause a farther property to score higher than a closer one
-4. Example: Query "near uni" → House 0.5km from university should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 5km should score 60-75%, house 5.6km should score 55-70%
-5. Example: Query "easy access to schools" → House 0.5km from school should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 3km should score 70-80%, house 5km should score 60-70%
-6. Example: Query "kids can play near" or "playground nearby" → House 0.5km from park should score 95-100%, house 1km should score 90-95%, house 2km should score 80-90%, house 3km should score 70-80%, house 5km should score 60-70%
-7. A house 1km away should ALWAYS score higher (90-95%) than a house 5.6km away (55-70%), even if the 5.6km house has better vibe or other attributes
-8. The closer the distance, the higher the match percentage should be - this is NON-NEGOTIABLE when proximity is mentioned
-9. When kids/children are mentioned AND school/park proximity is mentioned, school and park distances become PRIMARY factors alongside safety - they should have EQUAL or GREATER weight than safety
+DISTANCE-SPECIFIC RULE: Distance/proximity to amenities (metro, bus, school, hospital, park, university) is already handled by filtering and will be scored separately in post-processing. You should focus on other attributes (location, price, size, bedrooms, bathrooms, floor, heating, parking, year built/renovated, area safety, area vibe, owner rating, listing type, description) when calculating match percentages. Distance can be a minor consideration (1-5 points) but should NOT be the primary factor.
 
 VISUAL FEATURES EXAMPLES:
 - Query "view" or "sea view" or "mountain view" or "city view" → Check photoAnalysis field. Properties with matching views in photoAnalysis get 90-100%, properties without matching views get 60-80%, properties without photos (hasPhotos: false) get 50-70%
@@ -848,6 +904,8 @@ AREA CHARACTERISTICS EXAMPLES:
 FLOOR HEIGHT EXAMPLES:
 - Query "high floors" or "upper floors" or "high floor" → Properties with floorHeight: 'high' get 85-100%, others get 60-80%
 - Query "low floor" or "ground floor" → Properties with floorHeight: 'low' get 85-100%, others get 60-80%
+- Query "elevator if above 2nd floor" or "elevator if above floor 2" → This means properties on floor 2 and above MUST have an elevator. Properties on floor 0 or 1 are not affected (elevator not required). Properties on floor 2 and above WITHOUT elevator mentioned in description should be PENALIZED heavily (subtract 25-30 points) as they likely don't have an elevator. Properties on floor 2 and above WITH elevator mentioned should score normally or slightly higher. DO NOT interpret this as "prefer 2nd floor" - it's a requirement that 2nd floor and above must have elevator.
+- Query "elevator if above 2nd floor" or "elevator if above floor 2" → Properties on floor 0 or 1 get normal scores (elevator not required). Properties on floor 2 and above WITHOUT elevator information should be PENALIZED heavily (subtract 25-30 points) as they may not have an elevator. Properties on floor 2 and above with elevator mentioned in description should score higher.
 
 BASIC EXAMPLES:
 - Query "athens" → ALL Athens properties (whether city is "Athens" or "Αθήνα") MUST get 100% (they all match the location, no other criteria)
@@ -868,14 +926,13 @@ BASIC EXAMPLES:
 - Query "athens 2 bedrooms" → Athens properties with 2 bedrooms get 100%, others get lower scores
 - Query "i want a house with my 2 sons and me, in a safe neighborhood so the kids can play near and easy access to schools...the rent should be 800 at most and a parking would be good but not essential" →
   * Safety is prominent (kids mentioned) - properties with high safety (7-10) get +10-15 points, medium safety (5-7) get +5-10 points, low safety (<5) get -5-10 points
-  * School distance is PRIMARY - closestSchool 0.5km = +20 points, 1km = +15 points, 2km = +10 points, 3km = +5 points, 5km = 0 points, >5km = -5 points, null = -15 points
-  * Park distance is PRIMARY (kids can play near) - closestPark 0.5km = +20 points, 1km = +15 points, 2km = +10 points, 3km = +5 points, 5km = 0 points, >5km = -5 points, null = -15 points
+  * School and park distances are already handled by filtering and post-processing - focus on other attributes
   * Parking is nice-to-have (not essential) - properties with parking get +5 points, without parking get 0 points, null parking get -5 points
   * Price already filtered (max 800), so all properties match price
   * Final scores should be DISTRIBUTED across a range (e.g., 60-100%), NOT binary (100% or 0%)
-  * Properties with BOTH close school AND close park should score highest (90-100%)
-  * Properties with close school OR close park should score medium-high (75-90%)
-  * Properties with neither close school nor close park should score lower (60-75%)
+  * Properties with family-friendly vibe should score higher (85-100%)
+  * Properties with suburban/residential vibe should score higher (80-95%)
+  * Properties with urban/vibrant vibe should score medium (70-85%)
 - Query "parking is essential" or "parking required" or "must have parking" or "need parking" or "we need parking" →
   * Properties WITH parking (parking: true) get 85-100% (top priority, can be highest)
   * Properties with MISSING parking info (parking: null) get 40-55% (HEAVY penalty - subtract 40-50 points from base score)
@@ -883,15 +940,11 @@ BASIC EXAMPLES:
   * Properties without parking should NEVER rank in top results when parking is essential
   * Example: A property that would score 90% without considering parking should score: with parking = 90-95%, null parking = 45-50%, without parking = 25-30%
 - Query "i am a student looking for a house in athens near uni and nightlife parties" → 
-  * DISTANCE TO UNIVERSITY IS THE ABSOLUTE PRIMARY FACTOR - it OVERRIDES all other factors
-  * Athens properties with closestUniversity 0.5-1km get 90-100% (very close to uni, highest priority)
-  * Athens properties with closestUniversity 1-2km get 85-95% (close to uni)
-  * Athens properties with closestUniversity 2-5km get 70-85% (moderate distance, lower priority)
-  * Athens properties with closestUniversity 5-6km get 55-70% (far from uni, much lower priority)
-  * Athens properties with closestUniversity >6km get 50-65% (very far from uni, lowest priority)
-  * Properties with vibrant/student-friendly vibe can add 2-5 bonus points WITHIN the same distance range, but should NEVER make a 5.6km house score higher than a 1km house
-  * Properties with null closestUniversity get 50-60% (missing distance info, lowest priority)
-  * CRITICAL: A house 1km away (Kerameikos) should ALWAYS score 85-95%, while a house 5.6km away (Neos Kosmos) should ALWAYS score 55-70%, regardless of area vibe or other attributes
+  * Distance to university is already handled by filtering and post-processing
+  * Focus on other attributes: Athens location match, vibrant/student-friendly vibe, nightlife proximity (area characteristics)
+  * Properties with vibrant/student-friendly vibe should score higher (85-100%)
+  * Properties with urban/central vibe (good for nightlife) should score higher (80-95%)
+  * Properties with suburban/quiet vibe should score lower (60-75%)
 
 Return JSON:
 {
@@ -905,14 +958,22 @@ Return JSON:
     matchCalculationPrompt = `System: ${systemPrompt}\n\nUser: ${userPrompt}`
 
     // Call OpenAI API for match percentage calculation
+    // SKIP AI call if shouldForce100 (only hard filters, no soft criteria) - we'll set all to 100% anyway
     let matchResults: Array<{ id: number; matchPercentage: number }> = []
     
-    console.log('=== AI MATCH PERCENTAGE CALCULATION ===')
-    console.log('System Prompt:', systemPrompt)
-    console.log('User Prompt (first 500 chars):', userPrompt.substring(0, 500))
-    console.log('Number of homes to analyze:', homesData.length)
-    
-    try {
+    if (shouldForce100) {
+      console.log('=== SKIPPING AI MATCH CALCULATION ===')
+      console.log('Reason: Only hard filters detected, no soft criteria. All matches will be set to 100%.')
+      // Set all to 100% immediately - no need to call AI
+      matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 100 }))
+      matchCalculationResponse = 'Skipped - hard filters only, all matches set to 100%'
+    } else {
+      console.log('=== AI MATCH PERCENTAGE CALCULATION ===')
+      console.log('System Prompt:', systemPrompt)
+      console.log('User Prompt (first 500 chars):', userPrompt.substring(0, 500))
+      console.log('Number of homes to analyze:', homesData.length)
+      
+      try {
       const completion = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo', // Cheapest model
         messages: [
@@ -925,187 +986,335 @@ Return JSON:
 
       const responseContent = completion.choices[0]?.message?.content
       matchCalculationResponse = responseContent || null
-      console.log('AI Response (raw):', responseContent)
       
       if (responseContent) {
         try {
           const parsed = JSON.parse(responseContent)
-          console.log('AI Response (parsed):', JSON.stringify(parsed, null, 2))
           // Extract matches array from response
           matchResults = parsed.matches || parsed.results || []
-          console.log('Extracted match results:', matchResults.length, 'matches')
-          console.log('Homes sent to AI:', homesData.length)
-          console.log('Match results:', matchResults)
           
           // If AI didn't return matches for all homes, add missing ones with 0% match
           const matchedIds = new Set(matchResults.map((r: any) => r.id))
           const missingHomes = homesData.filter(home => !matchedIds.has(home.id))
           if (missingHomes.length > 0) {
-            console.log(`Warning: AI didn't return matches for ${missingHomes.length} homes. Adding them with 0% match.`)
             missingHomes.forEach(home => {
-              matchResults.push({ id: home.id, matchPercentage: 0 })
+              (matchResults as any[]).push({ 
+                id: home.id, 
+                matchPercentage: 0,
+                reasoning: 'Property not included in AI response - assigned 0% match'
+              })
             })
           }
         } catch (parseError) {
-          console.error('Failed to parse AI response:', parseError, 'Response:', responseContent)
+          console.error('Failed to parse AI response:', parseError)
           // Fallback: assign equal percentages if parsing fails
-          matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 50 }))
+          matchResults = homesData.map(home => ({ 
+            id: home.id, 
+            matchPercentage: 50,
+            reasoning: 'AI response parsing failed - assigned default 50% match'
+          } as any))
         }
       } else {
         // No response from AI, assign default percentages
-        console.log('No response from AI, assigning default percentages')
+        matchResults = homesData.map(home => ({ 
+          id: home.id, 
+          matchPercentage: 50,
+          reasoning: 'No AI response received - assigned default 50% match'
+        } as any))
+      }
+      } catch (openaiError) {
+        console.error('OpenAI API error:', openaiError)
+        matchCalculationResponse = openaiError instanceof Error ? openaiError.message : String(openaiError)
+        console.log('=== END MATCH PERCENTAGE CALCULATION (ERROR) ===')
+        // Fallback: assign equal percentages if API fails
         matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 50 }))
       }
-      console.log('=== END MATCH PERCENTAGE CALCULATION ===')
-    } catch (openaiError) {
-      console.error('OpenAI API error:', openaiError)
-      matchCalculationResponse = openaiError instanceof Error ? openaiError.message : String(openaiError)
-      console.log('=== END MATCH PERCENTAGE CALCULATION (ERROR) ===')
-      // Fallback: assign equal percentages if API fails
-      matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 50 }))
     }
 
-    // Create match percentage map
+    // Create match percentage map and reasoning map
     const matchMap = new Map<number, number>()
-    matchResults.forEach(result => {
+    const reasoningMap = new Map<number, string>()
+    matchResults.forEach((result: any) => {
       matchMap.set(result.id, Math.max(0, Math.min(100, result.matchPercentage)))
+      if (result.reasoning) {
+        reasoningMap.set(result.id, result.reasoning)
+      }
     })
     
-    // If only location filters were used AND query is simple (just location), force all to 100%
+    // If shouldForce100 is true, we already set all to 100% in matchResults (skipped AI call)
+    // But we still need to ensure the map has 100% for all homes
     if (shouldForce100 && homesData.length > 0) {
-      console.log('Simple location-only query detected - forcing all matches to 100%')
+      // Force all to 100% (in case AI was called before we detected shouldForce100)
       homesData.forEach(home => {
         matchMap.set(home.id, 100)
+        if (!reasoningMap.has(home.id)) {
+          reasoningMap.set(home.id, 'Hard-filters-only query - all matching properties receive 100% match')
+        }
       })
     }
 
-    // Post-process: Enforce distance-based ranking with priority system
-    // Priority order: metro > bus > university > school > park > hospital
-    // Metro and bus are ALWAYS considered (even if not mentioned) as they help house value
+    // Post-process: Apply distance-based scoring based on new category system
+    // Categories are NO LONGER used as hard filters - all homes are returned
+    // Instead, match percentages are adjusted based on distance categories:
+    // - Essential: Extra importance to 0-1km (high bonus), good importance to 1-2km (medium bonus), less importance beyond (small bonus/penalty)
+    // - Strong: Even importance to 0-2km (medium bonus), less importance beyond (small bonus/penalty)
+    // - Avoid: Penalize homes within 3km (penalty), reward homes further away (bonus)
+    // - Not important/Not mentioned: No distance-based scoring
+    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
     
-    // Helper function to calculate distance score
-    const calculateDistanceScore = (distance: number | null, preferCloser: boolean = true): number => {
-      if (distance === null || distance === undefined) return 0
+    if (!shouldForce100) {
+      const distanceFields: Array<{
+        field: 'closestMetro' | 'closestBus' | 'closestSchool' | 'closestHospital' | 'closestPark' | 'closestUniversity'
+        category: string | null | undefined
+        name: string
+        priority: number
+      }> = [
+        { field: 'closestMetro', category: extractedFilters.Metro, name: 'Metro', priority: 6 },
+        { field: 'closestBus', category: extractedFilters.Bus, name: 'Bus', priority: 5 },
+        { field: 'closestUniversity', category: extractedFilters.University, name: 'University', priority: 4 },
+        { field: 'closestSchool', category: extractedFilters.School, name: 'School', priority: 3 },
+        { field: 'closestPark', category: extractedFilters.Park, name: 'Park', priority: 2 },
+        { field: 'closestHospital', category: extractedFilters.Hospital, name: 'Hospital', priority: 1 },
+      ]
       
-      if (preferCloser) {
-        // Closer = better
-        if (distance <= 0.5) return 20
-        else if (distance <= 1.0) return 15
-        else if (distance <= 2.0) return 10
-        else if (distance <= 3.0) return 5
-        else if (distance <= 5.0) return 0
-        else return -5
-      } else {
-        // Further = better (user wants to be away)
-        if (distance >= 5.0) return 20
-        else if (distance >= 3.0) return 15
-        else if (distance >= 2.0) return 10
-        else if (distance >= 1.0) return 5
-        else if (distance >= 0.5) return 0
-        else return -5
-      }
-    }
-    
-    // Detect which distances are mentioned and if user wants to be further away
-    const userQueryLower = query.toLowerCase()
-    const wantsFurtherAway = /(far|away|distance|avoid|not near|not close)/i.test(query)
-    
-    // Detect special cases that should boost certain distances
-    const hasPets = /pet|pets|dog|dogs|cat|cats|animal|animals/i.test(query)
-    const hasElderlyOrPeopleInNeed = /elderly|senior|seniors|people in need|person in need|vulnerable|disabled|disability/i.test(query)
-    
-    // Check mentions for each distance type
-    const mentionsMetro = /metro|subway|underground|train station/i.test(query)
-    const mentionsBus = /bus|bus stop|bus station/i.test(query)
-    const mentionsUniversity = /(uni|university|universities|college)/i.test(query)
-    const mentionsSchool = /school|schools|education/i.test(query)
-    // Park is mentioned OR user has pets (pets need parks)
-    const mentionsPark = /park|parks|playground|playgrounds|nature|green|greenery|kids?\s+can\s+play/i.test(query) || hasPets
-    // Hospital is mentioned OR user has elderly/people in need (they need hospitals)
-    const mentionsHospital = /hospital|hospitals|medical|clinic/i.test(query) || hasElderlyOrPeopleInNeed
-    
-    // Priority weights (higher = more important when multiple are mentioned)
-    // Priority order: metro(6) > bus(5) > university(4) > school(3) > park(2) > hospital(1)
-    const distancePriorities: Array<{
-      name: string
-      field: 'closestMetro' | 'closestBus' | 'closestUniversity' | 'closestSchool' | 'closestPark' | 'closestHospital'
-      mentioned: boolean
-      alwaysConsider: boolean
-      priority: number
-    }> = [
-      { name: 'metro', field: 'closestMetro', mentioned: mentionsMetro, alwaysConsider: true, priority: 6 },
-      { name: 'bus', field: 'closestBus', mentioned: mentionsBus, alwaysConsider: true, priority: 5 },
-      { name: 'university', field: 'closestUniversity', mentioned: mentionsUniversity, alwaysConsider: false, priority: 4 },
-      { name: 'school', field: 'closestSchool', mentioned: mentionsSchool, alwaysConsider: false, priority: 3 },
-      { name: 'park', field: 'closestPark', mentioned: mentionsPark, alwaysConsider: false, priority: 2 },
-      { name: 'hospital', field: 'closestHospital', mentioned: mentionsHospital, alwaysConsider: false, priority: 1 },
-    ]
-    
-    // Filter to only distances that should be considered
-    const distancesToConsider = distancePriorities.filter(d => d.alwaysConsider || d.mentioned)
-    
-    // Sort by priority (highest first)
-    distancesToConsider.sort((a, b) => b.priority - a.priority)
-    
-    console.log('Distance priority system:', distancesToConsider.map(d => `${d.name}(${d.priority})`).join(' > '))
-    console.log('Wants further away:', wantsFurtherAway)
-    
-    // Apply distance scoring with priority
-    homes.forEach((home) => {
-      let totalDistanceBonus = 0
-      let appliedDistances = 0
+      // Filter to only distances that have a category (not "Not important", "Not mentioned", or null)
+      const distancesToConsider = distanceFields.filter(d => 
+        d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
+      )
       
-      // Apply each distance in priority order
-      for (const distanceInfo of distancesToConsider) {
-        const distance = home[distanceInfo.field] as number | null
+      // Sort by priority (highest first)
+      distancesToConsider.sort((a, b) => b.priority - a.priority)
+      
+      console.log('Distance categories to consider for scoring (all homes returned, no filtering):', distancesToConsider.map(d => `${d.name}(${d.category})`).join(', '))
+      
+      // Apply distance scoring based on categories to ALL homes (no filtering)
+      homes.forEach((home) => {
+        let totalDistanceBonus = 0
+        let appliedDistances = 0
         
-        if (distance !== null && distance !== undefined) {
-          let distanceScore = calculateDistanceScore(distance, !wantsFurtherAway)
+        for (const distanceInfo of distancesToConsider) {
+          const distance = home[distanceInfo.field] as number | null
           
-          // Special bonuses for pets (park) and elderly/people in need (hospital)
-          if (distanceInfo.name === 'park' && hasPets && !mentionsPark) {
-            // User has pets but didn't explicitly mention park - give extra bonus
-            distanceScore += 10 // Extra 10 points for park distance when pets are mentioned
-            console.log(`Home ${home.id}: Extra bonus for park (pets detected): +10`)
+          if (distance === null || distance === undefined) {
+            // Penalize missing distance data (less penalty for lower priority)
+            const penalty = -8 * (distanceInfo.priority / 6) // Normalize by max priority
+            totalDistanceBonus += penalty
+            appliedDistances++
+            console.log(`Home ${home.id}: ${distanceInfo.name} missing (category: ${distanceInfo.category}), penalty=${penalty.toFixed(2)}`)
+            continue
           }
-          if (distanceInfo.name === 'hospital' && hasElderlyOrPeopleInNeed && !mentionsHospital) {
-            // User has elderly/people in need but didn't explicitly mention hospital - give extra bonus
-            distanceScore += 10 // Extra 10 points for hospital distance when elderly/people in need are mentioned
-            console.log(`Home ${home.id}: Extra bonus for hospital (elderly/people in need detected): +10`)
+          
+          let distanceScore = 0
+          
+          if (distanceInfo.category === 'Essential') {
+            // Essential: Extra importance to 0-1km, good importance to 1-2km, heavy penalties beyond
+            if (distance <= 0.5) {
+              distanceScore = 35 // Highest bonus for very close (essential range)
+            } else if (distance <= 1.0) {
+              distanceScore = 30 // High bonus for essential range
+            } else if (distance <= 1.5) {
+              distanceScore = 15 // Medium bonus (still good, but less important)
+            } else if (distance <= 2.0) {
+              distanceScore = 5 // Small bonus (acceptable but not ideal)
+            } else if (distance <= 3.0) {
+              distanceScore = -10 // Small-medium penalty (getting far)
+            } else if (distance <= 5.0) {
+              distanceScore = -20 // Medium-large penalty (far from essential)
+            } else if (distance <= 7.0) {
+              distanceScore = -30 // Large penalty (very far)
+            } else {
+              distanceScore = -40 // Very large penalty (extremely far from essential amenity)
+            }
+          } else if (distanceInfo.category === 'Strong') {
+            // Strong: Even importance to 0-2km, less importance beyond
+            if (distance <= 0.5) {
+              distanceScore = 18 // Good bonus for very close
+            } else if (distance <= 1.0) {
+              distanceScore = 18 // Good bonus (even scoring)
+            } else if (distance <= 1.5) {
+              distanceScore = 15 // Medium bonus
+            } else if (distance <= 2.0) {
+              distanceScore = 12 // Small-medium bonus
+            } else if (distance <= 3.0) {
+              distanceScore = 0 // Neutral (not ideal but not bad)
+            } else if (distance <= 5.0) {
+              distanceScore = -5 // Small penalty
+            } else {
+              distanceScore = -10 // Medium penalty (far from strong preference)
+            }
+          } else if (distanceInfo.category === 'Avoid') {
+            // Avoid: Penalize homes within 3km, reward homes further away
+            if (distance < 1.0) {
+              distanceScore = -25 // Large penalty (too close to avoided amenity)
+            } else if (distance < 2.0) {
+              distanceScore = -20 // Large penalty
+            } else if (distance < 3.0) {
+              distanceScore = -15 // Medium-large penalty
+            } else if (distance >= 3.0 && distance < 5.0) {
+              distanceScore = 0 // Neutral (acceptable distance)
+            } else if (distance >= 5.0 && distance < 7.0) {
+              distanceScore = 10 // Small bonus (good distance)
+            } else if (distance >= 7.0 && distance < 10.0) {
+              distanceScore = 15 // Medium bonus (very good distance)
+            } else {
+              distanceScore = 20 // Large bonus (very far from avoided amenity)
+            }
           }
           
           // Weight by priority (higher priority = more influence)
-          const weightedScore = distanceScore * (distanceInfo.priority / 7) // Normalize to 0-1 scale
+          // For Essential categories, use full weight (priority/6), for others use slightly less
+          const priorityWeight = distanceInfo.category === 'Essential' 
+            ? (distanceInfo.priority / 6) * 1.2  // 20% extra weight for Essential
+            : (distanceInfo.priority / 6)
+          const weightedScore = distanceScore * priorityWeight
           totalDistanceBonus += weightedScore
           appliedDistances++
           
-          console.log(`Home ${home.id}: ${distanceInfo.name} distance=${distance}km, score=${distanceScore}, weighted=${weightedScore.toFixed(2)}`)
-        } else {
-          // Penalize missing distance data (less penalty for lower priority)
-          const penalty = -5 * (distanceInfo.priority / 7)
-          totalDistanceBonus += penalty
-          console.log(`Home ${home.id}: ${distanceInfo.name} missing, penalty=${penalty.toFixed(2)}`)
+          console.log(`Home ${home.id}: ${distanceInfo.name} distance=${distance}km (category: ${distanceInfo.category}), score=${distanceScore}, weighted=${weightedScore.toFixed(2)}, priorityWeight=${priorityWeight.toFixed(2)}`)
         }
+        
+        // Get current score
+        const currentScore = matchMap.get(home.id) || 50
+        
+        // Add distance bonus
+        // For Essential categories, don't normalize - use full impact
+        // For other categories, normalize by number of distances
+        const hasEssentialCategory = distancesToConsider.some(d => d.category === 'Essential')
+        const distanceBonus = hasEssentialCategory && appliedDistances > 0
+          ? totalDistanceBonus  // Full impact for Essential (no normalization)
+          : (appliedDistances > 0 ? totalDistanceBonus / appliedDistances : 0)  // Normalize for non-Essential
+        const finalScore = Math.min(100, Math.max(0, currentScore + distanceBonus))
+        
+        console.log(`Home ${home.id} (${home.area}): currentScore=${currentScore}, distanceBonus=${distanceBonus.toFixed(2)}, finalScore=${finalScore.toFixed(2)}`)
+        if (distancesToConsider.some(d => d.category === 'Essential')) {
+          // Log distance details for Essential categories to help debug ranking issues
+          const essentialDistances = distancesToConsider
+            .filter(d => d.category === 'Essential')
+            .map(d => {
+              const dist = home[d.field] as number | null
+              return `${d.name}: ${dist !== null ? dist.toFixed(2) + 'km' : 'null'}`
+            })
+          console.log(`  Essential distances for home ${home.id} (${home.area}): ${essentialDistances.join(', ')}`)
+        }
+        matchMap.set(home.id, finalScore)
+      })
+    }
+    
+    // Post-process: Apply preferred areas bonus
+    // If user mentions areas as preferences (e.g., "like Filothei, Psychiko"), boost properties in those areas
+    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
+    if (!shouldForce100) {
+      const preferredAreas = extractedFilters.preferredAreas
+      
+      if (preferredAreas && Array.isArray(preferredAreas) && preferredAreas.length > 0) {
+        // Get area name map for Greek/English matching
+        const allAreas = await prisma.area.findMany()
+        const areaNameMap = new Map<string, Set<string>>()
+        
+        allAreas.forEach(area => {
+          if (area.name) {
+            const nameLower = area.name.toLowerCase()
+            if (!areaNameMap.has(nameLower)) {
+              areaNameMap.set(nameLower, new Set())
+            }
+            if (area.nameGreek) {
+              areaNameMap.get(nameLower)!.add(area.nameGreek.toLowerCase())
+            }
+          }
+          if (area.nameGreek) {
+            const nameGreekLower = area.nameGreek.toLowerCase()
+            if (!areaNameMap.has(nameGreekLower)) {
+              areaNameMap.set(nameGreekLower, new Set())
+            }
+            if (area.name) {
+              areaNameMap.get(nameGreekLower)!.add(area.name.toLowerCase())
+            }
+          }
+        })
+        
+        // Build set of all possible preferred area name variations
+        const preferredAreaVariations = new Set<string>()
+        preferredAreas.forEach(prefArea => {
+          const prefAreaLower = prefArea.toLowerCase().trim()
+          preferredAreaVariations.add(prefAreaLower)
+          preferredAreaVariations.add(removeGreekAccents(prefAreaLower))
+          
+          // Add variations from area name map
+          if (areaNameMap.has(prefAreaLower)) {
+            areaNameMap.get(prefAreaLower)!.forEach(variation => {
+              preferredAreaVariations.add(variation)
+              preferredAreaVariations.add(removeGreekAccents(variation))
+            })
+          }
+        })
+        
+        homes.forEach((home) => {
+          if (home.area) {
+            const homeArea = home.area.toLowerCase().trim()
+            const homeAreaNormalized = removeGreekAccents(homeArea)
+            
+            // Check if home area matches any preferred area variation
+            const isPreferred = 
+              preferredAreaVariations.has(homeArea) ||
+              preferredAreaVariations.has(homeAreaNormalized) ||
+              Array.from(preferredAreaVariations).some(prefVar => 
+                homeArea === prefVar || 
+                homeArea.includes(prefVar) || 
+                prefVar.includes(homeArea) ||
+                homeAreaNormalized === removeGreekAccents(prefVar)
+              )
+            
+            if (isPreferred) {
+              const currentScore = matchMap.get(home.id) || 50
+              const bonus = 12 // Bonus for being in a preferred area
+              const finalScore = Math.min(100, Math.max(0, currentScore + bonus))
+              matchMap.set(home.id, finalScore)
+            }
+          }
+        })
       }
+    }
+    
+    // Post-process: Enforce elevator requirement penalty
+    // If user requires elevator for floors above a certain level, penalize properties on those floors without elevator
+    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
+    if (!shouldForce100) {
+      const requiresElevator = extractedFilters.requiresElevator === true
+      const elevatorRequiredFromFloor = extractedFilters.elevatorRequiredFromFloor
       
-      // Get current score
-      const currentScore = matchMap.get(home.id) || 50
-      
-      // Add distance bonus (normalize by number of distances considered)
-      const normalizedBonus = appliedDistances > 0 ? totalDistanceBonus / appliedDistances : 0
-      const finalScore = Math.min(100, Math.max(0, currentScore + normalizedBonus))
-      
-      console.log(`Home ${home.id} (${home.area}): currentScore=${currentScore}, distanceBonus=${normalizedBonus.toFixed(2)}, finalScore=${finalScore.toFixed(2)}`)
-      matchMap.set(home.id, finalScore)
-    })
+      if (requiresElevator && elevatorRequiredFromFloor !== null && elevatorRequiredFromFloor !== undefined) {
+        homes.forEach((home) => {
+          const currentScore = matchMap.get(home.id) || 50
+          
+          // Only penalize if property is on or above the required floor
+          if (home.floor !== null && home.floor !== undefined && home.floor >= elevatorRequiredFromFloor) {
+            // Check if elevator is mentioned in description (we can't store elevator in DB, so check description)
+            const description = (home.description || '').toLowerCase()
+            const hasElevatorMention = /elevator|lift|ascenseur|ανελκυστήρας/i.test(description)
+            
+            if (!hasElevatorMention) {
+              // Property is on required floor or above, but no elevator mentioned - heavy penalty
+              const penalty = -25
+              const finalScore = Math.max(0, Math.min(100, currentScore + penalty))
+              matchMap.set(home.id, finalScore)
+            } else {
+              // Elevator mentioned in description - small bonus
+              const bonus = 5
+              const finalScore = Math.max(0, Math.min(100, currentScore + bonus))
+              matchMap.set(home.id, finalScore)
+            }
+          }
+        })
+      }
+    }
     
     // Post-process: Enforce parking essential penalty
-    const parkingQueryLower = query.toLowerCase()
-    const parkingEssential = /parking.*essential|parking.*required|parking.*must|must.*parking|need.*parking|parking.*necessary/i.test(parkingQueryLower)
-    
-    if (parkingEssential) {
-      console.log('Parking essential detected - applying heavy penalties')
+    // SKIP if shouldForce100 (only location filters, simple query) - all should be 100%
+    if (!shouldForce100) {
+      const parkingQueryLower = query.toLowerCase()
+      const parkingEssential = /parking.*essential|parking.*required|parking.*must|must.*parking|need.*parking|parking.*necessary/i.test(parkingQueryLower)
       
+      if (parkingEssential) {
       homes.forEach((home) => {
         const currentScore = matchMap.get(home.id) || 50
         
@@ -1113,40 +1322,28 @@ Return JSON:
           // Has parking - keep score or slightly boost
           const finalScore = Math.min(100, currentScore + 5)
           matchMap.set(home.id, finalScore)
-          console.log(`Home ${home.id}: has parking, score=${currentScore} -> ${finalScore}`)
         } else if (home.parking === null || home.parking === undefined) {
           // Missing parking info - HEAVY penalty (40-50 points)
           const finalScore = Math.max(20, Math.min(55, currentScore - 45))
           matchMap.set(home.id, finalScore)
-          console.log(`Home ${home.id}: null parking, score=${currentScore} -> ${finalScore} (heavy penalty)`)
         } else if (home.parking === false) {
           // No parking - VERY HEAVY penalty (60-70 points)
           const finalScore = Math.max(15, Math.min(35, currentScore - 65))
           matchMap.set(home.id, finalScore)
-          console.log(`Home ${home.id}: no parking, score=${currentScore} -> ${finalScore} (very heavy penalty)`)
         }
       })
+      }
     }
 
-    // Attach match percentages to homes and sort by match percentage (highest first)
+    // Attach match percentages and reasoning to homes and sort by match percentage (highest first)
     const homesWithMatches = homes.map(home => ({
       ...home,
       matchPercentage: matchMap.get(home.id) || 0,
+      matchReasoning: reasoningMap.get(home.id) || 'No reasoning provided',
     })).sort((a, b) => b.matchPercentage - a.matchPercentage)
 
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length
-    
-    console.log(`=== AI SEARCH SUMMARY ===`)
-    console.log(`Homes before filtering: ${homesCountBeforeFilter}`)
-    console.log(`Homes after filtering: ${homesCountAfterFilter}`)
-    console.log(`Final homes returned: ${finalHomesCount}`)
-    console.log(`Match results count: ${matchResults.length}`)
-    console.log(`Homes with matches: ${homesWithMatches.length}`)
-    if (homesWithMatches.length > 0) {
-      console.log(`Match percentages:`, homesWithMatches.map(h => ({ id: h.id, city: h.city, match: h.matchPercentage })))
-    }
-    console.log(`=== END AI SEARCH SUMMARY ===`)
 
     // Log to database (async, don't wait for it)
     prisma.aISearchLog.create({
@@ -1170,6 +1367,15 @@ Return JSON:
     return NextResponse.json(
       { 
         homes: homesWithMatches,
+        aiAnalysis: {
+          extractedFilters: extractedFilters,
+          filterReasoning: filterReasoning,
+          matchReasoning: homesWithMatches.map(home => ({
+            id: home.id,
+            matchPercentage: home.matchPercentage,
+            reasoning: home.matchReasoning
+          }))
+        },
         message: 'AI search completed'
       },
       { status: 200 }

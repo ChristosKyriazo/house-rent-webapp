@@ -15,19 +15,19 @@ export async function GET(request: NextRequest) {
       const userId = parseInt(userIdParam)
       if (isNaN(userId)) {
         return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
-      }
+    }
       user = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
+      select: {
+        id: true,
+        email: true,
+        name: true,
           dateOfBirth: true,
-          occupation: true,
-          role: true,
-          createdAt: true,
-        },
-      })
+        occupation: true,
+        role: true,
+        createdAt: true,
+      },
+    })
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
@@ -97,7 +97,7 @@ export async function PATCH(request: NextRequest) {
     // For non-broker users, only allow changing to user/owner/both (not broker)
     const validRoles = ['owner', 'user', 'both']
     const userRole = role && validRoles.includes(role.toLowerCase()) ? role.toLowerCase() : (user.role || 'user')
-
+    
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {

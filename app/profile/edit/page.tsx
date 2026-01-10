@@ -194,20 +194,20 @@ export default function EditProfilePage() {
 
             {/* Only show role field if user is not a broker */}
             {currentRole !== 'broker' && (
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+            <div>
+              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
                   {getTranslation(language, 'role')}
-                </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-                >
+              </label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+              >
                   <option value="user">👤 {getTranslation(language, 'userSearchProperties')}</option>
                   <option value="owner">🏠 {getTranslation(language, 'ownerPublishProperties')}</option>
                   <option value="both">🔄 {getTranslation(language, 'ownerAndUserFull')}</option>
-                </select>
-              </div>
+              </select>
+            </div>
             )}
 
             {/* Show read-only broker role info if user is a broker */}
