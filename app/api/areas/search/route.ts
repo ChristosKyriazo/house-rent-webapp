@@ -1,30 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-
-/**
- * Remove Greek diacritics (accents) from a string for matching purposes
- * This allows "νεα" to match "Νέα" and "νεα σμυρνη" to match "Νέα Σμύρνη"
- */
-function removeGreekAccents(str: string): string {
-  const accentMap: Record<string, string> = {
-    // Lowercase with accents
-    'ά': 'α', 'έ': 'ε', 'ή': 'η', 'ί': 'ι', 'ό': 'ο', 'ύ': 'υ', 'ώ': 'ω',
-    'ὰ': 'α', 'ὲ': 'ε', 'ὴ': 'η', 'ὶ': 'ι', 'ὸ': 'ο', 'ὺ': 'υ', 'ὼ': 'ω',
-    'ᾶ': 'α', 'ῆ': 'η', 'ῖ': 'ι', 'ῦ': 'υ', 'ῶ': 'ω',
-    'ᾳ': 'α', 'ῃ': 'η', 'ῳ': 'ω',
-    // Uppercase with accents
-    'Ά': 'Α', 'Έ': 'Ε', 'Ή': 'Η', 'Ί': 'Ι', 'Ό': 'Ο', 'Ύ': 'Υ', 'Ώ': 'Ω',
-    'Ὰ': 'Α', 'Ὲ': 'Ε', 'Ὴ': 'Η', 'Ὶ': 'Ι', 'Ὸ': 'Ο', 'Ὺ': 'Υ', 'Ὼ': 'Ω',
-    'ᾼ': 'Α', 'ῌ': 'Η', 'ῼ': 'Ω',
-  }
-  
-  return str
-    .split('')
-    .map(char => accentMap[char] || char)
-    .join('')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove any remaining combining diacritical marks
-}
+import { removeGreekAccents } from '@/lib/utils'
 
 // GET /api/areas/search?q=query&limit=10&city=Athens&country=Greece
 export async function GET(request: NextRequest) {

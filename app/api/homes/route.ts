@@ -2,28 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { calculatePropertyDistances } from '@/lib/google-maps'
-
-/**
- * Remove Greek diacritics (accents) from a string for matching purposes
- */
-function removeGreekAccents(str: string): string {
-  const accentMap: Record<string, string> = {
-    'ά': 'α', 'έ': 'ε', 'ή': 'η', 'ί': 'ι', 'ό': 'ο', 'ύ': 'υ', 'ώ': 'ω',
-    'ὰ': 'α', 'ὲ': 'ε', 'ὴ': 'η', 'ὶ': 'ι', 'ὸ': 'ο', 'ὺ': 'υ', 'ὼ': 'ω',
-    'ᾶ': 'α', 'ῆ': 'η', 'ῖ': 'ι', 'ῦ': 'υ', 'ῶ': 'ω',
-    'ᾳ': 'α', 'ῃ': 'η', 'ῳ': 'ω',
-    'Ά': 'Α', 'Έ': 'Ε', 'Ή': 'Η', 'Ί': 'Ι', 'Ό': 'Ο', 'Ύ': 'Υ', 'Ώ': 'Ω',
-    'Ὰ': 'Α', 'Ὲ': 'Ε', 'Ὴ': 'Η', 'Ὶ': 'Ι', 'Ὸ': 'Ο', 'Ὺ': 'Υ', 'Ὼ': 'Ω',
-    'ᾼ': 'Α', 'ῌ': 'Η', 'ῼ': 'Ω',
-  }
-  
-  return str
-    .split('')
-    .map(char => accentMap[char] || char)
-    .join('')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-}
+import { removeGreekAccents } from '@/lib/utils'
 
 // GET /api/homes - list all homes with optional filters
 export async function GET(request: NextRequest) {
