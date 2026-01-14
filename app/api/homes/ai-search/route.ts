@@ -3,9 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
-import { MATCH_CALCULATION_SYSTEM_PROMPT, createMatchCalculationUserPrompt } from '@/lib/ai-prompts'
+// AI match calculation prompts no longer used - replaced with programmatic calculation
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields } from '@/lib/ai-search-helpers'
+import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore } from '@/lib/ai-search-helpers'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
@@ -91,6 +91,11 @@ export async function POST(request: NextRequest) {
     filterExtractionResponse = (extractedFiltersResult as any).filterExtractionResponse || null
     extractedFiltersJson = JSON.stringify(extractedFilters)
 
+    // TEST LOG - DELETE AFTER: Show AI JSON response
+    console.log('\n========== AI FILTER EXTRACTION JSON ==========')
+    console.log(JSON.stringify(extractedFilters, null, 2))
+    console.log('================================================\n')
+
     // Step 2: Build database query with extracted filters
     let where: any = {}
     
@@ -140,8 +145,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Parking is a HARD FILTER - if user mentions parking, filter database to only show matching homes
+    // UNLESS it's marked as a soft preference (e.g., "parking would be nice but not essential")
     if (extractedFilters.parking !== undefined && extractedFilters.parking !== null) {
-      where.parking = extractedFilters.parking
+      const isSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+      if (!isSoftPreference) {
+        // Only apply as hard filter if NOT a soft preference
+        where.parking = extractedFilters.parking
+      }
+      // If it's a soft preference, we'll handle it in scoring instead
     }
     
     // NOTE: Do NOT filter by heatingCategory or heatingAgent if user requests them
@@ -250,7 +261,7 @@ export async function POST(request: NextRequest) {
             orderBy: { createdAt: 'desc' },
             include: { owner: { select: { id: true, email: true, name: true } } },
           })
-        }
+      }
       }
     }
 
@@ -260,8 +271,8 @@ export async function POST(request: NextRequest) {
       homes = homes.filter(home => 
         matchesLocation(home.country, extractedFilters.country!, countryMap, countryVariations)
       )
-    }
-
+      }
+      
     // Filter homes by area with Greek/English matching
     if (extractedFilters.area) {
       const areaVariations = getLocationVariations(extractedFilters.area, areaNameMap)
@@ -493,7 +504,9 @@ export async function POST(request: NextRequest) {
       const isSuburban = /suburban|residential|quiet|family/i.test(areaVibe)
       const isUrban = /urban|central|city|downtown/i.test(areaVibe)
       const isUpscale = /upscale|luxury|premium|exclusive/i.test(areaVibe)
-      const isNearWater = /water|coastal|seaside|beach|marina/i.test(areaVibe) || /water|coastal|seaside|beach|marina/i.test(home.area || '')
+      const isNearWater = /water|coastal|seaside|beach|marina/i.test(areaVibe)
+      const isWorkingClass = /working-class|working class|industrial|factory/i.test(areaVibe)
+      const isCoastal = /coastal|seaside|beach|touristic|marina/i.test(areaVibe) || /water|coastal|seaside|beach|marina/i.test(home.area || '')
       
       // Determine floor height category
       const floorHeight = home.floor || null
@@ -514,7 +527,6 @@ export async function POST(request: NextRequest) {
         bathrooms: home.bathrooms,
         floor: home.floor,
         floorHeight: isHighFloor ? 'high' : isLowFloor ? 'low' : null, // 'high', 'low', or null
-        hasElevator: null, // Elevator information not stored in database - will be penalized in scoring if required
         heatingCategory: home.heatingCategory || '',
         heatingAgent: home.heatingAgent || '',
         sizeSqMeters: home.sizeSqMeters,
@@ -529,12 +541,14 @@ export async function POST(request: NextRequest) {
         closestPark: home.closestPark,
         closestUniversity: home.closestUniversity,
         areaSafety: areaData?.safety || null,
-        areaVibe: areaData?.vibe || null,
+        areaVibe: areaData?.vibe || null, // Include full vibe string for AI to check for conflicts
         areaCharacteristics: {
           isSuburban,
           isUrban,
           isUpscale,
           isNearWater,
+          isWorkingClass,
+          isCoastal,
         },
         ownerRating: ownerRating?.ownerRating || null,
         ownerRatingCount: ownerRating?.ownerCount || 0,
@@ -545,8 +559,8 @@ export async function POST(request: NextRequest) {
 
     // Check if ONLY hard filters were extracted (no soft criteria)
     // Hard filters: location (city/country/area), price, bedrooms, bathrooms, size, floor, year built/renovated, 
-    // heating category/agent, parking, listing type, distance categories
-    // Soft criteria: safety, vibe, visual features, owner rating, description matching, etc.
+    // heating category/agent, parking, listing type
+    // Soft criteria: distance categories, vibe preference
     // If ONLY hard filters are present, all matching properties should get 100%
     
     const hasHardFilters = 
@@ -560,159 +574,357 @@ export async function POST(request: NextRequest) {
       extractedFilters.heatingCategory || extractedFilters.heatingAgent ||
       extractedFilters.minFloor || extractedFilters.maxFloor ||
       extractedFilters.minYearBuilt || extractedFilters.maxYearBuilt ||
-      extractedFilters.minYearRenovated || extractedFilters.maxYearRenovated ||
+      extractedFilters.minYearRenovated || extractedFilters.maxYearRenovated
+    
+    // Check if we have soft criteria (distance categories, safety, vibe preference, or parking soft preference)
+    const parkingSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+    const hasSoftCriteria = 
       (extractedFilters.Metro && extractedFilters.Metro !== 'Not mentioned') ||
       (extractedFilters.Bus && extractedFilters.Bus !== 'Not mentioned') ||
       (extractedFilters.School && extractedFilters.School !== 'Not mentioned') ||
       (extractedFilters.Hospital && extractedFilters.Hospital !== 'Not mentioned') ||
       (extractedFilters.Park && extractedFilters.Park !== 'Not mentioned') ||
-      (extractedFilters.University && extractedFilters.University !== 'Not mentioned')
+      (extractedFilters.University && extractedFilters.University !== 'Not mentioned') ||
+      (extractedFilters.Safety && extractedFilters.Safety !== 'Not mentioned') ||
+      extractedFilters.vibePreference ||
+      parkingSoftPreference
     
-    // Check if query mentions soft criteria (safety, vibe, visual, etc.)
-    const queryLower = query.toLowerCase().trim()
-    const mentionsSoftCriteria = 
-      /safe|safety|secure|vibrant|quiet|family-friendly|upscale|suburban|urban|coastal|seaside|near water|beautiful|nice looking|modern|traditional|aesthetic|view|views|sea view|mountain view|city view|balcony|terrace|garden|pool|rating|rated|review/i.test(queryLower) ||
-      /kids|children|elderly|seniors|people in need|vulnerable|disabled|student|students|nightlife|parties/i.test(queryLower)
-    
-    // If we have hard filters but NO soft criteria mentioned, force 100% for all matches
-    // This means the user only specified hard requirements (location, price, size, etc.) 
-    // and all properties matching those hard filters should be considered equally good (100%)
-    const shouldForce100 = hasHardFilters && !mentionsSoftCriteria
+    // If we have hard filters but NO soft criteria, all matching properties get 100%
+    const shouldForce100 = hasHardFilters && !hasSoftCriteria
 
-    // Create AI prompt to calculate match percentages
-    // Use the ORIGINAL user query and compare against ALL house data (including safety/vibe)
-    const systemPrompt = MATCH_CALCULATION_SYSTEM_PROMPT
-    const userPrompt = createMatchCalculationUserPrompt(query, homesData)
-
-    // Capture match calculation prompt for logging
-    matchCalculationPrompt = `System: ${systemPrompt}\n\nUser: ${userPrompt}`
-
-    // Call OpenAI API for match percentage calculation
-    // SKIP AI call if shouldForce100 (only hard filters, no soft criteria) - we'll set all to 100% anyway
-    let matchResults: Array<{ id: number; matchPercentage: number }> = []
+    // PROGRAMMATIC MATCH CALCULATION (replaces AI match calculation)
+    // Calculate match percentages based on distance scores and vibe matching
+    const matchMap = new Map<number, number>()
     
     if (shouldForce100) {
-      // Set all to 100% immediately - no need to call AI
-      matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 100 }))
-      matchCalculationResponse = 'Skipped - hard filters only, all matches set to 100%'
-    } else {
-    
-    try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo', // Cheapest model
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3, // Lower temperature for more consistent results
-        response_format: { type: 'json_object' }, // Force JSON response
-      })
-
-      const responseContent = completion.choices[0]?.message?.content
-      matchCalculationResponse = responseContent || null
-      
-      if (responseContent) {
-        try {
-          const parsed = JSON.parse(responseContent)
-          // Extract matches array from response
-          matchResults = parsed.matches || parsed.results || []
-          
-          // If AI didn't return matches for all homes, add missing ones with 0% match
-          const matchedIds = new Set(matchResults.map((r: any) => r.id))
-          const missingHomes = homesData.filter(home => !matchedIds.has(home.id))
-          if (missingHomes.length > 0) {
-            missingHomes.forEach(home => {
-              (matchResults as any[]).push({ 
-                id: home.id, 
-                matchPercentage: 0
-              })
-            })
-          }
-        } catch (parseError) {
-          console.error('Failed to parse AI response:', parseError)
-          // Fallback: assign equal percentages if parsing fails
-          matchResults = homesData.map(home => ({ 
-            id: home.id, 
-            matchPercentage: 50
-          } as any))
-        }
-      } else {
-        // No response from AI, assign default percentages
-        matchResults = homesData.map(home => ({ 
-          id: home.id, 
-          matchPercentage: 50
-        } as any))
-      }
-    } catch (openaiError) {
-      console.error('OpenAI API error:', openaiError)
-      matchCalculationResponse = openaiError instanceof Error ? openaiError.message : String(openaiError)
-      // Fallback: assign equal percentages if API fails
-      matchResults = homesData.map(home => ({ id: home.id, matchPercentage: 50 }))
-      }
-    }
-
-    // Create match percentage map
-    const matchMap = new Map<number, number>()
-    matchResults.forEach((result: any) => {
-      matchMap.set(result.id, Math.max(0, Math.min(100, result.matchPercentage)))
-    })
-    
-    // If shouldForce100 is true, we already set all to 100% in matchResults (skipped AI call)
-    // But we still need to ensure the map has 100% for all homes
-    if (shouldForce100 && homesData.length > 0) {
-      // Force all to 100% (in case AI was called before we detected shouldForce100)
-      homesData.forEach(home => {
+      // All properties get 100% if only hard filters
+      homes.forEach(home => {
         matchMap.set(home.id, 100)
       })
-    }
-
-    // Post-process: Apply distance-based scoring based on new category system
-    // Categories are NO LONGER used as hard filters - all homes are returned
-    // Instead, match percentages are adjusted based on distance categories:
-    // - Essential: Extra importance to 0-1km (high bonus), good importance to 1-2km (medium bonus), less importance beyond (small bonus/penalty)
-    // - Strong: Even importance to 0-2km (medium bonus), less importance beyond (small bonus/penalty)
-    // - Avoid: Penalize homes within 3km (penalty), reward homes further away (bonus)
-    // - Not important/Not mentioned: No distance-based scoring
-    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
-    
-    if (!shouldForce100) {
+      matchCalculationResponse = 'Programmatic - hard filters only, all matches set to 100%'
+    } else {
+      // Calculate scores programmatically
+      const vibePreference = extractedFilters.vibePreference || null
+      const safetyCategory = extractedFilters.Safety || null
+      
       // Get distance fields
       const distanceFields = getDistanceFields(extractedFilters)
-      
-      // Filter to only distances that have a category (not "Not important", "Not mentioned", or null)
       const distancesToConsider = distanceFields.filter(d => 
         d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
       )
-    
-      // Apply distance scoring based on categories to ALL homes (no filtering)
+      
+      // TEST LOG - DELETE AFTER: Show calculation inputs
+      console.log('\n========== CALCULATION INPUTS ==========')
+      console.log('Vibe Preference:', vibePreference)
+      console.log('Safety Category:', safetyCategory)
+      console.log('Distances to Consider:', distancesToConsider.map(d => ({ field: d.name, category: d.category })))
+      console.log('========================================\n')
+
+      // Calculate raw scores for each home
+      const rawScores = new Map<number, number>()
+      let minScore = Infinity
+      let maxScore = -Infinity
+      
+      // TEST LOG - DELETE AFTER: Track calculation details
+      const calculationDetails: Array<{
+        homeId: number
+        homeTitle: string
+        distanceScores: Array<{ field: string; distance: number | null; score: number }>
+        avgDistanceScore: number
+        safety: number | null
+        safetyScore: number
+        parking: boolean | null
+        parkingScore: number
+        propertyVibes: string[]
+        vibeScore: number
+        rawScore: number
+        finalScaledScore?: number
+      }> = []
+      
       homes.forEach((home) => {
-        let totalDistanceBonus = 0
-        let appliedDistances = 0
+        let rawScore = 0 // Start from 0, build up
         
-        for (const distanceInfo of distancesToConsider) {
-          const distance = home[distanceInfo.field] as number | null
-          const score = calculateDistanceScore(distance, distanceInfo.category)
-          totalDistanceBonus += score
-          if (distance !== null && distance !== undefined) {
-            appliedDistances++
+        // Calculate distance scores with priority logic for Metro/Bus
+        let totalDistanceScore = 0
+        let distanceCount = 0
+        const distanceScores: Array<{ field: string; distance: number | null; score: number }> = []
+        
+        // Check if both Metro and Bus are Essential or Strong
+        const metroInfo = distancesToConsider.find(d => d.field === 'closestMetro')
+        const busInfo = distancesToConsider.find(d => d.field === 'closestBus')
+        const hasMetro = !!metroInfo
+        const hasBus = !!busInfo
+        const bothEssential = hasMetro && hasBus && 
+          metroInfo?.category === 'Essential' && busInfo?.category === 'Essential'
+        const bothStrong = hasMetro && hasBus && 
+          metroInfo?.category === 'Strong' && busInfo?.category === 'Strong'
+        
+        if (bothEssential || bothStrong) {
+          // Priority logic: 
+          // 1. If Metro <= 2km, prioritize Metro
+          // 2. If Metro > 2km and Bus <= 2km, prioritize Bus
+          // 3. If both > 2km, treat them equally (average)
+          const threshold = 2.0 // Same threshold for both Essential and Strong
+          
+          const metroDistance = home[metroInfo!.field] as number | null
+          const busDistance = home[busInfo!.field] as number | null
+          
+          const metroScore = calculateDistanceScore(metroDistance, metroInfo!.category)
+          const busScore = calculateDistanceScore(busDistance, busInfo!.category)
+          
+          // Determine how to combine Metro and Bus scores
+          if (metroDistance !== null && busDistance !== null) {
+            if (metroDistance <= threshold) {
+              // Metro <= 2km: prioritize Metro (80% metro, 20% bus)
+              totalDistanceScore = (metroScore * 0.8) + (busScore * 0.2)
+              distanceCount = 1
+            } else if (metroDistance > threshold && busDistance <= threshold) {
+              // Metro > 2km and Bus <= 2km: prioritize Bus (70% bus, 30% metro)
+              totalDistanceScore = (busScore * 0.7) + (metroScore * 0.3)
+              distanceCount = 1
+            } else {
+              // Both > 2km: treat equally (average them)
+              totalDistanceScore = metroScore + busScore
+              distanceCount = 2
+            }
+          } else if (metroDistance === null && busDistance !== null) {
+            // Only Bus available
+            totalDistanceScore = busScore
+            distanceCount = 1
+          } else if (busDistance === null && metroDistance !== null) {
+            // Only Metro available
+            totalDistanceScore = metroScore
+            distanceCount = 1
+          } else {
+            // Both null
+            totalDistanceScore = 0
+            distanceCount = 0
+          }
+          
+          // Store both for logging
+          distanceScores.push({ 
+            field: metroInfo!.name, 
+            distance: metroDistance, 
+            score: metroScore 
+          })
+          distanceScores.push({ 
+            field: busInfo!.name, 
+            distance: busDistance, 
+            score: busScore 
+          })
+          
+          // Add other distance types (School, Hospital, Park, University) normally
+          for (const distanceInfo of distancesToConsider) {
+            if (distanceInfo.field !== 'closestMetro' && distanceInfo.field !== 'closestBus') {
+              const distance = home[distanceInfo.field] as number | null
+              const score = calculateDistanceScore(distance, distanceInfo.category)
+              totalDistanceScore += score
+              distanceScores.push({ field: distanceInfo.name, distance, score })
+              if (distance !== null && distance !== undefined) {
+                distanceCount++
+              }
+            }
+          }
+        } else {
+          // Normal calculation: average all distance scores
+          for (const distanceInfo of distancesToConsider) {
+            const distance = home[distanceInfo.field] as number | null
+            const score = calculateDistanceScore(distance, distanceInfo.category)
+            totalDistanceScore += score
+            distanceScores.push({ field: distanceInfo.name, distance, score })
+            if (distance !== null && distance !== undefined) {
+              distanceCount++
+            }
           }
         }
-      
-      // Get current score
-      const currentScore = matchMap.get(home.id) || 50
-      
-        // Add distance bonus
-        // For Essential categories, don't normalize - use full impact
-        // For other categories, normalize by number of distances
-        const hasEssentialCategory = distancesToConsider.some(d => d.category === 'Essential')
-        const distanceBonus = hasEssentialCategory && appliedDistances > 0
-          ? totalDistanceBonus  // Full impact for Essential (no normalization)
-          : (appliedDistances > 0 ? totalDistanceBonus / appliedDistances : 0)  // Normalize for non-Essential
-        const finalScore = Math.min(100, Math.max(0, currentScore + distanceBonus))
         
-      matchMap.set(home.id, finalScore)
-    })
+        // Average distance scores if multiple distances, otherwise use the single score
+        const avgDistanceScore = distanceCount > 0 ? totalDistanceScore / distanceCount : 0
+        
+        // Calculate safety score
+        const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
+        const safety = areaData?.safety || null
+        const safetyScore = calculateSafetyScore(safety, safetyCategory)
+        
+        // Calculate vibe score
+        const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
+        const vibeScore = calculateVibeScore(vibePreference, propertyVibes)
+        
+        // Calculate parking score (only if it's a soft preference)
+        const parkingScore = calculateParkingScore(home.parking, parkingSoftPreference)
+        
+        // Combine distance, safety, vibe, and parking scores
+        // Weighting: Distance 80%, Safety 10%, Vibe 10% (when all three exist, no parking)
+        // Adjust based on what exists
+        const hasDistance = distancesToConsider.length > 0
+        const hasSafety = safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned'
+        const hasVibe = !!vibePreference
+        const hasParking = parkingSoftPreference
+        
+        // Count how many components we have
+        const componentCount = [hasDistance, hasSafety, hasVibe, hasParking].filter(Boolean).length
+        
+        if (componentCount === 4) {
+          // All four: Distance 70%, Safety 10%, Vibe 10%, Parking 10%
+          rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.1) + (vibeScore * 0.1) + (parkingScore * 0.1)
+        } else if (hasDistance && hasSafety && hasVibe) {
+          // Distance + Safety + Vibe: 80% Distance, 10% Safety, 10% Vibe
+          rawScore = (avgDistanceScore * 0.8) + (safetyScore * 0.1) + (vibeScore * 0.1)
+        } else if (hasDistance && hasSafety && hasParking) {
+          // Distance + Safety + Parking: 70% Distance, 20% Safety, 10% Parking
+          rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.2) + (parkingScore * 0.1)
+        } else if (hasDistance && hasVibe && hasParking) {
+          // Distance + Vibe + Parking: 75% Distance, 15% Vibe, 10% Parking
+          rawScore = (avgDistanceScore * 0.75) + (vibeScore * 0.15) + (parkingScore * 0.1)
+        } else if (hasSafety && hasVibe && hasParking) {
+          // Safety + Vibe + Parking: 60% Safety, 25% Vibe, 15% Parking
+          rawScore = (safetyScore * 0.6) + (vibeScore * 0.25) + (parkingScore * 0.15)
+        } else if (hasDistance && hasSafety) {
+          // Distance + Safety: 60% Distance, 40% Safety
+          rawScore = (avgDistanceScore * 0.6) + (safetyScore * 0.4)
+        } else if (hasDistance && hasVibe) {
+          // Distance + Vibe: 80% Distance, 20% Vibe
+          rawScore = (avgDistanceScore * 0.8) + (vibeScore * 0.2)
+        } else if (hasDistance && hasParking) {
+          // Distance + Parking: 85% Distance, 15% Parking
+          rawScore = (avgDistanceScore * 0.85) + (parkingScore * 0.15)
+        } else if (hasSafety && hasVibe) {
+          // Safety + Vibe: 70% Safety, 30% Vibe
+          rawScore = (safetyScore * 0.7) + (vibeScore * 0.3)
+        } else if (hasSafety && hasParking) {
+          // Safety + Parking: 75% Safety, 25% Parking
+          rawScore = (safetyScore * 0.75) + (parkingScore * 0.25)
+        } else if (hasVibe && hasParking) {
+          // Vibe + Parking: 70% Vibe, 30% Parking
+          rawScore = (vibeScore * 0.7) + (parkingScore * 0.3)
+        } else if (hasDistance) {
+          // Only distance
+          rawScore = avgDistanceScore
+        } else if (hasSafety) {
+          // Only safety
+          rawScore = safetyScore
+        } else if (hasVibe) {
+          // Only vibe
+          rawScore = vibeScore
+        } else if (hasParking) {
+          // Only parking
+          rawScore = parkingScore
+        } else {
+          // No soft criteria (shouldn't happen, but fallback)
+          rawScore = 50
+        }
+        
+        rawScores.set(home.id, rawScore)
+        minScore = Math.min(minScore, rawScore)
+        maxScore = Math.max(maxScore, rawScore)
+        
+        // TEST LOG - DELETE AFTER: Store calculation details
+        calculationDetails.push({
+          homeId: home.id,
+          homeTitle: home.title.substring(0, 50),
+          distanceScores,
+          avgDistanceScore,
+          safety,
+          safetyScore,
+          parking: home.parking,
+          parkingScore,
+          propertyVibes,
+          vibeScore,
+          rawScore,
+        })
+      })
+      
+      // Scale all scores to 0-100 range
+      const scoreRange = maxScore - minScore
+      
+      // TEST LOG - DELETE AFTER: Show scaling info
+      console.log('\n========== SCALING INFO ==========')
+      console.log('Min Raw Score:', minScore)
+      console.log('Max Raw Score:', maxScore)
+      console.log('Score Range:', scoreRange)
+      console.log('==================================\n')
+      
+      homes.forEach((home) => {
+        const rawScore = rawScores.get(home.id) || 50
+        
+        // Scale to 0-100
+        let scaledScore = scoreRange > 0 
+          ? ((rawScore - minScore) / scoreRange) * 100
+          : 100 // All same score, set to 100
+        
+        // Ensure score is between 0-100
+        scaledScore = Math.max(0, Math.min(100, scaledScore))
+        
+        // VALIDATION: Only allow 100% if ALL criteria are perfectly met
+        // A 100% home must have:
+        // 1. All Essential distances within "really close" threshold (≤ 1km)
+        // 2. Matching vibe (vibeScore > 80 if vibe preference exists)
+        // 3. Safety > 9 (if Safety is Essential)
+        let meetsAllCriteria = true
+        
+        // Check Essential distances - all must be ≤ 1km
+        const essentialDistances = distancesToConsider.filter(d => d.category === 'Essential')
+        for (const distanceInfo of essentialDistances) {
+          const distance = home[distanceInfo.field] as number | null
+          if (distance === null || distance === undefined || distance > 1.0) {
+            meetsAllCriteria = false
+            break
+          }
+        }
+        
+        // Check vibe match - must be > 80 if vibe preference exists
+        if (vibePreference) {
+          const detail = calculationDetails.find(d => d.homeId === home.id)
+          if (detail && detail.vibeScore < 80) {
+            meetsAllCriteria = false
+          }
+        }
+        
+        // Check safety - must be > 9 if Safety is Essential
+        if (safetyCategory === 'Essential') {
+          const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
+          const safety = areaData?.safety || null
+          if (safety === null || safety <= 9) {
+            meetsAllCriteria = false
+          }
+        }
+        
+        // Cap at 99% if doesn't meet all criteria (only 100% if meets all)
+        if (!meetsAllCriteria && scaledScore >= 99.5) {
+          scaledScore = 99
+        }
+        
+        matchMap.set(home.id, scaledScore)
+        
+        // TEST LOG - DELETE AFTER: Update calculation details with final score
+        const detail = calculationDetails.find(d => d.homeId === home.id)
+        if (detail) {
+          detail.finalScaledScore = scaledScore
+        }
+      })
+      
+      // TEST LOG - DELETE AFTER: Show all calculation details
+      console.log('\n========== CALCULATION DETAILS FOR EACH HOME ==========')
+      calculationDetails.forEach(detail => {
+        console.log(`\nHome ID: ${detail.homeId} - ${detail.homeTitle}`)
+        console.log('  Distance Scores:')
+        detail.distanceScores.forEach(ds => {
+          console.log(`    ${ds.field}: ${ds.distance !== null ? ds.distance + 'km' : 'null'} → Score: ${ds.score}`)
+        })
+        console.log(`  Average Distance Score: ${detail.avgDistanceScore.toFixed(2)}`)
+        console.log(`  Safety: ${detail.safety !== null ? detail.safety : 'null'} → Safety Score: ${detail.safetyScore.toFixed(2)}`)
+        console.log(`  Parking: ${detail.parking !== null ? detail.parking : 'null'} → Parking Score: ${detail.parkingScore.toFixed(2)}`)
+        console.log(`  Property Vibes: [${detail.propertyVibes.join(', ')}]`)
+        console.log(`  Vibe Score: ${detail.vibeScore.toFixed(2)}`)
+        console.log(`  Raw Score: ${detail.rawScore.toFixed(2)}`)
+        console.log(`  Final Scaled Score: ${detail.finalScaledScore?.toFixed(2)}%`)
+      })
+      console.log('\n======================================================\n')
+      
+      matchCalculationResponse = `Programmatic - calculated from distance, safety, vibe, and parking scores, scaled to 0-100`
     }
+
+    // Distance scoring is now handled in the programmatic calculation above
     
     // Post-process: Apply preferred areas bonus
     // If user mentions areas as preferences (e.g., "like Filothei, Psychiko"), boost properties in those areas
@@ -761,8 +973,8 @@ export async function POST(request: NextRequest) {
             })
           }
         })
-        
-        homes.forEach((home) => {
+      
+      homes.forEach((home) => {
           if (home.area) {
             const homeArea = home.area.toLowerCase().trim()
             const homeAreaNormalized = removeGreekAccents(homeArea)
@@ -779,7 +991,7 @@ export async function POST(request: NextRequest) {
               )
             
             if (isPreferred) {
-              const currentScore = matchMap.get(home.id) || 50
+        const currentScore = matchMap.get(home.id) || 50
               const bonus = 12 // Bonus for being in a preferred area
               const finalScore = Math.min(100, Math.max(0, currentScore + bonus))
               matchMap.set(home.id, finalScore)
@@ -789,47 +1001,19 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Post-process: Enforce elevator requirement penalty
-    // If user requires elevator for floors above a certain level, penalize properties on those floors without elevator
-    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
-    if (!shouldForce100) {
-      const requiresElevator = extractedFilters.requiresElevator === true
-      const elevatorRequiredFromFloor = extractedFilters.elevatorRequiredFromFloor
-      
-      if (requiresElevator && elevatorRequiredFromFloor !== null && elevatorRequiredFromFloor !== undefined) {
-        homes.forEach((home) => {
-      const currentScore = matchMap.get(home.id) || 50
-      
-          // Only penalize if property is on or above the required floor
-          if (home.floor !== null && home.floor !== undefined && home.floor >= elevatorRequiredFromFloor) {
-            // Check if elevator is mentioned in description (we can't store elevator in DB, so check description)
-            const description = (home.description || '').toLowerCase()
-            const hasElevatorMention = /elevator|lift|ascenseur|ανελκυστήρας/i.test(description)
-            
-            if (!hasElevatorMention) {
-              // Property is on required floor or above, but no elevator mentioned - heavy penalty
-              const penalty = -25
-              const finalScore = Math.max(0, Math.min(100, currentScore + penalty))
-      matchMap.set(home.id, finalScore)
-            } else {
-              // Elevator mentioned in description - small bonus
-              const bonus = 5
-              const finalScore = Math.max(0, Math.min(100, currentScore + bonus))
-              matchMap.set(home.id, finalScore)
-            }
-          }
-        })
-      }
-    }
+    // Parking: If hard filter, database is already filtered. If soft preference, it's included in scoring above.
     
-    // Parking is now a HARD FILTER - if user mentions parking, database is already filtered
-    // No post-processing needed for parking
+    // Distance, safety, and vibe matching are now handled in the programmatic calculation above
 
-    // Attach match percentages to homes and sort by match percentage (highest first)
-    const homesWithMatches = homes.map(home => ({
-      ...home,
-      matchPercentage: matchMap.get(home.id) || 0,
-    })).sort((a, b) => b.matchPercentage - a.matchPercentage)
+    // Attach match percentages and safety to homes and sort by match percentage (highest first)
+    const homesWithMatches = homes.map(home => {
+      const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
+      return {
+        ...home,
+        matchPercentage: matchMap.get(home.id) || 0,
+        safety: extractedFilters.Safety || null, // Include safety category in response
+      }
+    }).sort((a, b) => b.matchPercentage - a.matchPercentage)
 
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length

@@ -25,3 +25,4 @@ export function removeGreekAccents(str: string): string {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+

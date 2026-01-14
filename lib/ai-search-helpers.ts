@@ -149,76 +149,268 @@ export function getDistanceFields(extractedFilters: any): Array<{
 }
 
 /**
- * Calculate distance score based on category and distance
- * The category (Essential/Strong/Avoid) already indicates importance, so no additional priority weighting is needed
+ * Calculate distance score based on category and distance with new gravity system
+ * Essential: 0-1km (biggest), 1-3km, 3-10km, over 10km (least)
+ * Strong: 0-3km (biggest), 3-10km, over 10km (least)
+ * Not important/Not mentioned: 0-10km (even), over 10km (less)
+ * Avoid: over 10km (biggest), 0-10km (less)
  */
 export function calculateDistanceScore(
   distance: number | null,
   category: string | null | undefined
 ): number {
   if (distance === null || distance === undefined) {
-    // Penalize missing distance data with a fixed penalty
+    // Penalize missing distance data
     return -5
   }
   
   if (!category || category === 'Not important' || category === 'Not mentioned') {
-    return 0
+    // Not important/Not mentioned: 0-10km (even weight), over 10km (less weight)
+    if (distance <= 10) {
+      return 0 // Even weight for 0-10km
+    } else {
+      return -5 // Less weight for over 10km
+    }
   }
   
   let distanceScore = 0
   
   if (category === 'Essential') {
-    if (distance <= 0.5) {
-      distanceScore = 40
-    } else if (distance <= 1.0) {
-      distanceScore = 35
-    } else if (distance <= 1.5) {
-      distanceScore = 25
-    } else if (distance <= 2.0) {
-      distanceScore = 5
+    // Essential: 0-1km (biggest), 1-3km, 3-10km, over 10km (least)
+    if (distance <= 1.0) {
+      distanceScore = 50 // Biggest boost
     } else if (distance <= 3.0) {
-      distanceScore = -10
-    } else if (distance <= 5.0) {
-      distanceScore = -20
-    } else if (distance <= 7.0) {
-      distanceScore = -30
+      distanceScore = 30 // Medium boost
+    } else if (distance <= 10.0) {
+      distanceScore = 10 // Small boost
     } else {
-      distanceScore = -40
+      distanceScore = -10 // Least/penalty for over 10km
     }
   } else if (category === 'Strong') {
-    if (distance <= 0.5) {
-      distanceScore = 20
-    } else if (distance <= 1.0) {
-      distanceScore = 18
-    } else if (distance <= 1.5) {
-      distanceScore = 15
-    } else if (distance <= 2.0) {
-      distanceScore = 12
-    } else if (distance <= 3.0) {
-      distanceScore = 0
-    } else if (distance <= 5.0) {
-      distanceScore = -5
+    // Strong: 0-3km (biggest), 3-10km, over 10km (least)
+    if (distance <= 3.0) {
+      distanceScore = 30 // Biggest boost
+    } else if (distance <= 10.0) {
+      distanceScore = 15 // Medium boost
     } else {
-      distanceScore = -10
+      distanceScore = -5 // Least/penalty for over 10km
     }
   } else if (category === 'Avoid') {
-    if (distance < 1.0) {
-      distanceScore = -25
-    } else if (distance < 2.0) {
-      distanceScore = -20
-    } else if (distance < 3.0) {
-      distanceScore = -15
-    } else if (distance >= 3.0 && distance < 5.0) {
-      distanceScore = 0
-    } else if (distance >= 5.0 && distance < 7.0) {
-      distanceScore = 10
-    } else if (distance >= 7.0 && distance < 10.0) {
-      distanceScore = 15
-    } else {
-      distanceScore = 20
+    // Avoid: over 10km (biggest), 0-10km (less)
+    if (distance > 10.0) {
+      distanceScore = 30 // Biggest boost for being far away
+    } else if (distance <= 10.0) {
+      distanceScore = -20 // Penalty for being within 10km
     }
   }
   
   return distanceScore
+}
+
+/**
+ * Available distinct vibes in the system
+ */
+export const DISTINCT_VIBES = [
+  'Central',
+  'Family',
+  'Historic',
+  'Reviving',
+  'Rural',
+  'Student',
+  'Suburban',
+  'Upscale',
+  'Urban',
+  'Waterfront',
+  'Working-Class'
+]
+
+/**
+ * Calculate vibe match score based on user's vibe preference and property's area vibes
+ * @param vibePreference - 1-2 words describing the vibe user wants (e.g., "coastal", "urban", "family-friendly")
+ * @param propertyVibes - Array of vibes from the property's area (e.g., ["Urban", "Central"])
+ * @returns Score from 0-100 representing how well the property vibes match the user's preference
+ */
+export function calculateVibeScore(
+  vibePreference: string | null | undefined,
+  propertyVibes: string[]
+): number {
+  if (!vibePreference || !vibePreference.trim()) {
+    return 50 // Neutral score if no vibe preference
+  }
+
+  if (!propertyVibes || propertyVibes.length === 0) {
+    return 40 // Slight penalty for missing vibe data
+  }
+
+  const preferenceLower = vibePreference.toLowerCase().trim()
+  const propertyVibesLower = propertyVibes.map(v => v.toLowerCase().trim())
+
+  // Map user's vibe preference to system vibes with priority (1 = highest match, 2 = secondary match)
+  // Priority indicates how well the user's term matches each system vibe
+  const vibeMapping: Record<string, Array<{ vibe: string; priority: number }>> = {
+    'coastal': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
+    'beach': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
+    'seaside': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
+    'near the beach': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
+    'near water': [{ vibe: 'waterfront', priority: 1 }],
+    'waterfront': [{ vibe: 'waterfront', priority: 1 }],
+    'urban': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'city center': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'city centre': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'central': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'downtown': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'family-friendly': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'family': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'for kids': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'for children': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'safe': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'quiet': [{ vibe: 'suburban', priority: 1 }, { vibe: 'rural', priority: 2 }],
+    'peaceful': [{ vibe: 'suburban', priority: 1 }, { vibe: 'rural', priority: 2 }],
+    'residential': [{ vibe: 'suburban', priority: 1 }, { vibe: 'family', priority: 2 }],
+    'suburban': [{ vibe: 'suburban', priority: 1 }, { vibe: 'family', priority: 2 }],
+    'upscale': [{ vibe: 'upscale', priority: 1 }, { vibe: 'waterfront', priority: 2 }],
+    'luxury': [{ vibe: 'upscale', priority: 1 }],
+    'premium': [{ vibe: 'upscale', priority: 1 }],
+    'student': [{ vibe: 'student', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'nightlife': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'vibrant': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'historic': [{ vibe: 'historic', priority: 1 }],
+    'rural': [{ vibe: 'rural', priority: 1 }],
+    'working-class': [{ vibe: 'working-class', priority: 1 }],
+    'reviving': [{ vibe: 'reviving', priority: 1 }],
+  }
+
+  // Find matching vibes with priorities
+  let matchedVibes = vibeMapping[preferenceLower] || []
+  
+  if (matchedVibes.length === 0) {
+    // If no direct mapping, try fuzzy matching against distinct vibes
+    const fuzzyMatch = DISTINCT_VIBES.find(v => {
+      const vLower = v.toLowerCase()
+      return vLower === preferenceLower || 
+             vLower.includes(preferenceLower) || 
+             preferenceLower.includes(vLower) ||
+             vLower.replace('-', ' ') === preferenceLower ||
+             preferenceLower.replace('-', ' ') === vLower
+    })
+    if (fuzzyMatch) {
+      matchedVibes.push({ vibe: fuzzyMatch.toLowerCase(), priority: 1 })
+    } else {
+      return 50 // No match found, neutral score
+    }
+  }
+
+  // Calculate score based on how well property vibes match with priority weighting
+  // Properties have 2 vibes, we score based on how well they match the prioritized vibes
+  let totalScore = 0
+  let maxPossibleScore = 0
+
+  matchedVibes.forEach(({ vibe, priority }) => {
+    // Check if property has this vibe
+    const isMatch = propertyVibesLower.some(pv => {
+      const pvNormalized = pv.replace('-', ' ').replace('_', ' ')
+      const vibeNormalized = vibe.replace('-', ' ').replace('_', ' ')
+      return pv === vibe || pvNormalized === vibeNormalized
+    })
+    
+    if (isMatch) {
+      // Priority 1 (highest match) = 100 points, Priority 2 (secondary) = 50 points
+      const points = priority === 1 ? 100 : 50
+      totalScore += points
+    }
+    maxPossibleScore += priority === 1 ? 100 : 50
+  })
+
+  // Bonus if property matches multiple prioritized vibes
+  const matchedCount = matchedVibes.filter(({ vibe }) => 
+    propertyVibesLower.some(pv => {
+      const pvNormalized = pv.replace('-', ' ').replace('_', ' ')
+      const vibeNormalized = vibe.replace('-', ' ').replace('_', ' ')
+      return pv === vibe || pvNormalized === vibeNormalized
+    })
+  ).length
+
+  if (matchedCount > 1) {
+    totalScore += 15 // Bonus for matching multiple prioritized vibes
+    maxPossibleScore += 15
+  }
+
+  // Scale to 0-100
+  if (maxPossibleScore === 0) {
+    return 50
+  }
+
+  const rawScore = (totalScore / maxPossibleScore) * 100
+  
+  // Ensure score is between 0-100
+  return Math.max(0, Math.min(100, rawScore))
+}
+
+/**
+ * Calculate safety score based on category and safety rating
+ * Essential: 9+ (highest), 7-9 (medium), below 7 (lowest)
+ * Strong: above 7 (highest), below 7 (lowest)
+ * Not important/Not mentioned: even weight to all areas
+ */
+export function calculateSafetyScore(
+  safety: number | null,
+  category: string | null | undefined
+): number {
+  if (safety === null || safety === undefined) {
+    // Penalize missing safety data
+    return -5
+  }
+  
+  if (!category || category === 'Not important' || category === 'Not mentioned') {
+    // Not important/Not mentioned: even weight to all areas
+    return 0
+  }
+  
+  let safetyScore = 0
+  
+  if (category === 'Essential') {
+    // Essential: 9+ (highest), 7-9 (medium), below 7 (lowest)
+    if (safety >= 9) {
+      safetyScore = 50 // Highest priority
+    } else if (safety >= 7) {
+      safetyScore = 30 // Medium priority
+    } else {
+      safetyScore = -20 // Lowest priority (penalty)
+    }
+  } else if (category === 'Strong') {
+    // Strong: above 7 (highest), below 7 (lowest)
+    if (safety > 7) {
+      safetyScore = 30 // Highest priority
+    } else {
+      safetyScore = -10 // Lowest priority (penalty)
+    }
+  }
+  
+  return safetyScore
+}
+
+/**
+ * Calculate parking score based on whether property has parking and if it's a soft preference
+ * @param hasParking - Whether the property has parking (true/false/null)
+ * @param isSoftPreference - Whether parking is a soft preference (not a hard filter)
+ * @returns Score representing parking match
+ */
+export function calculateParkingScore(
+  hasParking: boolean | null,
+  isSoftPreference: boolean
+): number {
+  if (!isSoftPreference) {
+    // Not a soft preference (hard filter or not mentioned) - no scoring
+    return 0
+  }
+  
+  // Soft preference scoring
+  if (hasParking === true) {
+    return 30 // Bonus for having parking when it's a soft preference
+  } else if (hasParking === false) {
+    return -15 // Penalty for not having parking when it's a soft preference
+  } else {
+    return -5 // Small penalty for missing parking data
+  }
 }
 

@@ -54,8 +54,8 @@ export default function NotificationBell() {
 
     fetchNotifications()
 
-    // Refresh notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
+    // Refresh notifications every 10 minutes
+    const interval = setInterval(fetchNotifications, 600000)
     return () => clearInterval(interval)
   }, [language])
 

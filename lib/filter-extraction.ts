@@ -30,9 +30,11 @@ interface ExtractedFilters {
   Hospital?: string
   Park?: string
   University?: string
-  requiresElevator?: boolean // true if user requires elevator (e.g., "elevator if above 2nd floor")
-  elevatorRequiredFromFloor?: number // Floor number from which elevator is required (e.g., 2 means elevator required from 2nd floor and above)
+  Safety?: string // "Essential" or "Strong" or "Not important" or "Not mentioned"
   preferredAreas?: string[] // Array of area names mentioned as preferences (e.g., "like Filothei, Psychiko") - NOT hard filters, just preferences
+  // Soft preference flags - if true, the field should NOT be a hard filter, only affect scoring
+  parkingSoftPreference?: boolean // true if user says "parking would be nice but not essential" or similar
+  vibePreference?: string // 1-2 words describing the vibe the user wants (e.g., "coastal", "urban", "family-friendly", "quiet")
   confidence: number // 0-1, how confident we are in the extraction
 }
 

@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('maxPrice')) {
       where.pricePerMonth = { ...where.pricePerMonth, lte: Number(searchParams.get('maxPrice')) }
     }
-    
+
     if (searchParams.get('minSize')) {
       where.sizeSqMeters = { gte: Number(searchParams.get('minSize')) }
     }
@@ -486,27 +486,27 @@ export async function POST(request: NextRequest) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           return await prisma.home.create({
-            data: {
-              title: title.trim(),
-              description: description?.trim() || null,
-              street: street?.trim() || null,
-              city: city.trim(),
-              country: country.trim(),
+      data: {
+        title: title.trim(),
+        description: description?.trim() || null,
+        street: street?.trim() || null,
+        city: city.trim(),
+        country: country.trim(),
               area: area?.trim() || null,
-              listingType: listingType || 'rent',
-              pricePerMonth: Number(pricePerMonth),
-              bedrooms: Number(bedrooms || 0),
-              bathrooms: Number(bathrooms || 0),
-              floor: floor && floor !== '' ? Number(floor) : null,
+        listingType: listingType || 'rent',
+        pricePerMonth: Number(pricePerMonth),
+        bedrooms: Number(bedrooms || 0),
+        bathrooms: Number(bathrooms || 0),
+        floor: floor && floor !== '' ? Number(floor) : null,
               heatingCategory: heatingCategory?.trim() || null,
               heatingAgent: heatingAgent?.trim() || null,
               parking: parking === undefined || parking === null 
                 ? null 
                 : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
               sizeSqMeters: Number(sizeSqMeters),
-              yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
-              yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
-              availableFrom: availableFromDate,
+        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
+        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+        availableFrom: availableFromDate,
               photos: photos || null,
               // Distance values from Google Maps API
               closestMetro: distances.closestMetro,
@@ -516,9 +516,9 @@ export async function POST(request: NextRequest) {
               closestPark: distances.closestPark,
               closestUniversity: distances.closestUniversity,
               energyClass: energyClass?.trim() || null,
-              ownerId: user.id,
-            },
-          })
+        ownerId: user.id,
+      },
+    })
         } catch (error: any) {
           const isLockError = error?.code === 'SQLITE_BUSY' || 
                              error?.message?.includes('database is locked') ||
