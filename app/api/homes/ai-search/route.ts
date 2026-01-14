@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionPhotoBonus } from '@/lib/ai-search-helpers'
+import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus } from '@/lib/ai-search-helpers'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
@@ -929,95 +929,32 @@ export async function POST(request: NextRequest) {
     
     // Distance, safety, and vibe matching are now handled in the programmatic calculation above
 
-    // Post-process: Apply description and photo bonus
-    // Analyze descriptions and photos to match user query features (e.g., "new stove", "backyard", "big balcony")
+    // Post-process: Apply description bonus
+    // Analyze descriptions to match user query features (e.g., "new stove", "backyard", "big balcony")
     // This bonus is applied after all other scores are calculated
-    if (!shouldForce100 && openai) {
-      // Parse photos for homes that have them
-      const homesWithPhotos = homes.map(home => {
-        let photos: string[] = []
-        if (home.photos) {
-          try {
-            const parsed = JSON.parse(home.photos)
-            photos = Array.isArray(parsed) ? parsed : []
-          } catch (e) {
-            photos = []
-          }
-        }
-        return { ...home, parsedPhotos: photos }
-      }).filter(home => home.parsedPhotos.length > 0)
-
-      // Analyze photos using OpenAI Vision API for homes with photos
-      const photoAnalysisMap = new Map<number, string>()
-      if (homesWithPhotos.length > 0) {
-        for (const home of homesWithPhotos.slice(0, 10)) { // Limit to first 10 to avoid too many API calls
-          if (home.parsedPhotos && home.parsedPhotos.length > 0) {
-            try {
-              // Use first 3 photos for analysis
-              const photosToAnalyze = home.parsedPhotos.slice(0, 3)
-              
-              // Convert photo URLs to absolute URLs
-              const imageUrls = photosToAnalyze.map(photo => {
-                if (photo.startsWith('/')) {
-                  return `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}${photo}`
-                }
-                return photo
-              })
-
-              const visionResponse = await openai.chat.completions.create({
-                model: 'gpt-4o-mini', // Vision-capable model
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'text',
-                        text: `Analyze these property photos and describe visible features that match the user's search query. Focus on: appliances (stove, oven, kitchen), outdoor spaces (balcony, terrace, backyard, garden, pool), views (sea, mountain, city), interior features (fireplace, storage, modern bathrooms, flooring), and other features mentioned in the query. User query: "${query}"`
-                      },
-                      ...imageUrls.map(url => ({
-                        type: 'image_url' as const,
-                        image_url: { url }
-                      }))
-                    ]
-                  }
-                ],
-                max_tokens: 200
-              })
-
-              const analysis = visionResponse.choices[0]?.message?.content || ''
-              photoAnalysisMap.set(home.id, analysis)
-            } catch (error) {
-              console.error(`Error analyzing photos for home ${home.id}:`, error)
-              // Continue without photo analysis for this home
-            }
-          }
-        }
-      }
-
-      // Calculate description/photo bonus for each home
-      const descriptionPhotoScores: number[] = []
-      const descriptionPhotoBonusMap = new Map<number, number>()
+    if (!shouldForce100) {
+      // Calculate description bonus for each home
+      const descriptionScores: number[] = []
+      const descriptionBonusMap = new Map<number, number>()
       
       for (const home of homes) {
-        const photoAnalysis = photoAnalysisMap.get(home.id) || null
-        const bonus = calculateDescriptionPhotoBonus(
+        const bonus = calculateDescriptionBonus(
           query,
-          home.description,
-          photoAnalysis
+          home.description
         )
         
-        descriptionPhotoScores.push(bonus)
-        descriptionPhotoBonusMap.set(home.id, bonus)
+        descriptionScores.push(bonus)
+        descriptionBonusMap.set(home.id, bonus)
       }
       
-      // Check if any homes have description/photo bonus
-      const hasAnyDescriptionPhotoBonus = descriptionPhotoScores.some(score => score > 0)
+      // Check if any homes have description bonus
+      const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
       
       // If some homes have bonus and others don't, penalize those without
-      if (hasAnyDescriptionPhotoBonus) {
-        const maxBonus = Math.max(...descriptionPhotoScores)
+      if (hasAnyDescriptionBonus) {
+        const maxBonus = Math.max(...descriptionScores)
         homes.forEach(home => {
-          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
+          const bonus = descriptionBonusMap.get(home.id) || 0
           const currentScore = matchMap.get(home.id) || 0
           
           if (bonus > 0) {
@@ -1034,7 +971,7 @@ export async function POST(request: NextRequest) {
       } else {
         // No homes have bonus, just apply scores as normal
         homes.forEach(home => {
-          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
+          const bonus = descriptionBonusMap.get(home.id) || 0
           if (bonus > 0) {
             const currentScore = matchMap.get(home.id) || 0
             const finalScore = Math.min(100, currentScore + bonus)
@@ -1043,17 +980,17 @@ export async function POST(request: NextRequest) {
         })
       }
       
-      // Calculate average description/photo score for logging
-      if (descriptionPhotoScores.length > 0) {
-        avgDescriptionPhotoScore = descriptionPhotoScores.reduce((sum, score) => sum + score, 0) / descriptionPhotoScores.length
+      // Calculate average description score for logging
+      if (descriptionScores.length > 0) {
+        avgDescriptionPhotoScore = descriptionScores.reduce((sum, score) => sum + score, 0) / descriptionScores.length
       }
       
-      // Check if only description/photo matching is requested (no other hard/soft criteria except maybe country)
-      // If so, filter to only houses with description/photo score > 0
-      const hasOnlyDescriptionPhotoMatching = (!hasHardFilters || onlyCountryFilter) && !hasSoftCriteria && hasAnyDescriptionPhotoBonus
-      if (hasOnlyDescriptionPhotoMatching) {
+      // Check if only description matching is requested (no other hard/soft criteria except maybe country)
+      // If so, filter to only houses with description score > 0
+      const hasOnlyDescriptionMatching = (!hasHardFilters || onlyCountryFilter) && !hasSoftCriteria && hasAnyDescriptionBonus
+      if (hasOnlyDescriptionMatching) {
         homes = homes.filter(home => {
-          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
+          const bonus = descriptionBonusMap.get(home.id) || 0
           return bonus > 0
         })
         // Update matchMap to only include filtered homes
@@ -1065,8 +1002,8 @@ export async function POST(request: NextRequest) {
         })
       }
       
-      // If only country filter and no description/photo matches, return nothing
-      if (onlyCountryFilter && !hasAnyDescriptionPhotoBonus) {
+      // If only country filter and no description matches, return nothing
+      if (onlyCountryFilter && !hasAnyDescriptionBonus) {
         return NextResponse.json(
           { 
             homes: [],
@@ -1076,8 +1013,8 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      // If no hard filters (or only country) and all description/photo scores are 0, return nothing
-      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionPhotoBonus) {
+      // If no hard filters (or only country) and all description scores are 0, return nothing
+      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus) {
         return NextResponse.json(
           { 
             homes: [],

@@ -415,19 +415,17 @@ export function calculateParkingScore(
 }
 
 /**
- * Calculates a bonus score (0-5%) based on how well the home description and photos match user query features
+ * Calculates a bonus score (0-5%) based on how well the home description matches user query features
  * @param userQuery - The original user search query
  * @param homeDescription - The home description text
- * @param photoAnalysis - Optional AI analysis of photos (from Vision API)
  * @returns Bonus percentage (0-5) to add to the final score
  */
-export function calculateDescriptionPhotoBonus(
+export function calculateDescriptionBonus(
   userQuery: string,
-  homeDescription: string | null,
-  photoAnalysis: string | null
+  homeDescription: string | null
 ): number {
-  if (!homeDescription && !photoAnalysis) {
-    return 0 // No description or photos to analyze
+  if (!homeDescription) {
+    return 0 // No description to analyze
   }
 
   // Extract feature keywords from user query (things user wants)
@@ -482,32 +480,17 @@ export function calculateDescriptionPhotoBonus(
 
   // Check description for matches
   let descriptionMatches = 0
-  if (homeDescription) {
-    const descLower = homeDescription.toLowerCase()
-    featureKeywords.forEach(keyword => {
-      if (descLower.includes(keyword)) {
-        descriptionMatches++
-      }
-    })
-  }
+  const descLower = homeDescription.toLowerCase()
+  featureKeywords.forEach(keyword => {
+    if (descLower.includes(keyword)) {
+      descriptionMatches++
+    }
+  })
 
-  // Check photo analysis for matches
-  let photoMatches = 0
-  if (photoAnalysis) {
-    const photoLower = photoAnalysis.toLowerCase()
-    featureKeywords.forEach(keyword => {
-      if (photoLower.includes(keyword)) {
-        photoMatches++
-      }
-    })
-  }
+  // Calculate bonus: 0-5% based on description matches
+  // Each match in description = 1%, max 5%
+  const descriptionBonus = Math.min(descriptionMatches * 1, 5) // Max 5% from description
 
-  // Calculate bonus: 0-5% based on matches
-  // Each match in description = 1%, each match in photos = 1.5%, max 5%
-  const descriptionBonus = Math.min(descriptionMatches * 1, 2.5) // Max 2.5% from description
-  const photoBonus = Math.min(photoMatches * 1.5, 2.5) // Max 2.5% from photos
-  const totalBonus = Math.min(descriptionBonus + photoBonus, 5) // Max 5% total
-
-  return totalBonus
+  return descriptionBonus
 }
 
