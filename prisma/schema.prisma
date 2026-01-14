@@ -176,6 +176,7 @@ model AISearchLog {
   homesCountBeforeFilter Int     // Number of homes before filtering
   homesCountAfterFilter  Int     // Number of homes after filtering
   finalHomesCount       Int     // Final number of homes returned
+  descriptionPhotoScore  Float?  // Combined description and photo matching bonus score (0-5%)
   error                 String? // Error message if any
   createdAt             DateTime @default(now())
 

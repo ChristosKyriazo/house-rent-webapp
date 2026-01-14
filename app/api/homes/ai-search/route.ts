@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore } from '@/lib/ai-search-helpers'
+import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionPhotoBonus } from '@/lib/ai-search-helpers'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
   let homesCountBeforeFilter = 0
   let homesCountAfterFilter = 0
   let finalHomesCount = 0
+  let avgDescriptionPhotoScore: number | null = null
   let errorMessage: string | null = null
   let userQuery: string = 'unknown'
 
@@ -914,6 +915,97 @@ export async function POST(request: NextRequest) {
     
     // Distance, safety, and vibe matching are now handled in the programmatic calculation above
 
+    // Post-process: Apply description and photo bonus
+    // Analyze descriptions and photos to match user query features (e.g., "new stove", "backyard", "big balcony")
+    // This bonus is applied after all other scores are calculated
+    if (!shouldForce100 && openai) {
+      // Parse photos for homes that have them
+      const homesWithPhotos = homes.map(home => {
+        let photos: string[] = []
+        if (home.photos) {
+          try {
+            const parsed = JSON.parse(home.photos)
+            photos = Array.isArray(parsed) ? parsed : []
+          } catch (e) {
+            photos = []
+          }
+        }
+        return { ...home, parsedPhotos: photos }
+      }).filter(home => home.parsedPhotos.length > 0)
+
+      // Analyze photos using OpenAI Vision API for homes with photos
+      const photoAnalysisMap = new Map<number, string>()
+      if (homesWithPhotos.length > 0) {
+        for (const home of homesWithPhotos.slice(0, 10)) { // Limit to first 10 to avoid too many API calls
+          if (home.parsedPhotos && home.parsedPhotos.length > 0) {
+            try {
+              // Use first 3 photos for analysis
+              const photosToAnalyze = home.parsedPhotos.slice(0, 3)
+              
+              // Convert photo URLs to absolute URLs
+              const imageUrls = photosToAnalyze.map(photo => {
+                if (photo.startsWith('/')) {
+                  return `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}${photo}`
+                }
+                return photo
+              })
+
+              const visionResponse = await openai.chat.completions.create({
+                model: 'gpt-4o-mini', // Vision-capable model
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: `Analyze these property photos and describe visible features that match the user's search query. Focus on: appliances (stove, oven, kitchen), outdoor spaces (balcony, terrace, backyard, garden, pool), views (sea, mountain, city), interior features (fireplace, storage, modern bathrooms, flooring), and other features mentioned in the query. User query: "${query}"`
+                      },
+                      ...imageUrls.map(url => ({
+                        type: 'image_url' as const,
+                        image_url: { url }
+                      }))
+                    ]
+                  }
+                ],
+                max_tokens: 200
+              })
+
+              const analysis = visionResponse.choices[0]?.message?.content || ''
+              photoAnalysisMap.set(home.id, analysis)
+            } catch (error) {
+              console.error(`Error analyzing photos for home ${home.id}:`, error)
+              // Continue without photo analysis for this home
+            }
+          }
+        }
+      }
+
+      // Calculate description/photo bonus for each home
+      const descriptionPhotoScores: number[] = []
+      for (const home of homes) {
+        const photoAnalysis = photoAnalysisMap.get(home.id) || null
+        const bonus = calculateDescriptionPhotoBonus(
+          query,
+          home.description,
+          photoAnalysis
+        )
+        
+        if (bonus > 0) {
+          descriptionPhotoScores.push(bonus)
+          const currentScore = matchMap.get(home.id) || 0
+          const finalScore = Math.min(100, currentScore + bonus)
+          matchMap.set(home.id, finalScore)
+        } else {
+          descriptionPhotoScores.push(0)
+        }
+      }
+      
+      // Calculate average description/photo score for logging
+      if (descriptionPhotoScores.length > 0) {
+        avgDescriptionPhotoScore = descriptionPhotoScores.reduce((sum, score) => sum + score, 0) / descriptionPhotoScores.length
+      }
+    }
+
     // Attach match percentages and safety to homes and sort by match percentage (highest first)
     const homesWithMatches = homes.map(home => {
       const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
@@ -945,6 +1037,7 @@ export async function POST(request: NextRequest) {
         homesCountBeforeFilter,
         homesCountAfterFilter,
         finalHomesCount,
+        descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
       },
     }).catch((logError) => {
@@ -980,6 +1073,7 @@ export async function POST(request: NextRequest) {
         homesCountBeforeFilter,
         homesCountAfterFilter,
         finalHomesCount,
+        descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
       },
     }).catch((logError) => {

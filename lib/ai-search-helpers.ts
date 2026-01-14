@@ -414,3 +414,100 @@ export function calculateParkingScore(
   }
 }
 
+/**
+ * Calculates a bonus score (0-5%) based on how well the home description and photos match user query features
+ * @param userQuery - The original user search query
+ * @param homeDescription - The home description text
+ * @param photoAnalysis - Optional AI analysis of photos (from Vision API)
+ * @returns Bonus percentage (0-5) to add to the final score
+ */
+export function calculateDescriptionPhotoBonus(
+  userQuery: string,
+  homeDescription: string | null,
+  photoAnalysis: string | null
+): number {
+  if (!homeDescription && !photoAnalysis) {
+    return 0 // No description or photos to analyze
+  }
+
+  // Extract feature keywords from user query (things user wants)
+  // Common features: stove, oven, kitchen, balcony, terrace, backyard, garden, pool, view, etc.
+  const queryLower = userQuery.toLowerCase()
+  const featureKeywords: string[] = []
+  
+  // Common feature patterns
+  const featurePatterns = [
+    /\b(new|modern|updated|renovated)\s+(stove|oven|kitchen|appliance|appliances)\b/i,
+    /\b(big|large|spacious|huge)\s+(balcony|terrace|patio|deck)\b/i,
+    /\b(backyard|garden|yard|outdoor|outdoor space)\b/i,
+    /\b(pool|swimming pool|jacuzzi|hot tub)\b/i,
+    /\b(view|views|sea view|mountain view|city view|panoramic)\b/i,
+    /\b(fireplace|fire place)\b/i,
+    /\b(storage|storage space|closet|closets)\b/i,
+    /\b(garage|parking space|parking)\b/i,
+    /\b(modern|renovated|updated|new)\s+(bathroom|bathrooms)\b/i,
+    /\b(wood|hardwood|parquet)\s+(floor|floors|flooring)\b/i,
+    /\b(air conditioning|ac|heating|central heating)\b/i,
+    /\b(elevator|lift)\b/i,
+    /\b(quiet|peaceful|calm)\b/i,
+    /\b(bright|sunny|natural light|light)\b/i,
+  ]
+
+  // Extract keywords from query
+  featurePatterns.forEach(pattern => {
+    const match = queryLower.match(pattern)
+    if (match) {
+      // Extract the feature word(s)
+      const words = match[0].split(/\s+/)
+      words.forEach(word => {
+        if (word.length > 3 && !['new', 'big', 'large', 'modern', 'updated', 'renovated'].includes(word.toLowerCase())) {
+          featureKeywords.push(word.toLowerCase())
+        }
+      })
+      featureKeywords.push(match[0].toLowerCase())
+    }
+  })
+
+  // Also look for standalone feature words
+  const standaloneFeatures = ['stove', 'oven', 'balcony', 'terrace', 'backyard', 'garden', 'pool', 'view', 'fireplace', 'storage', 'garage', 'elevator']
+  standaloneFeatures.forEach(feature => {
+    if (queryLower.includes(feature)) {
+      featureKeywords.push(feature)
+    }
+  })
+
+  if (featureKeywords.length === 0) {
+    return 0 // No feature keywords found in query
+  }
+
+  // Check description for matches
+  let descriptionMatches = 0
+  if (homeDescription) {
+    const descLower = homeDescription.toLowerCase()
+    featureKeywords.forEach(keyword => {
+      if (descLower.includes(keyword)) {
+        descriptionMatches++
+      }
+    })
+  }
+
+  // Check photo analysis for matches
+  let photoMatches = 0
+  if (photoAnalysis) {
+    const photoLower = photoAnalysis.toLowerCase()
+    featureKeywords.forEach(keyword => {
+      if (photoLower.includes(keyword)) {
+        photoMatches++
+      }
+    })
+  }
+
+  // Calculate bonus: 0-5% based on matches
+  // Each match in description = 1%, each match in photos = 1.5%, max 5%
+  const descriptionBonus = Math.min(descriptionMatches * 1, 2.5) // Max 2.5% from description
+  const photoBonus = Math.min(photoMatches * 1.5, 2.5) // Max 2.5% from photos
+  const totalBonus = Math.min(descriptionBonus + photoBonus, 5) // Max 5% total
+
+  return totalBonus
+}
+
