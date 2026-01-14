@@ -17,11 +17,11 @@ export async function POST(request: NextRequest) {
   let userId: number | null = null
   let filterExtractionPrompt: string | null = null
   let filterExtractionResponse: string | null = null
-  let extractedFiltersJson: string | null = null
+  let hardFiltersJson: string | null = null
+  let softFiltersJson: string | null = null
+  let distancesJson: string | null = null
   let homesCountBeforeFilter = 0
   let homesCountAfterFilter = 0
-  let matchCalculationPrompt: string | null = null
-  let matchCalculationResponse: string | null = null
   let finalHomesCount = 0
   let errorMessage: string | null = null
   let userQuery: string = 'unknown'
@@ -87,11 +87,64 @@ export async function POST(request: NextRequest) {
     // Capture filter extraction data for logging
     filterExtractionPrompt = (extractedFiltersResult as any).filterExtractionPrompt || null
     filterExtractionResponse = (extractedFiltersResult as any).filterExtractionResponse || null
-    extractedFiltersJson = JSON.stringify(extractedFilters)
+    
+    // Separate filters into hard filters, soft filters, and distances for logging
+    const hardFilters: any = {}
+    const softFilters: any = {}
+    const distances: any = {}
+    
+    // Hard filters: city, country, area, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
+    if (extractedFilters.city !== undefined && extractedFilters.city !== null) hardFilters.city = extractedFilters.city
+    if (extractedFilters.country !== undefined && extractedFilters.country !== null) hardFilters.country = extractedFilters.country
+    if (extractedFilters.area !== undefined && extractedFilters.area !== null) hardFilters.area = extractedFilters.area
+    if (extractedFilters.listingType !== undefined && extractedFilters.listingType !== null) hardFilters.listingType = extractedFilters.listingType
+    if ((extractedFilters as any).listingtype !== undefined && (extractedFilters as any).listingtype !== null) hardFilters.listingtype = (extractedFilters as any).listingtype
+    if (extractedFilters.minPrice !== undefined && extractedFilters.minPrice !== null) hardFilters.minPrice = extractedFilters.minPrice
+    if (extractedFilters.maxPrice !== undefined && extractedFilters.maxPrice !== null) hardFilters.maxPrice = extractedFilters.maxPrice
+    if (extractedFilters.minBedrooms !== undefined && extractedFilters.minBedrooms !== null) hardFilters.minBedrooms = extractedFilters.minBedrooms
+    if (extractedFilters.maxBedrooms !== undefined && extractedFilters.maxBedrooms !== null) hardFilters.maxBedrooms = extractedFilters.maxBedrooms
+    if (extractedFilters.minBathrooms !== undefined && extractedFilters.minBathrooms !== null) hardFilters.minBathrooms = extractedFilters.minBathrooms
+    if (extractedFilters.maxBathrooms !== undefined && extractedFilters.maxBathrooms !== null) hardFilters.maxBathrooms = extractedFilters.maxBathrooms
+    if (extractedFilters.minSize !== undefined && extractedFilters.minSize !== null) hardFilters.minSize = extractedFilters.minSize
+    if (extractedFilters.maxSize !== undefined && extractedFilters.maxSize !== null) hardFilters.maxSize = extractedFilters.maxSize
+    // Parking is hard filter only if not a soft preference
+    if (extractedFilters.parking !== undefined && extractedFilters.parking !== null && (extractedFilters as any).parkingSoftPreference !== true) {
+      hardFilters.parking = extractedFilters.parking
+    }
+    if (extractedFilters.minFloor !== undefined && extractedFilters.minFloor !== null) hardFilters.minFloor = extractedFilters.minFloor
+    if (extractedFilters.maxFloor !== undefined && extractedFilters.maxFloor !== null) hardFilters.maxFloor = extractedFilters.maxFloor
+    if (extractedFilters.minYearBuilt !== undefined && extractedFilters.minYearBuilt !== null) hardFilters.minYearBuilt = extractedFilters.minYearBuilt
+    if (extractedFilters.maxYearBuilt !== undefined && extractedFilters.maxYearBuilt !== null) hardFilters.maxYearBuilt = extractedFilters.maxYearBuilt
+    if (extractedFilters.minYearRenovated !== undefined && extractedFilters.minYearRenovated !== null) hardFilters.minYearRenovated = extractedFilters.minYearRenovated
+    if (extractedFilters.maxYearRenovated !== undefined && extractedFilters.maxYearRenovated !== null) hardFilters.maxYearRenovated = extractedFilters.maxYearRenovated
+    if (extractedFilters.heatingCategory !== undefined && extractedFilters.heatingCategory !== null) hardFilters.heatingCategory = extractedFilters.heatingCategory
+    if (extractedFilters.heatingAgent !== undefined && extractedFilters.heatingAgent !== null) hardFilters.heatingAgent = extractedFilters.heatingAgent
+    
+    // Soft filters: preferredAreas, vibePreference, Safety, parkingSoftPreference
+    if (extractedFilters.preferredAreas !== undefined && extractedFilters.preferredAreas !== null) softFilters.preferredAreas = extractedFilters.preferredAreas
+    if (extractedFilters.vibePreference !== undefined && extractedFilters.vibePreference !== null) softFilters.vibePreference = extractedFilters.vibePreference
+    if (extractedFilters.Safety !== undefined && extractedFilters.Safety !== null) softFilters.Safety = extractedFilters.Safety
+    if ((extractedFilters as any).parkingSoftPreference !== undefined && (extractedFilters as any).parkingSoftPreference !== null) {
+      softFilters.parkingSoftPreference = (extractedFilters as any).parkingSoftPreference
+    }
+    
+    // Distances: Metro, Bus, School, Hospital, Park, University
+    if (extractedFilters.Metro !== undefined && extractedFilters.Metro !== null) distances.Metro = extractedFilters.Metro
+    if (extractedFilters.Bus !== undefined && extractedFilters.Bus !== null) distances.Bus = extractedFilters.Bus
+    if (extractedFilters.School !== undefined && extractedFilters.School !== null) distances.School = extractedFilters.School
+    if (extractedFilters.Hospital !== undefined && extractedFilters.Hospital !== null) distances.Hospital = extractedFilters.Hospital
+    if (extractedFilters.Park !== undefined && extractedFilters.Park !== null) distances.Park = extractedFilters.Park
+    if (extractedFilters.University !== undefined && extractedFilters.University !== null) distances.University = extractedFilters.University
+    
+    hardFiltersJson = Object.keys(hardFilters).length > 0 ? JSON.stringify(hardFilters) : null
+    softFiltersJson = Object.keys(softFilters).length > 0 ? JSON.stringify(softFilters) : null
+    distancesJson = Object.keys(distances).length > 0 ? JSON.stringify(distances) : null
 
     // TEST LOG - DELETE AFTER: Show AI JSON response
     console.log('\n========== AI FILTER EXTRACTION JSON ==========')
-    console.log(JSON.stringify(extractedFilters, null, 2))
+    console.log('Hard Filters:', hardFiltersJson)
+    console.log('Soft Filters:', softFiltersJson)
+    console.log('Distances:', distancesJson)
     console.log('================================================\n')
 
     // Step 2: Build database query with extracted filters
@@ -452,7 +505,6 @@ export async function POST(request: NextRequest) {
       homes.forEach(home => {
         matchMap.set(home.id, 100)
       })
-      matchCalculationResponse = 'Programmatic - hard filters only, all matches set to 100%'
     } else {
       // Calculate scores programmatically
       const vibePreference = extractedFilters.vibePreference || null
@@ -771,8 +823,6 @@ export async function POST(request: NextRequest) {
         console.log(`  Final Scaled Score: ${detail.finalScaledScore?.toFixed(2)}%`)
       })
       console.log('\n======================================================\n')
-      
-      matchCalculationResponse = `Programmatic - calculated from distance, safety, vibe, and parking scores, scaled to 0-100`
     }
 
     // Distance scoring is now handled in the programmatic calculation above
@@ -876,11 +926,11 @@ export async function POST(request: NextRequest) {
         userQuery: query,
         filterExtractionPrompt,
         filterExtractionResponse,
-        extractedFilters: extractedFiltersJson,
+        hardFilters: hardFiltersJson,
+        softFilters: softFiltersJson,
+        distances: distancesJson,
         homesCountBeforeFilter,
         homesCountAfterFilter,
-        matchCalculationPrompt,
-        matchCalculationResponse,
         finalHomesCount,
         error: errorMessage,
       },
@@ -906,11 +956,11 @@ export async function POST(request: NextRequest) {
         userQuery: userQuery || 'unknown',
         filterExtractionPrompt,
         filterExtractionResponse,
-        extractedFilters: extractedFiltersJson,
+        hardFilters: hardFiltersJson,
+        softFilters: softFiltersJson,
+        distances: distancesJson,
         homesCountBeforeFilter,
         homesCountAfterFilter,
-        matchCalculationPrompt,
-        matchCalculationResponse,
         finalHomesCount,
         error: errorMessage,
       },
