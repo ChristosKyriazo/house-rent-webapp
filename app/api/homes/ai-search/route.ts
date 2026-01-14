@@ -489,6 +489,20 @@ export async function POST(request: NextRequest) {
       extractedFilters.minYearBuilt || extractedFilters.maxYearBuilt ||
       extractedFilters.minYearRenovated || extractedFilters.maxYearRenovated
     
+    // Check if country is the ONLY hard filter - if so, return nothing
+    const onlyCountryFilter = extractedFilters.country && 
+      !extractedFilters.city && !extractedFilters.area &&
+      !extractedFilters.listingType && !(extractedFilters as any).listingtype &&
+      !extractedFilters.minPrice && !extractedFilters.maxPrice &&
+      !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
+      !extractedFilters.minBathrooms && !extractedFilters.maxBathrooms &&
+      !extractedFilters.minSize && !extractedFilters.maxSize &&
+      extractedFilters.parking === undefined &&
+      !extractedFilters.heatingCategory && !extractedFilters.heatingAgent &&
+      !extractedFilters.minFloor && !extractedFilters.maxFloor &&
+      !extractedFilters.minYearBuilt && !extractedFilters.maxYearBuilt &&
+      !extractedFilters.minYearRenovated && !extractedFilters.maxYearRenovated
+    
     // Check if we have soft criteria (distance categories, safety, vibe preference, or parking soft preference)
     const parkingSoftPreference = (extractedFilters as any).parkingSoftPreference === true
     const hasSoftCriteria = 
@@ -982,6 +996,8 @@ export async function POST(request: NextRequest) {
 
       // Calculate description/photo bonus for each home
       const descriptionPhotoScores: number[] = []
+      const descriptionPhotoBonusMap = new Map<number, number>()
+      
       for (const home of homes) {
         const photoAnalysis = photoAnalysisMap.get(home.id) || null
         const bonus = calculateDescriptionPhotoBonus(
@@ -990,19 +1006,96 @@ export async function POST(request: NextRequest) {
           photoAnalysis
         )
         
-        if (bonus > 0) {
-          descriptionPhotoScores.push(bonus)
+        descriptionPhotoScores.push(bonus)
+        descriptionPhotoBonusMap.set(home.id, bonus)
+      }
+      
+      // Check if any homes have description/photo bonus
+      const hasAnyDescriptionPhotoBonus = descriptionPhotoScores.some(score => score > 0)
+      
+      // If some homes have bonus and others don't, penalize those without
+      if (hasAnyDescriptionPhotoBonus) {
+        const maxBonus = Math.max(...descriptionPhotoScores)
+        homes.forEach(home => {
+          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
           const currentScore = matchMap.get(home.id) || 0
-          const finalScore = Math.min(100, currentScore + bonus)
-          matchMap.set(home.id, finalScore)
-        } else {
-          descriptionPhotoScores.push(0)
-        }
+          
+          if (bonus > 0) {
+            // Apply bonus
+            const finalScore = Math.min(100, currentScore + bonus)
+            matchMap.set(home.id, finalScore)
+          } else {
+            // Penalize houses without bonus when others have it
+            const penalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
+            const finalScore = Math.max(0, currentScore - penalty)
+            matchMap.set(home.id, finalScore)
+          }
+        })
+      } else {
+        // No homes have bonus, just apply scores as normal
+        homes.forEach(home => {
+          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
+          if (bonus > 0) {
+            const currentScore = matchMap.get(home.id) || 0
+            const finalScore = Math.min(100, currentScore + bonus)
+            matchMap.set(home.id, finalScore)
+          }
+        })
       }
       
       // Calculate average description/photo score for logging
       if (descriptionPhotoScores.length > 0) {
         avgDescriptionPhotoScore = descriptionPhotoScores.reduce((sum, score) => sum + score, 0) / descriptionPhotoScores.length
+      }
+      
+      // Check if only description/photo matching is requested (no other hard/soft criteria except maybe country)
+      // If so, filter to only houses with description/photo score > 0
+      const hasOnlyDescriptionPhotoMatching = (!hasHardFilters || onlyCountryFilter) && !hasSoftCriteria && hasAnyDescriptionPhotoBonus
+      if (hasOnlyDescriptionPhotoMatching) {
+        homes = homes.filter(home => {
+          const bonus = descriptionPhotoBonusMap.get(home.id) || 0
+          return bonus > 0
+        })
+        // Update matchMap to only include filtered homes
+        const filteredHomeIds = new Set(homes.map(h => h.id))
+        matchMap.forEach((score, homeId) => {
+          if (!filteredHomeIds.has(homeId)) {
+            matchMap.delete(homeId)
+          }
+        })
+      }
+      
+      // If only country filter and no description/photo matches, return nothing
+      if (onlyCountryFilter && !hasAnyDescriptionPhotoBonus) {
+        return NextResponse.json(
+          { 
+            homes: [],
+            message: 'No homes found matching your criteria'
+          },
+          { status: 200 }
+        )
+      }
+      
+      // If no hard filters (or only country) and all description/photo scores are 0, return nothing
+      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionPhotoBonus) {
+        return NextResponse.json(
+          { 
+            homes: [],
+            message: 'No homes found matching your criteria'
+          },
+          { status: 200 }
+        )
+      }
+    } else {
+      // If shouldForce100 but only country filter, return nothing
+      if (onlyCountryFilter) {
+        return NextResponse.json(
+          { 
+            homes: [],
+            message: 'No homes found matching your criteria'
+          },
+          { status: 200 }
+        )
       }
     }
 
