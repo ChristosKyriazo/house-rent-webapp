@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { getUserRatings } from '@/lib/ratings'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
-// AI match calculation prompts no longer used - replaced with programmatic calculation
 import { removeGreekAccents } from '@/lib/utils'
 import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore } from '@/lib/ai-search-helpers'
 import OpenAI from 'openai'
@@ -315,9 +313,8 @@ export async function POST(request: NextRequest) {
     // - Avoid: Penalize homes within 3km, reward homes further away
     // - Not important/Not mentioned: No distance-based scoring
 
-    // Apply exclude filters for inquired and approved listings BEFORE AI processing
+    // Apply exclude filters for inquired and approved listings
     // Note: excludeInquired and excludeApproved come from the request body
-    // IMPORTANT: Apply this BEFORE preparing homesData for AI to avoid processing excluded homes
     if (excludeInquired || excludeApproved) {
       try {
         // Get user ID - try to get current user if not already set
@@ -409,152 +406,6 @@ export async function POST(request: NextRequest) {
         safety: area.safety,
         vibe: area.vibe,
       })
-    })
-
-    // Fetch owner ratings for all homes
-    const ownerIds = [...new Set(homes.map(home => home.ownerId))]
-    const ownerRatingsMap = new Map<number, { ownerRating: number | null; ownerCount: number }>()
-    
-    for (const ownerId of ownerIds) {
-      const ratings = await getUserRatings(ownerId)
-      ownerRatingsMap.set(ownerId, {
-        ownerRating: ratings.ownerRating,
-        ownerCount: ratings.ownerCount,
-      })
-    }
-
-    // Parse photos for each home
-    const homesWithPhotos = homes.map(home => {
-      let photos: string[] = []
-      if (home.photos) {
-        try {
-          const parsed = JSON.parse(home.photos)
-          photos = Array.isArray(parsed) ? parsed : []
-        } catch (e) {
-          console.error('Error parsing photos for home', home.id, ':', e)
-          photos = []
-        }
-      }
-      return { ...home, parsedPhotos: photos }
-    })
-
-    // Check if query mentions visual features that require photo analysis
-    const queryLowerForVisual = query.toLowerCase()
-    const visualKeywords = ['view', 'views', 'looks', 'appearance', 'beautiful', 'nice looking', 'pretty', 'aesthetic', 'modern', 'traditional', 'style', 'design', 'decor', 'interior', 'exterior', 'balcony', 'terrace', 'garden', 'pool', 'sea view', 'mountain view', 'city view', 'water view', 'ocean view', 'panoramic', 'scenic']
-    const needsPhotoAnalysis = visualKeywords.some(keyword => queryLowerForVisual.includes(keyword))
-
-    // Analyze photos using OpenAI Vision API if visual features are mentioned
-    const photoAnalysisMap = new Map<number, string>()
-    if (needsPhotoAnalysis) {
-      
-      for (const home of homesWithPhotos) {
-        if (home.parsedPhotos && home.parsedPhotos.length > 0) {
-          try {
-            // Use first 3 photos for analysis (to save tokens)
-            const photosToAnalyze = home.parsedPhotos.slice(0, 3)
-            
-            // Convert photo URLs to base64 or use URLs directly
-            // For now, we'll use URLs (assuming they're publicly accessible)
-            const imageUrls = photosToAnalyze.map(photo => {
-              // If photo is a relative path, convert to absolute URL
-              if (photo.startsWith('/')) {
-                return `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}${photo}`
-              }
-              return photo
-            })
-
-            const visionResponse = await openai.chat.completions.create({
-              model: 'gpt-4o-mini', // Vision-capable model
-              messages: [
-                {
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: `Analyze these property photos and describe: 1) Views (sea, mountain, city, water, panoramic, etc.), 2) Visual style (modern, traditional, aesthetic), 3) Interior/exterior features (balcony, terrace, garden, pool, etc.), 4) Overall appearance. Be specific about views and visual characteristics. User query: "${query}"`
-                    },
-                    ...imageUrls.map(url => ({
-                      type: 'image_url' as const,
-                      image_url: { url }
-                    }))
-                  ]
-                }
-              ],
-              max_tokens: 300
-            })
-
-            const analysis = visionResponse.choices[0]?.message?.content || ''
-            photoAnalysisMap.set(home.id, analysis)
-          } catch (error) {
-            console.error(`Error analyzing photos for home ${home.id}:`, error)
-            // Continue without photo analysis for this home
-          }
-        }
-      }
-    }
-
-    // Prepare home data for AI analysis
-    const homesData = homesWithPhotos.map(home => {
-      const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
-      const ownerRating = ownerRatingsMap.get(home.ownerId)
-      const photoAnalysis = photoAnalysisMap.get(home.id) || null
-      
-      // Parse area vibe to extract characteristics
-      const areaVibe = areaData?.vibe || ''
-      const isSuburban = /suburban|residential|quiet|family/i.test(areaVibe)
-      const isUrban = /urban|central|city|downtown/i.test(areaVibe)
-      const isUpscale = /upscale|luxury|premium|exclusive/i.test(areaVibe)
-      const isNearWater = /water|coastal|seaside|beach|marina/i.test(areaVibe)
-      const isWorkingClass = /working-class|working class|industrial|factory/i.test(areaVibe)
-      const isCoastal = /coastal|seaside|beach|touristic|marina/i.test(areaVibe) || /water|coastal|seaside|beach|marina/i.test(home.area || '')
-      
-      // Determine floor height category
-      const floorHeight = home.floor || null
-      const isHighFloor = floorHeight !== null && floorHeight >= 5
-      const isLowFloor = floorHeight !== null && floorHeight <= 2
-      
-      return {
-        id: home.id,
-        key: home.key,
-        title: home.title,
-        description: home.description || '',
-        city: home.city,
-        country: home.country,
-        area: home.area || '',
-        listingType: home.listingType,
-        pricePerMonth: home.pricePerMonth,
-        bedrooms: home.bedrooms,
-        bathrooms: home.bathrooms,
-        floor: home.floor,
-        floorHeight: isHighFloor ? 'high' : isLowFloor ? 'low' : null, // 'high', 'low', or null
-        heatingCategory: home.heatingCategory || '',
-        heatingAgent: home.heatingAgent || '',
-        sizeSqMeters: home.sizeSqMeters,
-        yearBuilt: home.yearBuilt,
-        yearRenovated: home.yearRenovated,
-        availableFrom: home.availableFrom.toISOString(),
-        parking: home.parking,
-        closestMetro: home.closestMetro,
-        closestBus: home.closestBus,
-        closestSchool: home.closestSchool,
-        closestHospital: home.closestHospital,
-        closestPark: home.closestPark,
-        closestUniversity: home.closestUniversity,
-        areaSafety: areaData?.safety || null,
-        areaVibe: areaData?.vibe || null, // Include full vibe string for AI to check for conflicts
-        areaCharacteristics: {
-          isSuburban,
-          isUrban,
-          isUpscale,
-          isNearWater,
-          isWorkingClass,
-          isCoastal,
-        },
-        ownerRating: ownerRating?.ownerRating || null,
-        ownerRatingCount: ownerRating?.ownerCount || 0,
-        photoAnalysis: photoAnalysis, // Visual analysis from photos
-        hasPhotos: home.parsedPhotos.length > 0,
-      }
     })
 
     // Check if ONLY hard filters were extracted (no soft criteria)
