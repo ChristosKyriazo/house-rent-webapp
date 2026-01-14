@@ -428,12 +428,37 @@ export function calculateDescriptionBonus(
     return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No description to analyze
   }
 
-  // Extract feature keywords from user query (things user wants)
-  // Common features: stove, oven, kitchen, balcony, terrace, backyard, garden, pool, view, etc.
-  const queryLower = userQuery.toLowerCase()
+  // Extract meaningful words from user query (excluding common words)
+  // This works for both Greek and English
+  // This works for both Greek and English
+  const queryLower = userQuery.toLowerCase().trim()
   const featureKeywords: string[] = []
   
-  // Common feature patterns
+  // Common stop words to exclude (English and Greek)
+  const stopWords = new Set([
+    'i', 'want', 'need', 'looking', 'for', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+    'θελω', 'θέλω', 'χρειάζομαι', 'ψάχνω', 'για', 'το', 'τη', 'τον', 'τα', 'της', 'των', 'με', 'σε', 'από', 'προς', 'και', 'ή', 'αλλά'
+  ])
+  
+  // Extract all words from query (split by spaces and punctuation)
+  const words = queryLower
+    .replace(/[^\p{L}\s]/gu, ' ') // Replace punctuation with spaces
+    .split(/\s+/)
+    .filter(word => word.length > 2) // Only words longer than 2 characters
+    .filter(word => !stopWords.has(word)) // Exclude stop words
+  
+  // Add normalized versions (without accents) for Greek text
+  words.forEach(word => {
+    if (word.length > 2) {
+      featureKeywords.push(word)
+      const normalized = removeGreekAccents(word)
+      if (normalized !== word) {
+        featureKeywords.push(normalized)
+      }
+    }
+  })
+  
+  // Also check for common feature patterns (English)
   const featurePatterns = [
     /\b(new|modern|updated|renovated)\s+(stove|oven|kitchen|appliance|appliances)\b/i,
     /\b(big|large|spacious|huge)\s+(balcony|terrace|patio|deck)\b/i,
@@ -447,15 +472,12 @@ export function calculateDescriptionBonus(
     /\b(wood|hardwood|parquet)\s+(floor|floors|flooring)\b/i,
     /\b(air conditioning|ac|heating|central heating)\b/i,
     /\b(elevator|lift)\b/i,
-    /\b(quiet|peaceful|calm)\b/i,
-    /\b(bright|sunny|natural light|light)\b/i,
   ]
 
-  // Extract keywords from query
+  // Extract keywords from English patterns
   featurePatterns.forEach(pattern => {
     const match = queryLower.match(pattern)
     if (match) {
-      // Extract the feature word(s)
       const words = match[0].split(/\s+/)
       words.forEach(word => {
         if (word.length > 3 && !['new', 'big', 'large', 'modern', 'updated', 'renovated'].includes(word.toLowerCase())) {
@@ -466,8 +488,8 @@ export function calculateDescriptionBonus(
     }
   })
 
-  // Also look for standalone feature words
-  const standaloneFeatures = ['stove', 'oven', 'balcony', 'terrace', 'backyard', 'garden', 'pool', 'view', 'fireplace', 'storage', 'garage', 'elevator']
+  // Also look for standalone English feature words
+  const standaloneFeatures = ['stove', 'oven', 'balcony', 'terrace', 'backyard', 'garden', 'pool', 'view', 'fireplace', 'storage', 'garage', 'elevator', 'appliance', 'appliances']
   standaloneFeatures.forEach(feature => {
     if (queryLower.includes(feature)) {
       featureKeywords.push(feature)
@@ -481,18 +503,31 @@ export function calculateDescriptionBonus(
     return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No feature keywords found in query
   }
 
-  // Check description for matches
+  // Check description for matches (with Greek accent normalization)
   const matchedKeywords: string[] = []
   const descLower = homeDescription.toLowerCase()
+  const descNormalized = removeGreekAccents(descLower)
+  
   uniqueFeatureKeywords.forEach(keyword => {
-    if (descLower.includes(keyword)) {
+    const keywordNormalized = removeGreekAccents(keyword)
+    // Check both original and normalized versions
+    if (descLower.includes(keyword) || descNormalized.includes(keywordNormalized)) {
       matchedKeywords.push(keyword)
     }
   })
 
   // Calculate bonus: 0-5% based on description matches
   // Each match in description = 1%, max 5%
-  const descriptionBonus = Math.min(matchedKeywords.length * 1, 5) // Max 5% from description
+  // But if we have matches, give at least some bonus (scale based on match ratio)
+  const matchRatio = matchedKeywords.length / uniqueFeatureKeywords.length
+  let descriptionBonus = 0
+  
+  if (matchedKeywords.length > 0) {
+    // If we have matches, give bonus based on match ratio
+    // Perfect match (all keywords found) = 5%
+    // Partial matches scale proportionally, minimum 1% per match
+    descriptionBonus = Math.min(Math.max(matchedKeywords.length * 1, matchRatio * 5), 5)
+  }
 
   return { 
     bonus: descriptionBonus, 
