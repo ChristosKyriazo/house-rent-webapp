@@ -936,16 +936,56 @@ export async function POST(request: NextRequest) {
       // Calculate description bonus for each home
       const descriptionScores: number[] = []
       const descriptionBonusMap = new Map<number, number>()
+      const descriptionDetails: Array<{
+        homeId: number
+        homeTitle: string
+        description: string | null
+        bonus: number
+      }> = []
+      
+      // TEST LOG - DELETE AFTER: Show description matching info
+      console.log('\n========== DESCRIPTION MATCHING ==========')
+      console.log('User Query:', query)
+      console.log('Checking descriptions for matching features...\n')
+      
+      let extractedKeywords: string[] = []
+      const descriptionResults = new Map<number, { bonus: number; extractedKeywords: string[]; matchedKeywords: string[] }>()
       
       for (const home of homes) {
-        const bonus = calculateDescriptionBonus(
+        const result = calculateDescriptionBonus(
           query,
           home.description
         )
         
-        descriptionScores.push(bonus)
-        descriptionBonusMap.set(home.id, bonus)
+        // Store extracted keywords from first home (they're the same for all)
+        if (extractedKeywords.length === 0) {
+          extractedKeywords = result.extractedKeywords
+        }
+        
+        descriptionScores.push(result.bonus)
+        descriptionBonusMap.set(home.id, result.bonus)
+        descriptionResults.set(home.id, result)
+        
+        // TEST LOG - DELETE AFTER: Store description details
+        descriptionDetails.push({
+          homeId: home.id,
+          homeTitle: home.title.substring(0, 50),
+          description: home.description ? home.description.substring(0, 200) : null,
+          bonus: result.bonus,
+        })
       }
+      
+      // TEST LOG - DELETE AFTER: Show description scores for each home
+      console.log('Extracted Keywords from Query:', extractedKeywords.length > 0 ? extractedKeywords.join(', ') : 'None found')
+      console.log('\nDescription Scores:')
+      descriptionDetails.forEach(detail => {
+        const result = descriptionResults.get(detail.homeId)!
+        console.log(`  Home ID: ${detail.homeId} - ${detail.homeTitle}`)
+        console.log(`    Description: ${detail.description || 'null'}`)
+        console.log(`    Matched Keywords: ${result.matchedKeywords.length > 0 ? result.matchedKeywords.join(', ') : 'None'}`)
+        console.log(`    Description Bonus: ${detail.bonus.toFixed(2)}%`)
+      })
+      console.log('==========================================\n')
       
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
@@ -968,6 +1008,24 @@ export async function POST(request: NextRequest) {
             matchMap.set(home.id, finalScore)
           }
         })
+        
+        // TEST LOG - DELETE AFTER: Show description bonus application
+        console.log('\n========== DESCRIPTION BONUS APPLICATION ==========')
+        console.log(`Max Description Bonus: ${maxBonus.toFixed(2)}%`)
+        console.log(`Homes with bonus: ${descriptionScores.filter(s => s > 0).length}`)
+        console.log(`Homes without bonus: ${descriptionScores.filter(s => s === 0).length}`)
+        homes.forEach(home => {
+          const bonus = descriptionBonusMap.get(home.id) || 0
+          const beforeScore = matchMap.get(home.id) || 0
+          const afterScore = matchMap.get(home.id) || 0
+          if (bonus > 0) {
+            console.log(`  Home ${home.id}: +${bonus.toFixed(2)}% bonus → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
+          } else {
+            const penalty = Math.min(maxBonus * 0.5, 10)
+            console.log(`  Home ${home.id}: -${penalty.toFixed(2)}% penalty → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
+          }
+        })
+        console.log('==================================================\n')
       } else {
         // No homes have bonus, just apply scores as normal
         homes.forEach(home => {
@@ -978,6 +1036,11 @@ export async function POST(request: NextRequest) {
             matchMap.set(home.id, finalScore)
           }
         })
+        
+        // TEST LOG - DELETE AFTER: Show that no description matches found
+        console.log('\n========== DESCRIPTION MATCHING ==========')
+        console.log('No description matches found for any homes')
+        console.log('==========================================\n')
       }
       
       // Calculate average description score for logging

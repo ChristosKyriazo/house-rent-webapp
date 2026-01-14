@@ -418,14 +418,14 @@ export function calculateParkingScore(
  * Calculates a bonus score (0-5%) based on how well the home description matches user query features
  * @param userQuery - The original user search query
  * @param homeDescription - The home description text
- * @returns Bonus percentage (0-5) to add to the final score
+ * @returns Object with bonus percentage (0-5) and debug info (extracted keywords, matched keywords)
  */
 export function calculateDescriptionBonus(
   userQuery: string,
   homeDescription: string | null
-): number {
+): { bonus: number; extractedKeywords: string[]; matchedKeywords: string[] } {
   if (!homeDescription) {
-    return 0 // No description to analyze
+    return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No description to analyze
   }
 
   // Extract feature keywords from user query (things user wants)
@@ -474,23 +474,30 @@ export function calculateDescriptionBonus(
     }
   })
 
-  if (featureKeywords.length === 0) {
-    return 0 // No feature keywords found in query
+  // Remove duplicates from featureKeywords
+  const uniqueFeatureKeywords = [...new Set(featureKeywords)]
+  
+  if (uniqueFeatureKeywords.length === 0) {
+    return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No feature keywords found in query
   }
 
   // Check description for matches
-  let descriptionMatches = 0
+  const matchedKeywords: string[] = []
   const descLower = homeDescription.toLowerCase()
-  featureKeywords.forEach(keyword => {
+  uniqueFeatureKeywords.forEach(keyword => {
     if (descLower.includes(keyword)) {
-      descriptionMatches++
+      matchedKeywords.push(keyword)
     }
   })
 
   // Calculate bonus: 0-5% based on description matches
   // Each match in description = 1%, max 5%
-  const descriptionBonus = Math.min(descriptionMatches * 1, 5) // Max 5% from description
+  const descriptionBonus = Math.min(matchedKeywords.length * 1, 5) // Max 5% from description
 
-  return descriptionBonus
+  return { 
+    bonus: descriptionBonus, 
+    extractedKeywords: uniqueFeatureKeywords,
+    matchedKeywords: matchedKeywords
+  }
 }
 
