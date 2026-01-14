@@ -167,7 +167,12 @@ model AISearchLog {
   filterExtractionResponse String? // AI response for filter extraction
   hardFilters           String?  // JSON string of hard filters (city, country, area, listingType, price, bedrooms, bathrooms, size, parking, floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent)
   softFilters           String?  // JSON string of soft filters (preferredAreas, vibePreference, Safety, parkingSoftPreference)
-  distances             String?  // JSON string of distance categories (Metro, Bus, School, Hospital, Park, University with their categories)
+  metro                 String?  // Metro distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
+  bus                   String?  // Bus distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
+  school                String?  // School distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
+  hospital              String?  // Hospital distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
+  park                  String?  // Park distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
+  university            String?  // University distance category: "Essential", "Strong", "Not important", "Avoid", "Not mentioned"
   homesCountBeforeFilter Int     // Number of homes before filtering
   homesCountAfterFilter  Int     // Number of homes after filtering
   finalHomesCount       Int     // Final number of homes returned

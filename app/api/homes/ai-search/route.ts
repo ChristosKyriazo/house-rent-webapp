@@ -19,7 +19,12 @@ export async function POST(request: NextRequest) {
   let filterExtractionResponse: string | null = null
   let hardFiltersJson: string | null = null
   let softFiltersJson: string | null = null
-  let distancesJson: string | null = null
+  let metroCategory: string | null = null
+  let busCategory: string | null = null
+  let schoolCategory: string | null = null
+  let hospitalCategory: string | null = null
+  let parkCategory: string | null = null
+  let universityCategory: string | null = null
   let homesCountBeforeFilter = 0
   let homesCountAfterFilter = 0
   let finalHomesCount = 0
@@ -91,7 +96,6 @@ export async function POST(request: NextRequest) {
     // Separate filters into hard filters, soft filters, and distances for logging
     const hardFilters: any = {}
     const softFilters: any = {}
-    const distances: any = {}
     
     // Hard filters: city, country, area, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
     if (extractedFilters.city !== undefined && extractedFilters.city !== null) hardFilters.city = extractedFilters.city
@@ -128,23 +132,27 @@ export async function POST(request: NextRequest) {
       softFilters.parkingSoftPreference = (extractedFilters as any).parkingSoftPreference
     }
     
-    // Distances: Metro, Bus, School, Hospital, Park, University
-    if (extractedFilters.Metro !== undefined && extractedFilters.Metro !== null) distances.Metro = extractedFilters.Metro
-    if (extractedFilters.Bus !== undefined && extractedFilters.Bus !== null) distances.Bus = extractedFilters.Bus
-    if (extractedFilters.School !== undefined && extractedFilters.School !== null) distances.School = extractedFilters.School
-    if (extractedFilters.Hospital !== undefined && extractedFilters.Hospital !== null) distances.Hospital = extractedFilters.Hospital
-    if (extractedFilters.Park !== undefined && extractedFilters.Park !== null) distances.Park = extractedFilters.Park
-    if (extractedFilters.University !== undefined && extractedFilters.University !== null) distances.University = extractedFilters.University
+    // Extract individual distance categories
+    metroCategory = extractedFilters.Metro !== undefined && extractedFilters.Metro !== null ? extractedFilters.Metro : null
+    busCategory = extractedFilters.Bus !== undefined && extractedFilters.Bus !== null ? extractedFilters.Bus : null
+    schoolCategory = extractedFilters.School !== undefined && extractedFilters.School !== null ? extractedFilters.School : null
+    hospitalCategory = extractedFilters.Hospital !== undefined && extractedFilters.Hospital !== null ? extractedFilters.Hospital : null
+    parkCategory = extractedFilters.Park !== undefined && extractedFilters.Park !== null ? extractedFilters.Park : null
+    universityCategory = extractedFilters.University !== undefined && extractedFilters.University !== null ? extractedFilters.University : null
     
     hardFiltersJson = Object.keys(hardFilters).length > 0 ? JSON.stringify(hardFilters) : null
     softFiltersJson = Object.keys(softFilters).length > 0 ? JSON.stringify(softFilters) : null
-    distancesJson = Object.keys(distances).length > 0 ? JSON.stringify(distances) : null
 
     // TEST LOG - DELETE AFTER: Show AI JSON response
     console.log('\n========== AI FILTER EXTRACTION JSON ==========')
     console.log('Hard Filters:', hardFiltersJson)
     console.log('Soft Filters:', softFiltersJson)
-    console.log('Distances:', distancesJson)
+    console.log('Metro:', metroCategory)
+    console.log('Bus:', busCategory)
+    console.log('School:', schoolCategory)
+    console.log('Hospital:', hospitalCategory)
+    console.log('Park:', parkCategory)
+    console.log('University:', universityCategory)
     console.log('================================================\n')
 
     // Step 2: Build database query with extracted filters
@@ -928,7 +936,12 @@ export async function POST(request: NextRequest) {
         filterExtractionResponse,
         hardFilters: hardFiltersJson,
         softFilters: softFiltersJson,
-        distances: distancesJson,
+        metro: metroCategory,
+        bus: busCategory,
+        school: schoolCategory,
+        hospital: hospitalCategory,
+        park: parkCategory,
+        university: universityCategory,
         homesCountBeforeFilter,
         homesCountAfterFilter,
         finalHomesCount,
@@ -958,7 +971,12 @@ export async function POST(request: NextRequest) {
         filterExtractionResponse,
         hardFilters: hardFiltersJson,
         softFilters: softFiltersJson,
-        distances: distancesJson,
+        metro: metroCategory,
+        bus: busCategory,
+        school: schoolCategory,
+        hospital: hospitalCategory,
+        park: parkCategory,
+        university: universityCategory,
         homesCountBeforeFilter,
         homesCountAfterFilter,
         finalHomesCount,
