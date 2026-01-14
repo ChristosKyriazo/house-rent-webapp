@@ -27,6 +27,7 @@ RULES:
   * "public transport" or "public transportation" or "move easily" or "easy to move" or "accessibility" → Metro: Essential, Bus: Essential (Metro has higher priority)
   * "near bus station" or "close to bus" or "bus access" → Bus: Essential (higher priority)
   * "near metro station" or "close to metro" or "metro access" → Metro: Essential (higher priority)
+- Park category: Essential if user mentions pet/dog/cat/animal OR explicitly wants park. Strong if mentions park would be nice. Unmentioned → "Not mentioned"
 - Safety category: Essential if user explicitly wants safe area OR mentions kids/children OR person in need OR elderly. Strong if mentions safety would be nice but not in explicit ways above. Not important if not mentioned. Unmentioned → "Not mentioned"
 - Vibe preference: Extract 1-2 words describing the vibe/atmosphere the user wants. Examples: "near the beach" → "coastal", "city center" → "urban", "for kids" → "family-friendly", "quiet" → "quiet", "upscale" → "upscale". If no vibe mentioned → null`
 
