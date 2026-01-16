@@ -98,10 +98,11 @@ export async function POST(request: NextRequest) {
     const hardFilters: any = {}
     const softFilters: any = {}
     
-    // Hard filters: city, country, area, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
+    // Hard filters: city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
     if (extractedFilters.city !== undefined && extractedFilters.city !== null) hardFilters.city = extractedFilters.city
     if (extractedFilters.country !== undefined && extractedFilters.country !== null) hardFilters.country = extractedFilters.country
     if (extractedFilters.area !== undefined && extractedFilters.area !== null) hardFilters.area = extractedFilters.area
+    if ((extractedFilters as any).districts !== undefined && (extractedFilters as any).districts !== null) hardFilters.districts = (extractedFilters as any).districts
     if (extractedFilters.listingType !== undefined && extractedFilters.listingType !== null) hardFilters.listingType = extractedFilters.listingType
     if ((extractedFilters as any).listingtype !== undefined && (extractedFilters as any).listingtype !== null) hardFilters.listingtype = (extractedFilters as any).listingtype
     if (extractedFilters.minPrice !== undefined && extractedFilters.minPrice !== null) hardFilters.minPrice = extractedFilters.minPrice
@@ -280,7 +281,7 @@ export async function POST(request: NextRequest) {
     homesCountBeforeFilter = homes.length
 
     // Step 4: Apply city/area/country filters with Greek/English matching
-    // Always fetch areas for matching (needed for Greek/English translation)
+    // Always fetch areas for matching (needed for Greek/English translation and district filtering)
     const allAreas = await prisma.area.findMany({
       select: {
         name: true,
@@ -289,6 +290,7 @@ export async function POST(request: NextRequest) {
         cityGreek: true,
         country: true,
         countryGreek: true,
+        district: true,
       },
     })
 
@@ -364,6 +366,64 @@ export async function POST(request: NextRequest) {
             include: { owner: { select: { id: true, email: true, name: true } } },
           })
         }
+      }
+    }
+
+    // Filter homes by districts (hard filter - multiple districts = OR condition)
+    if ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) {
+      const requestedDistricts = (extractedFilters as any).districts as string[]
+      
+      // Get available districts from DB, filtered by city if city is provided
+      let availableDistricts = allAreas
+        .filter(a => a.district !== null && a.district !== undefined)
+        .map(a => a.district!)
+      
+      // If city is provided, filter districts by city
+      if (extractedFilters.city) {
+        const cityVariations = getLocationVariations(extractedFilters.city, cityMap)
+        const cityAreas = allAreas.filter(a => 
+          matchesLocation(a.city, extractedFilters.city!, cityMap, cityVariations)
+        )
+        availableDistricts = cityAreas
+          .filter(a => a.district !== null && a.district !== undefined)
+          .map(a => a.district!)
+      }
+      
+      // Remove duplicates
+      availableDistricts = [...new Set(availableDistricts)]
+      
+      // Match requested districts with available districts (flexible matching)
+      const matchedDistricts: string[] = []
+      for (const requestedDistrict of requestedDistricts) {
+        const requestedNormalized = removeGreekAccents(requestedDistrict.toLowerCase().trim())
+        const matched = availableDistricts.find(available => {
+          const availableNormalized = removeGreekAccents(available.toLowerCase().trim())
+          return availableNormalized === requestedNormalized || 
+                 availableNormalized.includes(requestedNormalized) ||
+                 requestedNormalized.includes(availableNormalized)
+        })
+        if (matched) {
+          matchedDistricts.push(matched)
+        }
+      }
+      
+      if (matchedDistricts.length > 0) {
+        // Filter homes by matching districts through their areas
+        const areasInDistricts = allAreas
+          .filter(a => matchedDistricts.includes(a.district!))
+          .map(a => a.name)
+        
+        if (areasInDistricts.length > 0) {
+          homes = homes.filter(home => 
+            home.area !== null && areasInDistricts.includes(home.area)
+          )
+        } else {
+          // No areas found in requested districts
+          homes = []
+        }
+      } else {
+        // No districts matched - return empty results
+        homes = []
       }
     }
 
@@ -478,6 +538,7 @@ export async function POST(request: NextRequest) {
     
     const hasHardFilters = 
       extractedFilters.city || extractedFilters.country || extractedFilters.area ||
+      ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) ||
       extractedFilters.listingType || (extractedFilters as any).listingtype ||
       extractedFilters.minPrice || extractedFilters.maxPrice ||
       extractedFilters.minBedrooms || extractedFilters.maxBedrooms ||
@@ -492,6 +553,7 @@ export async function POST(request: NextRequest) {
     // Check if country is the ONLY hard filter - if so, return nothing
     const onlyCountryFilter = extractedFilters.country && 
       !extractedFilters.city && !extractedFilters.area &&
+      !((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) &&
       !extractedFilters.listingType && !(extractedFilters as any).listingtype &&
       !extractedFilters.minPrice && !extractedFilters.maxPrice &&
       !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
@@ -680,64 +742,98 @@ export async function POST(request: NextRequest) {
         const parkingScore = calculateParkingScore(home.parking, parkingSoftPreference)
         
         // Combine distance, safety, vibe, and parking scores
-        // Weighting: Distance 80%, Safety 10%, Vibe 10% (when all three exist, no parking)
+        // If location preference is mentioned, vibe gets 40% weight
         // Adjust based on what exists
         const hasDistance = distancesToConsider.length > 0
         const hasSafety = safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned'
         const hasVibe = !!vibePreference
         const hasParking = parkingSoftPreference
+        const hasLocationPreference = (extractedFilters as any).hasLocationPreference === true
         
         // Count how many components we have
         const componentCount = [hasDistance, hasSafety, hasVibe, hasParking].filter(Boolean).length
         
-        if (componentCount === 4) {
-          // All four: Distance 70%, Safety 10%, Vibe 10%, Parking 10%
-          rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.1) + (vibeScore * 0.1) + (parkingScore * 0.1)
-        } else if (hasDistance && hasSafety && hasVibe) {
-          // Distance + Safety + Vibe: 80% Distance, 10% Safety, 10% Vibe
-          rawScore = (avgDistanceScore * 0.8) + (safetyScore * 0.1) + (vibeScore * 0.1)
-        } else if (hasDistance && hasSafety && hasParking) {
-          // Distance + Safety + Parking: 70% Distance, 20% Safety, 10% Parking
-          rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.2) + (parkingScore * 0.1)
-        } else if (hasDistance && hasVibe && hasParking) {
-          // Distance + Vibe + Parking: 75% Distance, 15% Vibe, 10% Parking
-          rawScore = (avgDistanceScore * 0.75) + (vibeScore * 0.15) + (parkingScore * 0.1)
-        } else if (hasSafety && hasVibe && hasParking) {
-          // Safety + Vibe + Parking: 60% Safety, 25% Vibe, 15% Parking
-          rawScore = (safetyScore * 0.6) + (vibeScore * 0.25) + (parkingScore * 0.15)
-        } else if (hasDistance && hasSafety) {
-          // Distance + Safety: 60% Distance, 40% Safety
-          rawScore = (avgDistanceScore * 0.6) + (safetyScore * 0.4)
-        } else if (hasDistance && hasVibe) {
-          // Distance + Vibe: 80% Distance, 20% Vibe
-          rawScore = (avgDistanceScore * 0.8) + (vibeScore * 0.2)
-        } else if (hasDistance && hasParking) {
-          // Distance + Parking: 85% Distance, 15% Parking
-          rawScore = (avgDistanceScore * 0.85) + (parkingScore * 0.15)
-        } else if (hasSafety && hasVibe) {
-          // Safety + Vibe: 70% Safety, 30% Vibe
-          rawScore = (safetyScore * 0.7) + (vibeScore * 0.3)
-        } else if (hasSafety && hasParking) {
-          // Safety + Parking: 75% Safety, 25% Parking
-          rawScore = (safetyScore * 0.75) + (parkingScore * 0.25)
-        } else if (hasVibe && hasParking) {
-          // Vibe + Parking: 70% Vibe, 30% Parking
-          rawScore = (vibeScore * 0.7) + (parkingScore * 0.3)
-        } else if (hasDistance) {
-          // Only distance
-          rawScore = avgDistanceScore
-        } else if (hasSafety) {
-          // Only safety
-          rawScore = safetyScore
-        } else if (hasVibe) {
-          // Only vibe
-          rawScore = vibeScore
-        } else if (hasParking) {
-          // Only parking
-          rawScore = parkingScore
+        // If location preference is mentioned, vibe gets 40% weight
+        if (hasLocationPreference && hasVibe) {
+          if (componentCount === 4) {
+            // All four with location preference: Distance 50%, Safety 5%, Vibe 40%, Parking 5%
+            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.05) + (vibeScore * 0.4) + (parkingScore * 0.05)
+          } else if (hasDistance && hasSafety && hasVibe) {
+            // Distance + Safety + Vibe with location: Distance 50%, Safety 10%, Vibe 40%
+            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.1) + (vibeScore * 0.4)
+          } else if (hasDistance && hasVibe && hasParking) {
+            // Distance + Vibe + Parking with location: Distance 50%, Vibe 40%, Parking 10%
+            rawScore = (avgDistanceScore * 0.5) + (vibeScore * 0.4) + (parkingScore * 0.1)
+          } else if (hasSafety && hasVibe && hasParking) {
+            // Safety + Vibe + Parking with location: Safety 20%, Vibe 40%, Parking 40%
+            rawScore = (safetyScore * 0.2) + (vibeScore * 0.4) + (parkingScore * 0.4)
+          } else if (hasDistance && hasVibe) {
+            // Distance + Vibe with location: Distance 60%, Vibe 40%
+            rawScore = (avgDistanceScore * 0.6) + (vibeScore * 0.4)
+          } else if (hasSafety && hasVibe) {
+            // Safety + Vibe with location: Safety 60%, Vibe 40%
+            rawScore = (safetyScore * 0.6) + (vibeScore * 0.4)
+          } else if (hasVibe && hasParking) {
+            // Vibe + Parking with location: Vibe 40%, Parking 60%
+            rawScore = (vibeScore * 0.4) + (parkingScore * 0.6)
+          } else if (hasVibe) {
+            // Only vibe with location preference: 100% Vibe
+            rawScore = vibeScore
+          } else {
+            // Fallback (shouldn't happen)
+            rawScore = avgDistanceScore || safetyScore || parkingScore || 50
+          }
         } else {
-          // No soft criteria (shouldn't happen, but fallback)
-          rawScore = 50
+          // No location preference - use original weighting
+          if (componentCount === 4) {
+            // All four: Distance 70%, Safety 10%, Vibe 10%, Parking 10%
+            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.1) + (vibeScore * 0.1) + (parkingScore * 0.1)
+          } else if (hasDistance && hasSafety && hasVibe) {
+            // Distance + Safety + Vibe: 80% Distance, 10% Safety, 10% Vibe
+            rawScore = (avgDistanceScore * 0.8) + (safetyScore * 0.1) + (vibeScore * 0.1)
+          } else if (hasDistance && hasSafety && hasParking) {
+            // Distance + Safety + Parking: 70% Distance, 20% Safety, 10% Parking
+            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.2) + (parkingScore * 0.1)
+          } else if (hasDistance && hasVibe && hasParking) {
+            // Distance + Vibe + Parking: 75% Distance, 15% Vibe, 10% Parking
+            rawScore = (avgDistanceScore * 0.75) + (vibeScore * 0.15) + (parkingScore * 0.1)
+          } else if (hasSafety && hasVibe && hasParking) {
+            // Safety + Vibe + Parking: 60% Safety, 25% Vibe, 15% Parking
+            rawScore = (safetyScore * 0.6) + (vibeScore * 0.25) + (parkingScore * 0.15)
+          } else if (hasDistance && hasSafety) {
+            // Distance + Safety: 60% Distance, 40% Safety
+            rawScore = (avgDistanceScore * 0.6) + (safetyScore * 0.4)
+          } else if (hasDistance && hasVibe) {
+            // Distance + Vibe: 80% Distance, 20% Vibe
+            rawScore = (avgDistanceScore * 0.8) + (vibeScore * 0.2)
+          } else if (hasDistance && hasParking) {
+            // Distance + Parking: 85% Distance, 15% Parking
+            rawScore = (avgDistanceScore * 0.85) + (parkingScore * 0.15)
+          } else if (hasSafety && hasVibe) {
+            // Safety + Vibe: 70% Safety, 30% Vibe
+            rawScore = (safetyScore * 0.7) + (vibeScore * 0.3)
+          } else if (hasSafety && hasParking) {
+            // Safety + Parking: 75% Safety, 25% Parking
+            rawScore = (safetyScore * 0.75) + (parkingScore * 0.25)
+          } else if (hasVibe && hasParking) {
+            // Vibe + Parking: 70% Vibe, 30% Parking
+            rawScore = (vibeScore * 0.7) + (parkingScore * 0.3)
+          } else if (hasDistance) {
+            // Only distance
+            rawScore = avgDistanceScore
+          } else if (hasSafety) {
+            // Only safety
+            rawScore = safetyScore
+          } else if (hasVibe) {
+            // Only vibe
+            rawScore = vibeScore
+          } else if (hasParking) {
+            // Only parking
+            rawScore = parkingScore
+          } else {
+            // No soft criteria (shouldn't happen, but fallback)
+            rawScore = 50
+          }
         }
         
         rawScores.set(home.id, rawScore)
@@ -781,44 +877,8 @@ export async function POST(request: NextRequest) {
         // Ensure score is between 0-100
         scaledScore = Math.max(0, Math.min(100, scaledScore))
         
-        // VALIDATION: Only allow 100% if ALL criteria are perfectly met
-        // A 100% home must have:
-        // 1. All Essential distances within "really close" threshold (≤ 1km)
-        // 2. Matching vibe (vibeScore > 80 if vibe preference exists)
-        // 3. Safety > 9 (if Safety is Essential)
-        let meetsAllCriteria = true
-        
-        // Check Essential distances - all must be ≤ 1km
-        const essentialDistances = distancesToConsider.filter(d => d.category === 'Essential')
-        for (const distanceInfo of essentialDistances) {
-          const distance = home[distanceInfo.field] as number | null
-          if (distance === null || distance === undefined || distance > 1.0) {
-            meetsAllCriteria = false
-            break
-          }
-        }
-        
-        // Check vibe match - must be > 80 if vibe preference exists
-        if (vibePreference) {
-          const detail = calculationDetails.find(d => d.homeId === home.id)
-          if (detail && detail.vibeScore < 80) {
-            meetsAllCriteria = false
-          }
-        }
-        
-        // Check safety - must be > 9 if Safety is Essential
-        if (safetyCategory === 'Essential') {
-          const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
-          const safety = areaData?.safety || null
-          if (safety === null || safety <= 9) {
-            meetsAllCriteria = false
-          }
-        }
-        
-        // Cap at 99% if doesn't meet all criteria (only 100% if meets all)
-        if (!meetsAllCriteria && scaledScore >= 99.5) {
-          scaledScore = 99
-        }
+        // No 99% cap - allow 100% if the scaled score reaches it
+        // The scoring system is now granular enough to show differences naturally
         
         matchMap.set(home.id, scaledScore)
         
@@ -936,11 +996,13 @@ export async function POST(request: NextRequest) {
       // Calculate description bonus for each home
       const descriptionScores: number[] = []
       const descriptionBonusMap = new Map<number, number>()
+      const descriptionPenaltyMap = new Map<number, number>()
       const descriptionDetails: Array<{
         homeId: number
         homeTitle: string
         description: string | null
         bonus: number
+        penalty: number
       }> = []
       
       // TEST LOG - DELETE AFTER: Show description matching info
@@ -949,12 +1011,14 @@ export async function POST(request: NextRequest) {
       console.log('Checking descriptions for matching features...\n')
       
       let extractedKeywords: string[] = []
-      const descriptionResults = new Map<number, { bonus: number; extractedKeywords: string[]; matchedKeywords: string[] }>()
+      const descriptionResults = new Map<number, { bonus: number; penalty: number; extractedKeywords: string[]; matchedKeywords: string[]; hasNewMention: boolean }>()
       
       for (const home of homes) {
         const result = calculateDescriptionBonus(
           query,
-          home.description
+          home.description,
+          home.yearBuilt,
+          home.yearRenovated
         )
         
         // Store extracted keywords from first home (they're the same for all)
@@ -964,6 +1028,7 @@ export async function POST(request: NextRequest) {
         
         descriptionScores.push(result.bonus)
         descriptionBonusMap.set(home.id, result.bonus)
+        descriptionPenaltyMap.set(home.id, result.penalty)
         descriptionResults.set(home.id, result)
         
         // TEST LOG - DELETE AFTER: Store description details
@@ -972,6 +1037,7 @@ export async function POST(request: NextRequest) {
           homeTitle: home.title.substring(0, 50),
           description: home.description ? home.description.substring(0, 200) : null,
           bonus: result.bonus,
+          penalty: result.penalty,
         })
       }
       
@@ -984,45 +1050,66 @@ export async function POST(request: NextRequest) {
         console.log(`    Description: ${detail.description || 'null'}`)
         console.log(`    Matched Keywords: ${result.matchedKeywords.length > 0 ? result.matchedKeywords.join(', ') : 'None'}`)
         console.log(`    Description Bonus: ${detail.bonus.toFixed(2)}%`)
+        if (detail.penalty < 0) {
+          console.log(`    Description Penalty: ${detail.penalty.toFixed(2)}%`)
+        }
+        if (result.hasNewMention) {
+          console.log(`    Year-based scoring: Built ${homes.find(h => h.id === detail.homeId)?.yearBuilt || 'N/A'}, Renovated ${homes.find(h => h.id === detail.homeId)?.yearRenovated || 'N/A'}`)
+        }
       })
       console.log('==========================================\n')
       
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
       
-      // If some homes have bonus and others don't, penalize those without
+      // Apply bonuses and penalties
+      homes.forEach(home => {
+        const bonus = descriptionBonusMap.get(home.id) || 0
+        const penalty = descriptionPenaltyMap.get(home.id) || 0
+        const currentScore = matchMap.get(home.id) || 0
+        
+        let finalScore = currentScore
+        
+        // Apply penalty first (for negative mentions)
+        if (penalty < 0) {
+          finalScore = Math.max(0, finalScore + penalty) // penalty is already negative
+        }
+        
+        // Apply bonus
+        if (bonus > 0) {
+          finalScore = Math.min(100, finalScore + bonus)
+        } else if (hasAnyDescriptionBonus && bonus === 0 && penalty === 0) {
+          // Penalize houses without bonus when others have it (only if no explicit penalty)
+          const maxBonus = Math.max(...descriptionScores)
+          const relativePenalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
+          finalScore = Math.max(0, finalScore - relativePenalty)
+        }
+        
+        matchMap.set(home.id, finalScore)
+      })
+      
+      // If some homes have bonus and others don't, show in logs
       if (hasAnyDescriptionBonus) {
-        const maxBonus = Math.max(...descriptionScores)
-        homes.forEach(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          const currentScore = matchMap.get(home.id) || 0
-          
-          if (bonus > 0) {
-            // Apply bonus
-            const finalScore = Math.min(100, currentScore + bonus)
-            matchMap.set(home.id, finalScore)
-          } else {
-            // Penalize houses without bonus when others have it
-            const penalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
-            const finalScore = Math.max(0, currentScore - penalty)
-            matchMap.set(home.id, finalScore)
-          }
-        })
         
         // TEST LOG - DELETE AFTER: Show description bonus application
         console.log('\n========== DESCRIPTION BONUS APPLICATION ==========')
+        const maxBonus = Math.max(...descriptionScores)
         console.log(`Max Description Bonus: ${maxBonus.toFixed(2)}%`)
         console.log(`Homes with bonus: ${descriptionScores.filter(s => s > 0).length}`)
+        console.log(`Homes with penalty: ${Array.from(descriptionPenaltyMap.values()).filter(p => p < 0).length}`)
         console.log(`Homes without bonus: ${descriptionScores.filter(s => s === 0).length}`)
         homes.forEach(home => {
           const bonus = descriptionBonusMap.get(home.id) || 0
+          const penalty = descriptionPenaltyMap.get(home.id) || 0
           const beforeScore = matchMap.get(home.id) || 0
           const afterScore = matchMap.get(home.id) || 0
           if (bonus > 0) {
             console.log(`  Home ${home.id}: +${bonus.toFixed(2)}% bonus → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          } else {
-            const penalty = Math.min(maxBonus * 0.5, 10)
-            console.log(`  Home ${home.id}: -${penalty.toFixed(2)}% penalty → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
+          } else if (penalty < 0) {
+            console.log(`  Home ${home.id}: ${penalty.toFixed(2)}% penalty (negative mention) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
+          } else if (hasAnyDescriptionBonus) {
+            const relativePenalty = Math.min(maxBonus * 0.5, 10)
+            console.log(`  Home ${home.id}: -${relativePenalty.toFixed(2)}% penalty (no match) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
           }
         })
         console.log('==================================================\n')
@@ -1076,8 +1163,9 @@ export async function POST(request: NextRequest) {
         )
       }
       
-      // If no hard filters (or only country) and all description scores are 0, return nothing
-      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus) {
+      // If no hard filters (or only country) and all description scores are 0 AND no soft criteria, return nothing
+      // If there are soft criteria (Safety, vibe, distances), we should still return results
+      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus && !hasSoftCriteria) {
         return NextResponse.json(
           { 
             homes: [],

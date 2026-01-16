@@ -40,196 +40,60 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   display: none !important;
 }
 
-/* Clerk Component Customization - Match site color scheme */
-.cl-rootBox {
-  width: 100% !important;
-  margin: 0 auto !important;
-  display: flex !important;
-  justify-content: center !important;
-  border: none !important;
-  box-shadow: none !important;
-  background-color: transparent !important;
-}
-
-.cl-card {
-  width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  border-width: 0 !important;
-  box-shadow: none !important;
-  background-color: transparent !important;
-  outline: none !important;
-}
-
-.cl-card * {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.cl-main {
-  width: 100% !important;
-  padding: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-  background-color: transparent !important;
-}
-
-/* Remove all borders and shadows from Clerk container elements */
-[class*="cl-card"],
-[class*="cl-rootBox"],
-[class*="cl-main"] {
-  border: none !important;
-  border-width: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
-  background-color: transparent !important;
-}
-
-.cl-rootBox,
-.cl-card,
-.cl-main,
-.cl-form,
-.cl-formButtonPrimary,
-.cl-socialButtonsBlockButton,
-.cl-formFieldInput,
-.cl-identityPreview,
-.cl-identityPreviewText,
-.cl-identityPreviewEditButton,
-.cl-formFieldLabel,
-.cl-headerTitle,
-.cl-headerSubtitle,
-.cl-footerAction,
-.cl-footerActionLink,
-.cl-alert,
-.cl-alertText,
-.cl-formResendCodeLink,
-.cl-dividerLine,
-.cl-dividerText {
-  background-color: transparent !important;
-  color: #E8D5B7 !important;
-}
-
-/* Override any white backgrounds */
-.cl-card,
-.cl-main,
-[class*="cl-"] {
-  background-color: transparent !important;
-}
-
-/* Input fields */
-.cl-formFieldInput {
-  background-color: #2D3748 !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
-  color: #E8D5B7 !important;
-}
-
-.cl-formFieldInput:focus {
-  border-color: #E8D5B7 !important;
-  outline: none !important;
-}
-
-/* Make Clerk OTP code input segments visible */
-.cl-otpCodeFieldInputs {
-  display: flex !important;
-  gap: 0.5rem !important;
-  justify-content: center !important;
-}
-
-.cl-otpCodeFieldInput {
-  width: 2.5rem !important;
-  height: 2.5rem !important;
-  min-width: 2.5rem !important;
-  min-height: 2.5rem !important;
-  background-color: #2D3748 !important;
-  border: 1px solid rgba(232, 213, 183, 0.3) !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
-  border-radius: 0.5rem !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  position: relative !important;
-}
-
-.cl-otpCodeFieldInput[data-focus-within="true"] {
+/* Clerk - Swapped colors: beige for buttons, dark grey for backgrounds */
+.cl-formButtonPrimary {
+  background-color: #E8D5B7 !important;
+  color: #2D3748 !important;
   border-color: #E8D5B7 !important;
   border-width: 2px !important;
 }
 
-[data-input-otp-container="true"] {
-  pointer-events: auto !important;
-}
-
-/* Make Clerk's OTP cursor visible - ensure it shows in focused inputs */
-input[data-input-otp="true"] {
-  caret-color: transparent !important;
-  text-align: center !important;
-}
-
-/* Make sure first input shows cursor when it's the active one */
-input[data-input-otp="true"]:first-of-type,
-.cl-otpCodeFieldInput:first-child input[data-input-otp="true"] {
-  caret-color: #E8D5B7 !important;
-}
-
-/* Hide cursor on other inputs */
-input[data-input-otp="true"]:not(:first-of-type) {
-  caret-color: transparent !important;
-}
-
-/* Remove any pseudo-element cursors that might appear in the middle */
-.cl-otpCodeFieldInput::after,
-.cl-otpCodeFieldInput::before,
-[data-input-otp-container="true"]::after,
-[data-input-otp-container="true"]::before,
-.cl-otpCodeFieldInputs::after,
-.cl-otpCodeFieldInputs::before {
-  display: none !important;
-  content: none !important;
-  visibility: hidden !important;
-}
-
-/* Hide cursor on container elements - only show on actual inputs */
-[data-input-otp-container="true"] {
-  caret-color: transparent !important;
-}
-
-/* Ensure inputs inside focused containers show cursor */
-.cl-otpCodeFieldInput[data-focus-within="true"] input[data-input-otp="true"] {
-  caret-color: #E8D5B7 !important;
-}
-
-/* Make sure the first input box can receive focus and show cursor */
-.cl-otpCodeFieldInput:first-child input[data-input-otp="true"] {
-  caret-color: #E8D5B7 !important;
-}
-
-/* Buttons */
-.cl-formButtonPrimary {
-  background-color: #E8D5B7 !important;
-  color: #2D3748 !important;
-}
-
 .cl-formButtonPrimary:hover {
   background-color: #D4C19F !important;
+  color: #2D3748 !important;
+  border-width: 2px !important;
 }
 
-.cl-socialButtonsBlockButton {
+/* Card/box backgrounds - dark grey with smooth edges */
+.cl-card,
+.cl-main,
+.cl-rootBox {
   background-color: #2D3748 !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
+  border-radius: 1.5rem !important;
+}
+
+/* Text elements - beige */
+.cl-headerTitle,
+.cl-headerSubtitle,
+.cl-formFieldLabel,
+.cl-footerAction,
+.cl-identityPreviewText,
+.cl-alertText,
+.cl-dividerText {
   color: #E8D5B7 !important;
 }
 
-.cl-socialButtonsBlockButton:hover {
-  background-color: #1A202C !important;
-  border-color: #E8D5B7 !important;
+/* Input fields - dark grey background, beige text */
+.cl-formFieldInput {
+  background-color: #2D3748 !important;
+  border-color: rgba(232, 213, 183, 0.3) !important;
+  border-width: 2px !important;
+  color: #E8D5B7 !important;
 }
 
-/* Links */
+.cl-formFieldInput::placeholder {
+  color: rgba(232, 213, 183, 0.5) !important;
+}
+
+.cl-formFieldInput:focus {
+  border-color: #E8D5B7 !important;
+  border-width: 2px !important;
+}
+
+/* Links - beige */
 .cl-footerActionLink,
-.cl-formResendCodeLink {
+.cl-formResendCodeLink,
+.cl-identityPreviewEditButton {
   color: #E8D5B7 !important;
 }
 
@@ -238,30 +102,73 @@ input[data-input-otp="true"]:not(:first-of-type) {
   color: #D4C19F !important;
 }
 
-/* Error text */
+/* Social buttons - beige background, dark grey text */
+.cl-socialButtonsBlockButton {
+  background-color: #E8D5B7 !important;
+  border-color: rgba(232, 213, 183, 0.3) !important;
+  border-width: 2px !important;
+  color: #2D3748 !important;
+}
+
+.cl-socialButtonsBlockButton:hover {
+  background-color: #D4C19F !important;
+  border-color: #E8D5B7 !important;
+  border-width: 2px !important;
+}
+
+/* OTP inputs - dark grey background, beige text */
+.cl-otpCodeFieldInput {
+  background-color: #2D3748 !important;
+  border-color: rgba(232, 213, 183, 0.3) !important;
+  border-width: 2px !important;
+  color: #E8D5B7 !important;
+}
+
+input[data-input-otp="true"] {
+  color: #E8D5B7 !important;
+  caret-color: #E8D5B7 !important;
+}
+
+/* Hide any duplicate OTP display in the middle */
+.cl-otpCodeFieldInputs::before,
+.cl-otpCodeFieldInputs::after,
+[data-input-otp-container="true"]::before,
+[data-input-otp-container="true"]::after,
+.cl-otpCodeFieldInput::before,
+.cl-otpCodeFieldInput::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Hide any overlay or duplicate display elements */
+[class*="otp"][class*="display"],
+[class*="otp"][class*="overlay"],
+[class*="otp"][class*="preview"],
+[class*="otp"][class*="value"],
+[class*="otp"][class*="code"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide any span or div that might be showing duplicate OTP values */
+.cl-otpCodeFieldInputs span,
+.cl-otpCodeFieldInputs div:not(.cl-otpCodeFieldInput),
+[data-input-otp-container="true"] span:not(input),
+[data-input-otp-container="true"] div:not([class*="otpCodeFieldInput"]) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Dividers */
+.cl-dividerLine {
+  background-color: rgba(45, 55, 72, 0.2) !important;
+}
+
+/* Error text - keep red */
 .cl-formFieldErrorText {
   color: #EF4444 !important;
 }
 
-        /* Aggressively remove all borders and shadows from Clerk components */
-        div[class*="cl-"],
-        section[class*="cl-"],
-        form[class*="cl-"] {
-          border: none !important;
-          border-width: 0 !important;
-          box-shadow: none !important;
-          outline: none !important;
-        }
-
-        /* Remove any box shadows that might be applied via inline styles or other means */
-        .cl-card,
-        .cl-rootBox,
-        .cl-main {
-          filter: none !important;
-          -webkit-box-shadow: none !important;
-          -moz-box-shadow: none !important;
-          box-shadow: none !important;
-        }
 
         /* Modal animations */
         @keyframes fadeIn {

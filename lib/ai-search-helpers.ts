@@ -176,24 +176,62 @@ export function calculateDistanceScore(
   let distanceScore = 0
   
   if (category === 'Essential') {
-    // Essential: 0-1km (biggest), 1-3km, 3-10km, over 10km (least)
-    if (distance <= 1.0) {
-      distanceScore = 50 // Biggest boost
+    // Essential: More granular scoring to show differences
+    // 0-0.5km: 60-50 points (linear decrease)
+    // 0.5-1km: 50-40 points
+    // 1-2km: 40-30 points
+    // 2-3km: 30-20 points
+    // 3-5km: 20-10 points
+    // 5-10km: 10-0 points
+    // >10km: negative penalty
+    if (distance <= 0.5) {
+      // 0-0.5km: 60 to 50 (closer is better)
+      distanceScore = 60 - (distance / 0.5) * 10
+    } else if (distance <= 1.0) {
+      // 0.5-1km: 50 to 40
+      distanceScore = 50 - ((distance - 0.5) / 0.5) * 10
+    } else if (distance <= 2.0) {
+      // 1-2km: 40 to 30
+      distanceScore = 40 - ((distance - 1.0) / 1.0) * 10
     } else if (distance <= 3.0) {
-      distanceScore = 30 // Medium boost
+      // 2-3km: 30 to 20
+      distanceScore = 30 - ((distance - 2.0) / 1.0) * 10
+    } else if (distance <= 5.0) {
+      // 3-5km: 20 to 10
+      distanceScore = 20 - ((distance - 3.0) / 2.0) * 10
     } else if (distance <= 10.0) {
-      distanceScore = 10 // Small boost
+      // 5-10km: 10 to 0
+      distanceScore = 10 - ((distance - 5.0) / 5.0) * 10
     } else {
-      distanceScore = -10 // Least/penalty for over 10km
+      // >10km: penalty increases with distance
+      distanceScore = -10 - ((distance - 10.0) / 10.0) * 5 // -10 to -15 for 10-20km, then more
     }
   } else if (category === 'Strong') {
-    // Strong: 0-3km (biggest), 3-10km, over 10km (least)
-    if (distance <= 3.0) {
-      distanceScore = 30 // Biggest boost
+    // Strong: More granular scoring
+    // 0-1km: 40-35 points
+    // 1-2km: 35-30 points
+    // 2-3km: 30-20 points
+    // 3-5km: 20-10 points
+    // 5-10km: 10-0 points
+    // >10km: negative penalty
+    if (distance <= 1.0) {
+      // 0-1km: 40 to 35
+      distanceScore = 40 - (distance / 1.0) * 5
+    } else if (distance <= 2.0) {
+      // 1-2km: 35 to 30
+      distanceScore = 35 - ((distance - 1.0) / 1.0) * 5
+    } else if (distance <= 3.0) {
+      // 2-3km: 30 to 20
+      distanceScore = 30 - ((distance - 2.0) / 1.0) * 10
+    } else if (distance <= 5.0) {
+      // 3-5km: 20 to 10
+      distanceScore = 20 - ((distance - 3.0) / 2.0) * 10
     } else if (distance <= 10.0) {
-      distanceScore = 15 // Medium boost
+      // 5-10km: 10 to 0
+      distanceScore = 10 - ((distance - 5.0) / 5.0) * 10
     } else {
-      distanceScore = -5 // Least/penalty for over 10km
+      // >10km: penalty
+      distanceScore = -5 - ((distance - 10.0) / 10.0) * 3
     }
   } else if (category === 'Avoid') {
     // Avoid: over 10km (biggest), 0-10km (less)
@@ -247,37 +285,73 @@ export function calculateVibeScore(
 
   // Map user's vibe preference to system vibes with priority (1 = highest match, 2 = secondary match)
   // Priority indicates how well the user's term matches each system vibe
+  // Location-based preferences get better matching:
+  // - "near center" / "with a lot of people" → central, urban
+  // - Family mentions → family, suburban, urban
+  // - Financial stability/pricey → upscale
+  // - Quiet places → rural, suburban
+  // - Beach/sea → waterfront
+  // - Younger workers/affordable → working-class
   const vibeMapping: Record<string, Array<{ vibe: string; priority: number }>> = {
-    'coastal': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
-    'beach': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
-    'seaside': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
-    'near the beach': [{ vibe: 'waterfront', priority: 1 }, { vibe: 'upscale', priority: 2 }],
+    // Beach/Waterfront preferences
+    'coastal': [{ vibe: 'waterfront', priority: 1 }],
+    'beach': [{ vibe: 'waterfront', priority: 1 }],
+    'seaside': [{ vibe: 'waterfront', priority: 1 }],
+    'near the beach': [{ vibe: 'waterfront', priority: 1 }],
+    'near beach': [{ vibe: 'waterfront', priority: 1 }],
+    'by the sea': [{ vibe: 'waterfront', priority: 1 }],
     'near water': [{ vibe: 'waterfront', priority: 1 }],
     'waterfront': [{ vibe: 'waterfront', priority: 1 }],
+    // Center/Urban preferences (with a lot of people)
     'urban': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
-    'city center': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
-    'city centre': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
+    'city center': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'city centre': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'near the center': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'near center': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'near the centre': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
     'central': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
     'downtown': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
-    'family-friendly': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
-    'family': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
-    'for kids': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
-    'for children': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
-    'safe': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
-    'quiet': [{ vibe: 'suburban', priority: 1 }, { vibe: 'rural', priority: 2 }],
-    'peaceful': [{ vibe: 'suburban', priority: 1 }, { vibe: 'rural', priority: 2 }],
-    'residential': [{ vibe: 'suburban', priority: 1 }, { vibe: 'family', priority: 2 }],
+    'with a lot of people': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'busy area': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    'crowded': [{ vibe: 'central', priority: 1 }, { vibe: 'urban', priority: 2 }],
+    // Family preferences
+    'family-friendly': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }, { vibe: 'urban', priority: 3 }],
+    'family': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }, { vibe: 'urban', priority: 3 }],
+    'for kids': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }, { vibe: 'urban', priority: 3 }],
+    'for children': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }, { vibe: 'urban', priority: 3 }],
+    // Quiet/Rural preferences
+    'quiet': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'peaceful': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'calm': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'tranquil': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'away from noise': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'near mountain': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'mountainous': [{ vibe: 'rural', priority: 1 }],
+    'mountain area': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
+    'rural': [{ vibe: 'rural', priority: 1 }, { vibe: 'suburban', priority: 2 }],
     'suburban': [{ vibe: 'suburban', priority: 1 }, { vibe: 'family', priority: 2 }],
-    'upscale': [{ vibe: 'upscale', priority: 1 }, { vibe: 'waterfront', priority: 2 }],
+    'residential': [{ vibe: 'suburban', priority: 1 }, { vibe: 'family', priority: 2 }],
+    // Upscale/Financial stability preferences
+    'upscale': [{ vibe: 'upscale', priority: 1 }],
     'luxury': [{ vibe: 'upscale', priority: 1 }],
     'premium': [{ vibe: 'upscale', priority: 1 }],
+    'high-end': [{ vibe: 'upscale', priority: 1 }],
+    'expensive': [{ vibe: 'upscale', priority: 1 }],
+    'financial stability': [{ vibe: 'upscale', priority: 1 }],
+    'pricey': [{ vibe: 'upscale', priority: 1 }],
+    // Working-class/Young workers preferences
+    'working-class': [{ vibe: 'working-class', priority: 1 }],
+    'young workers': [{ vibe: 'working-class', priority: 1 }],
+    'affordable': [{ vibe: 'working-class', priority: 1 }],
+    'budget-friendly': [{ vibe: 'working-class', priority: 1 }],
+    'student area': [{ vibe: 'working-class', priority: 1 }],
+    // Legacy mappings
     'student': [{ vibe: 'student', priority: 1 }, { vibe: 'urban', priority: 2 }],
     'nightlife': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
     'vibrant': [{ vibe: 'urban', priority: 1 }, { vibe: 'central', priority: 2 }],
     'historic': [{ vibe: 'historic', priority: 1 }],
-    'rural': [{ vibe: 'rural', priority: 1 }],
-    'working-class': [{ vibe: 'working-class', priority: 1 }],
     'reviving': [{ vibe: 'reviving', priority: 1 }],
+    'safe': [{ vibe: 'family', priority: 1 }, { vibe: 'suburban', priority: 2 }],
   }
 
   // Find matching vibes with priorities
@@ -369,20 +443,66 @@ export function calculateSafetyScore(
   let safetyScore = 0
   
   if (category === 'Essential') {
-    // Essential: 9+ (highest), 7-9 (medium), below 7 (lowest)
-    if (safety >= 9) {
-      safetyScore = 50 // Highest priority
-    } else if (safety >= 7) {
-      safetyScore = 30 // Medium priority
+    // Essential: More granular scoring
+    // 9.5-10: 60-50 points (excellent)
+    // 9-9.5: 50-45 points (very good)
+    // 8.5-9: 45-40 points (good)
+    // 8-8.5: 40-35 points (decent)
+    // 7.5-8: 35-30 points (acceptable)
+    // 7-7.5: 30-20 points (below ideal)
+    // 6-7: 20-0 points (poor)
+    // <6: negative penalty
+    if (safety >= 9.5) {
+      // 9.5-10: 60 to 50 (linear decrease)
+      safetyScore = 60 - ((safety - 9.5) / 0.5) * 10
+    } else if (safety >= 9.0) {
+      // 9-9.5: 50 to 45
+      safetyScore = 50 - ((safety - 9.0) / 0.5) * 5
+    } else if (safety >= 8.5) {
+      // 8.5-9: 45 to 40
+      safetyScore = 45 - ((safety - 8.5) / 0.5) * 5
+    } else if (safety >= 8.0) {
+      // 8-8.5: 40 to 35
+      safetyScore = 40 - ((safety - 8.0) / 0.5) * 5
+    } else if (safety >= 7.5) {
+      // 7.5-8: 35 to 30
+      safetyScore = 35 - ((safety - 7.5) / 0.5) * 5
+    } else if (safety >= 7.0) {
+      // 7-7.5: 30 to 20
+      safetyScore = 30 - ((safety - 7.0) / 0.5) * 10
+    } else if (safety >= 6.0) {
+      // 6-7: 20 to 0
+      safetyScore = 20 - ((safety - 6.0) / 1.0) * 20
     } else {
-      safetyScore = -20 // Lowest priority (penalty)
+      // <6: penalty increases with lower safety
+      safetyScore = -10 - ((6.0 - safety) / 2.0) * 10 // -10 to -20 for 6-4, then more
     }
   } else if (category === 'Strong') {
-    // Strong: above 7 (highest), below 7 (lowest)
-    if (safety > 7) {
-      safetyScore = 30 // Highest priority
+    // Strong: More granular scoring
+    // 9-10: 40-35 points
+    // 8-9: 35-30 points
+    // 7.5-8: 30-25 points
+    // 7-7.5: 25-15 points
+    // 6-7: 15-0 points
+    // <6: negative penalty
+    if (safety >= 9.0) {
+      // 9-10: 40 to 35
+      safetyScore = 40 - ((safety - 9.0) / 1.0) * 5
+    } else if (safety >= 8.0) {
+      // 8-9: 35 to 30
+      safetyScore = 35 - ((safety - 8.0) / 1.0) * 5
+    } else if (safety >= 7.5) {
+      // 7.5-8: 30 to 25
+      safetyScore = 30 - ((safety - 7.5) / 0.5) * 5
+    } else if (safety >= 7.0) {
+      // 7-7.5: 25 to 15
+      safetyScore = 25 - ((safety - 7.0) / 0.5) * 10
+    } else if (safety >= 6.0) {
+      // 6-7: 15 to 0
+      safetyScore = 15 - ((safety - 6.0) / 1.0) * 15
     } else {
-      safetyScore = -10 // Lowest priority (penalty)
+      // <6: penalty
+      safetyScore = -5 - ((6.0 - safety) / 2.0) * 5
     }
   }
   
@@ -416,17 +536,25 @@ export function calculateParkingScore(
 
 /**
  * Calculates a bonus score (0-5%) based on how well the home description matches user query features
+ * Also detects negative mentions (penalties) and "new" features (with year-based scoring)
  * @param userQuery - The original user search query
  * @param homeDescription - The home description text
- * @returns Object with bonus percentage (0-5) and debug info (extracted keywords, matched keywords)
+ * @param yearBuilt - Year the house was built (for "new" feature scoring)
+ * @param yearRenovated - Year the house was renovated (for "new" feature scoring)
+ * @returns Object with bonus percentage (0-5), penalty percentage (0 to -20), and debug info
  */
 export function calculateDescriptionBonus(
   userQuery: string,
-  homeDescription: string | null
-): { bonus: number; extractedKeywords: string[]; matchedKeywords: string[] } {
+  homeDescription: string | null,
+  yearBuilt: number | null = null,
+  yearRenovated: number | null = null
+): { bonus: number; penalty: number; extractedKeywords: string[]; matchedKeywords: string[]; hasNewMention: boolean } {
   if (!homeDescription) {
-    return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No description to analyze
+    return { bonus: 0, penalty: 0, extractedKeywords: [], matchedKeywords: [], hasNewMention: false } // No description to analyze
   }
+  
+  let penalty = 0
+  let hasNewMention = false
 
   // Extract meaningful words from user query (excluding common words)
   // This works for both Greek and English
@@ -500,7 +628,7 @@ export function calculateDescriptionBonus(
   const uniqueFeatureKeywords = [...new Set(featureKeywords)]
   
   if (uniqueFeatureKeywords.length === 0) {
-    return { bonus: 0, extractedKeywords: [], matchedKeywords: [] } // No feature keywords found in query
+    return { bonus: 0, penalty: 0, extractedKeywords: [], matchedKeywords: [], hasNewMention: false } // No feature keywords found in query
   }
 
   // Check description for matches (with Greek accent normalization)
@@ -508,10 +636,40 @@ export function calculateDescriptionBonus(
   const descLower = homeDescription.toLowerCase()
   const descNormalized = removeGreekAccents(descLower)
   
+  // Check for "new" mentions in query (for year-based scoring)
+  const newPatterns = [
+    /\b(new|modern|updated|renovated|recent)\s+(kitchen|bathroom|bathrooms|appliance|appliances|stove|oven|renovation|renovations)\b/i,
+    /\b(new|modern|updated|renovated)\s+(house|home|apartment|property)\b/i
+  ]
+  hasNewMention = newPatterns.some(pattern => pattern.test(userQuery))
+  
   uniqueFeatureKeywords.forEach(keyword => {
     const keywordNormalized = removeGreekAccents(keyword)
-    // Check both original and normalized versions
-    if (descLower.includes(keyword) || descNormalized.includes(keywordNormalized)) {
+    
+    // Check for negative mentions (e.g., "does not have", "no", "without")
+    // Look for the keyword near negative words (English and Greek)
+    // Greek negative words: δεν, δεν έχει, χωρίς, λείπει, λείπει το
+    const negativePatterns = [
+      // English patterns
+      new RegExp(`(doesn't|does not|don't|do not|no|without|lack|lacks|missing|does not have|doesn't have)\\s+.*?${keywordNormalized}`, 'i'),
+      new RegExp(`${keywordNormalized}.*?(doesn't|does not|don't|do not|no|without|lack|lacks|missing)`, 'i'),
+      new RegExp(`(no|without)\\s+${keywordNormalized}`, 'i'),
+      // Greek patterns
+      new RegExp(`(δεν|χωρίς|λείπει|λείπει το|δεν έχει|δεν υπάρχει)\\s+.*?${keywordNormalized}`, 'i'),
+      new RegExp(`${keywordNormalized}.*?(δεν|χωρίς|λείπει|δεν έχει)`, 'i'),
+      new RegExp(`(χωρίς)\\s+${keywordNormalized}`, 'i')
+    ]
+    
+    // Check if description explicitly says it doesn't have this feature
+    const hasNegativeMention = negativePatterns.some(pattern => 
+      pattern.test(descLower) || pattern.test(descNormalized)
+    )
+    
+    if (hasNegativeMention) {
+      // Heavy penalty for explicitly saying it doesn't have what user wants
+      penalty -= 15 // -15% penalty per negative mention
+    } else if (descLower.includes(keyword) || descNormalized.includes(keywordNormalized)) {
+      // Positive match
       matchedKeywords.push(keyword)
     }
   })
@@ -528,11 +686,48 @@ export function calculateDescriptionBonus(
     // Partial matches scale proportionally, minimum 1% per match
     descriptionBonus = Math.min(Math.max(matchedKeywords.length * 1, matchRatio * 5), 5)
   }
+  
+  // Add year-based bonus for "new" mentions
+  if (hasNewMention) {
+    const currentYear = new Date().getFullYear()
+    const latestYear = Math.max(
+      yearRenovated || 0,
+      yearBuilt || 0
+    )
+    
+    if (latestYear > 0) {
+      const yearsSinceLatest = currentYear - latestYear
+      
+      // Score based on how recent the house is
+      // 0-2 years: +3% bonus
+      // 2-5 years: +2% bonus
+      // 5-10 years: +1% bonus
+      // 10-20 years: +0.5% bonus
+      // >20 years: no bonus
+      if (yearsSinceLatest <= 2) {
+        descriptionBonus += 3
+      } else if (yearsSinceLatest <= 5) {
+        descriptionBonus += 2
+      } else if (yearsSinceLatest <= 10) {
+        descriptionBonus += 1
+      } else if (yearsSinceLatest <= 20) {
+        descriptionBonus += 0.5
+      }
+      
+      // Cap total bonus at 8% (5% from description + 3% from year)
+      descriptionBonus = Math.min(descriptionBonus, 8)
+    }
+  }
+  
+  // Cap penalty at -20% (to avoid completely destroying the score)
+  penalty = Math.max(penalty, -20)
 
   return { 
     bonus: descriptionBonus, 
+    penalty: penalty,
     extractedKeywords: uniqueFeatureKeywords,
-    matchedKeywords: matchedKeywords
+    matchedKeywords: matchedKeywords,
+    hasNewMention: hasNewMention
   }
 }
 

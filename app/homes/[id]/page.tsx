@@ -100,6 +100,23 @@ export default function HomeDetailPage() {
   }, [home?.photos])
 
   const fromMyListings = searchParams.get('from') === 'my-listings'
+  
+  // Get filter type from sessionStorage to preserve it in return link
+  const getReturnUrl = () => {
+    if (fromMyListings) return '/homes/my-listings'
+    
+    // Check if we have stored filter type in sessionStorage
+    try {
+      const storedFilterType = sessionStorage.getItem('homesFilterType')
+      if (storedFilterType === 'ai' || storedFilterType === 'manual') {
+        return `/homes?filter=${storedFilterType}`
+      }
+    } catch (error) {
+      // Ignore sessionStorage errors
+    }
+    
+    return '/homes'
+  }
 
   const fetchHomeData = async () => {
     try {
@@ -365,7 +382,7 @@ export default function HomeDetailPage() {
         {/* Back Button and Edit Button */}
         <div className="flex items-center justify-between">
           <Link
-            href={fromMyListings ? '/homes/my-listings' : '/homes'}
+            href={getReturnUrl()}
             className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
           >
             ← {getTranslation(language, 'returnToSearch')}

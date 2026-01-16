@@ -147,6 +147,7 @@ model Area {
   cityGreek   String?  // City name in Greek
   country     String?  // Optional country filter
   countryGreek String? // Country name in Greek
+  district    String?  // District name (e.g., "Central Athens", "Northern Suburbs")
   safety      Float?   // Safety rating (0-10 or similar scale)
   vibe        String?  // Vibe description (e.g., "family-friendly", "vibrant", "quiet")
   createdAt   DateTime @default(now())
@@ -155,6 +156,7 @@ model Area {
   @@index([name])
   @@index([city])
   @@index([country])
+  @@index([district])
   @@map("areas")
 }
 

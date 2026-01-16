@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
@@ -35,6 +35,7 @@ interface Home {
 export default function HomesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
   const [searchType, setSearchType] = useState<'rent' | 'buy' | null>(null)
@@ -67,15 +68,31 @@ export default function HomesPage() {
   const [excludeApproved, setExcludeApproved] = useState(false)
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
-  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
+  
+  // City autocomplete state
+  const [citySearchQuery, setCitySearchQuery] = useState('')
+  const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  
+  // Country autocomplete state
+  const [countrySearchQuery, setCountrySearchQuery] = useState('')
+  const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
   const [showOrderDropdown, setShowOrderDropdown] = useState(false)
   const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
   const isInitialized = useRef(false)
+  const homesRef = useRef(homes)
+  
+  // Keep homes ref in sync
+  useEffect(() => {
+    homesRef.current = homes
+  }, [homes])
 
   // Initialize state from URL parameters on mount (only once)
   useEffect(() => {
@@ -93,19 +110,115 @@ export default function HomesPage() {
     
     isInitialized.current = true
   }, [searchParams])
+
+  // Restore search results and filters from sessionStorage
+  const restoreSearchState = () => {
+    try {
+      const storedResults = sessionStorage.getItem('homesSearchResults')
+      const storedFilterType = sessionStorage.getItem('homesFilterType')
+      
+      // Only restore if we have stored data and no current results
+      if (!storedResults || !storedFilterType) return
+      
+      // Check current homes length to avoid overwriting existing results
+      if (homesRef.current.length > 0) return
+      
+      const storedFilters = sessionStorage.getItem('homesSearchFilters')
+      const storedSearchType = sessionStorage.getItem('homesSearchType')
+      const storedAiQuery = sessionStorage.getItem('homesAiQuery')
+      
+      if (storedResults) {
+        const parsedResults = JSON.parse(storedResults)
+        if (parsedResults.length > 0) {
+          setHomes(parsedResults)
+          setShowFilters(false) // Hide filters when results are restored
+        }
+      }
+      
+      if (storedFilters) {
+        const parsedFilters = JSON.parse(storedFilters)
+        setManualFilters(parsedFilters.manualFilters || manualFilters)
+        setSelectedAreas(parsedFilters.selectedAreas || [])
+        setExcludeInquired(parsedFilters.excludeInquired || false)
+        setExcludeApproved(parsedFilters.excludeApproved || false)
+      }
+      
+      if (storedSearchType && (storedSearchType === 'rent' || storedSearchType === 'buy')) {
+        setSearchType(storedSearchType)
+      }
+      
+      if (storedFilterType && (storedFilterType === 'manual' || storedFilterType === 'ai')) {
+        setFilterType(storedFilterType)
+        if (storedFilterType === 'ai') {
+          setIsAISearchActive(true)
+          if (storedAiQuery) {
+            setAiQuery(storedAiQuery)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring search state:', error)
+    }
+  }
+
+  // Restore on mount - MUST run before clearing effects
+  useEffect(() => {
+    restoreSearchState()
+  }, [])
+
+  // Restore when navigating back to /homes page (e.g., from house detail page)
+  // This should run BEFORE the clearing effect
+  useEffect(() => {
+    if (pathname === '/homes' && homesRef.current.length === 0) {
+      // Small delay to ensure this runs before clearing effect
+      const timer = setTimeout(() => {
+        restoreSearchState()
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [pathname])
+
+  // Restore when window gets focus (user navigates back)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (pathname === '/homes' && homesRef.current.length === 0) {
+        restoreSearchState()
+      }
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [pathname])
   
   // Clear AI search results when filterType changes or is removed from URL
+  // BUT: Don't clear if we have stored state in sessionStorage (user is returning from detail page)
+  // This effect should run AFTER restoration effects
   useEffect(() => {
     if (!isInitialized.current) return
+    
+    // Check if we have stored AI search state (user might be returning from detail page)
+    const hasStoredAIState = sessionStorage.getItem('homesSearchResults') && 
+                             sessionStorage.getItem('homesFilterType') === 'ai'
+    
+    // If we have stored state and no current results, don't clear - let restoration handle it
+    if (hasStoredAIState && homesRef.current.length === 0) {
+      return
+    }
     
     const urlFilterType = searchParams.get('filter') as 'manual' | 'ai' | null
     
     // If filterType is removed from URL or changed, clear AI search
+    // BUT: Don't clear if we have stored state (user is navigating back)
     if (isAISearchActive && (urlFilterType !== 'ai' || filterType !== 'ai')) {
-      setIsAISearchActive(false)
-      setAiQuery('')
-      setHomes([])
-      setShowFilters(true)
+      // Only clear if we don't have stored state OR if filterType actually changed (not just missing from URL)
+      if (!hasStoredAIState || (filterType !== 'ai' && urlFilterType !== 'ai')) {
+        setIsAISearchActive(false)
+        setAiQuery('')
+        setHomes([])
+        setShowFilters(true)
+      }
     }
   }, [searchParams, filterType, isAISearchActive])
 
@@ -220,6 +333,113 @@ export default function HomesPage() {
     }
   }
 
+  // Search cities function
+  const searchCities = async (query: string) => {
+    if (query.length < 1) {
+      setCitySuggestions([])
+      return
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: '10',
+      })
+      
+      if (manualFilters.country) params.append('country', manualFilters.country)
+
+      const response = await fetch(`/api/cities/search?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setCitySuggestions(data.cities || [])
+      }
+    } catch (error) {
+      console.error('Error searching cities:', error)
+    }
+  }
+
+  // Search countries function
+  const searchCountries = async (query: string) => {
+    if (query.length < 1) {
+      setCountrySuggestions([])
+      return
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: '10',
+      })
+
+      const response = await fetch(`/api/countries/search?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setCountrySuggestions(data.countries || [])
+      }
+    } catch (error) {
+      console.error('Error searching countries:', error)
+    }
+  }
+
+  // Handle city selection - filter country and area dropdowns
+  const handleCitySelect = (city: { city: string; cityGreek: string | null; country: string; countryGreek: string | null }) => {
+    setManualFilters({ ...manualFilters, city: city.city })
+    setCitySearchQuery(language === 'el' && city.cityGreek ? city.cityGreek : city.city)
+    setShowCityDropdown(false)
+    setCitySuggestions([])
+    
+    // Auto-set country if not already set
+    if (!manualFilters.country) {
+      setManualFilters(prev => ({ ...prev, country: city.country }))
+      setCountrySearchQuery(language === 'el' && city.countryGreek ? city.countryGreek : city.country)
+    }
+    
+    // Clear area selection if it doesn't match the new city
+    if (selectedAreas.length > 0) {
+      // We'll let the area search filter by city automatically
+      setSelectedAreas([])
+    }
+  }
+
+  // Handle country selection - filter city and area dropdowns
+  const handleCountrySelect = (country: { country: string; countryGreek: string | null }) => {
+    setManualFilters({ ...manualFilters, country: country.country })
+    setCountrySearchQuery(language === 'el' && country.countryGreek ? country.countryGreek : country.country)
+    setShowCountryDropdown(false)
+    setCountrySuggestions([])
+    
+    // Clear city if it doesn't match the new country
+    if (manualFilters.city) {
+      // We'll let the city search filter by country automatically
+      // For now, just clear it - user can re-select
+      setManualFilters(prev => ({ ...prev, city: '' }))
+      setCitySearchQuery('')
+    }
+    
+    // Clear area selection
+    setSelectedAreas([])
+  }
+
+  // Handle area selection - filter city and country dropdowns
+  const handleAreaSelect = (area: { id: number; name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }) => {
+    if (!selectedAreas.includes(area.name)) {
+      setSelectedAreas([...selectedAreas, area.name])
+    }
+    setAreaSearchQuery('')
+    setShowAreaDropdown(false)
+    setAreaSuggestions([])
+    
+    // Auto-set city and country if not already set
+    if (area.city && !manualFilters.city) {
+      setManualFilters(prev => ({ ...prev, city: area.city! }))
+      setCitySearchQuery(language === 'el' && area.cityGreek ? area.cityGreek : area.city)
+    }
+    if (area.country && !manualFilters.country) {
+      setManualFilters(prev => ({ ...prev, country: area.country! }))
+      setCountrySearchQuery(language === 'el' && area.countryGreek ? area.countryGreek : area.country)
+    }
+  }
+
   if (checkingRole) {
     return (
       <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
@@ -257,9 +477,20 @@ export default function HomesPage() {
         }),
       })
       const data = await response.json()
-      setHomes(data.homes || [])
+      const homesResults = data.homes || []
+      setHomes(homesResults)
       setIsAISearchActive(true) // Mark AI search as active
       setShowFilters(false) // Hide filters section
+      
+      // Store results and state in sessionStorage
+      sessionStorage.setItem('homesSearchResults', JSON.stringify(homesResults))
+      sessionStorage.setItem('homesSearchType', searchType || '')
+      sessionStorage.setItem('homesFilterType', 'ai')
+      sessionStorage.setItem('homesAiQuery', aiQuery)
+      sessionStorage.setItem('homesSearchFilters', JSON.stringify({
+        excludeInquired,
+        excludeApproved,
+      }))
     } catch (error) {
       console.error('Error with AI search:', error)
       // Fallback to showing all homes if AI search fails
@@ -271,8 +502,10 @@ export default function HomesPage() {
 
   const handleNewAISearch = () => {
     setIsAISearchActive(false) // Reset AI search state
-    setAiQuery('') // Clear the query
-    setHomes([]) // Clear results
+    // Don't clear the query - keep the previous one so user can see/edit it
+    // setAiQuery('') // Clear the query
+    // Don't clear results - keep them visible
+    // setHomes([]) // Clear results
     setShowFilters(true) // Show filters section again
     // State will be saved automatically by useEffect
   }
@@ -301,9 +534,21 @@ export default function HomesPage() {
 
       const response = await fetch(`/api/homes?${params.toString()}`)
       const data = await response.json()
-      setHomes(data.homes || [])
+      const homesResults = data.homes || []
+      setHomes(homesResults)
       // Collapse filters after search
       setShowFilters(false)
+      
+      // Store results and state in sessionStorage
+      sessionStorage.setItem('homesSearchResults', JSON.stringify(homesResults))
+      sessionStorage.setItem('homesSearchType', searchType || '')
+      sessionStorage.setItem('homesFilterType', 'manual')
+      sessionStorage.setItem('homesSearchFilters', JSON.stringify({
+        manualFilters,
+        selectedAreas,
+        excludeInquired,
+        excludeApproved,
+      }))
     } catch (error) {
       console.error('Error filtering homes:', error)
     } finally {
@@ -385,25 +630,97 @@ export default function HomesPage() {
             <div className="space-y-4 mb-4">
               {/* Row 1: City, Country */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                   <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
-                  value={manualFilters.city}
-                  onChange={(e) => setManualFilters({ ...manualFilters, city: e.target.value })}
+                  value={citySearchQuery || (manualFilters.city ? (language === 'el' ? (areas.find(a => a.city === manualFilters.city)?.cityGreek || manualFilters.city) : manualFilters.city) : '')}
+                  onChange={(e) => {
+                    const query = e.target.value
+                    setCitySearchQuery(query)
+                    if (query.length > 0) {
+                      setShowCityDropdown(true)
+                      searchCities(query)
+                    } else {
+                      setShowCityDropdown(false)
+                      setCitySuggestions([])
+                      setManualFilters({ ...manualFilters, city: '' })
+                    }
+                  }}
+                  onFocus={() => {
+                    if (citySearchQuery.length > 0 || manualFilters.city) {
+                      setShowCityDropdown(true)
+                      if (citySearchQuery.length > 0) {
+                        searchCities(citySearchQuery)
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowCityDropdown(false), 200)
+                  }}
                   className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
                     placeholder={getTranslation(language, 'anyCity')}
                 />
+                {showCityDropdown && citySuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {citySuggestions.map((city, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleCitySelect(city)}
+                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                      >
+                        <div className="font-medium">{language === 'el' && city.cityGreek ? city.cityGreek : city.city}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              <div className="relative">
                   <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
-                  value={manualFilters.country}
-                  onChange={(e) => setManualFilters({ ...manualFilters, country: e.target.value })}
+                  value={countrySearchQuery || (manualFilters.country ? (language === 'el' ? (areas.find(a => a.country === manualFilters.country)?.countryGreek || manualFilters.country) : manualFilters.country) : '')}
+                  onChange={(e) => {
+                    const query = e.target.value
+                    setCountrySearchQuery(query)
+                    if (query.length > 0) {
+                      setShowCountryDropdown(true)
+                      searchCountries(query)
+                    } else {
+                      setShowCountryDropdown(false)
+                      setCountrySuggestions([])
+                      setManualFilters({ ...manualFilters, country: '' })
+                    }
+                  }}
+                  onFocus={() => {
+                    if (countrySearchQuery.length > 0 || manualFilters.country) {
+                      setShowCountryDropdown(true)
+                      if (countrySearchQuery.length > 0) {
+                        searchCountries(countrySearchQuery)
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowCountryDropdown(false), 200)
+                  }}
                   className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
                     placeholder={getTranslation(language, 'anyCountry')}
                 />
+                {showCountryDropdown && countrySuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((country, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleCountrySelect(country)}
+                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                      >
+                        <div className="font-medium">{language === 'el' && country.countryGreek ? country.countryGreek : country.country}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 </div>
               </div>
 
@@ -467,14 +784,7 @@ export default function HomesPage() {
                           <button
                             key={area.id}
                             type="button"
-                            onClick={() => {
-                              if (!selectedAreas.includes(area.name)) {
-                                setSelectedAreas([...selectedAreas, area.name])
-                              }
-                              setAreaSearchQuery('')
-                              setShowAreaDropdown(false)
-                              setAreaSuggestions([])
-                            }}
+                            onClick={() => handleAreaSelect(area)}
                             className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
                           >
                             <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
@@ -645,13 +955,25 @@ export default function HomesPage() {
         )}
 
         {/* AI Search Form */}
-        {/* AI Search Input - Show when not active */}
-        {searchType && filterType === 'ai' && showFilters && !isAISearchActive && (
+        {/* AI Search Input - Show when not active OR when "Use AI for another search" is clicked */}
+        {searchType && filterType === 'ai' && (showFilters || (!isAISearchActive && homes.length > 0)) && (
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
               <button
-                onClick={() => setFilterType(null)}
+                onClick={() => {
+                  setFilterType(null)
+                  setIsAISearchActive(false)
+                  setAiQuery('')
+                  setHomes([])
+                  setShowFilters(true)
+                  // Clear sessionStorage when going back to start
+                  sessionStorage.removeItem('homesSearchResults')
+                  sessionStorage.removeItem('homesSearchFilters')
+                  sessionStorage.removeItem('homesSearchType')
+                  sessionStorage.removeItem('homesFilterType')
+                  sessionStorage.removeItem('homesAiQuery')
+                }}
                 className="px-3 py-1.5 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
               >
                 ← {getTranslation(language, 'back')}
