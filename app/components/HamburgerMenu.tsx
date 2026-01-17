@@ -58,7 +58,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
           
           setHasFinalizedInquiries(ownerHasFinalized || userHasFinalized)
         } else {
-          const roleParam = normalizedRole === 'owner' ? 'owner' : 'user'
+          const roleParam = (normalizedRole === 'owner' || normalizedRole === 'broker') ? 'owner' : 'user'
           const response = await fetch(`/api/inquiries/finalized?role=${roleParam}`)
           if (response.ok) {
             const data = await response.json()
@@ -71,8 +71,8 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       }
     }
 
-    // Always check if role is owner, user, or both
-    if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both') {
+    // Always check if role is owner, user, both, or broker
+    if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both' || normalizedRole === 'broker') {
       checkFinalizedInquiries()
     }
   }, [normalizedRole])
@@ -80,9 +80,9 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   // Define all possible menu items with translations
   // Inquiries item will be dynamically set based on selected role
   const allMenuItems = [
-    { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both'] },
-    { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both'] },
-    { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both'] },
+    { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both', 'broker'] },
+    { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both', 'broker'] },
+    { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both', 'broker'] },
     { href: '/homes', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
   ]
 
@@ -99,11 +99,12 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   // Add inquiries item based on display role
   // For owner: link to /homes/inquiries
   // For user: link to /homes/my-inquiries
-  if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both') {
+  // For broker: same as owner
+  if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both' || normalizedRole === 'broker') {
     let inquiriesHref = '/homes/my-inquiries'
     let insertIndex = menuItems.findIndex(item => item.href === '/profile') + 1
     
-    if (normalizedRole === 'owner' || (normalizedRole === 'both' && selectedRole === 'owner')) {
+    if (normalizedRole === 'owner' || normalizedRole === 'broker' || (normalizedRole === 'both' && selectedRole === 'owner')) {
       inquiriesHref = '/homes/inquiries'
       insertIndex = menuItems.findIndex(item => item.href === '/homes/my-listings') + 1
       if (insertIndex === 0) {
@@ -130,8 +131,8 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
     // This allows re-rating at intervals (e.g., every 6 months)
     // Show "Rate Owner" when viewing as user, "Rate User" when viewing as owner
     if (hasFinalizedInquiries) {
-      if (normalizedRole === 'owner') {
-        // Owner rates the user/renter
+      if (normalizedRole === 'owner' || normalizedRole === 'broker') {
+        // Owner/broker rates the user/renter
         menuItems.splice(insertIndex + 2, 0, {
           href: '/homes/rate-user',
           labelKey: 'rateUser',

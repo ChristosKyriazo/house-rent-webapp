@@ -144,12 +144,13 @@ button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria
 }
 
 /* Input fields - transparent to blend with banner, beige text */
-.cl-formFieldInput,
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="tel"],
-input[type="number"] {
+/* Exclude OTP inputs from these rules */
+.cl-formFieldInput:not([data-input-otp="true"]),
+input[type="text"]:not([data-input-otp="true"]),
+input[type="email"]:not([data-input-otp="true"]),
+input[type="password"]:not([data-input-otp="true"]),
+input[type="tel"]:not([data-input-otp="true"]),
+input[type="number"]:not([data-input-otp="true"]) {
   background: transparent !important;
   border: 2px solid rgba(232, 213, 183, 0.3) !important;
   color: #E8D5B7 !important;
@@ -172,12 +173,12 @@ input[type="number"]::placeholder {
   opacity: 1 !important;
 }
 
-.cl-formFieldInput:focus,
-input[type="text"]:focus,
-input[type="email"]:focus,
-input[type="password"]:focus,
-input[type="tel"]:focus,
-input[type="number"]:focus {
+.cl-formFieldInput:focus:not([data-input-otp="true"]),
+input[type="text"]:focus:not([data-input-otp="true"]),
+input[type="email"]:focus:not([data-input-otp="true"]),
+input[type="password"]:focus:not([data-input-otp="true"]),
+input[type="tel"]:focus:not([data-input-otp="true"]),
+input[type="number"]:focus:not([data-input-otp="true"]) {
   border-color: #E8D5B7 !important;
   box-shadow: none !important;
   outline: none !important;
@@ -236,56 +237,8 @@ input[type="number"]:focus {
   transform: translateY(-1px) !important;
 }
 
-/* OTP inputs - transparent to blend with banner, beige text */
-.cl-otpCodeFieldInput {
-  background: transparent !important;
-  border: 2px solid rgba(232, 213, 183, 0.3) !important;
-  color: #E8D5B7 !important;
-  border-radius: 0 !important;
-}
 
-.cl-otpCodeFieldInput:focus-within,
-.cl-otpCodeFieldInput[data-focus-within="true"] {
-  border-color: #E8D5B7 !important;
-  box-shadow: none !important;
-  background: transparent !important;
-}
 
-input[data-input-otp="true"] {
-  color: #E8D5B7 !important;
-  caret-color: #E8D5B7 !important;
-  background: transparent !important;
-}
-
-/* Hide any duplicate OTP display in the middle */
-.cl-otpCodeFieldInputs::before,
-.cl-otpCodeFieldInputs::after,
-[data-input-otp-container="true"]::before,
-[data-input-otp-container="true"]::after,
-.cl-otpCodeFieldInput::before,
-.cl-otpCodeFieldInput::after {
-  display: none !important;
-  content: none !important;
-}
-
-/* Hide any overlay or duplicate display elements */
-[class*="otp"][class*="display"],
-[class*="otp"][class*="overlay"],
-[class*="otp"][class*="preview"],
-[class*="otp"][class*="value"],
-[class*="otp"][class*="code"] {
-  display: none !important;
-  visibility: hidden !important;
-}
-
-/* Hide any span or div that might be showing duplicate OTP values */
-.cl-otpCodeFieldInputs span,
-.cl-otpCodeFieldInputs div:not(.cl-otpCodeFieldInput),
-[data-input-otp-container="true"] span:not(input),
-[data-input-otp-container="true"] div:not([class*="otpCodeFieldInput"]) {
-  display: none !important;
-  visibility: hidden !important;
-}
 
 /* Dividers */
 .cl-dividerLine {
@@ -359,6 +312,34 @@ div[class*="content"],
 div[class*="wrapper"] {
   background: transparent !important;
   background-color: transparent !important;
+}
+
+/* Ensure OTP wrapper elements don't block input */
+.cl-otpCodeFieldInputs,
+[data-input-otp-container="true"],
+.cl-otpCodeFieldInputs *,
+[data-input-otp-container="true"] * {
+  pointer-events: auto !important;
+  z-index: auto !important;
+}
+
+/* Make sure OTP inputs themselves are clickable and typeable */
+.cl-otpCodeFieldInput input,
+input[data-input-otp="true"],
+input[data-input-otp],
+.cl-otpCodeFieldInputs input,
+[data-input-otp-container="true"] input {
+  pointer-events: auto !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  cursor: text !important;
+  z-index: 10 !important;
+  position: relative !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* Remove any box-shadows that might create depth illusion */

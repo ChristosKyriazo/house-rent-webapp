@@ -122,8 +122,8 @@ export async function GET(request: NextRequest) {
       currentUser = await getCurrentUser()
       if (currentUser) {
         const userRole = (currentUser.role || 'user').toLowerCase()
-        // If user is owner or both, exclude their own houses from search
-        if (userRole === 'owner' || userRole === 'both') {
+        // If user is owner, both, or broker, exclude their own houses from search
+        if (userRole === 'owner' || userRole === 'both' || userRole === 'broker') {
           where.ownerId = { not: currentUser.id }
         }
       }
@@ -362,9 +362,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user has owner role
+    // Check if user has owner role (brokers are treated like owners)
     const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both') {
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json(
         { error: 'Only owners can create listings' },
         { status: 403 }

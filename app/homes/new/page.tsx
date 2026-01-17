@@ -41,6 +41,10 @@ export default function NewHomePage() {
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [searchingAreas, setSearchingAreas] = useState(false)
   const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
+  const [bulkUploadLoading, setBulkUploadLoading] = useState(false)
+  const [bulkUploadError, setBulkUploadError] = useState('')
+  const [bulkUploadSuccess, setBulkUploadSuccess] = useState('')
 
   // Check user role on mount
   useEffect(() => {
@@ -52,7 +56,7 @@ export default function NewHomePage() {
           return
         }
         const userRole = data.user.role || 'user'
-        if (userRole !== 'owner' && userRole !== 'both') {
+        if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
           router.push('/profile')
           return
         }
@@ -331,9 +335,18 @@ export default function NewHomePage() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-[#E8D5B7] mb-2">
-              {getTranslation(language, 'createListing')}
-            </h1>
+            <div className="flex items-center justify-between mb-2">
+              <h1 className="text-3xl font-bold text-[#E8D5B7]">
+                {getTranslation(language, 'createListing')}
+              </h1>
+              <button
+                type="button"
+                onClick={() => setShowBulkUploadModal(true)}
+                className="px-4 py-2 bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 rounded-xl hover:bg-[#1a1f2e] hover:border-[#E8D5B7]/50 transition-all text-sm font-semibold"
+              >
+                {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
+              </button>
+            </div>
             <p className="text-[#E8D5B7]/70">
               {getTranslation(language, 'listingDetails')}
             </p>
@@ -767,6 +780,178 @@ export default function NewHomePage() {
           </form>
         </div>
       </div>
+
+      {/* Bulk Upload Modal */}
+      {showBulkUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#1A202C] border-4 border-[#E8D5B7]/30 rounded-3xl p-8 max-w-2xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-[#E8D5B7]">
+                {language === 'el' ? 'Δημοσίευση από Αρχείο Excel' : 'Publish from Excel File'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowBulkUploadModal(false)
+                  setBulkUploadError('')
+                  setBulkUploadSuccess('')
+                }}
+                className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <p className="text-[#E8D5B7]/70 mb-4">
+                  {language === 'el' 
+                    ? 'Κατεβάστε το πρότυπο Excel, συμπληρώστε τα στοιχεία των ακινήτων και ανεβάστε το αρχείο μαζί με φωτογραφίες.'
+                    : 'Download the Excel template, fill in the property details, and upload the file along with photos.'}
+                </p>
+                <a
+                  href="/api/homes/template"
+                  download
+                  className="inline-block px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm mb-4"
+                >
+                  {language === 'el' ? '📥 Κατέβασμα Προτύπου' : '📥 Download Template'}
+                </a>
+              </div>
+
+              {bulkUploadError && (
+                <div className="bg-red-50/80 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
+                  {bulkUploadError}
+                </div>
+              )}
+
+              {bulkUploadSuccess && (
+                <div className="bg-green-50/80 border border-green-200 text-green-700 px-4 py-3 rounded-2xl text-sm">
+                  {bulkUploadSuccess}
+                </div>
+              )}
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setBulkUploadError('')
+                  setBulkUploadSuccess('')
+                  setBulkUploadLoading(true)
+
+                  const formData = new FormData(e.currentTarget)
+                  const excelFile = (formData.get('excelFile') as File) || null
+                  const photoFiles = formData.getAll('photos') as File[]
+
+                  if (!excelFile) {
+                    setBulkUploadError(language === 'el' ? 'Παρακαλώ επιλέξτε αρχείο Excel' : 'Please select an Excel file')
+                    setBulkUploadLoading(false)
+                    return
+                  }
+
+                  try {
+                    const uploadFormData = new FormData()
+                    uploadFormData.append('excelFile', excelFile)
+                    photoFiles.forEach((file) => {
+                      uploadFormData.append('photos', file)
+                    })
+
+                    const response = await fetch('/api/homes/bulk-upload', {
+                      method: 'POST',
+                      body: uploadFormData,
+                    })
+
+                    const data = await response.json()
+
+                    if (!response.ok) {
+                      setBulkUploadError(data.error || (language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'))
+                      setBulkUploadLoading(false)
+                      return
+                    }
+
+                    if (data.errors && data.errors.length > 0) {
+                      setBulkUploadError(
+                        language === 'el'
+                          ? `Δημιουργήθηκαν ${data.created} ακίνητα. Σφάλματα: ${data.errors.join(', ')}`
+                          : `Created ${data.created} homes. Errors: ${data.errors.join(', ')}`
+                      )
+                    } else {
+                      setBulkUploadSuccess(
+                        language === 'el'
+                          ? `Επιτυχής δημιουργία ${data.created} ακινήτων!`
+                          : `Successfully created ${data.created} homes!`
+                      )
+                    }
+
+                    // Redirect to my listings after 2 seconds
+                    setTimeout(() => {
+                      router.push('/homes/my-listings')
+                    }, 2000)
+                  } catch (err) {
+                    setBulkUploadError(
+                      language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'
+                    )
+                  } finally {
+                    setBulkUploadLoading(false)
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                    {language === 'el' ? 'Αρχείο Excel' : 'Excel File'} *
+                  </label>
+                  <input
+                    type="file"
+                    name="excelFile"
+                    accept=".xlsx,.xls"
+                    required
+                    className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#E8D5B7] file:text-[#2D3748] hover:file:bg-[#D4C19F]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                    {language === 'el' ? 'Φωτογραφίες' : 'Photos'} ({language === 'el' ? 'Προαιρετικό' : 'Optional'})
+                  </label>
+                  <input
+                    type="file"
+                    name="photos"
+                    multiple
+                    accept="image/*"
+                    className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#E8D5B7] file:text-[#2D3748] hover:file:bg-[#D4C19F]"
+                  />
+                  <p className="text-[#E8D5B7]/50 text-xs mt-1">
+                    {language === 'el' 
+                      ? 'Οι φωτογραφίες θα χρησιμοποιηθούν για όλα τα ακίνητα. Μέγιστο 5MB ανά φωτογραφία.'
+                      : 'Photos will be used for all homes. Maximum 5MB per photo.'}
+                  </p>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkUploadModal(false)
+                      setBulkUploadError('')
+                      setBulkUploadSuccess('')
+                    }}
+                    className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm"
+                  >
+                    {getTranslation(language, 'cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={bulkUploadLoading}
+                    className="flex-1 px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkUploadLoading 
+                      ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
+                      : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
