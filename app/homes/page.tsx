@@ -7,12 +7,14 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
+import TranslatedDescription from '@/app/components/TranslatedDescription'
 
 interface Home {
   id: number
   key: string
   title: string
   description: string | null
+  descriptionGreek: string | null
   city: string
   country: string
   area: string | null
@@ -44,6 +46,7 @@ export default function HomesPage() {
   const [loading, setLoading] = useState(false)
   const [checkingRole, setCheckingRole] = useState(true)
   const [userRole, setUserRole] = useState<string>('user')
+  const [subscription, setSubscription] = useState<number | null>(null)
   
   // Determine display role for UI: if user has "both" role, use selectedRole, otherwise use actualRole or userRole
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -259,6 +262,7 @@ export default function HomesPage() {
           return
         }
         setUserRole(role)
+        setSubscription(data.user.subscription || 1) // Default to Free (1)
         setCheckingRole(false)
         
         // Fetch user's inquiry status
@@ -606,10 +610,28 @@ export default function HomesPage() {
                 🔍 {getTranslation(language, 'manualFilter')}
               </button>
               <button
-                onClick={() => setFilterType('ai')}
-                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-lg shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1"
+                onClick={() => {
+                  if (subscription === 1) {
+                    // Free users - show upgrade message
+                    alert(getTranslation(language, 'upgradeToPlusForAISearch') || 'Please upgrade to Plus subscription to use AI search')
+                    return
+                  }
+                  setFilterType('ai')
+                }}
+                disabled={subscription === 1}
+                className={`px-6 py-4 rounded-2xl font-semibold text-lg shadow-lg transition-all ${
+                  subscription === 1
+                    ? 'bg-[#2D3748] text-[#E8D5B7]/50 border-2 border-[#E8D5B7]/30 cursor-not-allowed opacity-60'
+                    : 'bg-[#E8D5B7] text-[#2D3748] hover:bg-[#D4C19F] shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1'
+                }`}
+                title={subscription === 1 ? (getTranslation(language, 'upgradeToPlusForAISearch') || 'Upgrade to Plus for AI search') : ''}
               >
                 🤖 {getTranslation(language, 'aiSearch')}
+                {subscription === 1 && (
+                  <span className="block text-xs mt-1 text-[#E8D5B7]/70">
+                    {getTranslation(language, 'upgradeRequired') || 'Upgrade Required'}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1294,10 +1316,14 @@ export default function HomesPage() {
                         </p>
                       </div>
 
-                      {home.description && (
-                        <p className={`mb-4 line-clamp-2 ${
-                          status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
-                        }`}>{home.description}</p>
+                      {(home.description || home.descriptionGreek) && (
+                        <TranslatedDescription 
+                          description={home.description}
+                          descriptionGreek={home.descriptionGreek}
+                          className={`mb-4 line-clamp-2 ${
+                            status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
+                          }`}
+                        />
                       )}
 
                       <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
@@ -1376,10 +1402,14 @@ export default function HomesPage() {
                         </p>
                       </div>
 
-                      {home.description && (
-                        <p className={`mb-4 line-clamp-2 ${
-                          status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
-                        }`}>{home.description}</p>
+                      {(home.description || home.descriptionGreek) && (
+                        <TranslatedDescription 
+                          description={home.description}
+                          descriptionGreek={home.descriptionGreek}
+                          className={`mb-4 line-clamp-2 ${
+                            status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
+                          }`}
+                        />
                       )}
 
                       <div className={`flex items-center justify-between mb-4 pt-4 border-t ${

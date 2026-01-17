@@ -98,10 +98,14 @@ export const translations = {
     
     // Property Details
     returnToSearch: 'Επιστροφή στην Αναζήτηση',
+    returnToListings: 'Επιστροφή στις Καταχωρήσεις',
+    returnToApproved: 'Επιστροφή στις Εγκεκριμένες Καταχωρήσεις',
+    returnToInquiries: 'Επιστροφή στις Ερωτήσεις',
     edit: 'Επεξεργασία',
     noPhotos: 'Δεν υπάρχουν φωτογραφίες',
     owner: 'Ιδιοκτήτης',
     user: 'Χρήστης',
+    broker: 'Μεσιτικό',
     description: 'Περιγραφή',
     price: 'Τιμή',
     sizeSqMeters: 'Μέγεθος (m²)',
@@ -115,6 +119,41 @@ export const translations = {
     perMonth: '/ μήνα',
     totalPrice: 'Συνολική Τιμή',
     close: 'Κλείσιμο',
+    
+    // Subscription
+    chooseSubscription: 'Επιλέξτε Συνδρομή',
+    selectSubscriptionPlan: 'Επιλέξτε το σχέδιο συνδρομής που σας ταιριάζει',
+    freePlan: 'Δωρεάν',
+    plusPlan: 'Plus',
+    unlimitedPlan: 'Unlimited',
+    forever: 'Για πάντα',
+    popular: 'Δημοφιλές',
+    premium: 'Premium',
+    upTo2Homes: 'Έως 2 ακίνητα',
+    upTo10Homes: 'Έως 10 ακίνητα',
+    unlimitedHomes: 'Απεριόριστα ακίνητα',
+    aiDescription: 'AI Περιγραφή',
+    fileUpload: 'Ανέβασμα Αρχείου',
+    promoteButton: 'Κουμπί Προώθησης',
+    premiumPromote: 'Premium Προώθηση',
+    basicSearch: 'Βασική Αναζήτηση',
+    aiSearch: 'AI Αναζήτηση',
+    select: 'Επιλογή',
+    upgradeToPlusForAISearch: 'Παρακαλώ αναβαθμίστε σε συνδρομή Plus για να χρησιμοποιήσετε την AI αναζήτηση',
+    upgradeRequired: 'Απαιτείται Αναβάθμιση',
+    freePlanLimitReached: 'Το δωρεάν σχέδιο επιτρέπει έως 2 ακίνητα. Παρακαλώ αναβαθμίστε σε Plus ή Unlimited.',
+    plusPlanLimitReached: 'Το σχέδιο Plus επιτρέπει έως 10 ακίνητα. Παρακαλώ αναβαθμίστε σε Unlimited.',
+    useAIDescription: 'Χρήση AI για δημιουργία περιγραφής',
+    useAIDescriptionForAll: 'Χρήση AI για δημιουργία περιγραφών για όλα τα ακίνητα',
+    aiDescriptionWillGenerate: 'Η AI θα δημιουργήσει την περιγραφή',
+    promote: 'Προώθηση',
+    promoteHome: 'Προώθηση Ακινήτου',
+    promoteFor7Days: 'Προώθηση για 7 ημέρες',
+    premiumPromoteFor30Days: 'Premium Προώθηση για 30 ημέρες',
+    promoteFailed: 'Αποτυχία προώθησης ακινήτου',
+    subscription: 'Συνδρομή',
+    notSet: 'Δεν ορίστηκε',
+    cannotBeChanged: 'Δεν μπορεί να αλλάξει',
     ownerProfile: 'Προφίλ Ιδιοκτήτη',
     notProvided: 'Δεν δόθηκε',
     asOwner: 'Ως Ιδιοκτήτης',
@@ -425,10 +464,14 @@ export const translations = {
     
     // Property Details
     returnToSearch: 'Return to Search',
+    returnToListings: 'Return to Listings',
+    returnToApproved: 'Return to Approved Listings',
+    returnToInquiries: 'Return to Inquiries',
     edit: 'Edit',
     noPhotos: 'No photos',
     owner: 'Owner',
     user: 'User',
+    broker: 'Broker',
     description: 'Description',
     price: 'Price',
     sizeSqMeters: 'Size (m²)',
@@ -442,6 +485,42 @@ export const translations = {
     perMonth: '/ month',
     totalPrice: 'Total Price',
     close: 'Close',
+    
+    // Subscription
+    chooseSubscription: 'Choose Subscription',
+    selectSubscriptionPlan: 'Select the subscription plan that suits you',
+    freePlan: 'Free',
+    plusPlan: 'Plus',
+    unlimitedPlan: 'Unlimited',
+    forever: 'Forever',
+    popular: 'Popular',
+    premium: 'Premium',
+    upTo2Homes: 'Up to 2 homes',
+    upTo10Homes: 'Up to 10 homes',
+    unlimitedHomes: 'Unlimited homes',
+    aiDescription: 'AI Description',
+    fileUpload: 'File Upload',
+    promoteButton: 'Promote Button',
+    premiumPromote: 'Premium Promote',
+    basicSearch: 'Basic Search',
+    aiSearch: 'AI Search',
+    select: 'Select',
+    upgradeToPlusForAISearch: 'Please upgrade to Plus subscription to use AI search',
+    upgradeRequired: 'Upgrade Required',
+    freePlanLimitReached: 'Free plan allows up to 2 homes. Please upgrade to Plus or Unlimited.',
+    plusPlanLimitReached: 'Plus plan allows up to 10 homes. Please upgrade to Unlimited.',
+    useAIDescription: 'Use AI to generate description',
+    useAIDescriptionForAll: 'Use AI to generate descriptions for all homes',
+    aiDescriptionWillGenerate: 'AI will generate description',
+    promote: 'Promote',
+    promoteHome: 'Promote Home',
+    promoteFor7Days: 'Promote for 7 days',
+    premiumPromoteFor30Days: 'Premium Promote for 30 days',
+    promoteFailed: 'Failed to promote home',
+    subscription: 'Subscription',
+    notSet: 'Not set',
+    cannotBeChanged: 'Cannot be changed',
+    
     ownerProfile: 'Owner Profile',
     notProvided: 'Not provided',
     asOwner: 'As Owner',
@@ -732,4 +811,73 @@ export function reverseTranslateValue(translatedValue: string | null | undefined
   
   // If not found, return the original value (might already be a key)
   return translatedValue
+}
+
+/**
+ * Convert a value to English (reverse translate from Greek to English key)
+ * This ensures values are stored in English in the database
+ */
+export function toEnglishValue(value: string | null | undefined): string | null {
+  if (!value || value.trim() === '') return null
+  
+  const trimmed = value.trim()
+  
+  // First check if it's already an English key (exists in English translations)
+  if (translations.en[trimmed as keyof typeof translations.en]) {
+    return trimmed
+  }
+  
+  // Check if it's a Greek translation - find the English key
+  for (const [key, greekValue] of Object.entries(translations.el)) {
+    // Case-insensitive comparison
+    if (greekValue.toLowerCase() === trimmed.toLowerCase() || 
+        greekValue === trimmed) {
+      // Return the key (which is the English value)
+      return key
+    }
+  }
+  
+  // Try case-insensitive match for common values
+  const lowerValue = trimmed.toLowerCase()
+  const capitalizedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+  
+  // Check lowercase version
+  for (const [key, greekValue] of Object.entries(translations.el)) {
+    if (greekValue.toLowerCase() === lowerValue) {
+      return key
+    }
+  }
+  
+  // Check capitalized version
+  for (const [key, greekValue] of Object.entries(translations.el)) {
+    if (greekValue.toLowerCase() === capitalizedValue.toLowerCase()) {
+      return key
+    }
+  }
+  
+  // If not found in translations, return as-is (might be a new value or already in English)
+  return trimmed
+}
+
+/**
+ * Translate a role name to the selected language
+ */
+export function translateRole(language: Language, role: string): string {
+  const normalizedRole = role.toLowerCase()
+  
+  // Map role values to translation keys
+  const roleMap: Record<string, keyof typeof translations.en> = {
+    'owner': 'owner',
+    'user': 'user',
+    'broker': 'broker',
+    'both': 'ownerAndUser',
+  }
+  
+  const translationKey = roleMap[normalizedRole]
+  if (translationKey) {
+    return getTranslation(language, translationKey)
+  }
+  
+  // If role not found, return as-is
+  return role
 }

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
-import { getTranslation, translateValue } from '@/lib/translations'
+import { getTranslation, translateValue, translateRole } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
 
 interface User {
@@ -15,6 +15,7 @@ interface User {
   dateOfBirth: string | null
   occupation: string | null
   role: string
+  subscription: number | null
   createdAt: string
 }
 
@@ -355,10 +356,19 @@ export default function ProfilePage() {
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'role')}</label>
               <p className="text-lg text-[#E8D5B7]">
-                {user.role === 'owner' && `🏠 ${getTranslation(language, 'owner')}`}
-                {user.role === 'user' && `👤 ${getTranslation(language, 'user')}`}
-                {user.role === 'both' && `🔄 ${getTranslation(language, 'ownerAndUser')}`}
-                {user.role === 'broker' && `🏢 Μεσιτικό`}
+                {user.role === 'owner' && `🏠 ${translateRole(language, 'owner')}`}
+                {user.role === 'user' && `👤 ${translateRole(language, 'user')}`}
+                {user.role === 'both' && `🔄 ${translateRole(language, 'both')}`}
+                {user.role === 'broker' && `🏢 ${translateRole(language, 'broker')}`}
+              </p>
+            </div>
+            <div className="pb-4 border-b border-[#E8D5B7]/20">
+              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'subscription')}</label>
+              <p className="text-lg text-[#E8D5B7]">
+                {user.subscription === 1 && `🆓 ${getTranslation(language, 'freePlan')}`}
+                {user.subscription === 2 && `⭐ ${getTranslation(language, 'plusPlan')}`}
+                {user.subscription === 3 && `🚀 ${getTranslation(language, 'unlimitedPlan')}`}
+                {!user.subscription && getTranslation(language, 'notSet')}
               </p>
             </div>
             <div>

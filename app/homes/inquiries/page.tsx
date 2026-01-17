@@ -41,7 +41,7 @@ export default function OwnerInquiriesPage() {
         }
 
         const userRole = profileData.user.role || 'user'
-        if (userRole !== 'owner' && userRole !== 'both') {
+        if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
           router.push('/profile')
           return
         }

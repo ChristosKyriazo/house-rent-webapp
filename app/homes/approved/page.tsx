@@ -158,7 +158,7 @@ export default function ApprovedInquiriesPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <Link
-                        href={`/homes/${inquiry.home.key}`}
+                        href={`/homes/${inquiry.home.key}?from=approved`}
                         className="block group"
                       >
                         <h2 className="text-2xl font-bold text-[#E8D5B7] mb-2 group-hover:text-[#D4C19F] transition-colors">

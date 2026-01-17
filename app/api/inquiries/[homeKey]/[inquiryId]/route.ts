@@ -80,11 +80,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is an owner
+    // Check if user is an owner (brokers are treated like owners)
     const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both') {
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json(
-        { error: 'Only owners can manage inquiries' },
+        { error: 'Only owners and brokers can manage inquiries' },
         { status: 403 }
       )
     }

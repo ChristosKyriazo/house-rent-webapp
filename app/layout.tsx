@@ -4,6 +4,7 @@ import "./globals.css";
 import NavBar from "./components/NavBar";
 import LanguageProviderWrapper from "./components/LanguageProviderWrapper";
 import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
+import NavBarWrapper from "./components/NavBarWrapper";
 import OTPCursorFix from "./components/OTPCursorFix";
 import { ClerkProvider } from "@clerk/nextjs";
 
@@ -36,7 +37,9 @@ export default function RootLayout({
           <LanguageProviderWrapper>
             <OTPCursorFix />
             <ConditionalLanguageToggle />
-            <NavBar />
+            <NavBarWrapper>
+              <NavBar />
+            </NavBarWrapper>
             {children}
           </LanguageProviderWrapper>
         </body>

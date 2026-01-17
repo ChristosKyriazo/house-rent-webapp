@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
           dateOfBirth: true,
         occupation: true,
         role: true,
+        subscription: true,
         createdAt: true,
       },
     })
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
         dateOfBirth: user.dateOfBirth,
         occupation: user.occupation,
         role: user.role,
+        subscription: user.subscription,
         createdAt: user.createdAt,
       }
     }, { status: 200 })
@@ -88,6 +90,7 @@ export async function PATCH(request: NextRequest) {
           dateOfBirth: true,
           occupation: true,
           role: true,
+          subscription: true,
           createdAt: true,
         },
       })
@@ -113,6 +116,7 @@ export async function PATCH(request: NextRequest) {
         dateOfBirth: true,
         occupation: true,
         role: true,
+        subscription: true,
         createdAt: true,
       },
     })

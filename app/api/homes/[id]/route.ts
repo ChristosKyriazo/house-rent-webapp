@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
+import { toEnglishValue } from '@/lib/translations'
 
 export async function GET(
   request: NextRequest,
@@ -72,11 +73,11 @@ export async function PUT(
       )
     }
 
-    // Check if user has owner role
+    // Check if user has owner role (brokers are treated like owners)
     const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both') {
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json(
-        { error: 'Only owners can update listings' },
+        { error: 'Only owners and brokers can update listings' },
         { status: 403 }
       )
     }
@@ -156,31 +157,89 @@ export async function PUT(
       availableFromDate = new Date()
     }
 
+    // Convert city, country, and area to English by querying areas table
+    const areas = await prisma.area.findMany({
+      select: {
+        name: true,
+        nameGreek: true,
+        city: true,
+        cityGreek: true,
+        country: true,
+        countryGreek: true,
+      }
+    })
+
+    const convertAreaToEnglish = (input: string | null): string | null => {
+      if (!input) return null
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.nameGreek && a.nameGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.name || normalized
+    }
+
+    const convertCityToEnglish = (input: string): string => {
+      if (!input) return input
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.cityGreek && a.cityGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.city || normalized
+    }
+
+    const convertCountryToEnglish = (input: string): string => {
+      if (!input) return input
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.countryGreek && a.countryGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.country || normalized
+    }
+
+    const englishCity = convertCityToEnglish(city)
+    const englishCountry = convertCountryToEnglish(country)
+    const englishArea = convertAreaToEnglish(area)
+
     // Check if address has changed - only recalculate distances if it has
     const addressChanged = hasAddressChanged(
       existingHome.street,
       existingHome.area,
       existingHome.city,
+      existingHome.country,
       street?.trim() || null,
       area?.trim() || null,
-      city.trim()
+      englishCity,
+      englishCountry
     )
 
     // Prepare update data
     const updateData: any = {
       title: title.trim(),
       description: description?.trim() || null,
+      descriptionGreek: body.descriptionGreek?.trim() || null,
       street: street?.trim() || null,
-      city: city.trim(),
-      country: country.trim(),
-      area: area?.trim() || null,
-      listingType: listingType || 'rent',
+      city: englishCity,
+      country: englishCountry,
+      area: englishArea,
+      // Convert listing type to English (rent or sale)
+      listingType: (() => {
+        if (!listingType) return 'rent'
+        const normalized = String(listingType).trim().toLowerCase()
+        if (normalized === 'sale' || normalized === 'sell' || 
+            normalized === 'πώληση' || normalized === 'πωληση' ||
+            normalized.includes('sale') || normalized.includes('sell')) {
+          return 'sale'
+        }
+        return 'rent'
+      })(),
       pricePerMonth: Number(pricePerMonth),
       bedrooms: Number(bedrooms || 0),
       bathrooms: Number(bathrooms || 0),
-      floor: floor && floor !== '' ? Number(floor) : null,
-      heatingCategory: heatingCategory?.trim() || null,
-      heatingAgent: heatingAgent?.trim() || null,
+      // Allow 0 and negative numbers for ground floor and basement
+      floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
+      // Convert heating values to English before storing
+      heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
+      heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
       parking: parking === undefined || parking === null 
         ? null 
         : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
@@ -189,22 +248,23 @@ export async function PUT(
       yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
       availableFrom: availableFromDate,
       photos: photos || null,
-      energyClass: energyClass?.trim() || null,
+      // Convert energy class to uppercase English
+      energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
     }
 
     // Only recalculate distances if address changed
     if (addressChanged) {
       console.log('Address changed, recalculating distances:', {
-        old: { street: existingHome.street, area: existingHome.area, city: existingHome.city },
-        new: { street: street?.trim() || null, area: area?.trim() || null, city: city.trim() }
+        old: { street: existingHome.street, area: existingHome.area, city: existingHome.city, country: existingHome.country },
+        new: { street: street?.trim() || null, area: area?.trim() || null, city: englishCity, country: englishCountry }
       })
 
       try {
         const distanceResult = await calculatePropertyDistances(
           street?.trim() || null,
-          area?.trim() || null,
-          city.trim(),
-          country.trim()
+          englishArea,
+          englishCity,
+          englishCountry
         )
         
         console.log('Distance recalculation completed:')
@@ -289,11 +349,11 @@ export async function DELETE(
       )
     }
 
-    // Check if user has owner role
+    // Check if user has owner role (brokers are treated like owners)
     const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both') {
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json(
-        { error: 'Only owners can delete listings' },
+        { error: 'Only owners and brokers can delete listings' },
         { status: 403 }
       )
     }

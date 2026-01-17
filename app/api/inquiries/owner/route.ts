@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is an owner
+    // Check if user is an owner (brokers are treated like owners)
     const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both') {
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json(
-        { error: 'Only owners can view inquiries' },
+        { error: 'Only owners and brokers can view inquiries' },
         { status: 403 }
       )
     }

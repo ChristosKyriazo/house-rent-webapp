@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { useTranslatedDescription } from '@/app/hooks/useTranslatedDescription'
 import StarRating from '@/app/components/StarRating'
 
 interface Home {
@@ -14,6 +15,7 @@ interface Home {
   key: string
   title: string
   description: string | null
+  descriptionGreek: string | null
   street: string | null
   city: string
   country: string
@@ -80,6 +82,12 @@ export default function HomeDetailPage() {
   const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
   
+  // Translate description based on current language
+  const { translatedDescription } = useTranslatedDescription(
+    home?.description || null,
+    home?.descriptionGreek || null
+  )
+  
   // Determine display role for UI: if user has "both" role, use selectedRole, otherwise use actualRole or userRole
   const displayRole = (actualRole === 'both' && selectedRole) 
     ? selectedRole 
@@ -99,11 +107,16 @@ export default function HomeDetailPage() {
     }
   }, [home?.photos])
 
-  const fromMyListings = searchParams.get('from') === 'my-listings'
+  const fromParam = searchParams.get('from')
+  const fromMyListings = fromParam === 'my-listings'
+  const fromApproved = fromParam === 'approved'
+  const fromInquiries = fromParam === 'inquiries'
   
   // Get filter type from sessionStorage to preserve it in return link
   const getReturnUrl = () => {
     if (fromMyListings) return '/homes/my-listings'
+    if (fromApproved) return '/homes/approved'
+    if (fromInquiries) return '/homes/inquiries'
     
     // Check if we have stored filter type in sessionStorage
     try {
@@ -116,6 +129,13 @@ export default function HomeDetailPage() {
     }
     
     return '/homes'
+  }
+
+  const getReturnButtonText = () => {
+    if (fromMyListings) return getTranslation(language, 'returnToListings') || 'Return to Listings'
+    if (fromApproved) return getTranslation(language, 'returnToApproved') || 'Return to Approved Listings'
+    if (fromInquiries) return getTranslation(language, 'returnToInquiries') || 'Return to Inquiries'
+    return getTranslation(language, 'returnToSearch') || 'Return to Search'
   }
 
   const fetchHomeData = async () => {
@@ -385,7 +405,7 @@ export default function HomeDetailPage() {
             href={getReturnUrl()}
             className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
           >
-            ← {getTranslation(language, 'returnToSearch')}
+            ← {getReturnButtonText()}
           </Link>
           {fromMyListings && (
             <Link
@@ -709,10 +729,16 @@ export default function HomeDetailPage() {
           </div>
 
               {/* Description - Below the row */}
-          {home.description && (
+          {translatedDescription && (
                 <div className="mb-6 pb-6 border-t border-b border-[#E8D5B7]/20 pt-6">
-                  <h2 className="text-lg font-semibold text-[#E8D5B7] mb-2">{getTranslation(language, 'description')}</h2>
-              <p className="text-[#E8D5B7]/80 leading-relaxed">{home.description}</p>
+                  <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'description')}</h2>
+                  <div className="text-[#E8D5B7]/80 leading-relaxed space-y-4">
+                    {translatedDescription.split(/\n\n+/).filter(p => p.trim().length > 0).map((paragraph, index) => (
+                      <p key={index} className="text-[#E8D5B7]/80 leading-relaxed">
+                        {paragraph.trim()}
+                      </p>
+                    ))}
+                  </div>
             </div>
           )}
             </div>

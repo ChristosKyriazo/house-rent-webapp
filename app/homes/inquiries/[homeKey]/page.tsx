@@ -226,9 +226,14 @@ export default function HomeInquiriesPage() {
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
-            {home.title}
-          </h1>
+          <Link
+            href={`/homes/${home.key}?from=inquiries`}
+            className="block group"
+          >
+            <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2 group-hover:text-[#D4C19F] transition-colors">
+              {home.title}
+            </h1>
+          </Link>
           <p className="text-[#E8D5B7]/70">
             {home.street && `${home.street}, `}
             {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}

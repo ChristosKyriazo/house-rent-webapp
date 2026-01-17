@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import { SignUp } from '@clerk/nextjs'
 import { useSearchParams } from 'next/navigation'
+import { useLanguage } from '@/app/contexts/LanguageContext'
+import { getTranslation, translateRole } from '@/lib/translations'
 
 export default function SignupPage() {
+  const { language } = useLanguage()
   const [selectedRole, setSelectedRole] = useState<string>('')
   const [showRoleSelection, setShowRoleSelection] = useState(true)
   const searchParams = useSearchParams()
@@ -34,10 +37,10 @@ export default function SignupPage() {
           <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-10 shadow-xl border border-[#E8D5B7]/20">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-[#E8D5B7] mb-2">
-                Επιλέξτε Ρόλο
+                {language === 'el' ? 'Επιλέξτε Ρόλο' : 'Select Role'}
             </h2>
             <p className="text-[#E8D5B7]/70">
-                Επιλέξτε τον ρόλο που θέλετε να έχετε στον λογαριασμό σας
+                {language === 'el' ? 'Επιλέξτε τον ρόλο που θέλετε να έχετε στον λογαριασμό σας' : 'Select the role you want to have in your account'}
             </p>
           </div>
 
@@ -49,8 +52,8 @@ export default function SignupPage() {
                 <div className="flex items-center gap-4">
                   <span className="text-3xl">👤</span>
               <div>
-                    <div className="text-lg font-semibold text-[#E8D5B7]">Χρήστης</div>
-                    <div className="text-sm text-[#E8D5B7]/70">Αναζήτηση Ακινήτων</div>
+                    <div className="text-lg font-semibold text-[#E8D5B7]">{translateRole(language, 'user')}</div>
+                    <div className="text-sm text-[#E8D5B7]/70">{getTranslation(language, 'searchProperties')}</div>
               </div>
               </div>
               </button>
@@ -62,8 +65,8 @@ export default function SignupPage() {
                 <div className="flex items-center gap-4">
                   <span className="text-3xl">🏠</span>
               <div>
-                    <div className="text-lg font-semibold text-[#E8D5B7]">Ιδιοκτήτης</div>
-                    <div className="text-sm text-[#E8D5B7]/70">Δημοσίευση Ακινήτων</div>
+                    <div className="text-lg font-semibold text-[#E8D5B7]">{translateRole(language, 'owner')}</div>
+                    <div className="text-sm text-[#E8D5B7]/70">{getTranslation(language, 'publishProperty')}</div>
               </div>
               </div>
               </button>
@@ -75,8 +78,8 @@ export default function SignupPage() {
                 <div className="flex items-center gap-4">
                   <span className="text-3xl">🔄</span>
               <div>
-                    <div className="text-lg font-semibold text-[#E8D5B7]">Και τα δύο</div>
-                    <div className="text-sm text-[#E8D5B7]/70">Ιδιοκτήτης & Χρήστης</div>
+                    <div className="text-lg font-semibold text-[#E8D5B7]">{language === 'el' ? 'Και τα δύο' : 'Both'}</div>
+                    <div className="text-sm text-[#E8D5B7]/70">{translateRole(language, 'both')}</div>
               </div>
             </div>
               </button>
@@ -88,8 +91,8 @@ export default function SignupPage() {
                 <div className="flex items-center gap-4">
                   <span className="text-3xl">🏢</span>
                   <div>
-                    <div className="text-lg font-semibold text-[#E8D5B7]">Μεσιτικό</div>
-                    <div className="text-sm text-[#E8D5B7]/70">Δημοσίευση Ακινήτων</div>
+                    <div className="text-lg font-semibold text-[#E8D5B7]">{translateRole(language, 'broker')}</div>
+                    <div className="text-sm text-[#E8D5B7]/70">{getTranslation(language, 'publishProperty')}</div>
                   </div>
                 </div>
             </button>
@@ -105,8 +108,8 @@ export default function SignupPage() {
       <SignUp 
         routing="hash" 
         signInUrl="/login" 
-        afterSignUpUrl="/profile/set-role"
-        forceRedirectUrl="/profile/set-role"
+        afterSignUpUrl="/subscription"
+        forceRedirectUrl="/subscription"
       />
     </div>
   )

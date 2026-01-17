@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 import { removeGreekAccents } from '@/lib/utils'
+import { generateHouseDescriptions } from '@/lib/house-description-generator'
+import { toEnglishValue } from '@/lib/translations'
+import OpenAI from 'openai'
 
 // GET /api/homes - list all homes with optional filters
 export async function GET(request: NextRequest) {
@@ -393,7 +396,35 @@ export async function POST(request: NextRequest) {
       availableFrom,
       photos,
       energyClass,
+      useAIDescription,
     } = body
+
+    // Check home count limits based on subscription
+    const subscription = user.subscription || 1
+    if (subscription === 1) {
+      // Free plan: max 2 homes
+      const homeCount = await prisma.home.count({
+        where: { ownerId: user.id },
+      })
+      if (homeCount >= 2) {
+        return NextResponse.json(
+          { error: 'Free plan allows up to 2 homes. Please upgrade to Plus or Unlimited.' },
+          { status: 403 }
+        )
+      }
+    } else if (subscription === 2) {
+      // Plus plan: max 10 homes
+      const homeCount = await prisma.home.count({
+        where: { ownerId: user.id },
+      })
+      if (homeCount >= 10) {
+        return NextResponse.json(
+          { error: 'Plus plan allows up to 10 homes. Please upgrade to Unlimited.' },
+          { status: 403 }
+        )
+      }
+    }
+    // Unlimited plan: no limit
 
     // Minimal validation
     if (!title || !city || !country || !pricePerMonth || !sizeSqMeters) {
@@ -417,6 +448,49 @@ export async function POST(request: NextRequest) {
       availableFromDate = new Date()
     }
 
+    // Convert city, country, and area to English by querying areas table
+    const areas = await prisma.area.findMany({
+      select: {
+        name: true,
+        nameGreek: true,
+        city: true,
+        cityGreek: true,
+        country: true,
+        countryGreek: true,
+      }
+    })
+
+    const convertAreaToEnglish = (input: string | null): string | null => {
+      if (!input) return null
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.nameGreek && a.nameGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.name || normalized
+    }
+
+    const convertCityToEnglish = (input: string): string => {
+      if (!input) return input
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.cityGreek && a.cityGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.city || normalized
+    }
+
+    const convertCountryToEnglish = (input: string): string => {
+      if (!input) return input
+      const normalized = input.trim()
+      const matchingArea = areas.find(a => 
+        a.countryGreek && a.countryGreek.toLowerCase() === normalized.toLowerCase()
+      )
+      return matchingArea?.country || normalized
+    }
+
+    const englishCity = convertCityToEnglish(city)
+    const englishCountry = convertCountryToEnglish(country)
+    const englishArea = convertAreaToEnglish(area)
+
     // Calculate distances using Google Maps API (7 API calls: 1 geocoding + 6 places in parallel)
     let distances = {
       closestMetro: null,
@@ -430,12 +504,12 @@ export async function POST(request: NextRequest) {
     let distanceDetails: any = null
 
     try {
-      console.log('Calculating distances for new property:', { street, area, city, country })
+      console.log('Calculating distances for new property:', { street, area: englishArea, city: englishCity, country: englishCountry })
       const distanceResult = await calculatePropertyDistances(
         street?.trim() || null,
-        area?.trim() || null,
-        city.trim(),
-        country.trim()
+        englishArea,
+        englishCity,
+        englishCountry
       )
       
       // Extract just the distances for database storage
@@ -481,6 +555,68 @@ export async function POST(request: NextRequest) {
       // Continue with null distances if API fails - don't block home creation
     }
 
+    // Get area safety and vibe if area is provided
+    let areaSafety: number | null = null
+    let areaVibe: string | null = null
+    if (englishArea) {
+      const areaData = await prisma.area.findFirst({
+        where: { name: englishArea },
+        select: { safety: true, vibe: true }
+      })
+      if (areaData) {
+        areaSafety = areaData.safety
+        areaVibe = areaData.vibe
+      }
+    }
+
+    // Generate descriptions using AI only if useAIDescription is explicitly checked
+    let finalDescription = description?.trim() || null
+    let finalDescriptionGreek: string | null = null
+    
+    // Only generate AI descriptions for Plus (2) or Unlimited (3) subscriptions
+    const canUseAI = subscription === 2 || subscription === 3
+    
+    if (useAIDescription && canUseAI) {
+      const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      }) : null
+
+      const aiDescriptions = await generateHouseDescriptions({
+        title,
+        city: englishCity,
+        country: englishCountry,
+        area: englishArea,
+        listingType: listingType === 'sale' ? 'sale' : 'rent',
+        pricePerMonth: Number(pricePerMonth),
+        bedrooms: Number(bedrooms || 0),
+        bathrooms: Number(bathrooms || 0),
+        floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
+        sizeSqMeters: sizeSqMeters ? Number(sizeSqMeters) : null,
+        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
+        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+        heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
+        heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+        parking: parking === undefined || parking === null 
+          ? null 
+          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
+        energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
+        closestMetro: distances.closestMetro,
+        closestBus: distances.closestBus,
+        closestSchool: distances.closestSchool,
+        closestHospital: distances.closestHospital,
+        closestPark: distances.closestPark,
+        closestUniversity: distances.closestUniversity,
+        areaSafety,
+        areaVibe,
+        availableFrom: availableFrom || null,
+      }, openai)
+
+      if (aiDescriptions) {
+        finalDescription = aiDescriptions.description
+        finalDescriptionGreek = aiDescriptions.descriptionGreek
+      }
+    }
+
     // Retry logic for SQLite database locks
     const createHomeWithRetry = async (maxRetries = 3, delay = 100) => {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -488,18 +624,31 @@ export async function POST(request: NextRequest) {
           return await prisma.home.create({
       data: {
         title: title.trim(),
-        description: description?.trim() || null,
+        description: finalDescription,
+        descriptionGreek: finalDescriptionGreek,
         street: street?.trim() || null,
-        city: city.trim(),
-        country: country.trim(),
-              area: area?.trim() || null,
-        listingType: listingType || 'rent',
+        city: englishCity,
+        country: englishCountry,
+        area: englishArea,
+        // Convert listing type to English (rent or sale)
+        listingType: (() => {
+          if (!listingType) return 'rent'
+          const normalized = String(listingType).trim().toLowerCase()
+          if (normalized === 'sale' || normalized === 'sell' || 
+              normalized === 'πώληση' || normalized === 'πωληση' ||
+              normalized.includes('sale') || normalized.includes('sell')) {
+            return 'sale'
+          }
+          return 'rent'
+        })(),
         pricePerMonth: Number(pricePerMonth),
         bedrooms: Number(bedrooms || 0),
         bathrooms: Number(bathrooms || 0),
-        floor: floor && floor !== '' ? Number(floor) : null,
-              heatingCategory: heatingCategory?.trim() || null,
-              heatingAgent: heatingAgent?.trim() || null,
+        // Allow 0 and negative numbers for ground floor and basement
+        floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
+              // Convert heating values to English before storing
+              heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
+              heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
               parking: parking === undefined || parking === null 
                 ? null 
                 : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
@@ -515,7 +664,8 @@ export async function POST(request: NextRequest) {
               closestHospital: distances.closestHospital,
               closestPark: distances.closestPark,
               closestUniversity: distances.closestUniversity,
-              energyClass: energyClass?.trim() || null,
+              // Convert energy class to uppercase English
+              energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
         ownerId: user.id,
       },
     })

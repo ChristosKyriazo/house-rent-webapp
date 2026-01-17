@@ -21,9 +21,14 @@ export async function GET(request: NextRequest) {
     // Determine which role to use for filtering
     // If user has 'both' role and selectedRole is provided, use selectedRole
     // Otherwise use the user's actual role
+    // Brokers are treated like owners
     let displayRole = userRole
     if (userRole === 'both' && selectedRole) {
       displayRole = selectedRole.toLowerCase()
+    }
+    // Treat brokers as owners
+    if (userRole === 'broker') {
+      displayRole = 'owner'
     }
 
     if (displayRole === 'owner') {
