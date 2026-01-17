@@ -35,18 +35,24 @@ export default function NotificationBell() {
     const fetchNotifications = async () => {
       try {
         const response = await fetch(`/api/notifications?language=${language}`)
-        if (response.ok) {
+        if (response && response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
-        } else {
+        } else if (response) {
           // If unauthorized, user might not be logged in - that's ok
           if (response.status !== 401) {
-            console.error('Error fetching notifications:', response.status)
+            // Only log non-401 errors, but don't throw
+            console.warn('Error fetching notifications:', response.status)
           }
+          setNotifications([])
+        } else {
+          // Response is null/undefined - network error
+          setNotifications([])
         }
       } catch (error) {
         // Silently handle errors - bell will still show
-        console.error('Error fetching notifications:', error)
+        // Don't log fetch errors as they're common (network issues, etc.)
+        setNotifications([])
       } finally {
         setLoading(false)
       }

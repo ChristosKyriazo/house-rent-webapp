@@ -40,30 +40,100 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   display: none !important;
 }
 
-/* Clerk - Swapped colors: beige for buttons, dark grey for backgrounds */
+/* Clerk - Beautiful gradients and colors */
 .cl-formButtonPrimary {
-  background-color: #E8D5B7 !important;
+  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
   color: #2D3748 !important;
-  border-color: #E8D5B7 !important;
-  border-width: 2px !important;
+  border: none !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+  transition: all 0.2s ease !important;
 }
 
 .cl-formButtonPrimary:hover {
-  background-color: #D4C19F !important;
-  color: #2D3748 !important;
-  border-width: 2px !important;
+  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
+  box-shadow: 0 6px 16px rgba(232, 213, 183, 0.4) !important;
+  transform: translateY(-1px) !important;
 }
 
-/* Card/box backgrounds - dark grey with smooth edges */
+/* Continue button - always beige gradient (override any other rules) */
+button[data-localization-key*="continue"],
+button[data-localization-key*="Continue"],
+button[aria-label*="Continue" i],
+button[aria-label*="continue" i] {
+  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
+  background-color: transparent !important;
+  background-image: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
+  color: #2D3748 !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+}
+
+button[data-localization-key*="continue"]:hover,
+button[data-localization-key*="Continue"]:hover,
+button[aria-label*="Continue" i]:hover,
+button[aria-label*="continue" i]:hover {
+  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
+  background-image: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
+  box-shadow: 0 6px 16px rgba(232, 213, 183, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Sign up button - dark gray (only the final signup button, not continue) */
+button[data-localization-key*="signUp"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]),
+button[data-localization-key*="createAccount"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]),
+button[aria-label*="Sign up" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]),
+button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]) {
+  background: #2D3748 !important;
+  background-color: #2D3748 !important;
+  background-image: none !important;
+  color: #E8D5B7 !important;
+  border: 2px solid rgba(232, 213, 183, 0.3) !important;
+}
+
+button[data-localization-key*="signUp"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]):hover,
+button[data-localization-key*="createAccount"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]):hover,
+button[aria-label*="Sign up" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]):hover,
+button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]):hover {
+  background: #1a1f2e !important;
+  background-color: #1a1f2e !important;
+  background-image: none !important;
+  border-color: rgba(232, 213, 183, 0.5) !important;
+}
+
+/* Card/box backgrounds - dark grey gradient with hard edges */
 .cl-card,
 .cl-main,
 .cl-rootBox {
-  background-color: #2D3748 !important;
-  border-radius: 1.5rem !important;
+  background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 50%, #1a1f2e 100%) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
-/* Text elements - beige */
-.cl-headerTitle,
+/* Remove any pseudo-element backgrounds */
+.cl-card::before,
+.cl-card::after,
+.cl-main::before,
+.cl-main::after,
+.cl-rootBox::before,
+.cl-rootBox::after,
+.cl-formFieldInputWrapper::before,
+.cl-formFieldInputWrapper::after,
+.cl-formFieldRow::before,
+.cl-formFieldRow::after {
+  background: none !important;
+  background-color: transparent !important;
+  content: none !important;
+  display: none !important;
+}
+
+/* Text elements - gray headers, beige labels */
+.cl-headerTitle {
+  color: #9CA3AF !important;
+  font-weight: 700 !important;
+}
+
 .cl-headerSubtitle,
 .cl-formFieldLabel,
 .cl-footerAction,
@@ -73,60 +143,118 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
   color: #E8D5B7 !important;
 }
 
-/* Input fields - dark grey background, beige text */
-.cl-formFieldInput {
-  background-color: #2D3748 !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
-  border-width: 2px !important;
+/* Input fields - transparent to blend with banner, beige text */
+.cl-formFieldInput,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="number"] {
+  background: transparent !important;
+  border: 2px solid rgba(232, 213, 183, 0.3) !important;
   color: #E8D5B7 !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+  padding: 0.75rem !important;
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.cl-formFieldInput::placeholder {
+.cl-formFieldInput::placeholder,
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="tel"]::placeholder,
+input[type="number"]::placeholder {
   color: rgba(232, 213, 183, 0.5) !important;
+  opacity: 1 !important;
 }
 
-.cl-formFieldInput:focus {
+.cl-formFieldInput:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="tel"]:focus,
+input[type="number"]:focus {
   border-color: #E8D5B7 !important;
-  border-width: 2px !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
 }
 
-/* Links - beige */
-.cl-footerActionLink,
+.cl-formFieldInput:hover {
+  border-color: rgba(232, 213, 183, 0.4) !important;
+}
+
+/* Links - beige with hover effects */
 .cl-formResendCodeLink,
 .cl-identityPreviewEditButton {
   color: #E8D5B7 !important;
+  text-decoration: underline !important;
+  text-underline-offset: 4px !important;
+  text-decoration-thickness: 2px !important;
+  transition: all 0.2s ease !important;
 }
 
-.cl-footerActionLink:hover,
 .cl-formResendCodeLink:hover {
-  color: #D4C19F !important;
+  color: #F5E6D3 !important;
+  text-shadow: 0 0 8px rgba(232, 213, 183, 0.5) !important;
+  text-decoration-thickness: 3px !important;
 }
 
-/* Social buttons - beige background, dark grey text */
-.cl-socialButtonsBlockButton {
-  background-color: #E8D5B7 !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
-  border-width: 2px !important;
+/* Sign up link in footer - dark gray */
+.cl-footerActionLink {
   color: #2D3748 !important;
+  text-decoration: underline !important;
+  text-underline-offset: 4px !important;
+  text-decoration-thickness: 2px !important;
+  transition: all 0.2s ease !important;
+  font-weight: 600 !important;
+}
+
+.cl-footerActionLink:hover {
+  color: #1a1f2e !important;
+  text-decoration-thickness: 3px !important;
+}
+
+/* Social buttons - beige gradient, dark grey text */
+.cl-socialButtonsBlockButton {
+  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 100%) !important;
+  border: 2px solid rgba(232, 213, 183, 0.4) !important;
+  color: #2D3748 !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
 }
 
 .cl-socialButtonsBlockButton:hover {
-  background-color: #D4C19F !important;
+  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 100%) !important;
   border-color: #E8D5B7 !important;
-  border-width: 2px !important;
+  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+  transform: translateY(-1px) !important;
 }
 
-/* OTP inputs - dark grey background, beige text */
+/* OTP inputs - transparent to blend with banner, beige text */
 .cl-otpCodeFieldInput {
-  background-color: #2D3748 !important;
-  border-color: rgba(232, 213, 183, 0.3) !important;
-  border-width: 2px !important;
+  background: transparent !important;
+  border: 2px solid rgba(232, 213, 183, 0.3) !important;
   color: #E8D5B7 !important;
+  border-radius: 0 !important;
+}
+
+.cl-otpCodeFieldInput:focus-within,
+.cl-otpCodeFieldInput[data-focus-within="true"] {
+  border-color: #E8D5B7 !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
 
 input[data-input-otp="true"] {
   color: #E8D5B7 !important;
   caret-color: #E8D5B7 !important;
+  background: transparent !important;
 }
 
 /* Hide any duplicate OTP display in the middle */
@@ -167,6 +295,79 @@ input[data-input-otp="true"] {
 /* Error text - keep red */
 .cl-formFieldErrorText {
   color: #EF4444 !important;
+}
+
+/* SIMPLE: Make "Optional" text beige with reduced opacity */
+.cl-formFieldLabel small,
+.cl-formFieldHelperText,
+[class*="optional"],
+[class*="Optional"],
+.cl-optional {
+  color: rgba(232, 213, 183, 0.6) !important;
+}
+
+/* Force beige for main label text (not optional) */
+.cl-formFieldLabel,
+.cl-formFieldLabelText {
+  color: #E8D5B7 !important;
+}
+
+/* Target all label children - full opacity beige for main text */
+.cl-formFieldLabel span:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabel small:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabel div:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabelText:not([class*="optional"]):not([class*="Optional"]) {
+  color: #E8D5B7 !important;
+}
+
+/* Force beige for main label text only (not children that might be optional) */
+.cl-formFieldLabel:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabelText:not([class*="optional"]):not([class*="Optional"]) {
+  color: #E8D5B7 !important;
+}
+
+
+.cl-formFieldLabel > *:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabel span *:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabel small *:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldLabel div *:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldRow .cl-formFieldLabel span:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldRow .cl-formFieldLabel small:not([class*="optional"]):not([class*="Optional"]),
+.cl-formFieldRow .cl-formFieldLabel div:not([class*="optional"]):not([class*="Optional"]) {
+  color: #E8D5B7 !important;
+}
+
+/* Ensure ALL wrapper elements are transparent - only banner gradient should show */
+.cl-formFieldInputWrapper,
+.cl-formFieldRow,
+.cl-form,
+.cl-formBox,
+.cl-formContainer,
+.cl-cardBox,
+.cl-cardContent,
+.cl-mainContent,
+.cl-content,
+.cl-internal,
+.cl-scrollBox,
+.cl-formSection,
+.cl-formField,
+.cl-formFieldInputContainer,
+div[class*="formField"],
+div[class*="card"],
+div[class*="main"],
+div[class*="content"],
+div[class*="wrapper"] {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Remove any box-shadows that might create depth illusion */
+.cl-card,
+.cl-main,
+.cl-rootBox,
+.cl-formFieldInputWrapper,
+.cl-formFieldRow {
+  box-shadow: none !important;
 }
 
 
