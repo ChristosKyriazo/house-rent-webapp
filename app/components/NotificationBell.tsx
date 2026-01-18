@@ -14,6 +14,7 @@ interface Notification {
   homeKey: string
   inquiryId: number | null
   createdAt: string
+  viewed: boolean
 }
 
 export default function NotificationBell() {
@@ -23,6 +24,7 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [unviewedCount, setUnviewedCount] = useState(0)
   const [finalizeNotification, setFinalizeNotification] = useState<Notification | null>(null)
   const notificationRef = useRef<HTMLDivElement>(null)
 
@@ -38,6 +40,7 @@ export default function NotificationBell() {
         if (response && response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
+          setUnviewedCount(data.unviewedCount || 0)
         } else if (response) {
           // If unauthorized, user might not be logged in - that's ok
           if (response.status !== 401) {
@@ -45,14 +48,17 @@ export default function NotificationBell() {
             console.warn('Error fetching notifications:', response.status)
           }
           setNotifications([])
+          setUnviewedCount(0)
         } else {
           // Response is null/undefined - network error
           setNotifications([])
+          setUnviewedCount(0)
         }
       } catch (error) {
         // Silently handle errors - bell will still show
         // Don't log fetch errors as they're common (network issues, etc.)
         setNotifications([])
+        setUnviewedCount(0)
       } finally {
         setLoading(false)
       }
@@ -82,14 +88,31 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
     setIsOpen(false)
+    
+    // Delete approved notification when clicked (it will also be deleted when house is finalized)
+    if (notification.type === 'approved') {
+      try {
+        await fetch(`/api/notifications?id=${notification.id}`, {
+          method: 'DELETE',
+        })
+        setNotifications(notifications.filter(n => n.id !== notification.id))
+        if (!notification.viewed) {
+          setUnviewedCount(Math.max(0, unviewedCount - 1))
+        }
+      } catch (error) {
+        console.error('Error deleting notification:', error)
+      }
+      router.push('/homes/approved')
+      return
+    }
+    
     if (notification.type === 'finalize') {
       setFinalizeNotification(notification)
     } else if (displayRole === 'owner' && notification.type === 'inquiry') {
+      // Inquiry notifications don't disappear when clicked, only when approved/rejected
       router.push(`/homes/inquiries/${notification.homeKey}`)
-    } else if (notification.type === 'approved') {
-      router.push('/homes/approved')
     } else if (notification.type === 'dismissed') {
       router.push('/homes/my-inquiries')
     } else if (notification.type === 'rate') {
@@ -107,45 +130,93 @@ export default function NotificationBell() {
     setFinalizeNotification(null)
   }
 
-  const handleFinalizeApprove = () => {
+  const handleFinalizeApprove = async () => {
     if (finalizeNotification) {
+      // Delete the notification when finalized
+      try {
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
+          method: 'DELETE',
+        })
+      } catch (error) {
+        console.error('Error deleting notification:', error)
+      }
       setNotifications(notifications.filter(n => n.id !== finalizeNotification.id))
+      if (!finalizeNotification.viewed) {
+        setUnviewedCount(Math.max(0, unviewedCount - 1))
+      }
       setFinalizeNotification(null)
     }
   }
 
-  const handleFinalizeDismiss = () => {
+  const handleFinalizeDismiss = async () => {
     if (finalizeNotification) {
+      // Delete the notification when dismissed
+      try {
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
+          method: 'DELETE',
+        })
+      } catch (error) {
+        console.error('Error deleting notification:', error)
+      }
       setNotifications(notifications.filter(n => n.id !== finalizeNotification.id))
+      if (!finalizeNotification.viewed) {
+        setUnviewedCount(Math.max(0, unviewedCount - 1))
+      }
       setFinalizeNotification(null)
     }
   }
 
   const handleDeleteNotification = async (e: React.MouseEvent, notificationId: number) => {
     e.stopPropagation()
+    const notification = notifications.find(n => n.id === notificationId)
     try {
       const response = await fetch(`/api/notifications?id=${notificationId}`, {
         method: 'DELETE',
       })
       if (response.ok) {
         setNotifications(notifications.filter(n => n.id !== notificationId))
+        // Update unviewed count if notification was unviewed
+        if (notification && !notification.viewed) {
+          setUnviewedCount(Math.max(0, unviewedCount - 1))
+        }
       }
     } catch (error) {
       console.error('Error deleting notification:', error)
     }
   }
 
-  const unreadCount = notifications.length
+  // Mark all notifications as viewed when bell is opened
+  const handleBellClick = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const wasOpen = isOpen
+    setIsOpen(!isOpen)
+    
+    // If opening the bell (not closing), mark all as viewed
+    if (!wasOpen && unviewedCount > 0) {
+      try {
+        const response = await fetch('/api/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markAllAsViewed: true }),
+        })
+        if (response.ok) {
+          // Update local state to mark all as viewed
+          setNotifications(notifications.map(n => ({ ...n, viewed: true })))
+          setUnviewedCount(0)
+        }
+      } catch (error) {
+        console.error('Error marking notifications as viewed:', error)
+      }
+    }
+  }
 
   // Always render the notification bell - don't hide it
   return (
     <div className="relative pointer-events-auto" ref={notificationRef} style={{ isolation: 'isolate' }}>
       <button
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setIsOpen(!isOpen)
-        }}
+        onClick={handleBellClick}
         className="relative px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5 pointer-events-auto h-[40px] flex items-center justify-center"
         aria-label="Notifications"
         style={{ pointerEvents: 'auto', isolation: 'isolate' }}
@@ -173,9 +244,9 @@ export default function NotificationBell() {
             strokeLinejoin="round"
           />
         </svg>
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse border-2 border-[#2D3748]">
-            {unreadCount > 9 ? '9+' : unreadCount}
+        {unviewedCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#2D3748]">
+            {unviewedCount > 9 ? '9+' : unviewedCount}
           </span>
         )}
       </button>

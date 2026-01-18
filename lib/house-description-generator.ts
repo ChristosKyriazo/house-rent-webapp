@@ -47,11 +47,23 @@ export async function generateHouseDescriptions(
       houseData.area ? `in ${houseData.area}` : null,
     ].filter(Boolean).join(', ')
 
+    // Format floor description correctly
+    let floorDescription: string | null = null
+    if (houseData.floor !== null) {
+      if (houseData.floor === 0) {
+        floorDescription = 'ground floor (ισόγειο)'
+      } else if (houseData.floor < 0) {
+        floorDescription = `below ground floor (υπόγειο), level ${houseData.floor}`
+      } else {
+        floorDescription = `floor ${houseData.floor}`
+      }
+    }
+
     const propertyDetails = [
       `${houseData.bedrooms} bedroom${houseData.bedrooms !== 1 ? 's' : ''}`,
       `${houseData.bathrooms} bathroom${houseData.bathrooms !== 1 ? 's' : ''}`,
       houseData.sizeSqMeters ? `${houseData.sizeSqMeters} m²` : null,
-      houseData.floor !== null ? `floor ${houseData.floor}` : null,
+      floorDescription,
       houseData.yearBuilt ? `built in ${houseData.yearBuilt}` : null,
       houseData.yearRenovated ? `renovated in ${houseData.yearRenovated}` : null,
       houseData.heatingCategory ? `${houseData.heatingCategory} heating` : null,
@@ -125,6 +137,10 @@ Requirements for BOTH descriptions:
 - Uses natural, professional language - be charming but not pushy. Vary your sentence structure and vocabulary to avoid repetitive patterns.
 - Focuses on lifestyle benefits and convenience
 - NEVER mention any numbers except for house qualities (bedrooms, bathrooms, size, floor, year built/renovated)
+- CRITICAL FLOOR DESCRIPTION RULES:
+  * If floor is 0: In English say "ground floor", in Greek say "ισόγειο" (NOT "υπόγειο")
+  * If floor is negative (e.g., -1, -2): In English say "below ground floor" or "basement level", in Greek say "υπόγειο" (NOT "ισόγειο")
+  * If floor is positive (e.g., 1, 2, 3): In English say "Xth floor", in Greek say "Xος όροφος" or "Xο όροφο"
 - CRITICAL: Format each description in 2-3 separate, well-structured paragraphs. Each paragraph should be on its own line with a blank line between paragraphs.
 - Keep descriptions general and appealing, not overly technical
 - CRITICAL: Each description MUST be exactly 200 words and complete - do not cut off mid-sentence. Make sure both descriptions end naturally.

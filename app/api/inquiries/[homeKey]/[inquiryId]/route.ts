@@ -236,6 +236,24 @@ export async function PATCH(
         },
       })
 
+      // Delete inquiry notifications for the owner when inquiry is dismissed/rejected
+      // This ensures the inquiry notification is automatically deleted when dismissed
+      try {
+        await prisma.notification.updateMany({
+          where: {
+            homeKey: inquiryWithDetails?.home.key,
+            type: 'inquiry',
+            recipientId: user.id,
+            deleted: false, // Only delete if not already deleted
+          },
+          data: {
+            deleted: true,
+          },
+        })
+      } catch (error) {
+        console.error('Failed to delete inquiry notifications:', error)
+      }
+
       // Create notification for the user
       if (inquiryWithDetails) {
         try {

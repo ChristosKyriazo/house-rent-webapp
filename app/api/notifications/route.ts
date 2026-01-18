@@ -154,10 +154,18 @@ export async function GET(request: NextRequest) {
         homeKey: notif.homeKey || '',
         inquiryId: notif.inquiryId || null,
         createdAt: notif.createdAt,
+        viewed: notif.viewed || false,
       }
     })
 
-    return NextResponse.json({ notifications: formattedNotifications, count: formattedNotifications.length }, { status: 200 })
+    // Count unviewed notifications
+    const unviewedCount = formattedNotifications.filter(n => !n.viewed).length
+
+    return NextResponse.json({ 
+      notifications: formattedNotifications, 
+      count: formattedNotifications.length,
+      unviewedCount: unviewedCount
+    }, { status: 200 })
   } catch (error) {
     console.error('Get notifications error:', error)
     return NextResponse.json(
@@ -196,6 +204,43 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Notification deleted' }, { status: 200 })
   } catch (error) {
     console.error('Delete notification error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+// PATCH: Mark notifications as viewed
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { markAllAsViewed } = body
+
+    if (markAllAsViewed) {
+      // Mark all unviewed notifications for this user as viewed
+      await prisma.notification.updateMany({
+        where: {
+          recipientId: user.id,
+          viewed: false,
+          deleted: false,
+        },
+        data: {
+          viewed: true,
+        },
+      })
+
+      return NextResponse.json({ message: 'All notifications marked as viewed' }, { status: 200 })
+    }
+
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  } catch (error) {
+    console.error('Mark notifications as viewed error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
