@@ -18,6 +18,10 @@ model User {
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
   subscription    Int?      @default(1) // 1 = Free, 2 = Plus, 3 = Unlimited
+  calComUsername  String?   // Cal.com username (optional, for direct link)
+  calComAccessToken String? // Cal.com OAuth access token
+  calComRefreshToken String? // Cal.com OAuth refresh token
+  calComTokenExpiresAt DateTime? // When the access token expires
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]
@@ -25,6 +29,8 @@ model User {
   ratingsGiven    Rating[]       @relation("Rater")
   inquiries       Inquiry[]
   notifications   Notification[] @relation
+  bookingsAsUser  Booking[]      @relation("UserBookings")
+  bookingsAsOwner Booking[]      @relation("OwnerBookings")
 
   @@map("users")
 }
@@ -67,6 +73,7 @@ model Home {
   updatedAt         DateTime @updatedAt
   owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   inquiries         Inquiry[]
+  availabilities    Availability[]
 
   @@index([finalized])
 
@@ -203,4 +210,53 @@ model University {
 
   @@index([city])
   @@map("universities")
+}
+
+model Availability {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @default(cuid())
+  homeId      Int      // Home this availability is for
+  inquiryId   Int?     // Related inquiry (if availability is for a specific inquiry)
+  date        DateTime // Date of availability
+  startTime   String   // Start time (e.g., "09:00")
+  endTime     String   // End time (e.g., "17:00")
+  isAvailable Boolean  @default(true) // Whether this slot is still available
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  home        Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  bookings    Booking[] // Bookings that use this availability
+
+  @@index([homeId])
+  @@index([inquiryId])
+  @@index([date])
+  @@index([isAvailable])
+  @@map("availabilities")
+}
+
+model Booking {
+  id              Int      @id @default(autoincrement())
+  key             String   @unique @default(cuid())
+  userId          Int      // User who has the booking (attendee)
+  ownerId         Int      // Owner/broker who created the booking
+  inquiryId       Int?     // Related inquiry (if booking is from an inquiry)
+  availabilityId  Int?     // Related availability slot that was booked
+  calComBookingId String?  // Cal.com booking ID (if synced from Cal.com)
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime
+  location        String?  // "phone" or physical address
+  status          String   @default("scheduled") // "scheduled", "completed", "cancelled"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
+  owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([ownerId])
+  @@index([startTime])
+  @@index([status])
+  @@index([availabilityId])
+  @@map("bookings")
 }

@@ -262,6 +262,42 @@ export default function ApprovedInquiriesPage() {
                     </div>
                   )}
 
+                  {/* Book Viewing Button - Only for users */}
+                  {!isOwner && (
+                    <div className="bg-[#2D3748]/50 rounded-2xl p-4 mt-4 border border-[#E8D5B7]/20">
+                      <h3 className="text-lg font-semibold text-[#E8D5B7] mb-3">
+                        {getTranslation(language, 'bookViewing')}
+                      </h3>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-4">
+                        {getTranslation(language, 'selectAvailableSlot')}
+                      </p>
+                      <Link
+                        href={`/homes/${inquiry.home.key}/book?inquiryId=${inquiry.id}`}
+                        className="inline-block px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+                      >
+                        {getTranslation(language, 'viewAvailableSlots')}
+                      </Link>
+                    </div>
+                  )}
+                  
+                  {/* Set Availability Button - Only for owners */}
+                  {isOwner && (
+                    <div className="bg-[#2D3748]/50 rounded-2xl p-4 mt-4 border border-[#E8D5B7]/20">
+                      <h3 className="text-lg font-semibold text-[#E8D5B7] mb-3">
+                        {getTranslation(language, 'manageAvailability')}
+                      </h3>
+                      <p className="text-sm text-[#E8D5B7]/70 mb-4">
+                        {getTranslation(language, 'setAvailabilityForUsers')}
+                      </p>
+                      <Link
+                        href={`/homes/${inquiry.home.key}/set-availability?inquiryId=${inquiry.id}`}
+                        className="inline-block px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold"
+                      >
+                        {getTranslation(language, 'setAvailability')}
+                      </Link>
+                    </div>
+                  )}
+
                   <p className="text-[#E8D5B7]/60 text-xs mt-4">
                     {getTranslation(language, 'approvedOn')}:{' '}
                     {new Date(inquiry.approvedAt).toLocaleDateString(

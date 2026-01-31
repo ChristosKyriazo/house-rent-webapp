@@ -26,6 +26,11 @@ if (!prismaInstance.inquiry) {
   }
 }
 
+// Check if booking model exists
+if (!prismaInstance.booking) {
+  console.warn('Prisma client missing booking model. Please run: npx prisma generate')
+}
+
 // Add connection timeout handling for SQLite
 // SQLite uses PRAGMA busy_timeout to handle locks
 if (process.env.DATABASE_URL?.includes('sqlite') || process.env.DATABASE_URL?.includes('.db')) {

@@ -34,9 +34,28 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Get current user's profile
-      user = await getCurrentUser()
-      if (!user) {
+      const currentUser = await getCurrentUser()
+      if (!currentUser) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      }
+      
+      // Fetch full user data including Cal.com info
+      user = await prisma.user.findUnique({
+        where: { id: currentUser.id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          dateOfBirth: true,
+          occupation: true,
+          role: true,
+          subscription: true,
+          createdAt: true,
+        },
+      })
+      
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 })
       }
     }
 
@@ -108,6 +127,7 @@ export async function PATCH(request: NextRequest) {
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         occupation: occupation || null,
         role: userRole,
+        calComUsername: calComUsername || null,
       },
       select: {
         id: true,
@@ -117,6 +137,7 @@ export async function PATCH(request: NextRequest) {
         occupation: true,
         role: true,
         subscription: true,
+        calComUsername: true,
         createdAt: true,
       },
     })

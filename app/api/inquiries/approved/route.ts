@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
               bathrooms: true,
               listingType: true,
               photos: true,
+              ownerId: true,
             },
           },
         },
@@ -125,6 +126,7 @@ export async function GET(request: NextRequest) {
             bathrooms: inquiry.home.bathrooms,
             listingType: inquiry.home.listingType,
             photos: photos,
+            ownerId: inquiry.home.ownerId,
           },
           user: {
             id: inquiry.user.id,
@@ -169,6 +171,7 @@ export async function GET(request: NextRequest) {
               bathrooms: true,
               listingType: true,
               photos: true,
+              ownerId: true,
               owner: {
                 select: {
                   id: true,
@@ -225,6 +228,7 @@ export async function GET(request: NextRequest) {
             bathrooms: inquiry.home.bathrooms,
             listingType: inquiry.home.listingType,
             photos: photos,
+            ownerId: inquiry.home.ownerId,
           },
           contactInfo: contactInfo,
           approvedAt: inquiry.updatedAt,

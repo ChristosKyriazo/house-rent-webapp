@@ -44,7 +44,6 @@ export default function HomeInquiriesPage() {
   const [ownerProfile, setOwnerProfile] = useState<{ name: string | null; email: string } | null>(null)
   const [contactInfo, setContactInfo] = useState({
     phone: '',
-    timeSchedule: '',
   })
   const [useContactPerson, setUseContactPerson] = useState(false)
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
@@ -104,7 +103,7 @@ export default function HomeInquiriesPage() {
   const handleApproveClick = (inquiryId: number) => {
     setSelectedInquiryId(inquiryId)
     setShowApproveModal(true)
-    setContactInfo({ phone: '', timeSchedule: '' })
+    setContactInfo({ phone: '' })
     setUseContactPerson(false)
   }
 
@@ -128,7 +127,6 @@ export default function HomeInquiriesPage() {
             name: ownerProfile?.name || '',
             email: ownerProfile?.email || '',
             phone: contactInfo.phone,
-            timeSchedule: contactInfo.timeSchedule,
           }
 
       const response = await fetch(`/api/inquiries/${home.key}/${selectedInquiryId}`, {
@@ -153,8 +151,11 @@ export default function HomeInquiriesPage() {
 
       setShowApproveModal(false)
       setSelectedInquiryId(null)
-      setContactInfo({ phone: '', timeSchedule: '' })
+      setContactInfo({ phone: '' })
       setUseContactPerson(false)
+      
+      // Redirect to availability setting page
+      router.push(`/homes/${home.key}/set-availability?inquiryId=${selectedInquiryId}`)
     } catch (error) {
       console.error('Error processing inquiry:', error)
       alert(getTranslation(language, 'somethingWentWrong'))
@@ -375,7 +376,7 @@ export default function HomeInquiriesPage() {
           onClick={() => {
             setShowApproveModal(false)
             setSelectedInquiryId(null)
-            setContactInfo({ phone: '', timeSchedule: '' })
+            setContactInfo({ phone: '' })
           }}
         >
           <div
@@ -390,7 +391,7 @@ export default function HomeInquiriesPage() {
                 onClick={() => {
                   setShowApproveModal(false)
                   setSelectedInquiryId(null)
-                  setContactInfo({ phone: '', timeSchedule: '' })
+                  setContactInfo({ phone: '' })
                   setUseContactPerson(false)
                 }}
                 className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl transition-colors"
@@ -435,7 +436,7 @@ export default function HomeInquiriesPage() {
                 {/* Phone */}
                 <div>
                   <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                    {getTranslation(language, 'phone')}
+                    {getTranslation(language, 'phone')} ({getTranslation(language, 'optional')})
                   </label>
                   <input
                     type="tel"
@@ -445,20 +446,10 @@ export default function HomeInquiriesPage() {
                     className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:border-[#E8D5B7] focus:outline-none"
                   />
                 </div>
-
-                {/* Time Schedule */}
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                    {getTranslation(language, 'timeSchedule')}
-                  </label>
-                  <textarea
-                    value={contactInfo.timeSchedule}
-                    onChange={(e) => setContactInfo({ ...contactInfo, timeSchedule: e.target.value })}
-                    placeholder={getTranslation(language, 'enterTimeSchedule')}
-                    rows={4}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:border-[#E8D5B7] focus:outline-none resize-none"
-                  />
-                </div>
+                
+                <p className="text-sm text-[#E8D5B7]/70 mt-4">
+                  {getTranslation(language, 'afterApprovalSetAvailability')}
+                </p>
 
                 {/* Send Button */}
                 <button

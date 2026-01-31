@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     const inquiryMap = new Map(inquiries.map(i => [i.id, i]))
 
     // Format notifications for response
-    const formattedNotifications = notifications.map(notif => {
+    const formattedNotifications = await Promise.all(notifications.map(async (notif) => {
       const homeTitle = notif.homeKey ? homeMap.get(notif.homeKey) : null
       
       let message = ''
@@ -145,6 +145,110 @@ export async function GET(request: NextRequest) {
             message = t.notificationRateOwner.replace('{propertyTitle}', propertyTitle)
           }
         }
+      } else if (notif.type === 'booking_reminder') {
+        // For booking reminders: fetch booking details
+        if (notif.homeKey) {
+          const home = await prisma.home.findUnique({
+            where: { key: notif.homeKey },
+            select: { id: true },
+          })
+          
+          if (home) {
+            // Find the booking for this home and recipient
+            const booking = await prisma.booking.findFirst({
+              where: {
+                homeId: home.id,
+                status: 'scheduled',
+                startTime: {
+                  gte: new Date(),
+                  lt: new Date(Date.now() + 48 * 60 * 60 * 1000), // Within next 48 hours
+                },
+                ...(notif.role === 'user' 
+                  ? { userId: notif.recipientId }
+                  : { ownerId: notif.recipientId }
+                ),
+              },
+              orderBy: { startTime: 'asc' },
+              take: 1,
+            })
+
+            if (booking) {
+              if (notif.role === 'user') {
+                // User reminder: show booking time
+                const bookingTime = new Date(booking.startTime).toLocaleTimeString(
+                  language === 'el' ? 'el-GR' : 'en-US',
+                  { hour: '2-digit', minute: '2-digit' }
+                )
+                message = t.notificationBookingReminder
+                  .replace('{title}', booking.title)
+                  .replace('{time}', bookingTime)
+              } else {
+                // Owner reminder: count tomorrow's bookings
+                const tomorrow = new Date()
+                tomorrow.setDate(tomorrow.getDate() + 1)
+                tomorrow.setHours(0, 0, 0, 0)
+                const dayAfter = new Date(tomorrow)
+                dayAfter.setDate(dayAfter.getDate() + 1)
+
+                const tomorrowBookings = await prisma.booking.count({
+                  where: {
+                    ownerId: notif.recipientId,
+                    status: 'scheduled',
+                    startTime: {
+                      gte: tomorrow,
+                      lt: dayAfter,
+                    },
+                  },
+                })
+
+                if (tomorrowBookings > 0) {
+                  message = t.notificationOwnerBookingReminder
+                    .replace('{count}', tomorrowBookings.toString())
+                    .replace('{plural}', tomorrowBookings > 1 ? 's' : '')
+                } else {
+                  message = t.notificationOwnerBookingReminder
+                    .replace('{count}', '0')
+                    .replace('{plural}', 's')
+                }
+              }
+            } else {
+              // Fallback message
+              message = notif.role === 'user' 
+                ? t.notificationBookingReminder.replace('{title}', propertyTitle).replace('{time}', '')
+                : t.notificationOwnerBookingReminder.replace('{count}', '0').replace('{plural}', 's')
+            }
+          } else {
+            message = notif.role === 'user' 
+              ? t.notificationBookingReminder.replace('{title}', propertyTitle).replace('{time}', '')
+              : t.notificationOwnerBookingReminder.replace('{count}', '0').replace('{plural}', 's')
+          }
+        } else {
+          // For owner reminders without homeKey, count all tomorrow's bookings
+          if (notif.role === 'owner') {
+            const tomorrow = new Date()
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            tomorrow.setHours(0, 0, 0, 0)
+            const dayAfter = new Date(tomorrow)
+            dayAfter.setDate(dayAfter.getDate() + 1)
+
+            const tomorrowBookings = await prisma.booking.count({
+              where: {
+                ownerId: notif.recipientId,
+                status: 'scheduled',
+                startTime: {
+                  gte: tomorrow,
+                  lt: dayAfter,
+                },
+              },
+            })
+
+            message = t.notificationOwnerBookingReminder
+              .replace('{count}', tomorrowBookings.toString())
+              .replace('{plural}', tomorrowBookings > 1 ? 's' : '')
+          } else {
+            message = t.notificationBookingReminder.replace('{title}', '').replace('{time}', '')
+          }
+        }
       }
 
       return {
@@ -156,7 +260,7 @@ export async function GET(request: NextRequest) {
         createdAt: notif.createdAt,
         viewed: notif.viewed || false,
       }
-    })
+    }))
 
     // Count unviewed notifications
     const unviewedCount = formattedNotifications.filter(n => !n.viewed).length

@@ -84,6 +84,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
     { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both', 'broker'] },
     { href: '/homes', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
+    { href: '/homes/calendar', labelKey: 'calendar', icon: '📅', roles: ['owner', 'user', 'both', 'broker'] },
   ]
 
   // Build menu items based on display role
