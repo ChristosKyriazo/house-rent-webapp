@@ -15,6 +15,7 @@ interface Booking {
   endTime: string
   location: string | null
   status: string
+  userId?: number
   owner: {
     id: number
     name: string | null
@@ -48,6 +49,8 @@ interface BookingDetailsModalProps {
   onClose: () => void
   isOwner: boolean
   onReschedule?: () => void
+  onCancel?: () => void
+  currentUserId?: number
 }
 
 export default function BookingDetailsModal({ booking, onClose, isOwner, onReschedule, onCancel, currentUserId }: BookingDetailsModalProps) {
@@ -59,7 +62,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
   // Check if booking can be rescheduled
   // Users: scheduled status, >24 hours away
   // Owners: scheduled status, anytime
-  const isUser = currentUserId && booking && booking.userId === currentUserId
+  const isUser = currentUserId && booking && (booking.userId === currentUserId || booking.user.id === currentUserId)
   const canReschedule = booking?.status === 'scheduled' && (
     isUser 
       ? (new Date(booking.startTime).getTime() - new Date().getTime()) > 24 * 60 * 60 * 1000
@@ -317,6 +320,15 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
         {/* Action Buttons */}
         <div className="mt-8 flex justify-end gap-4">
+          {canCancel && onCancel && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {cancelling ? getTranslation(language, 'cancelling') : getTranslation(language, 'cancelBooking')}
+            </button>
+          )}
           {canReschedule && onReschedule && (
             <button
               onClick={() => {

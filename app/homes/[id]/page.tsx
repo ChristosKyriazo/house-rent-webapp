@@ -46,6 +46,7 @@ interface Home {
     name: string | null
     role: string
     createdAt: string
+    isBroker?: boolean
     ratings?: {
       ownerRating: number | null
       ownerCount: number
@@ -75,8 +76,10 @@ export default function HomeDetailPage() {
   const [inquiryId, setInquiryId] = useState<number | null>(null)
   const [isFinalized, setIsFinalized] = useState(false)
   const [finalizeRequestSent, setFinalizeRequestSent] = useState(false)
+  const [pendingFinalization, setPendingFinalization] = useState(false)
   const [updatingInquiry, setUpdatingInquiry] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
+  const [dismissingFinalization, setDismissingFinalization] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null; safety: number | null; vibe: string | null }>>([])
   const { selectedRole, actualRole } = useRole()
@@ -178,13 +181,40 @@ export default function HomeDetailPage() {
             setInquiryStatus(status)
             
             // Get inquiry ID if exists
-            if (inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id]) {
-              setInquiryId(inquiriesData.inquiryIds[data.home.id])
+            const currentInquiryId = inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id] ? inquiriesData.inquiryIds[data.home.id] : null
+            if (currentInquiryId) {
+              setInquiryId(currentInquiryId)
             }
             
             // Check if finalized
             if (inquiriesData.finalizedHomes && inquiriesData.finalizedHomes[data.home.id]) {
               setIsFinalized(true)
+            }
+            
+            // Check for pending finalization notification (use the inquiryId we just got)
+            if (currentInquiryId) {
+              const notificationsRes = await fetch('/api/notifications')
+              if (notificationsRes.ok) {
+                const notificationsData = await notificationsRes.json()
+                const pendingFinalize = notificationsData.notifications?.find(
+                  (n: any) => n.type === 'finalize' && n.inquiryId === currentInquiryId && !n.viewed
+                )
+                if (pendingFinalize) {
+                  setPendingFinalization(true)
+                }
+              }
+              
+              // Also check approved inquiries API for users to get waitingForFinalization status
+              if (profileData.user.role === 'user' || (profileData.user.role === 'both' && displayRole === 'user')) {
+                const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=user`)
+                if (approvedInquiriesRes.ok) {
+                  const approvedData = await approvedInquiriesRes.json()
+                  const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.id === currentInquiryId)
+                  if (approvedInquiry && approvedInquiry.waitingForFinalization) {
+                    setPendingFinalization(true)
+                  }
+                }
+              }
             }
             
             // If inquiry is dismissed, redirect to search page
@@ -196,16 +226,31 @@ export default function HomeDetailPage() {
         }
         
         // For owners: check if they have approved inquiries for this home
+        // Also check if inquiryId is provided in URL params
+        const inquiryIdParam = searchParams.get('inquiryId')
+        if (inquiryIdParam) {
+          const inquiryIdNum = parseInt(inquiryIdParam)
+          if (!isNaN(inquiryIdNum)) {
+            setInquiryId(inquiryIdNum)
+            setInquiryStatus('approved')
+          }
+        }
+        
         if ((profileData.user.role === 'owner' || profileData.user.role === 'both') && data.home.owner.id === profileData.user.id) {
           const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=owner`)
           if (approvedInquiriesRes.ok) {
             const approvedData = await approvedInquiriesRes.json()
-            const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.home.key === data.home.key)
+            const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => 
+              inquiryIdParam ? inq.id === parseInt(inquiryIdParam) : inq.home.key === data.home.key
+            )
             if (approvedInquiry) {
               setInquiryId(approvedInquiry.id)
               setInquiryStatus('approved')
               if (approvedInquiry.finalized) {
                 setIsFinalized(true)
+              }
+              if (approvedInquiry.waitingForFinalization) {
+                setPendingFinalization(true)
               }
             }
           }
@@ -224,6 +269,33 @@ export default function HomeDetailPage() {
       fetchHomeData()
     }
   }, [params.id, router])
+
+  // Check for pending finalization when inquiryId changes
+  useEffect(() => {
+    const checkPendingFinalization = async () => {
+      // Calculate isOwner here to avoid dependency issues
+      const userIsOwner = currentUserId !== null && home !== null && home.owner.id === currentUserId
+      
+      if (inquiryId && !userIsOwner) {
+        try {
+          const notificationsRes = await fetch('/api/notifications')
+          if (notificationsRes.ok) {
+            const notificationsData = await notificationsRes.json()
+            const pendingFinalize = notificationsData.notifications?.find(
+              (n: any) => n.type === 'finalize' && n.inquiryId === inquiryId && !n.viewed
+            )
+            if (pendingFinalize) {
+              setPendingFinalization(true)
+            }
+          }
+        } catch (error) {
+          console.error('Error checking pending finalization:', error)
+        }
+      }
+    }
+
+    checkPendingFinalization()
+  }, [inquiryId, currentUserId, home])
 
 
   const handleFinalize = async () => {
@@ -246,6 +318,63 @@ export default function HomeDetailPage() {
       alert(getTranslation(language, 'finalizeFailed'))
     } finally {
       setFinalizing(false)
+    }
+  }
+
+  const handleApproveFinalization = async () => {
+    if (!home || !inquiryId || finalizing || isFinalized) return
+    
+    setFinalizing(true)
+    try {
+      const response = await fetch(`/api/inquiries/${home.key}/${inquiryId}/finalize`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      })
+      
+      if (response.ok) {
+        setIsFinalized(true)
+        setPendingFinalization(false)
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        alert(data.error || getTranslation(language, 'finalizeFailed'))
+      }
+    } catch (error) {
+      console.error('Error approving finalization:', error)
+      alert(getTranslation(language, 'finalizeFailed'))
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
+  const handleRejectFinalization = async () => {
+    if (!home || !inquiryId || dismissingFinalization) return
+    
+    if (!confirm(getTranslation(language, 'confirmRejectFinalization') || 'Are you sure you want to reject this finalization? The property will be removed from your search results.')) {
+      return
+    }
+    
+    setDismissingFinalization(true)
+    try {
+      const response = await fetch(`/api/inquiries/${home.key}/${inquiryId}/finalize`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismiss' }),
+      })
+      
+      if (response.ok) {
+        // Redirect to search page since the house will be hidden
+        router.push('/homes')
+      } else {
+        const data = await response.json()
+        alert(data.error || getTranslation(language, 'somethingWentWrong'))
+      }
+    } catch (error) {
+      console.error('Error rejecting finalization:', error)
+      alert(getTranslation(language, 'somethingWentWrong'))
+    } finally {
+      setDismissingFinalization(false)
     }
   }
 
@@ -392,6 +521,8 @@ export default function HomeDetailPage() {
   // Owners see "sell" for their own listings, "buy" for others
   // Users always see "buy" for sale listings
   const isOwner = currentUserId !== null && home.owner.id === currentUserId
+  // Check if user has owner/broker role (for finalize button visibility)
+  const isOwnerOrBroker = displayRole === 'owner' || displayRole === 'broker' || actualRole === 'owner' || actualRole === 'broker' || actualRole === 'both'
   const displayListingType = home.listingType === 'rent' 
     ? 'rent' 
     : (isOwner ? 'sell' : 'buy')
@@ -677,55 +808,94 @@ export default function HomeDetailPage() {
                 </div>
                 
                 {/* Owner Profile - Right side, square */}
-                <div 
-                  onClick={() => setShowOwnerModal(true)}
-                  className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
-                >
-                  {/* Owner Title - At the top */}
-                  <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">{getTranslation(language, 'owner')}</h2>
-                  
-                  {/* Name and Rating - Centered and prominent */}
-                  <div className="flex flex-col items-center justify-center flex-1">
-                    {/* Name */}
-                    <p className="text-base font-semibold text-[#E8D5B7] text-center mb-2">
-                      {home.owner.name || home.owner.email.split('@')[0]}
-                    </p>
+                {home.owner.isBroker ? (
+                  // For brokers, show generic "House Owner" with clickable rating (no modal)
+                  <Link
+                    href={`/homes/ratings/${home.key}`}
+                    className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                  >
+                    {/* Owner Title - At the top */}
+                    <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">
+                      {getTranslation(language, 'houseOwner') || 'House Owner'}
+                    </h2>
                     
-                    {/* Rating */}
-                    {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                      <Link
-                        href={`/profile/ratings/${home.owner.id}?type=owner`}
-                        className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
-                      >
-                        <span className="text-xl font-bold text-[#E8D5B7]">
-                          {home.owner.ratings.ownerRating.toFixed(1)}
+                    {/* Rating - Centered and prominent */}
+                    <div className="flex flex-col items-center justify-center flex-1">
+                      <span className="text-xl font-bold text-[#E8D5B7]">
+                        {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
+                          ? home.owner.ratings.ownerRating.toFixed(1) 
+                          : '0.0'}
+                      </span>
+                      <StarRating 
+                        rating={home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
+                          ? home.owner.ratings.ownerRating 
+                          : 0} 
+                        size="sm" 
+                      />
+                      {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
+                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                          {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
-                        <StarRating rating={home.owner.ratings!.ownerRating!} size="sm" />
-                        {home.owner.ratings.ownerCount > 0 && (
-                          <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
-                            {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
+                      ) : (
+                        <span className="text-xs text-[#E8D5B7]/50 italic">
+                          {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ) : (
+                  // For regular owners, show name and rating with modal
+                  <div 
+                    onClick={() => setShowOwnerModal(true)}
+                    className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                  >
+                    {/* Owner Title - At the top */}
+                    <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">{getTranslation(language, 'owner')}</h2>
+                    
+                    {/* Name and Rating - Centered and prominent */}
+                    <div className="flex flex-col items-center justify-center flex-1">
+                      {/* Name */}
+                      <p className="text-base font-semibold text-[#E8D5B7] text-center mb-2">
+                        {home.owner.name || home.owner.email.split('@')[0]}
+                      </p>
+                      
+                      {/* Rating */}
+                      {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
+                        <Link
+                          href={`/profile/ratings/${home.owner.id}?type=owner`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          <span className="text-xl font-bold text-[#E8D5B7]">
+                            {home.owner.ratings.ownerRating.toFixed(1)}
                           </span>
-                        )}
-                      </Link>
-                    ) : (
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-xl font-bold text-[#E8D5B7]">
-                          0.0
-                        </span>
-                        <div className="flex items-center gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <span key={i} className="text-sm text-[#E8D5B7]/30">
-                              ⭐
+                          <StarRating rating={home.owner.ratings!.ownerRating!} size="sm" />
+                          {home.owner.ratings.ownerCount > 0 && (
+                            <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                              {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                             </span>
-                          ))}
+                          )}
+                        </Link>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xl font-bold text-[#E8D5B7]">
+                            0.0
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <span key={i} className="text-sm text-[#E8D5B7]/30">
+                                ⭐
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-xs text-[#E8D5B7]/60">
+                            {getTranslation(language, 'notRatedYet')}
+                          </span>
                         </div>
-                        <span className="text-xs text-[#E8D5B7]/60">
-                          {getTranslation(language, 'notRatedYet')}
-                        </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-            </div>
+                )}
           </div>
 
               {/* Description - Below the row */}
@@ -883,8 +1053,8 @@ export default function HomeDetailPage() {
             </div>
           )}
 
-            {/* Finalize Button - Show for both users and owners when inquiry is approved */}
-            {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && (
+            {/* Finalize Button - Only show for owners/brokers when inquiry is approved */}
+            {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && isOwner && isOwnerOrBroker && !pendingFinalization && (
               <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
                 <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-xl text-center">
                   <p className="text-sm font-medium text-green-400">
@@ -907,6 +1077,33 @@ export default function HomeDetailPage() {
                     {finalizing ? getTranslation(language, 'loading') : getTranslation(language, 'finalize')}
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Finalize/Reject Buttons for Users - Show when there's a pending finalization request */}
+            {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && currentUserId !== null && home.owner.id !== currentUserId && pendingFinalization && (
+              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+                <div className="mb-4 p-3 bg-yellow-600/20 border border-yellow-500/50 rounded-xl text-center">
+                  <p className="text-sm font-medium text-yellow-400">
+                    {getTranslation(language, 'finalizationRequestReceived') || 'Finalization Request Received'}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleApproveFinalization}
+                    disabled={finalizing}
+                    className="flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                  >
+                    {finalizing ? getTranslation(language, 'loading') : getTranslation(language, 'approveFinalization')}
+                  </button>
+                  <button
+                    onClick={handleRejectFinalization}
+                    disabled={dismissingFinalization}
+                    className="flex-1 px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                  >
+                    {dismissingFinalization ? getTranslation(language, 'loading') : getTranslation(language, 'reject')}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1019,8 +1216,8 @@ export default function HomeDetailPage() {
           </div>
         )}
 
-        {/* Owner Profile Modal */}
-        {showOwnerModal && (
+        {/* Owner Profile Modal - Only show for non-broker owners */}
+        {showOwnerModal && !home.owner.isBroker && (
           <div 
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn"
             onClick={() => setShowOwnerModal(false)}
@@ -1057,48 +1254,84 @@ export default function HomeDetailPage() {
                   <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'email')}</label>
               <p className="text-lg text-[#E8D5B7]">{home.owner.email}</p>
             </div>
-                {/* Rating in Modal */}
-                {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
+                {/* Rating in Modal - Show house owner rating for brokers, owner rating for regular owners */}
+                {home.owner.isBroker ? (
+                  // For brokers, always show house owner rating (even if 0.0) and make it clickable
                   <Link
-                    href={`/profile/ratings/${home.owner.id}?type=owner`}
+                    href={`/homes/ratings/${home.key}`}
                     className="pt-4 border-t border-[#E8D5B7]/20 block hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
+                    <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                      {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
+                    </label>
                     <div>
                       <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
                         <span>⭐</span>
-                        {home.owner.ratings.ownerRating.toFixed(1)}
+                        {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
+                          ? home.owner.ratings.ownerRating.toFixed(1) 
+                          : '0.0'}
                       </p>
                       <div className="mt-2">
-                        <StarRating rating={home.owner.ratings!.ownerRating!} size="base" />
+                        <StarRating 
+                          rating={home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
+                            ? home.owner.ratings.ownerRating 
+                            : 0} 
+                          size="base" 
+                        />
                       </div>
-                      {home.owner.ratings.ownerCount > 0 && (
+                      {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
                         <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">
                           {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </Link>
                 ) : (
-                  <div className="pt-4 border-t border-[#E8D5B7]/20">
-                    <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
-            <div>
-                      <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
-                        <span>⭐</span>
-                        0.0
-                      </p>
-                      <div className="flex items-center gap-1 mt-2">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className="text-base text-[#E8D5B7]/30">
-                            ⭐
+                  // For regular owners, show their personal rating
+                  home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
+                    <Link
+                      href={`/profile/ratings/${home.owner.id}?type=owner`}
+                      className="pt-4 border-t border-[#E8D5B7]/20 block hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                      <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                        {getTranslation(language, 'asOwner')}
+                      </label>
+                      <div>
+                        <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                          <span>⭐</span>
+                          {home.owner.ratings.ownerRating.toFixed(1)}
+                        </p>
+                        <div className="mt-2">
+                          <StarRating rating={home.owner.ratings!.ownerRating!} size="base" />
+                        </div>
+                        {home.owner.ratings.ownerCount > 0 && (
+                          <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">
+                            {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                           </span>
-                        ))}
+                        )}
                       </div>
-                      <p className="text-sm text-[#E8D5B7]/60 mt-1">
-                        {getTranslation(language, 'notRatedYet')}
-                      </p>
+                    </Link>
+                  ) : (
+                    <div className="pt-4 border-t border-[#E8D5B7]/20">
+                      <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
+                      <div>
+                        <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                          <span>⭐</span>
+                          0.0
+                        </p>
+                        <div className="flex items-center gap-1 mt-2">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className="text-base text-[#E8D5B7]/30">
+                              ⭐
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-sm text-[#E8D5B7]/60 mt-1">
+                          {getTranslation(language, 'notRatedYet')}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )
                 )}
               </div>
             </div>

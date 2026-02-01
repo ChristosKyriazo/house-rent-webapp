@@ -30,3 +30,4 @@ CREATE INDEX "bookings_availabilityId_idx" ON "bookings"("availabilityId");
 -- Note: SQLite doesn't support adding foreign keys to existing tables easily
 -- The constraint will be enforced at application level
 
+

@@ -65,10 +65,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify that there's a finalized inquiry between these users
-    // For owner rating renter: find finalized inquiry where owner is rater and user is rated
-    // For user rating owner: find finalized inquiry where user is rater and owner is rated
-    let inquiryExists = false
+    // Verify that there's a relationship between these users
+    // For owner rating renter: check if owner has inquiry with this user AND a scheduled booking that has passed
+    // For user rating owner: check if user has finalized inquiry with this owner
+    let canRate = false
     if (type === 'owner') {
       // User is rating owner - check if user has finalized inquiry with this owner
       const inquiry = await prisma.inquiry.findFirst({
@@ -80,24 +80,29 @@ export async function POST(request: NextRequest) {
           finalized: true,
         },
       })
-      inquiryExists = !!inquiry
+      canRate = !!inquiry
     } else {
-      // Owner is rating renter - check if owner has finalized inquiry with this user
-      const inquiry = await prisma.inquiry.findFirst({
+      // Owner is rating renter - check if there's a booking between owner and user that has passed
+      // We check for bookings where:
+      // - ownerId is the current user (owner)
+      // - userId is the rated user
+      // - endTime has passed (meeting has ended)
+      const now = new Date()
+      const booking = await prisma.booking.findFirst({
         where: {
+          ownerId: user.id,
           userId: parseInt(ratedUserId),
-          home: {
-            ownerId: user.id,
+          endTime: {
+            lt: now, // Meeting has ended
           },
-          finalized: true,
         },
       })
-      inquiryExists = !!inquiry
+      canRate = !!booking
     }
 
-    if (!inquiryExists) {
+    if (!canRate) {
       return NextResponse.json(
-        { error: 'No finalized inquiry found between these users' },
+        { error: 'Cannot rate this user. A completed meeting is required.' },
         { status: 403 }
       )
     }

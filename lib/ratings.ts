@@ -27,3 +27,46 @@ export async function getUserRatings(userId: number) {
   }
 }
 
+// Calculate house owner ratings for a specific home
+// This is used for broker-owned homes where ratings are associated with the house, not the broker
+export async function getHouseOwnerRatings(homeId: number) {
+  // Get all finalized inquiries for this home
+  const finalizedInquiries = await prisma.inquiry.findMany({
+    where: {
+      homeId: homeId,
+      finalized: true,
+    },
+    select: {
+      id: true,
+      userId: true,
+      home: {
+        select: {
+          ownerId: true,
+        },
+      },
+    },
+  })
+
+  // Get all ratings from users to owner for this home
+  const houseOwnerRatings = []
+  for (const inquiry of finalizedInquiries) {
+    const ratings = await prisma.rating.findMany({
+      where: {
+        raterId: inquiry.userId,
+        ratedUserId: inquiry.home.ownerId,
+        type: 'owner',
+      },
+    })
+    houseOwnerRatings.push(...ratings)
+  }
+
+  const avg = houseOwnerRatings.length > 0
+    ? houseOwnerRatings.reduce((sum, r) => sum + r.score, 0) / houseOwnerRatings.length
+    : null
+
+  return {
+    houseOwnerRating: avg !== null ? Number(avg.toFixed(1)) : null,
+    houseOwnerCount: houseOwnerRatings.length,
+  }
+}
+

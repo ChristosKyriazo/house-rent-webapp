@@ -74,3 +74,4 @@ export default function NotificationPopup({ type, message, onClose, language }: 
   )
 }
 
+

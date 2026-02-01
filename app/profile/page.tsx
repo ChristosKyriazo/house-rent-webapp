@@ -195,12 +195,18 @@ export default function ProfilePage() {
   const isOwnProfile = !userIdParam || (currentUserId !== null && user.id === currentUserId)
 
   // Check if profile is incomplete (only for own profile)
-  const isProfileIncomplete = isOwnProfile && (!user.name || !user.dateOfBirth || !user.occupation)
+  // Brokers don't need date of birth, and occupation is auto-set to "Broker"
+  const isBroker = user.role === 'broker'
+  const isProfileIncomplete = isOwnProfile && (
+    !user.name || 
+    (!isBroker && !user.dateOfBirth) || 
+    (!isBroker && !user.occupation)
+  )
   const missingFields: string[] = []
   if (isOwnProfile) {
     if (!user.name) missingFields.push(getTranslation(language, 'name'))
-    if (!user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
-    if (!user.occupation) missingFields.push(getTranslation(language, 'occupation'))
+    if (!isBroker && !user.dateOfBirth) missingFields.push(getTranslation(language, 'dateOfBirth'))
+    if (!isBroker && !user.occupation) missingFields.push(getTranslation(language, 'occupation'))
   }
 
   return (
@@ -265,8 +271,8 @@ export default function ProfilePage() {
           {/* Ratings Section - Show based on display role */}
           {ratings && (
             <div className="grid gap-4 mb-6 grid-cols-1">
-              {/* Show owner rating only when display role is owner or broker */}
-              {(displayRole === 'owner' || displayRole === 'broker') && (
+              {/* Show owner rating only when display role is owner (NOT broker) */}
+              {displayRole === 'owner' && user && user.role !== 'broker' && (
                 <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
                   <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asOwner')}</h3>
                 {ratings.ownerRating !== null ? (
@@ -337,18 +343,22 @@ export default function ProfilePage() {
                 {user.name || getTranslation(language, 'notSet')}
               </p>
             </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
-              <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
-                {typeof computedAge === 'number' ? computedAge : getTranslation(language, 'notSet')}
-              </p>
-            </div>
+            {/* Don't show age/date of birth for brokers */}
+            {user.role !== 'broker' && (
               <div className="pb-4 border-b border-[#E8D5B7]/20">
+                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
+                <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+                  {typeof computedAge === 'number' ? computedAge : getTranslation(language, 'notSet')}
+                </p>
+              </div>
+            )}
+            {/* Occupation - show for brokers as "Broker", editable for others */}
+            <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'occupation')}</label>
               <p className={`text-lg ${user.occupation ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
                 {user.occupation ? translateValue(language, user.occupation) : getTranslation(language, 'notSet')}
               </p>
-              </div>
+            </div>
             <div className="pb-4 border-b border-[#E8D5B7]/20">
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'email')}</label>
               <p className="text-lg text-[#E8D5B7]">{user.email}</p>

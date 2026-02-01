@@ -137,6 +137,21 @@ export async function GET(request: NextRequest) {
       where.finalized = false
     }
 
+    // Always exclude homes where user has dismissed (rejected) inquiries
+    let excludeRejectedHomeIds: number[] = []
+    if (currentUser) {
+      const rejectedInquiries = await prisma.inquiry.findMany({
+        where: {
+          userId: currentUser.id,
+          dismissed: true,
+        },
+        select: {
+          homeId: true,
+        },
+      })
+      excludeRejectedHomeIds = rejectedInquiries.map(inq => inq.homeId)
+    }
+
     // Handle exclude filters for inquired and approved listings
     const excludeInquired = searchParams.get('excludeInquired') === 'true'
     const excludeApproved = searchParams.get('excludeApproved') === 'true'
@@ -174,6 +189,31 @@ export async function GET(request: NextRequest) {
 
       // Remove duplicates
       excludeHomeIds = [...new Set(excludeHomeIds)]
+    }
+
+    // Combine all excluded home IDs (rejected + filter exclusions)
+    const allExcludedHomeIds = [...new Set([...excludeRejectedHomeIds, ...excludeHomeIds])]
+    if (allExcludedHomeIds.length > 0) {
+      // Add exclusion to where clause
+      // Use NOT with OR to exclude multiple IDs
+      if (where.AND) {
+        where.AND.push({ id: { notIn: allExcludedHomeIds } })
+      } else if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { id: { notIn: allExcludedHomeIds } }
+        ]
+        delete where.OR
+      } else if (where.id) {
+        // If id filter already exists, combine with AND
+        where.AND = [
+          { id: where.id },
+          { id: { notIn: allExcludedHomeIds } }
+        ]
+        delete where.id
+      } else {
+        where.id = { notIn: allExcludedHomeIds }
+      }
     }
 
     // Remove city/country from where clause - we'll filter in JavaScript for proper Greek/English matching

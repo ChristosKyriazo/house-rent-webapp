@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
             email,
             name,
             role, // Use the selected role instead of default 'user'
+            occupation: role === 'broker' ? 'Broker' : null, // Auto-set occupation for brokers
           },
         })
       } catch (createError: any) {
@@ -88,9 +89,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user role (or create was already done with correct role)
+    // If setting role to broker, also set occupation to "Broker"
+    const updateData: any = { role }
+    if (role === 'broker') {
+      updateData.occupation = 'Broker'
+    }
+    
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { role },
+      data: updateData,
     })
 
     return NextResponse.json(

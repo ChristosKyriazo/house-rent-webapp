@@ -9,7 +9,7 @@ import FinalizeNotificationModal from './FinalizeNotificationModal'
 
 interface Notification {
   id: number
-  type: 'inquiry' | 'approved' | 'dismissed' | 'finalize'
+  type: 'inquiry' | 'approved' | 'dismissed' | 'finalize' | 'availability_set' | 'booking_reminder' | 'rate' | 'rejected'
   message: string
   homeKey: string
   inquiryId: number | null
@@ -112,9 +112,26 @@ export default function NotificationBell() {
       setFinalizeNotification(notification)
     } else if (displayRole === 'owner' && notification.type === 'inquiry') {
       // Inquiry notifications don't disappear when clicked, only when approved/rejected
-      router.push(`/homes/inquiries/${notification.homeKey}`)
-    } else if (notification.type === 'dismissed') {
+      // If inquiryId is available, pass it to highlight the specific inquiry
+      if (notification.inquiryId) {
+        router.push(`/homes/inquiries/${notification.homeKey}?inquiryId=${notification.inquiryId}`)
+      } else {
+        router.push(`/homes/inquiries/${notification.homeKey}`)
+      }
+    } else if (notification.type === 'dismissed' || notification.type === 'rejected') {
       router.push('/homes/my-inquiries')
+    } else if (notification.type === 'availability_set') {
+      // Navigate to booking page for the home
+      if (notification.homeKey) {
+        // Include inquiryId if available
+        const queryParams = notification.inquiryId ? `?inquiryId=${notification.inquiryId}` : ''
+        router.push(`/homes/${notification.homeKey}/book${queryParams}`)
+      }
+    } else if (notification.type === 'booking_created') {
+      // Navigate to approved inquiries page to see the booking
+      if (notification.homeKey) {
+        router.push('/homes/approved')
+      }
     } else if (notification.type === 'rate') {
       // Redirect to rating page based on role
       // Owner rates user, User rates owner

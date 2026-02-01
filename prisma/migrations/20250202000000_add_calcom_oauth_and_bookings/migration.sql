@@ -30,3 +30,4 @@ CREATE INDEX "bookings_ownerId_idx" ON "bookings"("ownerId");
 CREATE INDEX "bookings_startTime_idx" ON "bookings"("startTime");
 CREATE INDEX "bookings_status_idx" ON "bookings"("status");
 
+

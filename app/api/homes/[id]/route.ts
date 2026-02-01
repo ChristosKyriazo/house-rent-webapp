@@ -37,15 +37,55 @@ export async function GET(
       return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    // Fetch owner ratings
-    const ownerRatings = await getUserRatings(home.owner.id)
+    // Check if user has a rejected (dismissed) inquiry for this home
+    try {
+      const currentUser = await getCurrentUser()
+      if (currentUser) {
+        const rejectedInquiry = await prisma.inquiry.findFirst({
+          where: {
+            userId: currentUser.id,
+            homeId: home.id,
+            dismissed: true,
+          },
+        })
+        
+        if (rejectedInquiry) {
+          return NextResponse.json(
+            { error: 'This property is no longer available' },
+            { status: 403 }
+          )
+        }
+      }
+    } catch (error) {
+      // If user is not authenticated, continue normally
+    }
+
+    // Check if owner is a broker - if so, use house owner ratings instead of broker ratings
+    const isBroker = home.owner.role === 'broker'
+    
+    let ratings
+    if (isBroker) {
+      // For brokers, get house owner ratings (ratings for this specific home)
+      const { getHouseOwnerRatings } = await import('@/lib/ratings')
+      const houseRatings = await getHouseOwnerRatings(home.id)
+      ratings = {
+        ownerRating: houseRatings.houseOwnerRating,
+        ownerCount: houseRatings.houseOwnerCount,
+        renterRating: null,
+        renterCount: 0,
+      }
+    } else {
+      // For regular owners, get their personal ratings
+      ratings = await getUserRatings(home.owner.id)
+    }
 
     return NextResponse.json({ 
       home: {
         ...home,
         owner: {
           ...home.owner,
-          ratings: ownerRatings,
+          ratings: ratings,
+          isBroker: isBroker,
         }
       }
     }, { status: 200 })

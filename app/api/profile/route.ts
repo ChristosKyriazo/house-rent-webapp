@@ -91,15 +91,16 @@ export async function PATCH(request: NextRequest) {
 
     const { name, dateOfBirth, occupation, role } = await request.json()
     
-    // If user is a broker, they cannot change their role
+    // If user is a broker, they cannot change their role or occupation
     if (user.role === 'broker') {
-      // Only update other fields, keep role as 'broker'
+      // Only update name, keep role as 'broker' and occupation as 'Broker'
+      // Brokers don't have date of birth
       const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: {
           name: name || null,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-          occupation: occupation || null,
+          dateOfBirth: null, // Brokers don't have date of birth
+          occupation: 'Broker', // Always keep as "Broker" for brokers
           role: 'broker', // Keep broker role
         },
         select: {

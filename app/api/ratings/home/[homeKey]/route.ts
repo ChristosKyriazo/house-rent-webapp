@@ -25,6 +25,12 @@ export async function GET(
         key: true,
         title: true,
         ownerId: true,
+        owner: {
+          select: {
+            id: true,
+            role: true,
+          },
+        },
       },
     })
 
@@ -121,6 +127,7 @@ export async function GET(
       })
 
       // Add all user-to-owner ratings
+      // If owner is a broker, don't include broker info (ratings are for the house, not the broker)
       userToOwnerRatings.forEach(rating => {
         ratings.push({
           ...rating,
@@ -128,6 +135,7 @@ export async function GET(
           homeKey: home.key,
           homeTitle: home.title,
           ratingType: 'owner', // User rates owner (for reference)
+          isBrokerOwned: home.owner.role === 'broker', // Flag to indicate if house is broker-owned
         })
       })
 

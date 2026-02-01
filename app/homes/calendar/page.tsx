@@ -18,19 +18,15 @@ interface Booking {
   endTime: string
   location: string | null
   status: string
+  availabilityId?: number | null
   owner: {
-    id: number
-    name: string | null
-    email: string
-  }
-  user: {
     id: number
     name: string | null
     email: string
     phone?: string | null
     occupation?: string | null
   }
-  owner: {
+  user: {
     id: number
     name: string | null
     email: string
@@ -573,9 +569,21 @@ function RescheduleModal({
       
       let isBooked = false
       
+      // Exclude the current booking's exact timeslot if it matches this availability
+      if (booking.availabilityId === availability.id) {
+        const bookingStart = new Date(booking.startTime)
+        const bookingStartMinutes = bookingStart.getHours() * 60 + bookingStart.getMinutes()
+        const slotStartMinutes = slotStart.getHours() * 60 + slotStart.getMinutes()
+        
+        // If this is the exact same timeslot as the current booking, mark it as booked
+        if (slotStartMinutes === bookingStartMinutes) {
+          isBooked = true
+        }
+      }
+      
       // Check if any booking overlaps with this time slot (excluding the current booking being rescheduled)
       // First check bookings for this specific home
-      if (availability.bookings && availability.bookings.length > 0) {
+      if (!isBooked && availability.bookings && availability.bookings.length > 0) {
         isBooked = availability.bookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false

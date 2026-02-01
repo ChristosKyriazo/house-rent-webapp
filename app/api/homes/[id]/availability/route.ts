@@ -27,17 +27,23 @@ export async function GET(
     }
 
     // Get availability slots
+    // Compare dates only (not times) to include today's slots
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Set to start of today
+    
     const availabilities = await prisma.availability.findMany({
       where: {
         homeId: home.id,
         date: {
-          gte: new Date(), // Only future dates
+          gte: today, // Only future dates (including today)
         },
       },
       orderBy: {
         date: 'asc',
       },
     })
+    
+    console.log(`Found ${availabilities.length} availability slots for home ${home.id}`)
 
     // Get ALL scheduled bookings that conflict with this home's availability
     // This includes:
@@ -240,16 +246,55 @@ export async function POST(
     }
 
     // Create availability slots
+    // Normalize dates to local midnight to avoid timezone issues
     const createdSlots = await Promise.all(
-      slots.map((slot: { date: string; startTime: string; endTime: string }) =>
-        prisma.availability.create({
+      slots.map((slot: { date: string; startTime: string; endTime: string }) => {
+        // Parse date string (format: YYYY-MM-DD) and set to local midnight
+        const [year, month, day] = slot.date.split('-').map(Number)
+        const normalizedDate = new Date(year, month - 1, day, 0, 0, 0, 0) // Local midnight
+        
+        return prisma.availability.create({
           data: {
             homeId: home.id,
             inquiryId: inquiryId ? parseInt(inquiryId) : null,
-            date: new Date(slot.date),
+            date: normalizedDate,
             startTime: slot.startTime,
             endTime: slot.endTime,
             isAvailable: true,
+          },
+        })
+      })
+    )
+
+    // Find all users with approved inquiries for this home and notify them
+    const approvedInquiries = await prisma.inquiry.findMany({
+      where: {
+        homeId: home.id,
+        approved: true,
+        finalized: false,
+      },
+      select: {
+        userId: true,
+      },
+      distinct: ['userId'],
+    })
+
+    // Get owner's key for notification
+    const owner = await prisma.user.findUnique({
+      where: { id: home.ownerId },
+      select: { key: true },
+    })
+
+    // Create notifications for each user
+    await Promise.all(
+      approvedInquiries.map((inquiry) =>
+        prisma.notification.create({
+          data: {
+            recipientId: inquiry.userId,
+            role: 'user',
+            type: 'availability_set',
+            homeKey: homeKey,
+            ownerKey: owner?.key || null,
           },
         })
       )

@@ -18,6 +18,7 @@ interface Rating {
   homeKey: string
   homeTitle: string
   ratingType?: string // 'owner' or 'renter' - helps determine the type when editing
+  isBrokerOwned?: boolean // Flag to indicate if house is broker-owned
   rater: {
     id: number
     name: string | null
@@ -202,7 +203,9 @@ export default function HomeRatingsPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <span className="text-lg font-semibold text-[#E8D5B7]">
-                              {getTranslation(language, 'rated')}: {rating.ratedUser.name || rating.ratedUser.email.split('@')[0]}
+                              {rating.isBrokerOwned && rating.ratingType === 'owner' 
+                                ? getTranslation(language, 'ownerRating') || 'Owner Rating'
+                                : `${getTranslation(language, 'rated')}: ${rating.ratedUser.name || rating.ratedUser.email.split('@')[0]}`}
                             </span>
                             <StarRating rating={rating.score} size="lg" />
                             <span className="text-lg font-bold text-[#E8D5B7] ml-2">

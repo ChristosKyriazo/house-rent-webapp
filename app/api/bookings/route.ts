@@ -10,13 +10,98 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const bookings = await prisma.booking.findMany({
-      where: {
-        OR: [
-          { userId: user.id }, // Bookings where user is the attendee
-          { ownerId: user.id }, // Bookings where user is the owner
-        ],
+    // Check if inquiryId filter is provided
+    const searchParams = request.nextUrl.searchParams
+    const inquiryIdParam = searchParams.get('inquiryId')
+    
+    // Build where clause
+    const whereClause: any = {
+      OR: [
+        { userId: user.id }, // Bookings where user is the attendee
+        { ownerId: user.id }, // Bookings where user is the owner
+      ],
+    }
+    
+    // Add inquiryId filter if provided
+    if (inquiryIdParam) {
+      const inquiryId = parseInt(inquiryIdParam)
+      if (!isNaN(inquiryId)) {
+        whereClause.inquiryId = inquiryId
+      }
+    }
+    
+    // First, get all bookings to find their availabilityIds
+    const allBookings = await prisma.booking.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        availabilityId: true,
+        inquiryId: true,
+        status: true,
       },
+    })
+
+    // Get all valid availabilityIds that exist
+    const availabilityIds = allBookings
+      .map(b => b.availabilityId)
+      .filter((id): id is number => id !== null)
+    
+    if (availabilityIds.length === 0) {
+      return NextResponse.json({ bookings: [] }, { status: 200 })
+    }
+
+    // First, get all availabilities to find their homeIds
+    const allAvailabilities = await prisma.availability.findMany({
+      where: {
+        id: { in: availabilityIds },
+      },
+      select: {
+        id: true,
+        homeId: true,
+      },
+    })
+
+    // Get all valid homeIds that exist
+    const homeIds = allAvailabilities
+      .map(a => a.homeId)
+      .filter((id): id is number => id !== null)
+    
+    const validHomes = await prisma.home.findMany({
+      where: {
+        id: { in: homeIds },
+      },
+      select: { id: true },
+    })
+    
+    const validHomeIds = new Set(validHomes.map(h => h.id))
+    
+    // Filter availabilities to only those with valid homes
+    const validAvailabilityIds = new Set(
+      allAvailabilities
+        .filter(a => a.homeId !== null && validHomeIds.has(a.homeId))
+        .map(a => a.id)
+    )
+
+    // Build where clause for final booking query
+    const finalWhereClause: any = {
+      OR: [
+        { userId: user.id }, // Bookings where user is the attendee
+        { ownerId: user.id }, // Bookings where user is the owner
+      ],
+      availabilityId: { in: Array.from(validAvailabilityIds) },
+    }
+    
+    // Add inquiryId filter if provided
+    if (inquiryIdParam) {
+      const inquiryId = parseInt(inquiryIdParam)
+      if (!isNaN(inquiryId)) {
+        finalWhereClause.inquiryId = inquiryId
+      }
+    }
+    
+    // Now fetch bookings only for valid availabilities
+    const bookings = await prisma.booking.findMany({
+      where: finalWhereClause,
       include: {
         owner: {
           select: {
@@ -54,10 +139,16 @@ export async function GET(request: NextRequest) {
     })
 
     // Transform bookings to include home at the top level for easier access
-    const transformedBookings = bookings.map(booking => ({
-      ...booking,
-      home: booking.availability?.home || null,
-    }))
+    // Filter out any bookings with null availability or null home (safety check)
+    const transformedBookings = bookings
+      .filter(booking => booking.availability !== null && booking.availability.home !== null)
+      .map(booking => ({
+        ...booking,
+        home: booking.availability!.home!,
+        availabilityId: booking.availabilityId,
+        inquiryId: booking.inquiryId,
+        userId: booking.userId,
+      }))
 
 
     return NextResponse.json({ bookings: transformedBookings }, { status: 200 })
@@ -88,15 +179,55 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // If availabilityId is provided, get ownerId from the availability
+    // If availabilityId is provided, get ownerId and homeKey from the availability
     let finalOwnerId = ownerId
+    let homeKey: string | null = null
+    let ownerKey: string | null = null
+    
     if (availabilityId && !ownerId) {
       const availability = await prisma.availability.findUnique({
         where: { id: availabilityId },
-        include: { home: { select: { ownerId: true } } },
+        include: { 
+          home: { 
+            select: { 
+              ownerId: true,
+              key: true,
+              owner: {
+                select: {
+                  key: true,
+                },
+              },
+            } 
+          } 
+        },
       })
       if (availability) {
         finalOwnerId = availability.home.ownerId
+        homeKey = availability.home.key
+        ownerKey = availability.home.owner.key
+      }
+    } else if (finalOwnerId) {
+      // If ownerId is provided but we don't have homeKey, try to get it from inquiryId
+      if (inquiryId) {
+        const inquiry = await prisma.inquiry.findUnique({
+          where: { id: inquiryId },
+          include: {
+            home: {
+              select: {
+                key: true,
+                owner: {
+                  select: {
+                    key: true,
+                  },
+                },
+              },
+            },
+          },
+        })
+        if (inquiry) {
+          homeKey = inquiry.home.key
+          ownerKey = inquiry.home.owner.key
+        }
       }
     }
 
@@ -169,10 +300,44 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             email: true,
+            key: true,
+          },
+        },
+        availability: {
+          include: {
+            home: {
+              select: {
+                key: true,
+              },
+            },
           },
         },
       },
     })
+
+    // Create notification for owner/broker about the new booking
+    try {
+      // Get homeKey if not already set
+      const finalHomeKey = homeKey || booking.availability?.home?.key || null
+      const finalOwnerKey = ownerKey || booking.owner.key || null
+      
+      if (finalHomeKey && finalOwnerId) {
+        await prisma.notification.create({
+          data: {
+            recipientId: finalOwnerId,
+            role: 'owner',
+            type: 'booking_created',
+            homeKey: finalHomeKey,
+            userId: user.id,
+            ownerKey: finalOwnerKey,
+            inquiryId: inquiryId || null,
+          },
+        })
+      }
+    } catch (error) {
+      console.error('Failed to create booking notification:', error)
+      // Don't fail the booking creation if notification fails
+    }
 
     return NextResponse.json({ booking }, { status: 201 })
   } catch (error) {

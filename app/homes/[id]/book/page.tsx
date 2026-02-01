@@ -43,17 +43,49 @@ export default function BookPage() {
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [homeRes, availabilityRes] = await Promise.all([
+        const [profileRes, homeRes, availabilityRes] = await Promise.all([
+          fetch('/api/profile'),
           fetch(`/api/homes/${homeKey}`),
           fetch(`/api/homes/${homeKey}/availability`),
         ])
 
+        // Read home data once
+        let homeData = null
         if (homeRes.ok) {
-          const homeData = await homeRes.json()
+          homeData = await homeRes.json()
+        }
+
+        // Check user profile to determine if they're an owner
+        let profileData = null
+        if (profileRes.ok) {
+          profileData = await profileRes.json()
+          if (profileData.user) {
+            const userRole = (profileData.user.role || 'user').toLowerCase()
+            const isOwnerRole = userRole === 'owner' || userRole === 'broker' || userRole === 'both'
+            
+            // Also check if user is the owner of this specific home
+            let isHomeOwner = false
+            if (homeData && homeData.home && homeData.home.owner) {
+              isHomeOwner = profileData.user.id === homeData.home.owner.id
+            }
+            
+            // If user is owner/broker role OR owns this home, redirect them
+            if (isOwnerRole || isHomeOwner) {
+              setIsOwner(true)
+              // Redirect owners away from booking page
+              router.push('/homes/approved')
+              return
+            }
+          }
+        }
+
+        // If we didn't redirect, set home data
+        if (homeData && homeData.home) {
           setHome(homeData.home)
         }
 
@@ -311,6 +343,25 @@ export default function BookPage() {
     return (
       <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
         <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      </div>
+    )
+  }
+
+  // If user is an owner, show error message
+  if (isOwner) {
+    return (
+      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center max-w-md">
+          <p className="text-[#E8D5B7] text-lg mb-4">
+            {getTranslation(language, 'onlyUsersCanBook') || 'Only users can book viewing appointments. Owners should use the set availability page.'}
+          </p>
+          <Link
+            href="/homes/approved"
+            className="inline-block px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+          >
+            {getTranslation(language, 'back')}
+          </Link>
+        </div>
       </div>
     )
   }

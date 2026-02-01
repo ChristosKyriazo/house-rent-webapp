@@ -47,11 +47,20 @@ export default function HomeInquiriesPage() {
   })
   const [useContactPerson, setUseContactPerson] = useState(false)
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
+  const [highlightedInquiryId, setHighlightedInquiryId] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const homeKey = params.homeKey as string
+        
+        // Check for inquiryId in URL query params
+        const searchParams = new URLSearchParams(window.location.search)
+        const inquiryIdParam = searchParams.get('inquiryId')
+        if (inquiryIdParam) {
+          setHighlightedInquiryId(parseInt(inquiryIdParam))
+        }
+        
         const response = await fetch(`/api/inquiries/${homeKey}`)
         
         if (!response.ok) {
@@ -87,6 +96,22 @@ export default function HomeInquiriesPage() {
 
     fetchData()
   }, [params.homeKey, router])
+  
+  // Scroll to highlighted inquiry when it loads
+  useEffect(() => {
+    if (highlightedInquiryId && inquiries.length > 0) {
+      const element = document.getElementById(`inquiry-${highlightedInquiryId}`)
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.classList.add('ring-4', 'ring-yellow-500', 'ring-opacity-50')
+          setTimeout(() => {
+            element.classList.remove('ring-4', 'ring-yellow-500', 'ring-opacity-50')
+          }, 3000)
+        }, 500)
+      }
+    }
+  }, [highlightedInquiryId, inquiries])
 
   // Fetch areas for city/country translation
   useEffect(() => {
@@ -263,15 +288,19 @@ export default function HomeInquiriesPage() {
               const isCurrent = inquiry.id === currentInquiry?.id
               const isApproved = inquiry.approved
               const isGrayedOut = !isCurrent && !isApproved
+              const isHighlighted = inquiry.id === highlightedInquiryId
 
               return (
                 <div
+                  id={`inquiry-${inquiry.id}`}
                   key={inquiry.id}
                   className={`bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all ${
                     isGrayedOut
                       ? 'border-[#E8D5B7]/10 opacity-50'
                       : isApproved
                       ? 'border-green-500/50'
+                      : isHighlighted
+                      ? 'border-yellow-500/70 ring-4 ring-yellow-500/30'
                       : 'border-[#E8D5B7]/40'
                   }`}
                 >

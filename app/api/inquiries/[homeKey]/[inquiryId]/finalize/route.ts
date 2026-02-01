@@ -67,27 +67,35 @@ export async function POST(
       )
     }
 
-    // Determine recipient: if user is owner, notify user; if user is the inquirer, notify owner
-    let recipientId: number
-    let recipientRole: string
-    let senderName: string
-
-    if (user.id === inquiry.home.ownerId) {
-      // Owner is initiating - notify the user
-      recipientId = inquiry.user.id
-      recipientRole = 'user'
-      senderName = inquiry.home.owner.name || inquiry.home.owner.email.split('@')[0]
-    } else if (user.id === inquiry.userId) {
-      // User is initiating - notify the owner
-      recipientId = inquiry.home.ownerId
-      recipientRole = 'owner'
-      senderName = inquiry.user.name || inquiry.user.email.split('@')[0]
-    } else {
+    // Only owners/brokers can initiate finalization
+    const userRole = (user.role || 'user').toLowerCase()
+    const isOwner = user.id === inquiry.home.ownerId || userRole === 'broker' || userRole === 'both'
+    
+    if (!isOwner) {
       return NextResponse.json(
-        { error: 'Not authorized to finalize this inquiry' },
+        { error: 'Only owners and brokers can initiate finalization' },
         { status: 403 }
       )
     }
+
+    // Check if there's a scheduled booking for this inquiry
+    const scheduledBooking = await prisma.booking.findFirst({
+      where: {
+        inquiryId: inquiry.id,
+        status: 'scheduled',
+      },
+    })
+
+    if (!scheduledBooking) {
+      return NextResponse.json(
+        { error: 'Can only finalize after a scheduled meeting' },
+        { status: 400 }
+      )
+    }
+
+    // Owner is initiating - notify the user for approval
+    const recipientId = inquiry.user.id
+    const recipientRole = 'user'
 
     // Create notification for the other party
     await prisma.notification.create({
@@ -283,7 +291,15 @@ export async function PATCH(
         { status: 200 }
       )
     } else {
-      // Dismiss finalization - just delete the notification
+      // Dismiss finalization (reject) - mark inquiry as dismissed and hide the home from the user
+      await prisma.inquiry.update({
+        where: { id: inquiry.id },
+        data: {
+          dismissed: true,
+        },
+      })
+      
+      // Delete the finalize notification
       await prisma.notification.updateMany({
         where: {
           inquiryId: inquiry.id,
@@ -292,6 +308,18 @@ export async function PATCH(
         },
         data: {
           deleted: true,
+        },
+      })
+      
+      // Create a rejected notification for the user
+      await prisma.notification.create({
+        data: {
+          recipientId: inquiry.user.id,
+          role: 'user',
+          type: 'rejected',
+          homeKey: inquiry.home.key,
+          ownerKey: inquiry.home.owner.key,
+          userId: inquiry.userId,
         },
       })
 

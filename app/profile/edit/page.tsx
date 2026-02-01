@@ -188,36 +188,57 @@ export default function EditProfilePage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'dateOfBirth')}
-              </label>
-              <input
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
-                placeholder={getTranslation(language, 'yourDateOfBirth')}
-              />
-            </div>
+            {/* Don't show date of birth for brokers */}
+            {currentRole !== 'broker' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'dateOfBirth')}
+                </label>
+                <input
+                  type="date"
+                  value={formData.dateOfBirth}
+                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  placeholder={getTranslation(language, 'yourDateOfBirth')}
+                />
+              </div>
+            )}
 
-            <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'occupation')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span>
-              </label>
-              <select
-                value={formData.occupation}
-                onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-              >
-                <option value="">{getTranslation(language, 'selectOccupation')}</option>
-                <option value="Employed">{translateValue(language, 'Employed')}</option>
-                <option value="Student">{translateValue(language, 'Student')}</option>
-                <option value="Retired">{translateValue(language, 'Retired')}</option>
-                <option value="Unemployed">{translateValue(language, 'Unemployed')}</option>
-                <option value="Other">{translateValue(language, 'Other')}</option>
-              </select>
-            </div>
+            {/* Don't show occupation for brokers (it's auto-set to "Broker") */}
+            {currentRole !== 'broker' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'occupation')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span>
+                </label>
+                <select
+                  value={formData.occupation}
+                  onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
+                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                >
+                  <option value="">{getTranslation(language, 'selectOccupation')}</option>
+                  <option value="Employed">{translateValue(language, 'Employed')}</option>
+                  <option value="Student">{translateValue(language, 'Student')}</option>
+                  <option value="Retired">{translateValue(language, 'Retired')}</option>
+                  <option value="Unemployed">{translateValue(language, 'Unemployed')}</option>
+                  <option value="Other">{translateValue(language, 'Other')}</option>
+                </select>
+              </div>
+            )}
+            
+            {/* Show occupation as read-only for brokers */}
+            {currentRole === 'broker' && (
+              <div>
+                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  {getTranslation(language, 'occupation')}
+                </label>
+                <p className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748]/50 rounded-2xl text-[#E8D5B7]">
+                  {translateValue(language, 'Broker')}
+                </p>
+                <p className="text-xs text-[#E8D5B7]/50 mt-1">
+                  {getTranslation(language, 'brokerOccupationLocked') || 'Occupation is automatically set for brokers'}
+                </p>
+              </div>
+            )}
 
             {/* Only show role field if user is not a broker */}
             {currentRole !== 'broker' && (

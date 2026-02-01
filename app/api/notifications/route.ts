@@ -105,6 +105,9 @@ export async function GET(request: NextRequest) {
       } else if (notif.type === 'dismissed') {
         // For users: show their inquiry was dismissed
         message = t.notificationDismissed.replace('{propertyTitle}', propertyTitle)
+      } else if (notif.type === 'rejected') {
+        // For users: show their offer was rejected
+        message = t.notificationRejected.replace('{propertyTitle}', propertyTitle)
       } else if (notif.type === 'finalize') {
         // For finalize: show who wants to finalize
         if (notif.inquiryId) {
@@ -144,6 +147,18 @@ export async function GET(request: NextRequest) {
           } else {
             message = t.notificationRateOwner.replace('{propertyTitle}', propertyTitle)
           }
+        }
+      } else if (notif.type === 'availability_set') {
+        // For users: owner has set availability
+        message = t.notificationAvailabilitySet.replace('{propertyTitle}', propertyTitle)
+      } else if (notif.type === 'booking_created') {
+        // For owners: show that a user has booked a slot
+        if (notif.userId) {
+          const bookingUser = userMap.get(notif.userId)
+          const userName = bookingUser?.name || bookingUser?.email.split('@')[0] || t.aUser
+          message = t.notificationBookingCreated.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
+        } else {
+          message = t.notificationBookingCreatedGeneric.replace('{propertyTitle}', propertyTitle)
         }
       } else if (notif.type === 'booking_reminder') {
         // For booking reminders: fetch booking details

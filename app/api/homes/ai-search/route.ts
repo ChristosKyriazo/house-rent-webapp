@@ -453,6 +453,18 @@ export async function POST(request: NextRequest) {
         }
 
         if (currentUserId) {
+          // Always exclude homes where user has dismissed (rejected) inquiries
+          const rejectedInquiries = await prisma.inquiry.findMany({
+            where: {
+              userId: currentUserId,
+              dismissed: true,
+            },
+            select: {
+              homeId: true,
+            },
+          })
+          const excludeRejectedHomeIds = rejectedInquiries.map(inq => inq.homeId)
+
           const userInquiries = await prisma.inquiry.findMany({
             where: {
               userId: currentUserId,
@@ -483,10 +495,12 @@ export async function POST(request: NextRequest) {
             excludeHomeIds.push(...approvedHomeIds)
           }
 
+          // Combine all excluded home IDs (rejected + filter exclusions)
+          const allExcludedHomeIds = [...new Set([...excludeRejectedHomeIds, ...excludeHomeIds])]
+          
           // Remove duplicates and filter out excluded homes
-          excludeHomeIds = [...new Set(excludeHomeIds)]
-          if (excludeHomeIds.length > 0) {
-            homes = homes.filter(home => !excludeHomeIds.includes(home.id))
+          if (allExcludedHomeIds.length > 0) {
+            homes = homes.filter(home => !allExcludedHomeIds.includes(home.id))
           }
         }
       } catch (error) {
