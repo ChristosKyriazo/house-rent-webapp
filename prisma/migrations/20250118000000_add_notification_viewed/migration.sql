@@ -5,3 +5,4 @@ ALTER TABLE "notifications" ADD COLUMN "viewed" BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX "notifications_viewed_idx" ON "notifications"("viewed");
 
 
+

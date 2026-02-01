@@ -31,3 +31,4 @@ CREATE INDEX "bookings_availabilityId_idx" ON "bookings"("availabilityId");
 -- The constraint will be enforced at application level
 
 
+

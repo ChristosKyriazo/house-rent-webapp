@@ -4,3 +4,4 @@ ALTER TABLE "homes" ADD COLUMN "premiumPromotedUntil" DATETIME;
 
 
 
+
