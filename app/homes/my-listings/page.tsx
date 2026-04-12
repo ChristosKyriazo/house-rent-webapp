@@ -91,18 +91,18 @@ export default function MyListingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">{getTranslation(language, 'myListings')}</h1>
-          <p className="text-[#E8D5B7]/70">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">{getTranslation(language, 'myListings')}</h1>
+          <p className="text-[var(--text-muted)]">
             {getTranslation(language, 'manageListings')}
           </p>
         </div>
@@ -110,25 +110,25 @@ export default function MyListingsPage() {
         <div className="mb-6 flex justify-end">
           <Link
             href="/homes/new"
-            className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5"
+            className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold shadow-lg shadow-[var(--accent)]/15 hover:shadow-xl transform hover:-translate-y-0.5"
           >
             + {getTranslation(language, 'newListing')}
           </Link>
         </div>
 
         {userHomes.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
-            <p className="text-xl text-[#E8D5B7]/70">{getTranslation(language, 'noListings')}</p>
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
+            <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noListings')}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {userHomes.map((home) => (
               <div
                 key={home.id}
-                className={`block bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all ${
+                className={`block bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all ${
                   home.finalized 
                     ? 'border-purple-500/50 opacity-60' 
-                    : 'border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transform hover:-translate-y-1'
+                    : 'border-[var(--border-subtle)] hover:border-[var(--accent)]/35 transform hover:-translate-y-1'
                 }`}
               >
                 {home.finalized && (
@@ -150,16 +150,16 @@ export default function MyListingsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-2xl font-bold text-[#E8D5B7]">{home.title}</h3>
+                        <h3 className="text-2xl font-bold text-[var(--text)]">{home.title}</h3>
                         <span className={`px-3 py-1 rounded-xl text-xs font-semibold ${
                           home.listingType === 'rent' 
-                            ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                            : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+                            ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]' 
+                            : 'bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--accent)]'
                         }`}>
                           {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'sell')}`}
                         </span>
                       </div>
-                      <p className="text-[#E8D5B7]/70 flex items-center gap-1 mb-2">
+                      <p className="text-[var(--text-muted)] flex items-center gap-1 mb-2">
                         <span>📍</span>
                         {home.street && <span>{home.street}, </span>}
                         {home.area && <span>{getAreaName(home.area, areas, language)}, </span>}
@@ -169,30 +169,30 @@ export default function MyListingsPage() {
                         <TranslatedDescription 
                           description={home.description}
                           descriptionGreek={home.descriptionGreek}
-                          className="text-[#E8D5B7]/80 line-clamp-2"
+                          className="text-[var(--text-muted)] line-clamp-2"
                         />
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t border-[#E8D5B7]/20">
+                  <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
                     <div>
-                      <p className="text-3xl font-bold text-[#E8D5B7]">
+                      <p className="text-3xl font-bold text-[var(--text)]">
                         €{home.pricePerMonth.toLocaleString()}
                       </p>
-                      <p className="text-sm text-[#E8D5B7]/60">
+                      <p className="text-sm text-[var(--text-muted)]">
                         {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
                       </p>
                     </div>
-                    <div className="flex items-center gap-6 text-sm text-[#E8D5B7]/70">
+                    <div className="flex items-center gap-6 text-sm text-[var(--text-muted)]">
                       <span>{home.bedrooms} {getTranslation(language, 'bedrooms')}</span>
                       <span>{home.bathrooms} {getTranslation(language, 'bathrooms')}</span>
                       {home.sizeSqMeters && <span>{home.sizeSqMeters} m²</span>}
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-[#E8D5B7]/20">
-                    <p className="text-xs text-[#E8D5B7]/60">
+                  <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       {getTranslation(language, 'publishedOn')} {new Date(home.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                         year: 'numeric',
                         month: 'long',

@@ -205,17 +205,17 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
       onClick={onClose}
     >
       <div
-        className="bg-[#1A202C] rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#E8D5B7]/20 shadow-2xl animate-scaleIn"
+        className="bg-[var(--ink-soft)] rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-[#E8D5B7]">
+          <h2 className="text-3xl font-bold text-[var(--text)]">
             {getTranslation(language, 'bookingDetails')}
           </h2>
           <button
             onClick={onClose}
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl transition-colors"
           >
             ×
           </button>
@@ -224,31 +224,31 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
         {/* Booking Information */}
         <div className="space-y-6">
           <div>
-            <h3 className="text-xl font-semibold text-[#E8D5B7] mb-2">
+            <h3 className="text-xl font-semibold text-[var(--text)] mb-2">
               {booking.title}
             </h3>
             {booking.description && (
-              <p className="text-[#E8D5B7]/70">{booking.description}</p>
+              <p className="text-[var(--text-muted)]">{booking.description}</p>
             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                 {getTranslation(language, 'date')}
               </label>
-              <p className="text-[#E8D5B7]">{formatDate(booking.startTime)}</p>
+              <p className="text-[var(--text)]">{formatDate(booking.startTime)}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                 {getTranslation(language, 'time')}
               </label>
-              <p className="text-[#E8D5B7]">
+              <p className="text-[var(--text)]">
                 {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                 {getTranslation(language, 'status')}
               </label>
               <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
@@ -266,22 +266,22 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
           {booking.home && (
             <div className="space-y-2">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                   {getTranslation(language, 'property')}
                 </label>
                 <Link
                   href={`/homes/${booking.home.key}`}
-                  className="text-[#E8D5B7] hover:text-[#D4C19F] underline"
+                  className="text-[var(--text)] hover:text-[var(--accent)] underline"
                 >
                   {booking.home.title}
                 </Link>
               </div>
               {(booking.home.street || booking.home.city || booking.home.country) && (
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                     {getTranslation(language, 'address')}
                   </label>
-                  <p className="text-[#E8D5B7]">
+                  <p className="text-[var(--text)]">
                     {[booking.home.street, booking.home.city, booking.home.country]
                       .filter(Boolean)
                       .join(', ')}
@@ -292,42 +292,42 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
           )}
 
           {/* Other Person Information */}
-          <div className="border-t border-[#E8D5B7]/20 pt-6">
-            <h3 className="text-xl font-semibold text-[#E8D5B7] mb-4">
+          <div className="border-t border-[var(--border-subtle)] pt-6">
+            <h3 className="text-xl font-semibold text-[var(--text)] mb-4">
               {isOwner ? getTranslation(language, 'userInformation') : getTranslation(language, 'ownerInformation')}
             </h3>
             
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                   {getTranslation(language, 'name')}
                 </label>
-                <p className="text-[#E8D5B7]">
+                <p className="text-[var(--text)]">
                   {otherPerson.name || getTranslation(language, 'notSet')}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                   {getTranslation(language, 'email')}
                 </label>
-                <p className="text-[#E8D5B7]">{otherPerson.email}</p>
+                <p className="text-[var(--text)]">{otherPerson.email}</p>
               </div>
               {otherPerson.occupation && (
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                     {getTranslation(language, 'occupation')}
                   </label>
-                  <p className="text-[#E8D5B7]">{otherPerson.occupation}</p>
+                  <p className="text-[var(--text)]">{otherPerson.occupation}</p>
                 </div>
               )}
 
               {/* Ratings */}
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                   {isUserViewing && isBroker ? getTranslation(language, 'houseRatings') || 'House Ratings' : getTranslation(language, 'ratings')}
                 </label>
                 {loadingRatings ? (
-                  <p className="text-[#E8D5B7]/70">{getTranslation(language, 'loading')}</p>
+                  <p className="text-[var(--text-muted)]">{getTranslation(language, 'loading')}</p>
                 ) : relevantRating ? (
                   <Link
                     href={isRatingClickable ? `/homes/ratings/${booking.home?.key}` : '#'}
@@ -345,27 +345,27 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
                           className={`text-2xl ${
                             i < Math.round(relevantRating)
                               ? 'text-yellow-400'
-                              : 'text-[#E8D5B7]/30'
+                              : 'text-[var(--text)]/30'
                           }`}
                         >
                           ★
                         </span>
                       ))}
                     </div>
-                    <span className="text-[#E8D5B7] font-semibold">
+                    <span className="text-[var(--text)] font-semibold">
                       {relevantRating.toFixed(1)}
                     </span>
-                    <span className="text-[#E8D5B7]/70 text-sm">
+                    <span className="text-[var(--text-muted)] text-sm">
                       ({relevantCount} {getTranslation(language, 'ratings')})
                     </span>
                     {isRatingClickable && (
-                      <span className="text-[#E8D5B7]/70 text-xs ml-2 underline">
+                      <span className="text-[var(--text-muted)] text-xs ml-2 underline">
                         {getTranslation(language, 'viewAll') || 'View all'}
                       </span>
                     )}
                   </Link>
                 ) : (
-                  <p className="text-[#E8D5B7]/70">
+                  <p className="text-[var(--text-muted)]">
                     {getTranslation(language, 'noRatingsYet')}
                   </p>
                 )}
@@ -398,7 +398,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
           )}
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+            className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
           >
             {getTranslation(language, 'close')}
           </button>

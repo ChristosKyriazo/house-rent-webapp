@@ -148,18 +148,18 @@ export default function FinalizeNotificationModal({
   return (
     <>
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#1A202C] rounded-3xl shadow-2xl border border-[#E8D5B7]/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="p-6 border-b border-[#E8D5B7]/20 flex items-center justify-between">
+        <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="text-4xl">⚠️</div>
-            <h2 className="text-2xl font-bold text-[#E8D5B7]">
+            <h2 className="text-2xl font-bold text-[var(--text)]">
               {getTranslation(language, 'finalizeDeal')}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors text-2xl"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-2xl"
             aria-label="Close"
           >
             ×
@@ -170,7 +170,7 @@ export default function FinalizeNotificationModal({
         <div className="p-6 space-y-6">
           {loading ? (
             <div className="text-center py-8">
-              <p className="text-[#E8D5B7]/70">{getTranslation(language, 'loading')}</p>
+              <p className="text-[var(--text-muted)]">{getTranslation(language, 'loading')}</p>
             </div>
           ) : (
             <>
@@ -183,11 +183,11 @@ export default function FinalizeNotificationModal({
 
               {/* House Information */}
               {home && (
-                <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
-                  <h3 className="text-lg font-semibold text-[#E8D5B7] mb-3">
+                <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)]">
+                  <h3 className="text-lg font-semibold text-[var(--text)] mb-3">
                     {getTranslation(language, 'propertyInformation')}
                   </h3>
-                  <div className="space-y-2 text-[#E8D5B7]/80">
+                  <div className="space-y-2 text-[var(--text-muted)]">
                     <p><span className="font-semibold">{getTranslation(language, 'title')}:</span> {home.title}</p>
                     {home.street && (
                       <p>
@@ -206,11 +206,11 @@ export default function FinalizeNotificationModal({
 
               {/* Sender Information */}
               {sender && (
-                <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
-                  <h3 className="text-lg font-semibold text-[#E8D5B7] mb-3">
+                <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)]">
+                  <h3 className="text-lg font-semibold text-[var(--text)] mb-3">
                     {getTranslation(language, 'senderInformation')}
                   </h3>
-                  <div className="space-y-2 text-[#E8D5B7]/80">
+                  <div className="space-y-2 text-[var(--text-muted)]">
                     <p>
                       <span className="font-semibold">{getTranslation(language, 'name')}:</span> {sender.name || sender.email.split('@')[0]}
                     </p>

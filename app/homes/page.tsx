@@ -6,8 +6,10 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
+import { greekUppercaseNoAnnotations } from '@/lib/utils'
 import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
+import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 
 interface Home {
   id: number
@@ -28,6 +30,8 @@ interface Home {
   energyClass: string | null
   closestUniversity: number | null
   matchPercentage?: number // AI match percentage
+  /** Set when AI detects listing rules vs your query/profile conflict */
+  incompatibilityReason?: string
   owner: {
     email: string
     name: string | null
@@ -444,8 +448,9 @@ function HomesPageInner() {
 
   if (checkingRole) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+        <div className="h-14 w-14 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] motion-safe:animate-spin" />
+        <p className="animate-fade-in-slow text-lg text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -561,24 +566,27 @@ function HomesPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen py-12 px-4">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 shadow-inner motion-safe:animate-fade-in-slow">
+          <GraphicSearchBanner className="h-14 w-full sm:h-[4.5rem]" />
+        </div>
         {/* Step 1: Choose Rent or Buy - Only show if no search type selected */}
         {!searchType && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
+          <div className="mb-6 rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-8 shadow-xl backdrop-blur-sm transition-shadow duration-500 hover:shadow-[var(--accent)]/10">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-[#E8D5B7] flex-1 text-center">{getTranslation(language, 'whatAreYouLookingFor')}</h2>
+              <h2 className="text-2xl font-bold text-[var(--text)] flex-1 text-center">{getTranslation(language, 'whatAreYouLookingFor')}</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
               <button
                 onClick={() => setSearchType('rent')}
-                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-lg shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1"
+                className="btn-primary px-8 py-4 text-lg"
               >
                 🏠 {getTranslation(language, 'rent')}
               </button>
               <button
                 onClick={() => setSearchType('buy')}
-                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-lg shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1"
+                className="btn-primary px-8 py-4 text-lg"
               >
                 💰 {getTranslation(language, 'buy')}
               </button>
@@ -588,16 +596,16 @@ function HomesPageInner() {
 
         {/* Step 2: Choose Filter Type */}
         {searchType && !filterType && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-[#E8D5B7]">{getTranslation(language, 'howDoYouWantToSearch')}</h2>
+              <h2 className="text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'howDoYouWantToSearch')}</h2>
               <button
                 onClick={() => {
                   setSearchType(null)
                   setFilterType(null)
                   setHomes([])
                 }}
-                className="px-3 py-1.5 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
               >
                 ← {getTranslation(language, 'back')}
               </button>
@@ -605,13 +613,13 @@ function HomesPageInner() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
               <button
                 onClick={() => setFilterType('manual')}
-                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-lg shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1"
+                className="btn-primary px-8 py-4 text-lg"
               >
                 🔍 {getTranslation(language, 'manualFilter')}
               </button>
               <button
                 onClick={() => setFilterType('ai')}
-                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1 font-semibold text-lg shadow-lg transition-all"
+                className="btn-primary px-8 py-4 text-lg"
               >
                 🤖 {getTranslation(language, 'aiSearch')}
               </button>
@@ -621,12 +629,12 @@ function HomesPageInner() {
 
         {/* Manual Filter Form */}
         {searchType && filterType === 'manual' && showFilters && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'filterByFeatures')}</h2>
+              <h2 className="text-xl font-bold text-[var(--text)]">{getTranslation(language, 'filterByFeatures')}</h2>
               <button
                 onClick={() => setFilterType(null)}
-                className="px-3 py-1.5 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
               >
                 ← {getTranslation(language, 'back')}
               </button>
@@ -635,7 +643,7 @@ function HomesPageInner() {
               {/* Row 1: City, Country */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="relative">
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'city')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   value={citySearchQuery || (manualFilters.city ? (language === 'el' ? (areas.find(a => a.city === manualFilters.city)?.cityGreek || manualFilters.city) : manualFilters.city) : '')}
@@ -662,17 +670,17 @@ function HomesPageInner() {
                   onBlur={() => {
                     setTimeout(() => setShowCityDropdown(false), 200)
                   }}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'anyCity')}
                 />
                 {showCityDropdown && citySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
                     {citySuggestions.map((city, index) => (
                       <button
                         key={index}
                         type="button"
                         onClick={() => handleCitySelect(city)}
-                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
                         <div className="font-medium">{language === 'el' && city.cityGreek ? city.cityGreek : city.city}</div>
                       </button>
@@ -681,7 +689,7 @@ function HomesPageInner() {
                 )}
               </div>
               <div className="relative">
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'country')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   value={countrySearchQuery || (manualFilters.country ? (language === 'el' ? (areas.find(a => a.country === manualFilters.country)?.countryGreek || manualFilters.country) : manualFilters.country) : '')}
@@ -708,17 +716,17 @@ function HomesPageInner() {
                   onBlur={() => {
                     setTimeout(() => setShowCountryDropdown(false), 200)
                   }}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'anyCountry')}
                 />
                 {showCountryDropdown && countrySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
                     {countrySuggestions.map((country, index) => (
                       <button
                         key={index}
                         type="button"
                         onClick={() => handleCountrySelect(country)}
-                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
                         <div className="font-medium">{language === 'el' && country.countryGreek ? country.countryGreek : country.country}</div>
                       </button>
@@ -730,7 +738,7 @@ function HomesPageInner() {
 
               {/* Row 2: City Area (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'cityArea')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')}</label>
                 <div className="space-y-3">
                   {/* Selected areas as chips */}
                   {selectedAreas.length > 0 && (
@@ -738,13 +746,13 @@ function HomesPageInner() {
                       {selectedAreas.map((area) => (
                         <div
                           key={area}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-[#E8D5B7] text-[#2D3748] rounded-lg"
+                          className="btn-primary inline-flex items-center gap-2 px-3 py-1.5 text-sm"
                         >
                           <span className="text-sm font-medium">{getAreaName(area, allAreas, language)}</span>
                           <button
                             type="button"
                             onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
-                            className="text-[#2D3748] hover:text-red-600 transition-colors"
+                            className="text-[var(--btn-primary-fg)] hover:text-red-600 transition-colors"
                             aria-label={getTranslation(language, 'close')}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -779,17 +787,17 @@ function HomesPageInner() {
                       onBlur={() => {
                         setTimeout(() => setShowAreaDropdown(false), 200)
                       }}
-                      className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                      className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                       placeholder={getTranslation(language, 'selectCityArea')}
                     />
                     {showAreaDropdown && areaSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
                         {areaSuggestions.map((area) => (
                           <button
                             key={area.id}
                             type="button"
                             onClick={() => handleAreaSelect(area)}
-                            className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                            className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                           >
                             <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
                           </button>
@@ -803,24 +811,24 @@ function HomesPageInner() {
               {/* Row 3: Min Price, Max Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minPrice')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minPrice')}</label>
                   <input
                     type="number"
                     min="0"
                     value={manualFilters.minPrice}
                     onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxPrice')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxPrice')}</label>
                   <input
                     type="number"
                     min="0"
                     value={manualFilters.maxPrice}
                     onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                   />
                 </div>
@@ -829,24 +837,24 @@ function HomesPageInner() {
               {/* Row 4: Min Size, Max Size */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minSize')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minSize')}</label>
                   <input
                     type="number"
                     min="0"
                     value={manualFilters.minSize}
                     onChange={(e) => setManualFilters({ ...manualFilters, minSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxSize')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxSize')}</label>
                   <input
                     type="number"
                     min="0"
                     value={manualFilters.maxSize}
                     onChange={(e) => setManualFilters({ ...manualFilters, maxSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                   />
                 </div>
@@ -855,11 +863,11 @@ function HomesPageInner() {
               {/* Row 5: Heating Category, Heating Agent */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingCategory')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')}</label>
                   <select
                     value={manualFilters.heatingCategory}
                     onChange={(e) => setManualFilters({ ...manualFilters, heatingCategory: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
                   >
                     <option value="">{getTranslation(language, 'any')}</option>
                     <option value="central">{translateValue(language, 'central')}</option>
@@ -867,11 +875,11 @@ function HomesPageInner() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingAgent')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')}</label>
                   <select
                     value={manualFilters.heatingAgent}
                     onChange={(e) => setManualFilters({ ...manualFilters, heatingAgent: e.target.value })}
-                    className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7]"
+                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
                   >
                     <option value="">{getTranslation(language, 'any')}</option>
                     <option value="oil">{translateValue(language, 'oil')}</option>
@@ -885,24 +893,24 @@ function HomesPageInner() {
               {/* Row 6: Min Bedrooms, Max Bedrooms */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'minBedrooms')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minBedrooms')}</label>
                 <input
                   type="number"
                   min="0"
                   value={manualFilters.minBedrooms}
                   onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder="0"
                 />
               </div>
               <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
                 <input
                   type="number"
                   min="0"
                   value={manualFilters.maxBedrooms}
                   onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                 />
               </div>
@@ -910,14 +918,14 @@ function HomesPageInner() {
 
               {/* Row 7: Year Built (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'yearBuilt')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')}</label>
                 <input
                   type="number"
                   min="1900"
                   max={new Date().getFullYear()}
                   value={manualFilters.yearBuilt}
                   onChange={(e) => setManualFilters({ ...manualFilters, yearBuilt: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'any')}
                 />
               </div>
@@ -929,9 +937,9 @@ function HomesPageInner() {
                     type="checkbox"
                     checked={excludeInquired}
                     onChange={(e) => setExcludeInquired(e.target.checked)}
-                    className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
                   />
-                  <span className="text-sm font-medium text-[#E8D5B7]">
+                  <span className="text-sm font-medium text-[var(--text)]">
                     {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
                   </span>
                 </label>
@@ -940,9 +948,9 @@ function HomesPageInner() {
                     type="checkbox"
                     checked={excludeApproved}
                     onChange={(e) => setExcludeApproved(e.target.checked)}
-                    className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
                   />
-                  <span className="text-sm font-medium text-[#E8D5B7]">
+                  <span className="text-sm font-medium text-[var(--text)]">
                     {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
                   </span>
                 </label>
@@ -951,7 +959,7 @@ function HomesPageInner() {
             <button
               onClick={handleManualFilter}
               disabled={loading}
-              className="w-full sm:w-auto px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold disabled:opacity-50"
+              className="btn-primary w-full px-6 py-3 sm:w-auto disabled:opacity-50"
             >
               {loading ? getTranslation(language, 'searching') : getTranslation(language, 'applyFilters')}
             </button>
@@ -961,9 +969,9 @@ function HomesPageInner() {
         {/* AI Search Form */}
         {/* AI Search Input - Show when not active OR when "Use AI for another search" is clicked */}
         {searchType && filterType === 'ai' && (showFilters || (!isAISearchActive && homes.length > 0)) && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 mb-6">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[#E8D5B7]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
+              <h2 className="text-xl font-bold text-[var(--text)]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
               <button
                 onClick={() => {
                   setFilterType(null)
@@ -978,18 +986,18 @@ function HomesPageInner() {
                   sessionStorage.removeItem('homesFilterType')
                   sessionStorage.removeItem('homesAiQuery')
                 }}
-                className="px-3 py-1.5 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
               >
                 ← {getTranslation(language, 'back')}
               </button>
             </div>
-            <p className="text-[#E8D5B7]/70 mb-4">
+            <p className="text-[var(--text-muted)] mb-4">
               {getTranslation(language, 'aiSearchDescription')}
             </p>
             <textarea
               value={aiQuery}
               onChange={(e) => setAiQuery(e.target.value)}
-              className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 mb-4 resize-none"
+              className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50 mb-4 resize-none"
               rows={6}
               placeholder={
                 searchType === 'buy'
@@ -1009,9 +1017,9 @@ function HomesPageInner() {
                   type="checkbox"
                   checked={excludeInquired}
                   onChange={(e) => setExcludeInquired(e.target.checked)}
-                  className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
                 />
-                <span className="text-sm font-medium text-[#E8D5B7]">
+                <span className="text-sm font-medium text-[var(--text)]">
                   {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
                 </span>
               </label>
@@ -1020,9 +1028,9 @@ function HomesPageInner() {
                   type="checkbox"
                   checked={excludeApproved}
                   onChange={(e) => setExcludeApproved(e.target.checked)}
-                  className="w-5 h-5 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] focus:ring-offset-0 focus:ring-offset-[#2D3748] cursor-pointer"
+                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
                 />
-                <span className="text-sm font-medium text-[#E8D5B7]">
+                <span className="text-sm font-medium text-[var(--text)]">
                   {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
                 </span>
               </label>
@@ -1031,7 +1039,7 @@ function HomesPageInner() {
             <button
               onClick={handleAISearch}
               disabled={loading || !aiQuery.trim()}
-              className="w-full sm:w-auto px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold disabled:opacity-50"
+              className="btn-primary w-full px-6 py-3 sm:w-auto disabled:opacity-50"
             >
               {loading ? getTranslation(language, 'searchingWithAi') : getTranslation(language, 'aiSearch')}
             </button>
@@ -1049,13 +1057,13 @@ function HomesPageInner() {
                 setHomes([])
                 setShowFilters(true)
               }}
-              className="px-6 py-3 bg-[#2D3748] border border-[#E8D5B7]/30 text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] hover:border-[#E8D5B7] transition-all font-semibold"
+              className="px-6 py-3 bg-[var(--ink-soft)] border border-[var(--border-subtle)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] hover:border-[var(--accent)] transition-all font-semibold"
             >
               ← {getTranslation(language, 'back')}
             </button>
             <button
               onClick={handleNewAISearch}
-              className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+              className="btn-primary px-6 py-3"
             >
               {getTranslation(language, 'useAIForAnotherSearch')}
             </button>
@@ -1069,7 +1077,7 @@ function HomesPageInner() {
             <div className="relative">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+                className="btn-primary px-6 py-3"
               >
                 {getTranslation(language, 'filters') || 'Filters'}
               </button>
@@ -1078,22 +1086,22 @@ function HomesPageInner() {
             <div className="relative order-dropdown-container">
               <button
                 onClick={() => setShowOrderDropdown(!showOrderDropdown)}
-                className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+                className="btn-primary px-6 py-3"
               >
                 {getTranslation(language, 'order') || 'Order'}
               </button>
               {showOrderDropdown && (
-                <div className="absolute z-10 mt-2 w-64 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl shadow-xl overflow-hidden">
+                <div className="absolute z-10 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden">
                   <button
                     onClick={() => {
                       setSortOrder('price-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceAscending') || 'Price Ascending'}</span>
                     {sortOrder === 'price-asc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                   <button
@@ -1101,11 +1109,11 @@ function HomesPageInner() {
                       setSortOrder('price-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceDescending') || 'Price Descending'}</span>
                     {sortOrder === 'price-desc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                   <button
@@ -1113,11 +1121,11 @@ function HomesPageInner() {
                       setSortOrder('size-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeAscending') || 'Size Ascending'}</span>
                     {sortOrder === 'size-asc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                   <button
@@ -1125,11 +1133,11 @@ function HomesPageInner() {
                       setSortOrder('size-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeDescending') || 'Size Descending'}</span>
                     {sortOrder === 'size-desc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                   <button
@@ -1137,11 +1145,11 @@ function HomesPageInner() {
                       setSortOrder('date-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateAscending') || 'Date of Publish Ascending'}</span>
                     {sortOrder === 'date-asc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                   <button
@@ -1149,11 +1157,11 @@ function HomesPageInner() {
                       setSortOrder('date-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateDescending') || 'Date of Publish Descending'}</span>
                     {sortOrder === 'date-desc' && (
-                      <span className="text-[#E8D5B7]">✓</span>
+                      <span className="text-[var(--text)]">✓</span>
                     )}
                   </button>
                 </div>
@@ -1166,17 +1174,17 @@ function HomesPageInner() {
         {(filterType && homes.length > 0) && (
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-[#E8D5B7]">
+              <h1 className="text-4xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'availableProperties')} {searchType === 'rent' ? `(${getTranslation(language, 'rent')})` : `(${getTranslation(language, 'buy')})`}
               </h1>
-              <p className="text-[#E8D5B7]/70 mt-2">
+              <p className="text-[var(--text-muted)] mt-2">
                 {homes.length} {homes.length === 1 ? getTranslation(language, 'listing') : getTranslation(language, 'listings')} {getTranslation(language, 'found')}
               </p>
             </div>
             {displayRole === 'owner' && (
               <Link
                 href="/homes/new"
-                className="inline-flex items-center px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-sm shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5"
+                className="btn-primary inline-flex items-center px-5 py-2 text-sm"
               >
                 + {getTranslation(language, 'newListing')}
               </Link>
@@ -1186,8 +1194,8 @@ function HomesPageInner() {
 
         {/* Homes Grid */}
         {homes.length === 0 && filterType ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
-            <p className="text-xl text-[#E8D5B7]/70">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
+            <p className="text-xl text-[var(--text-muted)]">
               {filterType === 'manual' ? getTranslation(language, 'noPropertiesFound') : getTranslation(language, 'noPropertiesFoundAi')}
             </p>
           </div>
@@ -1236,24 +1244,34 @@ function HomesPageInner() {
               return (
               <div
                 key={home.id}
-                  className={`relative bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
+                  className={`relative bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
                     status 
-                      ? 'border-[#E8D5B7]/10 opacity-60' 
-                      : 'border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40'
+                      ? 'border-[var(--border-subtle)] opacity-60' 
+                      : 'border-[var(--border-subtle)] hover:border-[var(--accent)]/35'
                   }`}
                 >
                   {/* AI Match Percentage Badge - Top Right */}
                   {home.matchPercentage !== undefined && (
-                    <div className="absolute top-4 right-4 z-20">
-                      <div className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
-                        home.matchPercentage >= 80 
-                          ? 'bg-green-500/90 text-white border-green-600' 
-                          : home.matchPercentage >= 60
-                          ? 'bg-yellow-500/90 text-white border-yellow-600'
-                          : 'bg-orange-500/90 text-white border-orange-600'
-                      }`}>
+                    <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
+                      <div
+                        className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
+                          home.incompatibilityReason
+                            ? 'border-red-700 bg-red-600/95 text-white'
+                            : home.matchPercentage >= 80
+                              ? 'border-green-600 bg-green-500/90 text-white'
+                              : home.matchPercentage >= 60
+                                ? 'border-yellow-600 bg-yellow-500/90 text-white'
+                                : 'border-orange-600 bg-orange-500/90 text-white'
+                        }`}
+                        title={home.incompatibilityReason || undefined}
+                      >
                         {home.matchPercentage.toFixed(1)}% Match
                       </div>
+                      {home.incompatibilityReason && (
+                        <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">
+                          {home.incompatibilityReason}
+                        </p>
+                      )}
                     </div>
                   )}
                   
@@ -1270,8 +1288,10 @@ function HomesPageInner() {
                           <span className="text-lg">
                             {hasInquiry ? '🏷️' : isApproved ? '✅' : '❌'}
                           </span>
-                          <p className="text-sm font-black uppercase tracking-wide">
-                            {bannerText}
+                          <p
+                            className={`text-sm font-black tracking-wide ${language === 'el' ? '' : 'uppercase'}`}
+                          >
+                            {language === 'el' ? greekUppercaseNoAnnotations(bannerText) : bannerText}
                           </p>
                         </div>
                         {/* Sticker shine effect */}
@@ -1285,18 +1305,18 @@ function HomesPageInner() {
                       <div className="mb-4">
                         <div className="flex items-start justify-between mb-2">
                           <h2 className={`text-2xl font-bold flex-1 ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>{home.title}</h2>
                           <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
-                            home.listingType === 'rent' 
-                              ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                              : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+                            home.listingType === 'rent'
+                              ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
+                              : 'border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] text-[var(--text)]'
                           }`}>
                             {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
                           </span>
                         </div>
                         <p className={`flex items-center gap-1 ${
-                          status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
+                          status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                         }`}>
                           <span>📍</span>
                           {home.area && (
@@ -1313,52 +1333,52 @@ function HomesPageInner() {
                           description={home.description}
                           descriptionGreek={home.descriptionGreek}
                           className={`mb-4 line-clamp-2 ${
-                            status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
+                            status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                           }`}
                         />
                       )}
 
                       <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
-                        status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
                         <div>
                           <p className={`text-3xl font-bold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             €{home.pricePerMonth.toLocaleString()}
                           </p>
                           <p className={`text-sm ${
-                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                           }`}>
                             {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className={`text-sm font-semibold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             {home.bedrooms} <span className={`${
-                              hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                             }`}>{getTranslation(language, 'bedroomsShort')}</span>
                           </p>
                           <p className={`text-sm font-semibold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             {home.bathrooms} <span className={`${
-                              hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                             }`}>{getTranslation(language, 'bathroomsShort')}</span>
                           </p>
                         </div>
                       </div>
 
                       <div className={`pt-4 border-t ${
-                        status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
                         <p className={`text-xs ${
-                          hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                         }`}>
                           {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>{home.owner.name || home.owner.email}</span>
                         </p>
                       </div>
@@ -1371,18 +1391,18 @@ function HomesPageInner() {
                       <div className="mb-4">
                         <div className="flex items-start justify-between mb-2">
                           <h2 className={`text-2xl font-bold flex-1 ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>{home.title}</h2>
                           <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
-                            home.listingType === 'rent' 
-                              ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                              : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+                            home.listingType === 'rent'
+                              ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
+                              : 'border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] text-[var(--text)]'
                           }`}>
                             {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
                           </span>
                         </div>
                         <p className={`flex items-center gap-1 ${
-                          status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/70'
+                          status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                         }`}>
                           <span>📍</span>
                           {home.area && (
@@ -1399,39 +1419,39 @@ function HomesPageInner() {
                           description={home.description}
                           descriptionGreek={home.descriptionGreek}
                           className={`mb-4 line-clamp-2 ${
-                            status ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/80'
+                            status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                           }`}
                         />
                       )}
 
                       <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
-                        status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
                         <div>
                           <p className={`text-3xl font-bold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             €{home.pricePerMonth.toLocaleString()}
                           </p>
                           <p className={`text-sm ${
-                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                           }`}>
                             {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className={`text-sm font-semibold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             {home.bedrooms} <span className={`${
-                              hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                             }`}>{getTranslation(language, 'bedroomsShort')}</span>
                           </p>
                           <p className={`text-sm font-semibold ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>
                             {home.bathrooms} <span className={`${
-                              hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                             }`}>{getTranslation(language, 'bathroomsShort')}</span>
                           </p>
                         </div>
@@ -1440,26 +1460,26 @@ function HomesPageInner() {
                       {/* Energy Class - Only if provided, styled like parking */}
                       {home.energyClass && (
                         <div className={`mb-4 pt-4 border-t ${
-                          status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                          status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                         }`}>
                           <p className={`text-xs ${
-                            hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                           }`}>
                             {getTranslation(language, 'energyClass')}: <span className={`font-medium ${
-                              status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                              status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                             }`}>{home.energyClass}</span>
                           </p>
                         </div>
                       )}
 
                       <div className={`pt-4 border-t ${
-                        status ? 'border-[#E8D5B7]/10' : 'border-[#E8D5B7]/20'
+                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
                         <p className={`text-xs ${
-                          hasInquiry ? 'text-[#E8D5B7]/40' : 'text-[#E8D5B7]/60'
+                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
                         }`}>
                           {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[#E8D5B7]/50' : 'text-[#E8D5B7]'
+                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
                           }`}>{home.owner.name || home.owner.email}</span>
                         </p>
                       </div>
@@ -1479,8 +1499,8 @@ export default function HomesPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#2D3748] flex items-center justify-center px-4">
-          <p className="text-[#E8D5B7]">Loading...</p>
+        <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center px-4">
+          <p className="text-[var(--text)]">Loading...</p>
         </div>
       }
     >

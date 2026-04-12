@@ -92,15 +92,15 @@ export default function ApprovedInquiriesPage() {
   }, [])
 
   if (loading) {
-    return <div className="min-h-screen bg-[#2D3748] flex items-center justify-center text-[#E8D5B7]">{getTranslation(language, 'loading')}</div>
+    return <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center text-[var(--text)]">{getTranslation(language, 'loading')}</div>
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold text-[#E8D5B7] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
+        <h1 className="text-4xl font-bold text-[var(--text)] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
         {approvedInquiries.length === 0 ? (
-          <div className="bg-[#1A202C]/80 rounded-3xl p-10 border border-[#E8D5B7]/20 text-center text-[#E8D5B7]/70">
+          <div className="bg-[var(--surface)] rounded-3xl p-10 border border-[var(--border-subtle)] text-center text-[var(--text-muted)]">
             {getTranslation(language, 'noApprovedInquiries')}
           </div>
         ) : (
@@ -113,19 +113,19 @@ export default function ApprovedInquiriesPage() {
                 inq.status === 'awaiting_finalization'
               const showScheduled = appointment !== null || serverSaysScheduled
               return (
-                <div key={inq.id} className="bg-[#1A202C]/80 rounded-3xl p-6 border border-[#E8D5B7]/20">
-                  <h2 className="text-2xl font-bold text-[#E8D5B7]">{inq.home.title}</h2>
-                  <p className="text-[#E8D5B7]/70 text-sm mt-1">
+                <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
+                  <h2 className="text-2xl font-bold text-[var(--text)]">{inq.home.title}</h2>
+                  <p className="text-[var(--text-muted)] text-sm mt-1">
                     {inq.home.street ? `${inq.home.street}, ` : ''}
                     {getCityName(inq.home.city, areas, language)}, {getCountryName(inq.home.country, areas, language)}
                     {inq.home.area ? ` • ${getAreaName(inq.home.area, areas, language)}` : ''}
                   </p>
-                  <p className="text-[#E8D5B7]/80 text-sm mt-3">
+                  <p className="text-[var(--text-muted)] text-sm mt-3">
                     {isOwner ? `${getTranslation(language, 'user')}: ${inq.user?.name || inq.user?.email || '-'}` : `${getTranslation(language, 'owner')}: ${inq.owner?.name || inq.owner?.email || '-'}`}
                   </p>
 
                   {inq.contactInfo && (
-                    <div className="mt-3 p-3 rounded-xl bg-[#2D3748]/60 border border-[#E8D5B7]/20 text-sm text-[#E8D5B7]/85">
+                    <div className="mt-3 p-3 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] text-sm text-[var(--text)]/85">
                       {inq.contactInfo.phone && <p>Phone: {inq.contactInfo.phone}</p>}
                       {inq.contactInfo.timeFrame && <p>Time frame: {inq.contactInfo.timeFrame}</p>}
                       {inq.contactInfo.appointmentThresholdMinutes && <p>Appointment duration: {inq.contactInfo.appointmentThresholdMinutes} min</p>}
@@ -150,7 +150,7 @@ export default function ApprovedInquiriesPage() {
                           </p>
                           <Link
                             href="/homes/calendar"
-                            className="inline-block text-[#E8D5B7] underline font-medium hover:text-white"
+                            className="inline-block text-[var(--text)] underline font-medium hover:text-white"
                           >
                             {getTranslation(language, 'scheduledBookings')}
                           </Link>
@@ -160,7 +160,7 @@ export default function ApprovedInquiriesPage() {
                   ) : (
                     !isOwner && (
                       <div className="mt-4">
-                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="inline-block px-5 py-2.5 bg-[#E8D5B7] text-[#2D3748] rounded-xl font-semibold hover:bg-[#D4C19F] transition-all">
+                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="inline-block px-5 py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
                           {getTranslation(language, 'viewAvailableSlots')}
                         </Link>
                       </div>

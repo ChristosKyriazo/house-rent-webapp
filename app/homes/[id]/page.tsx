@@ -517,8 +517,8 @@ export default function HomeDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -572,20 +572,20 @@ export default function HomeDetailPage() {
     : (isOwner ? 'sell' : 'buy')
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Back Button and Edit Button */}
         <div className="flex items-center justify-between">
           <Link
             href={getReturnUrl()}
-            className="inline-flex items-center px-4 py-2 text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+            className="inline-flex items-center px-4 py-2 text-[var(--text)] hover:text-[var(--accent)] transition-colors"
           >
             ← {getReturnButtonText()}
           </Link>
           {fromMyListings && (
             <Link
               href={`/homes/${home.key}/edit`}
-              className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+              className="px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm"
             >
               {getTranslation(language, 'edit')}
             </Link>
@@ -595,7 +595,7 @@ export default function HomeDetailPage() {
         {/* Photo Gallery - Full Width */}
         <div>
             {photos.length > 0 ? (
-              <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[#E8D5B7]/20">
+              <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)]">
                 {/* Main featured photo */}
                 <div className="relative aspect-video group cursor-pointer" onClick={() => openLightbox(currentPhotoIndex)}>
                   <img
@@ -620,7 +620,7 @@ export default function HomeDetailPage() {
                           e.stopPropagation()
                           prevPhoto()
                         }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-[var(--btn-primary-bg)]/90 hover:bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
                         aria-label="Previous photo"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -632,7 +632,7 @@ export default function HomeDetailPage() {
                           e.stopPropagation()
                           nextPhoto()
                         }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-[var(--btn-primary-bg)]/90 hover:bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-full p-2.5 transition-all shadow-lg hover:shadow-xl z-10"
                         aria-label="Next photo"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -650,7 +650,7 @@ export default function HomeDetailPage() {
                               setCurrentPhotoIndex(index)
                             }}
                             className={`w-2.5 h-2.5 rounded-full transition-all ${
-                              index === currentPhotoIndex ? 'bg-[#E8D5B7] w-8' : 'bg-white/60 hover:bg-white/80'
+                              index === currentPhotoIndex ? 'bg-[var(--btn-primary-bg)] w-8' : 'bg-white/60 hover:bg-white/80'
                             }`}
                             aria-label={`Go to photo ${index + 1}`}
                           />
@@ -658,7 +658,7 @@ export default function HomeDetailPage() {
                       </div>
                       
                       {/* Photo counter */}
-                      <div className="absolute top-4 right-4 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] px-3 py-1.5 rounded-full text-sm font-medium border border-[#E8D5B7]/30">
+                      <div className="absolute top-4 right-4 bg-[var(--surface)] backdrop-blur-sm text-[var(--text)] px-3 py-1.5 rounded-full text-sm font-medium border border-[var(--border-subtle)]">
                         {currentPhotoIndex + 1} / {photos.length}
                       </div>
                     </>
@@ -667,7 +667,7 @@ export default function HomeDetailPage() {
                 
                 {/* Thumbnail scrollable row below main photo */}
                 {photos.length > 1 && (
-                  <div className="relative p-4 bg-[#1A202C]/40 group">
+                  <div className="relative p-4 bg-[var(--ink-soft)]/50 group">
                     <div 
                       ref={thumbnailScrollRef}
                       className="flex gap-2 overflow-x-auto pb-2 scroll-smooth scrollbar-hide" 
@@ -688,8 +688,8 @@ export default function HomeDetailPage() {
                           onClick={() => setCurrentPhotoIndex(index)}
                           className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                             index === currentPhotoIndex
-                              ? 'border-[#E8D5B7] ring-2 ring-[#E8D5B7]/50 scale-110'
-                              : 'border-transparent hover:border-[#E8D5B7]/50 opacity-70 hover:opacity-100'
+                              ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/45 scale-110'
+                              : 'border-transparent hover:border-[var(--accent)]/45 opacity-70 hover:opacity-100'
                           }`}
                         >
                           <img
@@ -702,7 +702,7 @@ export default function HomeDetailPage() {
                     </div>
                     {/* Custom slider - fixed size bar, full width track */}
                     <div 
-                      className="absolute bottom-2 left-4 right-4 h-2 bg-[#2D3748]/80 rounded-full cursor-pointer"
+                      className="absolute bottom-2 left-4 right-4 h-2 bg-[var(--ink-soft)]/80 rounded-full cursor-pointer"
                       onMouseDown={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -741,7 +741,7 @@ export default function HomeDetailPage() {
                       }}
                     >
                       <div 
-                        className={`h-full bg-[#E8D5B7] rounded-full w-16 absolute ${
+                        className={`h-full bg-[var(--btn-primary-bg)] rounded-full w-16 absolute ${
                           isDragging ? '' : 'transition-all duration-100'
                         }`}
                         style={{ 
@@ -753,11 +753,11 @@ export default function HomeDetailPage() {
                 )}
               </div>
             ) : (
-              <div className="relative bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[#E8D5B7]/20">
+              <div className="relative bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)]">
                 <div className="relative aspect-video flex flex-col items-center justify-center">
                   {/* No Photo Graphic */}
                   <svg
-                    className="w-32 h-32 text-[#E8D5B7]/40 mb-4"
+                    className="w-32 h-32 text-[var(--text-muted)] mb-4"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -770,23 +770,23 @@ export default function HomeDetailPage() {
                       d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  <p className="text-[#E8D5B7]/70 text-lg">{getTranslation(language, 'noPhotos')}</p>
+                  <p className="text-[var(--text-muted)] text-lg">{getTranslation(language, 'noPhotos')}</p>
                 </div>
               </div>
             )}
         </div>
 
         {/* House Details Card - Full width, aligned with photos */}
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-6">
               <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
-              <h1 className="text-4xl font-bold text-[#E8D5B7]">{home.title}</h1>
+              <h1 className="text-4xl font-bold text-[var(--text)]">{home.title}</h1>
                 
                 {/* Listing Type Badge - Outside owner box, top right */}
               <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
                   displayListingType === 'rent' 
-                  ? 'bg-[#E8D5B7] text-[#2D3748]' 
-                  : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]'
+                  ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]' 
+                  : 'bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--accent)]'
               }`}>
                   {displayListingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, displayListingType)}`}
               </span>
@@ -795,7 +795,7 @@ export default function HomeDetailPage() {
               {/* Location and Owner Info in same row */}
               <div className="flex items-start gap-4 mb-4">
                 {/* Location Info - Left side */}
-                <div className="flex-1 text-[#E8D5B7]/70 flex flex-col gap-1 text-lg">
+                <div className="flex-1 text-[var(--text-muted)] flex flex-col gap-1 text-lg">
               {home.street && (
                 <p className="flex items-center gap-1">
                   <span>📍</span>
@@ -828,19 +828,19 @@ export default function HomeDetailPage() {
                     return (
                       <div className="mt-2 flex flex-col gap-1">
                         <p className="flex items-center gap-1">
-                          <span className="text-[#E8D5B7]">
+                          <span className="text-[var(--text)]">
                             {getTranslation(language, 'cityArea')}: <strong>{getAreaName(home.area, areas, language)}</strong>
                           </span>
                         </p>
                         {areaData && (
                           <>
                             {areaData.vibe && (
-                              <p className="flex items-center gap-1 text-[#E8D5B7]">
+                              <p className="flex items-center gap-1 text-[var(--text)]">
                                 {getTranslation(language, 'vibe')}: <strong>{translateValue(language, areaData.vibe)}</strong>
                               </p>
                             )}
                             {areaData.safety != null && (
-                              <p className="flex items-center gap-1 text-[#E8D5B7]">
+                              <p className="flex items-center gap-1 text-[var(--text)]">
                                 {getTranslation(language, 'safety')}: <strong>{areaData.safety.toFixed(1)}/10</strong>
                               </p>
                             )}
@@ -856,16 +856,16 @@ export default function HomeDetailPage() {
                   // For brokers, show generic "House Owner" with clickable rating (no modal)
                   <Link
                     href={`/homes/ratings/${home.key}`}
-                    className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
                   >
                     {/* Owner Title - At the top */}
-                    <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">
+                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
                       {getTranslation(language, 'houseOwner') || 'House Owner'}
                     </h2>
                     
                     {/* Rating - Centered and prominent */}
                     <div className="flex flex-col items-center justify-center flex-1">
-                      <span className="text-xl font-bold text-[#E8D5B7]">
+                      <span className="text-xl font-bold text-[var(--text)]">
                         {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
                           ? home.owner.ratings.ownerRating.toFixed(1) 
                           : '0.0'}
@@ -877,11 +877,11 @@ export default function HomeDetailPage() {
                         size="sm" 
                       />
                       {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
-                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                        <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
                           {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
                       ) : (
-                        <span className="text-xs text-[#E8D5B7]/50 italic">
+                        <span className="text-xs text-[var(--text)]/50 italic">
                           {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
                         </span>
                       )}
@@ -891,15 +891,15 @@ export default function HomeDetailPage() {
                   // For regular owners, show name and rating with modal
                   <div 
                     onClick={() => setShowOwnerModal(true)}
-                    className="px-4 py-4 rounded-xl bg-[#2D3748]/50 border border-[#E8D5B7]/20 cursor-pointer hover:border-[#E8D5B7]/40 hover:bg-[#2D3748]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
                   >
                     {/* Owner Title - At the top */}
-                    <h2 className="text-xs font-medium text-[#E8D5B7]/70 text-center">{getTranslation(language, 'owner')}</h2>
+                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">{getTranslation(language, 'owner')}</h2>
                     
                     {/* Name and Rating - Centered and prominent */}
                     <div className="flex flex-col items-center justify-center flex-1">
                       {/* Name */}
-                      <p className="text-base font-semibold text-[#E8D5B7] text-center mb-2">
+                      <p className="text-base font-semibold text-[var(--text)] text-center mb-2">
                         {home.owner.name || home.owner.email.split('@')[0]}
                       </p>
                       
@@ -910,29 +910,29 @@ export default function HomeDetailPage() {
                           onClick={(e) => e.stopPropagation()}
                           className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
                         >
-                          <span className="text-xl font-bold text-[#E8D5B7]">
+                          <span className="text-xl font-bold text-[var(--text)]">
                             {home.owner.ratings.ownerRating.toFixed(1)}
                           </span>
                           <StarRating rating={home.owner.ratings!.ownerRating!} size="sm" />
                           {home.owner.ratings.ownerCount > 0 && (
-                            <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                            <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
                               {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                             </span>
                           )}
                         </Link>
                       ) : (
                         <div className="flex flex-col items-center gap-1">
-                          <span className="text-xl font-bold text-[#E8D5B7]">
+                          <span className="text-xl font-bold text-[var(--text)]">
                             0.0
                           </span>
                           <div className="flex items-center gap-0.5">
                             {[...Array(5)].map((_, i) => (
-                              <span key={i} className="text-sm text-[#E8D5B7]/30">
+                              <span key={i} className="text-sm text-[var(--text)]/30">
                                 ⭐
                               </span>
                             ))}
                           </div>
-                          <span className="text-xs text-[#E8D5B7]/60">
+                          <span className="text-xs text-[var(--text-muted)]">
                             {getTranslation(language, 'notRatedYet')}
                           </span>
                         </div>
@@ -944,11 +944,11 @@ export default function HomeDetailPage() {
 
               {/* Description - Below the row */}
           {translatedDescription && (
-                <div className="mb-6 pb-6 border-t border-b border-[#E8D5B7]/20 pt-6">
-                  <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'description')}</h2>
-                  <div className="text-[#E8D5B7]/80 leading-relaxed space-y-4">
+                <div className="mb-6 pb-6 border-t border-b border-[var(--border-subtle)] pt-6">
+                  <h2 className="text-lg font-semibold text-[var(--text)] mb-4">{getTranslation(language, 'description')}</h2>
+                  <div className="text-[var(--text-muted)] leading-relaxed space-y-4">
                     {translatedDescription.split(/\n\n+/).filter(p => p.trim().length > 0).map((paragraph, index) => (
-                      <p key={index} className="text-[#E8D5B7]/80 leading-relaxed">
+                      <p key={index} className="text-[var(--text-muted)] leading-relaxed">
                         {paragraph.trim()}
                       </p>
                     ))}
@@ -958,62 +958,62 @@ export default function HomeDetailPage() {
             </div>
 
             {/* Price, Size, Floor Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
             <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'price')}</p>
-              <p className="text-3xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'price')}</p>
+              <p className="text-3xl font-bold text-[var(--text)]">
                 €{home.pricePerMonth.toLocaleString()}
               </p>
               </div>
               <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
-                <p className="text-3xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
+                <p className="text-3xl font-bold text-[var(--text)]">
                   {home.sizeSqMeters !== null && home.sizeSqMeters !== undefined ? `${home.sizeSqMeters} m²` : '-'}
               </p>
             </div>
             <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'floor')}</p>
-                <p className="text-3xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'floor')}</p>
+                <p className="text-3xl font-bold text-[var(--text)]">
                   {home.floor !== null && home.floor !== undefined ? home.floor : '-'}
                 </p>
               </div>
             </div>
 
             {/* Heating Category, Bedrooms, Year Built Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
             <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'heatingCategory')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'heatingCategory')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">
                   {home.heatingCategory ? translateValue(language, home.heatingCategory) : '-'}
                 </p>
             </div>
               <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'bedrooms')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">{home.bedrooms}</p>
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bedrooms')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">{home.bedrooms}</p>
           </div>
                 <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'yearBuilt')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearBuilt')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">
                   {home.yearBuilt !== null && home.yearBuilt !== undefined ? home.yearBuilt : '-'}
                 </p>
                 </div>
                 </div>
 
             {/* Heating Agent, Bathrooms, Year Renovated Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[#E8D5B7]/20">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
                 <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'heatingAgent')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'heatingAgent')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">
                   {home.heatingAgent ? translateValue(language, home.heatingAgent) : '-'}
                 </p>
                 </div>
                 <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'bathrooms')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">{home.bathrooms}</p>
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bathrooms')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">{home.bathrooms}</p>
                 </div>
                 <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'yearRenovated')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearRenovated')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">
                   {home.yearRenovated !== null && home.yearRenovated !== undefined ? home.yearRenovated : '-'}
                 </p>
                 </div>
@@ -1021,14 +1021,14 @@ export default function HomeDetailPage() {
 
             {/* Energy Class and Parking - Together */}
             {(home.energyClass || (home.parking !== null && home.parking !== undefined)) && (
-              <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
+              <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
                 {home.energyClass && (
-                  <p className="text-sm text-[#E8D5B7]/70 mb-1">
+                  <p className="text-sm text-[var(--text-muted)] mb-1">
                     {getTranslation(language, 'energyClass')}: {home.energyClass}
                   </p>
                 )}
                 {home.parking !== null && home.parking !== undefined && (
-                  <p className="text-sm text-[#E8D5B7]/70">
+                  <p className="text-sm text-[var(--text-muted)]">
                     {getTranslation(language, 'parking')}: {home.parking === true ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
                   </p>
                 )}
@@ -1039,44 +1039,44 @@ export default function HomeDetailPage() {
             {((home.closestMetro != null) || (home.closestBus != null) || (home.closestSchool != null) || 
               (home.closestHospital != null) || (home.closestPark != null) ||
               true) && ( // Always show section to display university distance
-              <div className="mb-6 pb-6 border-b border-[#E8D5B7]/20">
-                <h2 className="text-lg font-semibold text-[#E8D5B7] mb-4">{getTranslation(language, 'distances')}</h2>
+              <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
+                <h2 className="text-lg font-semibold text-[var(--text)] mb-4">{getTranslation(language, 'distances')}</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {home.closestMetro != null && (
                     <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🚇 {getTranslation(language, 'closestMetro')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestMetro.toFixed(1)} km</p>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🚇 {getTranslation(language, 'closestMetro')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestMetro.toFixed(1)} km</p>
                     </div>
                   )}
                   {home.closestBus != null && (
                     <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🚌 {getTranslation(language, 'closestBus')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestBus.toFixed(1)} km</p>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🚌 {getTranslation(language, 'closestBus')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestBus.toFixed(1)} km</p>
                     </div>
                   )}
                   {home.closestPark != null && (
                     <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🌳 {getTranslation(language, 'closestPark')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestPark.toFixed(1)} km</p>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🌳 {getTranslation(language, 'closestPark')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestPark.toFixed(1)} km</p>
                     </div>
                   )}
                   {home.closestSchool != null && (
                     <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🏫 {getTranslation(language, 'closestSchool')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestSchool.toFixed(1)} km</p>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🏫 {getTranslation(language, 'closestSchool')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestSchool.toFixed(1)} km</p>
                     </div>
                   )}
                   {/* University distance - always show, display "-" if null */}
                   <div>
-                    <p className="text-sm text-[#E8D5B7]/70 mb-1">🎓 {getTranslation(language, 'closestUniversity')}</p>
-                    <p className="text-xl font-bold text-[#E8D5B7]">
+                    <p className="text-sm text-[var(--text-muted)] mb-1">🎓 {getTranslation(language, 'closestUniversity')}</p>
+                    <p className="text-xl font-bold text-[var(--text)]">
                       {home.closestUniversity != null ? `${home.closestUniversity.toFixed(1)} km` : '-'}
                     </p>
                   </div>
                   {home.closestHospital != null && (
                     <div>
-                      <p className="text-sm text-[#E8D5B7]/70 mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>
-                      <p className="text-xl font-bold text-[#E8D5B7]">{home.closestHospital.toFixed(1)} km</p>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestHospital.toFixed(1)} km</p>
                     </div>
                   )}
                 </div>
@@ -1086,8 +1086,8 @@ export default function HomeDetailPage() {
             {/* Available From */}
           {home.availableFrom && (
               <div>
-                <p className="text-sm text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'availableFrom')}</p>
-                <p className="text-2xl font-bold text-[#E8D5B7]">
+                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'availableFrom')}</p>
+                <p className="text-2xl font-bold text-[var(--text)]">
                   {new Date(home.availableFrom).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -1099,7 +1099,7 @@ export default function HomeDetailPage() {
 
             {/* Finalize Button - Only show for owners/brokers when inquiry is approved */}
             {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && isOwner && isOwnerOrBroker && !pendingFinalization && (
-              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+              <div className="mt-8 pt-8 border-t border-[var(--border-subtle)]">
                 <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-xl text-center">
                   <p className="text-sm font-medium text-green-400">
                     ✅ {getTranslation(language, 'approved')}
@@ -1126,7 +1126,7 @@ export default function HomeDetailPage() {
 
             {/* Finalize/Reject Buttons for Users - Show when there's a pending finalization request */}
             {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && currentUserId !== null && home.owner.id !== currentUserId && pendingFinalization && (
-              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+              <div className="mt-8 pt-8 border-t border-[var(--border-subtle)]">
                 <div className="mb-4 p-3 bg-yellow-600/20 border border-yellow-500/50 rounded-xl text-center">
                   <p className="text-sm font-medium text-yellow-400">
                     {getTranslation(language, 'finalizationRequestReceived') || 'Finalization Request Received'}
@@ -1153,7 +1153,7 @@ export default function HomeDetailPage() {
 
             {/* Inquire Button - Only show for users (not owners viewing their own listings) */}
             {home && displayRole === 'user' && currentUserId !== home.owner.id && inquiryStatus !== 'approved' && (
-              <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+              <div className="mt-8 pt-8 border-t border-[var(--border-subtle)]">
                 {/* Inquire/Remove Button - Only show if inquiry is not approved or dismissed */}
                 {inquiryStatus !== 'dismissed' && (
                   <button
@@ -1162,7 +1162,7 @@ export default function HomeDetailPage() {
                     className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
                       inquiryStatus === 'inquired'
                         ? 'bg-red-600 hover:bg-red-700 text-white'
-                        : 'bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]'
+                        : 'bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)]'
                     } disabled:opacity-50`}
                   >
                     {updatingInquiry 
@@ -1183,19 +1183,19 @@ export default function HomeDetailPage() {
               inquiryStatus === 'approved' &&
               inquiryId &&
               (hasScheduledViewingAppointment || hasBookableAvailability) && (
-                <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+                <div className="mt-8 pt-8 border-t border-[var(--border-subtle)]">
                   {hasScheduledViewingAppointment ? (
                     <button
                       type="button"
                       disabled
-                      className="w-full px-6 py-4 rounded-xl font-semibold text-lg bg-[#2D3748] border border-[#E8D5B7]/40 text-[#E8D5B7]/80 cursor-not-allowed"
+                      className="w-full px-6 py-4 rounded-xl font-semibold text-lg bg-[var(--ink-soft)] border border-[var(--border-subtle)] text-[var(--text-muted)] cursor-not-allowed"
                     >
                       {getTranslation(language, 'appointmentScheduled')}
                     </button>
                   ) : (
                     <Link
                       href={`/homes/${home.key}/book?inquiryId=${inquiryId}`}
-                      className="block w-full text-center px-6 py-4 rounded-xl font-semibold text-lg transition-all bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]"
+                      className="block w-full text-center px-6 py-4 rounded-xl font-semibold text-lg transition-all bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)]"
                     >
                       {getTranslation(language, 'setAppointment')}
                     </Link>
@@ -1217,7 +1217,7 @@ export default function HomeDetailPage() {
               {/* Close button */}
               <button
                 onClick={closeLightbox}
-                className="absolute top-4 right-4 z-20 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] hover:text-white rounded-full p-3 transition-all shadow-lg hover:shadow-xl border border-[#E8D5B7]/30 hover:border-[#E8D5B7]"
+                className="absolute top-4 right-4 z-20 bg-[var(--surface)] backdrop-blur-sm text-[var(--text)] hover:text-white rounded-full p-3 transition-all shadow-lg hover:shadow-xl border border-[var(--border-subtle)] hover:border-[var(--accent)]"
                 aria-label={getTranslation(language, 'close')}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1226,7 +1226,7 @@ export default function HomeDetailPage() {
               </button>
 
               {/* Main photo */}
-              <div className="relative bg-[#1A202C]/95 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl border border-[#E8D5B7]/30">
+              <div className="relative bg-[var(--ink-soft)]/95 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl border border-[var(--border-subtle)]">
                 <img
                   src={photos[lightboxPhotoIndex]}
                   alt={`${home.title} - Photo ${lightboxPhotoIndex + 1}`}
@@ -1238,7 +1238,7 @@ export default function HomeDetailPage() {
                   <>
                     <button
                       onClick={prevLightboxPhoto}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-[var(--btn-primary-bg)]/90 hover:bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
                       aria-label="Previous photo"
                     >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1247,7 +1247,7 @@ export default function HomeDetailPage() {
                     </button>
                     <button
                       onClick={nextLightboxPhoto}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#E8D5B7]/90 hover:bg-[#E8D5B7] text-[#2D3748] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-[var(--btn-primary-bg)]/90 hover:bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-full p-4 transition-all shadow-lg hover:shadow-xl z-10"
                       aria-label="Next photo"
                     >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1256,7 +1256,7 @@ export default function HomeDetailPage() {
                     </button>
                     
                     {/* Photo counter */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#1A202C]/90 backdrop-blur-sm text-[#E8D5B7] px-4 py-2 rounded-full text-sm font-medium border border-[#E8D5B7]/30">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--surface)] backdrop-blur-sm text-[var(--text)] px-4 py-2 rounded-full text-sm font-medium border border-[var(--border-subtle)]">
                       {lightboxPhotoIndex + 1} / {photos.length}
         </div>
 
@@ -1268,8 +1268,8 @@ export default function HomeDetailPage() {
                           onClick={() => setLightboxPhotoIndex(index)}
                           className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
                             index === lightboxPhotoIndex
-                              ? 'border-[#E8D5B7] ring-2 ring-[#E8D5B7]/50'
-                              : 'border-transparent hover:border-[#E8D5B7]/50 opacity-70 hover:opacity-100'
+                              ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/45'
+                              : 'border-transparent hover:border-[var(--accent)]/45 opacity-70 hover:opacity-100'
                           }`}
                         >
                           <img
@@ -1294,14 +1294,14 @@ export default function HomeDetailPage() {
             onClick={() => setShowOwnerModal(false)}
           >
             <div 
-              className="bg-[#1A202C]/95 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-[#E8D5B7]/30 max-w-md w-full animate-scaleIn"
+              className="bg-[var(--ink-soft)]/95 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-[var(--border-subtle)] max-w-md w-full animate-scaleIn"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-[#E8D5B7]">{getTranslation(language, 'ownerProfile')}</h2>
+                <h2 className="text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'ownerProfile')}</h2>
                 <button
                   onClick={() => setShowOwnerModal(false)}
-                  className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors"
+                  className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
                   aria-label={getTranslation(language, 'close')}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1311,32 +1311,32 @@ export default function HomeDetailPage() {
               </div>
               <div className="space-y-6">
                 <div className="flex flex-col items-center mb-6">
-                  <div className="w-32 h-32 rounded-full bg-[#E8D5B7] flex items-center justify-center mb-4 border-4 border-[#E8D5B7]/30">
-                    <span className="text-5xl font-bold text-[#2D3748]">
+                  <div className="w-32 h-32 rounded-full bg-[var(--btn-primary-bg)] flex items-center justify-center mb-4 border-4 border-[var(--border-subtle)]">
+                    <span className="text-5xl font-bold text-[var(--btn-primary-fg)]">
                       {home.owner.name ? home.owner.name[0].toUpperCase() : home.owner.email[0].toUpperCase()}
                     </span>
                   </div>
                 </div>
             <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'name')}</label>
-                  <p className="text-lg text-[#E8D5B7]">{home.owner.name || getTranslation(language, 'notProvided')}</p>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'name')}</label>
+                  <p className="text-lg text-[var(--text)]">{home.owner.name || getTranslation(language, 'notProvided')}</p>
             </div>
             <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'email')}</label>
-              <p className="text-lg text-[#E8D5B7]">{home.owner.email}</p>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'email')}</label>
+              <p className="text-lg text-[var(--text)]">{home.owner.email}</p>
             </div>
                 {/* Rating in Modal - Show house owner rating for brokers, owner rating for regular owners */}
                 {home.owner.isBroker ? (
                   // For brokers, always show house owner rating (even if 0.0) and make it clickable
                   <Link
                     href={`/homes/ratings/${home.key}`}
-                    className="pt-4 border-t border-[#E8D5B7]/20 block hover:opacity-80 transition-opacity cursor-pointer"
+                    className="pt-4 border-t border-[var(--border-subtle)] block hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                    <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                       {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
                     </label>
                     <div>
-                      <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                      <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
                         <span>⭐</span>
                         {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
                           ? home.owner.ratings.ownerRating.toFixed(1) 
@@ -1351,7 +1351,7 @@ export default function HomeDetailPage() {
                         />
                       </div>
                       {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
-                        <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">
+                        <span className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors mt-1 block">
                           {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
                       ) : null}
@@ -1362,13 +1362,13 @@ export default function HomeDetailPage() {
                   home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
                     <Link
                       href={`/profile/ratings/${home.owner.id}?type=owner`}
-                      className="pt-4 border-t border-[#E8D5B7]/20 block hover:opacity-80 transition-opacity cursor-pointer"
+                      className="pt-4 border-t border-[var(--border-subtle)] block hover:opacity-80 transition-opacity cursor-pointer"
                     >
-                      <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                         {getTranslation(language, 'asOwner')}
                       </label>
                       <div>
-                        <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                        <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
                           <span>⭐</span>
                           {home.owner.ratings.ownerRating.toFixed(1)}
                         </p>
@@ -1376,28 +1376,28 @@ export default function HomeDetailPage() {
                           <StarRating rating={home.owner.ratings!.ownerRating!} size="base" />
                         </div>
                         {home.owner.ratings.ownerCount > 0 && (
-                          <span className="text-sm text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors mt-1 block">
+                          <span className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors mt-1 block">
                             {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                           </span>
                         )}
                       </div>
                     </Link>
                   ) : (
-                    <div className="pt-4 border-t border-[#E8D5B7]/20">
-                      <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">{getTranslation(language, 'asOwner')}</label>
+                    <div className="pt-4 border-t border-[var(--border-subtle)]">
+                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'asOwner')}</label>
                       <div>
-                        <p className="text-2xl font-bold text-[#E8D5B7] flex items-center gap-2">
+                        <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
                           <span>⭐</span>
                           0.0
                         </p>
                         <div className="flex items-center gap-1 mt-2">
                           {[...Array(5)].map((_, i) => (
-                            <span key={i} className="text-base text-[#E8D5B7]/30">
+                            <span key={i} className="text-base text-[var(--text)]/30">
                               ⭐
                             </span>
                           ))}
                         </div>
-                        <p className="text-sm text-[#E8D5B7]/60 mt-1">
+                        <p className="text-sm text-[var(--text-muted)] mt-1">
                           {getTranslation(language, 'notRatedYet')}
                         </p>
                       </div>

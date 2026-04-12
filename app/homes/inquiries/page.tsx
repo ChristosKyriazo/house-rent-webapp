@@ -85,20 +85,20 @@ export default function OwnerInquiriesPage() {
 
   if (checkingRole || loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'inquiries')}
           </h1>
-          <p className="text-[#E8D5B7]/70">
+          <p className="text-[var(--text-muted)]">
             {totalInquiries > 0
               ? getTranslation(language, 'totalInquiries').replace('{count}', totalInquiries.toString())
               : getTranslation(language, 'noInquiries')}
@@ -106,13 +106,13 @@ export default function OwnerInquiriesPage() {
         </div>
 
         {homesWithInquiries.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center">
-            <p className="text-[#E8D5B7]/70 text-lg mb-4">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">
+            <p className="text-[var(--text-muted)] text-lg mb-4">
               {getTranslation(language, 'noInquiriesForListings')}
             </p>
             <Link
               href="/homes/my-listings"
-              className="inline-block px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+              className="inline-block px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
             >
               {getTranslation(language, 'viewMyListings')}
             </Link>
@@ -123,20 +123,20 @@ export default function OwnerInquiriesPage() {
               <Link
                 key={home.id}
                 href={`/homes/inquiries/${home.key}`}
-                className="block bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transition-all"
+                className="block bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 transition-all"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-[#E8D5B7] mb-2">
+                    <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
                       {home.title}
                     </h2>
-                    <p className="text-[#E8D5B7]/70">
+                    <p className="text-[var(--text-muted)]">
                       {home.street && `${home.street}, `}
                       {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     </p>
                   </div>
                   <div className="text-right ml-4">
-                    <div className="bg-[#E8D5B7] text-[#2D3748] px-4 py-2 rounded-xl font-bold text-lg">
+                    <div className="bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] px-4 py-2 rounded-xl font-bold text-lg">
                       {inquiryCount} {inquiryCount === 1 ? getTranslation(language, 'inquiry') : getTranslation(language, 'inquiries')}
                     </div>
                   </div>

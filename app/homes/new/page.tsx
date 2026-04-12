@@ -217,8 +217,8 @@ export default function NewHomePage() {
 
   if (checkingRole) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -227,9 +227,6 @@ export default function NewHomePage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
-    // If AI description is requested, clear the description field
-    const descriptionToSend = useAIDescription ? '' : formData.description
 
     // Always ensure we have a valid area name from the database
     let finalArea: string | null = null
@@ -283,7 +280,7 @@ export default function NewHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          description: descriptionToSend,
+          description: formData.description,
           area: finalArea || null,
           heatingCategory: formData.heatingCategory || null,
           heatingAgent: formData.heatingAgent || null,
@@ -354,23 +351,23 @@ export default function NewHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-              <h1 className="text-3xl font-bold text-[#E8D5B7]">
+              <h1 className="text-3xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'createListing')}
               </h1>
               <button
                 type="button"
                 onClick={() => setShowBulkUploadModal(true)}
-                className="px-4 py-2 bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 rounded-xl hover:bg-[#1a1f2e] hover:border-[#E8D5B7]/50 transition-all text-sm font-semibold"
+                className="px-4 py-2 bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--canvas-mid)] hover:border-[var(--accent)]/45 transition-all text-sm font-semibold"
               >
                 {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
               </button>
             </div>
-            <p className="text-[#E8D5B7]/70">
+            <p className="text-[var(--text-muted)]">
               {getTranslation(language, 'listingDetails')}
             </p>
           </div>
@@ -383,48 +380,58 @@ export default function NewHomePage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'title')}</label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'title')}</label>
               <input
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                 placeholder={getTranslation(language, 'placeholderTitle')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'description')}</label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'description')}</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                disabled={useAIDescription}
-                className={`w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all resize-none text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 ${useAIDescription ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all resize-none text-[var(--text)] placeholder:text-[var(--text)]/50"
                 rows={4}
-                placeholder={useAIDescription ? (getTranslation(language, 'aiDescriptionWillGenerate') || 'AI will generate description') : getTranslation(language, 'placeholderDescription')}
+                placeholder={
+                  useAIDescription
+                    ? getTranslation(language, 'aiDescriptionHintsPlaceholder') ||
+                      'Optional: tenant rules or preferences (e.g. students only, no pets). Leave blank for a standard description.'
+                    : getTranslation(language, 'placeholderDescription')
+                }
               />
-              <label className="flex items-center gap-3 mt-4 p-3 bg-[#2D3748]/50 rounded-xl border border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transition-all cursor-pointer">
+              <label className="flex items-center gap-3 mt-4 p-3 bg-[var(--ink-soft)]/50 rounded-xl border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 transition-all cursor-pointer">
                 <input
                   type="checkbox"
                   checked={useAIDescription}
                   onChange={(e) => setUseAIDescription(e.target.checked)}
-                  className="w-5 h-5 rounded border-2 border-[#E8D5B7]/50 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer accent-[#E8D5B7]"
+                  className="w-5 h-5 rounded border-2 border-[var(--accent)]/40 bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] cursor-pointer accent-[var(--accent)]"
                 />
-                <span className="text-base font-medium text-[#E8D5B7]">
+                <span className="text-base font-medium text-[var(--text)]">
                   {getTranslation(language, 'useAIDescription') || 'Use AI to generate description'}
                 </span>
               </label>
+              {useAIDescription && (
+                <p className="text-sm text-[var(--text-muted)] mt-2">
+                  {getTranslation(language, 'aiDescriptionHintsHelper') ||
+                    'The AI writes the full listing text. Anything you type above is merged into that text as landlord notes or rules.'}
+                </p>
+              )}
             </div>
 
             {/* Photo Upload Section */}
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'uploadPhotos')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">
+                {getTranslation(language, 'uploadPhotos')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span>
               </label>
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <label className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                  <label className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                     {uploadingPhotos ? getTranslation(language, 'loading') : getTranslation(language, 'upload')}
                     <input
                       type="file"
@@ -436,7 +443,7 @@ export default function NewHomePage() {
                     />
                   </label>
                   {uploadingPhotos && (
-                    <span className="text-[#E8D5B7]/70 text-sm">{getTranslation(language, 'loading')}</span>
+                    <span className="text-[var(--text-muted)] text-sm">{getTranslation(language, 'loading')}</span>
                   )}
                 </div>
                 
@@ -447,7 +454,7 @@ export default function NewHomePage() {
                         <img
                           src={photo}
                           alt={`Photo ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-xl border border-[#E8D5B7]/30"
+                          className="w-full h-32 object-cover rounded-xl border border-[var(--border-subtle)]"
                         />
                         <button
                           type="button"
@@ -464,15 +471,15 @@ export default function NewHomePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'listingType')}</label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'listingType')}</label>
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, listingType: 'rent' })}
                   className={`px-6 py-4 rounded-2xl font-semibold transition-all duration-200 transform hover:scale-105 ${
                     formData.listingType === 'rent'
-                      ? 'bg-[#E8D5B7] text-[#2D3748] shadow-lg'
-                      : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 hover:border-[#E8D5B7]'
+                      ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] shadow-lg'
+                      : 'bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] hover:border-[var(--accent)]'
                   }`}
                 >
                   🏠 {getTranslation(language, 'rent')}
@@ -482,8 +489,8 @@ export default function NewHomePage() {
                   onClick={() => setFormData({ ...formData, listingType: 'sell' })}
                   className={`px-6 py-4 rounded-2xl font-semibold transition-all duration-200 transform hover:scale-105 ${
                     formData.listingType === 'sell'
-                      ? 'bg-[#E8D5B7] text-[#2D3748] shadow-lg'
-                      : 'bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 hover:border-[#E8D5B7]'
+                      ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] shadow-lg'
+                      : 'bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] hover:border-[var(--accent)]'
                   }`}
                 >
                   💰 {getTranslation(language, 'sell')}
@@ -492,36 +499,36 @@ export default function NewHomePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'street')}</label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'street')}</label>
               <input
                 type="text"
                 value={formData.street}
                 onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderStreet')}
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'city')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   required
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCity')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'country')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   required
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCountry')}
                 />
               </div>
@@ -529,7 +536,7 @@ export default function NewHomePage() {
 
             {/* Area Autocomplete */}
             <div className="relative">
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'cityArea')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
               <div className="relative">
                 <input
                   type="text"
@@ -595,11 +602,11 @@ export default function NewHomePage() {
                       }
                     }, 200)
                   }}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'selectCityArea')}
                 />
                 {showAreaDropdown && areaSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {areaSuggestions.map((area) => (
                       <button
                         key={area.id}
@@ -623,11 +630,11 @@ export default function NewHomePage() {
                             })
                           }, 0)
                         }}
-                        className="w-full px-4 py-3 text-left text-[#E8D5B7] hover:bg-[#1A202C] transition-colors border-b border-[#E8D5B7]/10 last:border-b-0"
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
                         <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
                         {(area.city || area.country) && (
-                          <div className="text-sm text-[#E8D5B7]/60">
+                          <div className="text-sm text-[var(--text-muted)]">
                             {[area.city, area.country].filter(Boolean).join(', ')}
                           </div>
                         )}
@@ -641,26 +648,26 @@ export default function NewHomePage() {
             {/* Price and Size Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'price')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'price')}</label>
                 <input
                   type="number"
                   min="0"
                   required
                   value={formData.pricePerMonth}
                   onChange={(e) => setFormData({ ...formData, pricePerMonth: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder="900"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'sizeSqMeters')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'sizeSqMeters')}</label>
                 <input
                   type="number"
                   min="0"
                   required
                   value={formData.sizeSqMeters}
                   onChange={(e) => setFormData({ ...formData, sizeSqMeters: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderSize')}
                 />
               </div>
@@ -669,11 +676,11 @@ export default function NewHomePage() {
             {/* Heating Category and Agent Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingCategory')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
                 <select
                   value={formData.heatingCategory}
                   onChange={(e) => setFormData({ ...formData, heatingCategory: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
                 >
                   <option value="">{getTranslation(language, 'any')}</option>
                   <option value="central">{translateValue(language, 'central')}</option>
@@ -681,11 +688,11 @@ export default function NewHomePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'heatingAgent')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
                 <select
                   value={formData.heatingAgent}
                   onChange={(e) => setFormData({ ...formData, heatingAgent: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
                 >
                   <option value="">{getTranslation(language, 'any')}</option>
                   <option value="oil">{translateValue(language, 'oil')}</option>
@@ -698,11 +705,11 @@ export default function NewHomePage() {
 
             {/* Energy Class */}
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'energyClass')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'energyClass')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
               <select
                 value={formData.energyClass}
                 onChange={(e) => setFormData({ ...formData, energyClass: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
               >
                 <option value="">{getTranslation(language, 'any')}</option>
                 <option value="A+">A+</option>
@@ -719,44 +726,44 @@ export default function NewHomePage() {
             {/* Floor, Bedrooms, Bathrooms Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'floor')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'floor')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
                 <input
                   type="number"
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderBedrooms')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'bedrooms')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'bedrooms')}</label>
                 <input
                   type="number"
                   min="0"
                   value={formData.bedrooms}
                   onChange={(e) => setFormData({ ...formData, bedrooms: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'bathrooms')}</label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'bathrooms')}</label>
                 <input
                   type="number"
                   min="0"
                   value={formData.bathrooms}
                   onChange={(e) => setFormData({ ...formData, bathrooms: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                 />
               </div>
             </div>
 
             {/* Parking */}
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'parking')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'parking')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
               <select
                 value={formData.parking}
                 onChange={(e) => setFormData({ ...formData, parking: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
               >
                 <option value="">{getTranslation(language, 'any')}</option>
                 <option value="yes">{getTranslation(language, 'yes')}</option>
@@ -767,26 +774,26 @@ export default function NewHomePage() {
             {/* Year Built and Year Renovated Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'yearBuilt')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
                 <input
                   type="number"
                   min="1800"
                   max={new Date().getFullYear()}
                   value={formData.yearBuilt}
                   onChange={(e) => setFormData({ ...formData, yearBuilt: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderYearBuilt')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'yearRenovated')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span></label>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearRenovated')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span></label>
                 <input
                   type="number"
                   min="1800"
                   max={new Date().getFullYear()}
                   value={formData.yearRenovated}
                   onChange={(e) => setFormData({ ...formData, yearRenovated: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderYearRenovated')}
                 />
               </div>
@@ -794,12 +801,12 @@ export default function NewHomePage() {
 
             {/* Available From */}
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">{getTranslation(language, 'availableFrom')}</label>
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'availableFrom')}</label>
               <input
                 type="date"
                 value={formData.availableFrom}
                 onChange={(e) => setFormData({ ...formData, availableFrom: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
               />
             </div>
 
@@ -807,7 +814,7 @@ export default function NewHomePage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-base shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
+                className="w-full py-3 px-4 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-base shadow-lg shadow-[var(--accent)]/15 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
               >
                 {loading ? getTranslation(language, 'loading') : getTranslation(language, 'createListing')}
               </button>
@@ -819,9 +826,9 @@ export default function NewHomePage() {
       {/* Bulk Upload Modal */}
       {showBulkUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#1A202C] border-4 border-[#E8D5B7]/30 rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-[#E8D5B7]">
+              <h2 className="text-2xl font-bold text-[var(--text)]">
                 {language === 'el' ? 'Δημοσίευση από Αρχείο Excel' : 'Publish from Excel File'}
               </h2>
               <button
@@ -834,7 +841,7 @@ export default function NewHomePage() {
                   setHousePhotos({})
                   setExcelInputKey(prev => prev + 1)
                 }}
-                className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl"
+                className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
               >
                 ×
               </button>
@@ -842,7 +849,7 @@ export default function NewHomePage() {
 
             <div className="space-y-6">
               <div>
-                <p className="text-[#E8D5B7]/70 mb-4">
+                <p className="text-[var(--text-muted)] mb-4">
                   {language === 'el' 
                     ? 'Κατεβάστε το πρότυπο Excel, συμπληρώστε τα στοιχεία των ακινήτων και ανεβάστε το αρχείο. Στη συνέχεια, ανεβάστε φωτογραφίες για κάθε ακίνητο.'
                     : 'Download the Excel template, fill in the property details, and upload the file. Then upload photos for each property.'}
@@ -850,7 +857,7 @@ export default function NewHomePage() {
                 <a
                   href="/api/homes/template"
                   download
-                  className="inline-block px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm mb-4"
+                  className="inline-block px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm mb-4"
                 >
                   {language === 'el' ? '📥 Κατέβασμα Προτύπου' : '📥 Download Template'}
                 </a>
@@ -871,7 +878,7 @@ export default function NewHomePage() {
               {parsedHouses.length === 0 ? (
                 // Step 1: Upload and parse Excel file
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">
                     {language === 'el' ? 'Αρχείο Excel' : 'Excel File'} *
                   </label>
                   <input
@@ -912,7 +919,7 @@ export default function NewHomePage() {
                         setExcelFile(null)
                       }
                     }}
-                    className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#E8D5B7] file:text-[#2D3748] hover:file:bg-[#D4C19F]"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--btn-primary-bg)] file:text-[var(--btn-primary-fg)] hover:file:bg-[var(--btn-primary-hover-bg)]"
                   />
                 </div>
               ) : (
@@ -985,26 +992,31 @@ export default function NewHomePage() {
                   }}
                   className="space-y-4"
                 >
-                  <div className="bg-[#2D3748]/50 rounded-2xl p-4 mb-4">
+                  <div className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 mb-4">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={useAIDescriptionBulk}
                         onChange={(e) => setUseAIDescriptionBulk(e.target.checked)}
-                        className="w-4 h-4 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer"
+                        className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] cursor-pointer"
                       />
-                      <span className="text-sm text-[#E8D5B7]/80">
+                      <span className="text-sm text-[var(--text-muted)]">
                         {getTranslation(language, 'useAIDescriptionForAll') || 'Use AI to generate descriptions for all homes'}
                       </span>
                     </label>
+                    {useAIDescriptionBulk && (
+                      <p className="text-sm text-[var(--text-muted)] mt-3 pl-6">
+                        {getTranslation(language, 'bulkAiDescriptionExcelHint')}
+                      </p>
+                    )}
                   </div>
-                  <div className="bg-[#2D3748]/50 rounded-2xl p-4 mb-4">
-                    <p className="text-[#E8D5B7] font-semibold mb-2">
+                  <div className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 mb-4">
+                    <p className="text-[var(--text)] font-semibold mb-2">
                       {language === 'el' 
                         ? `Βρέθηκαν ${parsedHouses.length} ακίνητα στο αρχείο Excel`
                         : `Found ${parsedHouses.length} properties in Excel file`}
                     </p>
-                    <p className="text-[#E8D5B7]/70 text-sm">
+                    <p className="text-[var(--text-muted)] text-sm">
                       {language === 'el' 
                         ? 'Ανεβάστε φωτογραφίες για κάθε ακίνητο (προαιρετικό)'
                         : 'Upload photos for each property (optional)'}
@@ -1013,17 +1025,17 @@ export default function NewHomePage() {
 
                   <div className="space-y-4 max-h-[400px] overflow-y-auto">
                     {parsedHouses.map((house, index) => (
-                      <div key={index} className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20">
+                      <div key={index} className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]">
                         <div className="mb-3">
-                          <h3 className="text-[#E8D5B7] font-semibold">
+                          <h3 className="text-[var(--text)] font-semibold">
                             {house.title || `House ${index + 1}`}
                           </h3>
-                          <p className="text-[#E8D5B7]/70 text-sm">
+                          <p className="text-[var(--text-muted)] text-sm">
                             {house.city && house.country ? `${house.city}, ${house.country}` : ''}
                           </p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                          <label className="block text-sm font-medium text-[var(--text)] mb-2">
                             {language === 'el' ? 'Φωτογραφίες' : 'Photos'} ({language === 'el' ? 'Προαιρετικό' : 'Optional'})
                           </label>
                           <input
@@ -1037,10 +1049,10 @@ export default function NewHomePage() {
                                 [house.rowIndex]: files,
                               }))
                             }}
-                            className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[#E8D5B7] file:text-[#2D3748] hover:file:bg-[#D4C19F]"
+                            className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--btn-primary-bg)] file:text-[var(--btn-primary-fg)] hover:file:bg-[var(--btn-primary-hover-bg)]"
                           />
                           {housePhotos[house.rowIndex] && housePhotos[house.rowIndex].length > 0 && (
-                            <p className="text-[#E8D5B7]/50 text-xs mt-1">
+                            <p className="text-[var(--text)]/50 text-xs mt-1">
                               {housePhotos[house.rowIndex].length} {language === 'el' ? 'φωτογραφία(ες) επιλέχθηκε(αν)' : 'photo(s) selected'}
                             </p>
                           )}
@@ -1059,7 +1071,7 @@ export default function NewHomePage() {
                         setBulkUploadError('')
                         setExcelInputKey(prev => prev + 1)
                       }}
-                      className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm"
+                      className="flex-1 px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm"
                     >
                       {language === 'el' ? 'Επιστροφή' : 'Back'}
                     </button>
@@ -1074,14 +1086,14 @@ export default function NewHomePage() {
                         setHousePhotos({})
                         setExcelInputKey(prev => prev + 1)
                       }}
-                      className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm"
+                      className="flex-1 px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm"
                     >
                       {getTranslation(language, 'cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={bulkUploadLoading}
-                      className="flex-1 px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {bulkUploadLoading 
                         ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')

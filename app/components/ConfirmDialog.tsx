@@ -30,7 +30,7 @@ export default function ConfirmDialog({
   const confirmClass =
     variant === 'danger'
       ? 'bg-red-600 hover:bg-red-700 text-white'
-      : 'bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]'
+      : 'bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)]'
 
   return (
     <div
@@ -40,20 +40,20 @@ export default function ConfirmDialog({
       aria-labelledby={title ? 'confirm-dialog-title' : undefined}
     >
       <div
-        className="bg-[#1A202C] rounded-3xl p-8 max-w-md w-full border border-[#E8D5B7]/20 shadow-2xl animate-scaleIn"
+        className="bg-[var(--ink-soft)] rounded-3xl p-8 max-w-md w-full border border-[var(--border-subtle)] shadow-2xl animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <h2 id="confirm-dialog-title" className="text-xl font-bold text-[#E8D5B7] mb-3">
+          <h2 id="confirm-dialog-title" className="text-xl font-bold text-[var(--text)] mb-3">
             {title}
           </h2>
         )}
-        <p className="text-[#E8D5B7]/90 text-sm leading-relaxed mb-6 whitespace-pre-wrap">{message}</p>
+        <p className="text-[var(--text)] text-sm leading-relaxed mb-6 whitespace-pre-wrap">{message}</p>
         <div className="flex gap-3 justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="px-5 py-2.5 rounded-xl font-semibold text-[#E8D5B7] border border-[#E8D5B7]/40 hover:bg-[#2D3748] transition-all"
+            className="px-5 py-2.5 rounded-xl font-semibold text-[var(--text)] border border-[var(--border-subtle)] hover:bg-[var(--ink-soft)] transition-all"
           >
             {cancelLabel ?? getTranslation(language, 'cancel')}
           </button>

@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import { useClerk } from '@clerk/nextjs'
+import AppLogo from './AppLogo'
 
 interface HamburgerMenuProps {
   userRole: string // 'owner', 'user', 'both', 'broker', or 'guest'
@@ -46,47 +47,50 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
 
     return (
       <>
-        {/* Hamburger Button */}
-        <button
-          onClick={toggleMenu}
-          className="fixed top-4 left-4 z-[9999] p-3 bg-[#E8D5B7] rounded-xl shadow-lg hover:bg-[#D4C19F] transition-all duration-300 transform hover:scale-110 active:scale-95 pointer-events-auto"
-          aria-label={getTranslation(language, 'showMenu')}
-        >
-          <div className="w-6 h-5 flex flex-col justify-between">
-            <span
-              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-                isOpen ? 'rotate-45 translate-y-2' : ''
-              }`}
-            />
-            <span
-              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-                isOpen ? 'opacity-0' : 'opacity-100'
-              }`}
-            />
-            <span
-              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-                isOpen ? '-rotate-45 -translate-y-2' : ''
-              }`}
-            />
-          </div>
-        </button>
+        <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[var(--z-chrome)] flex items-center gap-2 pl-[env(safe-area-inset-left)]">
+          <AppLogo className="shrink-0" />
+          <button
+            type="button"
+            onClick={toggleMenu}
+            className="btn-secondary shrink-0 min-h-[44px] min-w-[44px] p-3 text-[var(--btn-secondary-fg)] shadow-md transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            aria-label={getTranslation(language, 'showMenu')}
+          >
+            <div className="flex h-5 w-6 flex-col justify-between" aria-hidden>
+              <span
+                className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                  isOpen ? 'translate-y-2 rotate-45' : ''
+                }`}
+              />
+              <span
+                className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                  isOpen ? 'opacity-0' : 'opacity-100'
+                }`}
+              />
+              <span
+                className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                  isOpen ? '-translate-y-2 -rotate-45' : ''
+                }`}
+              />
+            </div>
+          </button>
+        </div>
 
         {/* Overlay - only block when menu is open */}
         {isOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+            className="fixed inset-0 z-[var(--z-menu-backdrop)] bg-black/50 transition-opacity duration-300"
             onClick={closeMenu}
           />
         )}
 
         {/* Menu Panel */}
         <div
-          className={`fixed top-0 left-0 h-full w-80 bg-[#1A202C] shadow-2xl z-40 transform transition-transform duration-300 ease-in-out ${
+          className={`fixed left-0 top-0 z-[var(--z-menu-panel)] h-full w-80 max-w-[min(100vw,20rem)] transform bg-[var(--ink-soft)] shadow-2xl transition-transform duration-300 ease-in-out ${
             isOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="p-6 pt-20 flex flex-col h-full">
-            <h2 className="text-2xl font-bold text-[#E8D5B7] mb-8">{getTranslation(language, 'menu')}</h2>
+          <div className="flex h-full flex-col p-6 pt-20">
+            <h2 className="mb-8 text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
             <nav className="space-y-2 flex-1">
               {guestMenuItems.map((item, index) => (
                 <Link
@@ -97,7 +101,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
                     closeMenu()
                     router.push(item.href)
                   }}
-                  className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 bg-[#2D3748]/50 text-[#E8D5B7] hover:bg-[#2D3748]"
+                  className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 bg-[var(--ink)]/50 text-[var(--text)] hover:bg-[var(--ink)]"
                   style={
                     isOpen
                       ? {
@@ -206,47 +210,50 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
 
   return (
     <>
-      {/* Hamburger Button */}
-      <button
-        onClick={toggleMenu}
-        className="fixed top-4 left-4 z-[9999] p-3 bg-[#E8D5B7] rounded-xl shadow-lg hover:bg-[#D4C19F] transition-all duration-300 transform hover:scale-110 active:scale-95 pointer-events-auto"
-        aria-label={getTranslation(language, 'showMenu')}
-      >
-        <div className="w-6 h-5 flex flex-col justify-between">
-          <span
-            className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-              isOpen ? 'rotate-45 translate-y-2' : ''
-            }`}
-          />
-          <span
-            className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-              isOpen ? 'opacity-0' : 'opacity-100'
-            }`}
-          />
-          <span
-            className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
-              isOpen ? '-rotate-45 -translate-y-2' : ''
-            }`}
-          />
-        </div>
-      </button>
+      <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[var(--z-chrome)] flex items-center gap-2 pl-[env(safe-area-inset-left)]">
+        <AppLogo className="shrink-0" />
+        <button
+          type="button"
+          onClick={toggleMenu}
+          className="btn-secondary shrink-0 min-h-[44px] min-w-[44px] p-3 text-[var(--btn-secondary-fg)] shadow-md transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+          aria-label={getTranslation(language, 'showMenu')}
+        >
+          <div className="flex h-5 w-6 flex-col justify-between" aria-hidden>
+            <span
+              className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                isOpen ? 'translate-y-2 rotate-45' : ''
+              }`}
+            />
+            <span
+              className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                isOpen ? 'opacity-0' : 'opacity-100'
+              }`}
+            />
+            <span
+              className={`block h-0.5 w-full rounded-sm bg-current transition-all duration-300 ${
+                isOpen ? '-translate-y-2 -rotate-45' : ''
+              }`}
+            />
+          </div>
+        </button>
+      </div>
 
       {/* Overlay - only block when menu is open */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+          className="fixed inset-0 z-[var(--z-menu-backdrop)] bg-black/50 transition-opacity duration-300"
           onClick={closeMenu}
         />
       )}
 
       {/* Menu Panel */}
       <div
-        className={`fixed top-0 left-0 h-full w-80 bg-[#1A202C] shadow-2xl z-40 transform transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 z-[var(--z-menu-panel)] h-full w-80 max-w-[min(100vw,20rem)] transform bg-[var(--ink-soft)] shadow-2xl transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-6 pt-20 flex flex-col h-full">
-          <h2 className="text-2xl font-bold text-[#E8D5B7] mb-8">{getTranslation(language, 'menu')}</h2>
+        <div className="flex h-full flex-col p-6 pt-20">
+          <h2 className="mb-8 text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
           <nav className="space-y-2 flex-1">
             {menuItems.map((item, index) => {
               // More precise active state matching
@@ -269,10 +276,10 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
                     closeMenu()
                     router.push(item.href)
                   }}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                  className={`flex items-center gap-4 rounded-xl px-4 py-3 transition-colors duration-200 ${
                     isActive
-                      ? 'bg-[#E8D5B7] text-[#2D3748] font-semibold shadow-lg'
-                      : 'bg-[#2D3748]/50 text-[#E8D5B7] hover:bg-[#2D3748]'
+                      ? 'bg-[var(--btn-primary-bg)] font-semibold text-[var(--btn-primary-fg)] shadow-md'
+                      : 'bg-[var(--ink)]/50 text-[var(--text)] hover:bg-[var(--ink)]'
                   }`}
                   style={
                     isOpen
@@ -290,7 +297,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
           </nav>
           
           {/* Logout Button at Bottom */}
-          <div className="pt-4 border-t border-[#E8D5B7]/20 mt-auto">
+          <div className="mt-auto border-t border-[var(--border-subtle)] pt-4">
             <button
               onClick={() => {
                 closeMenu()

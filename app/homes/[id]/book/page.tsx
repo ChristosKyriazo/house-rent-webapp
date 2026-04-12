@@ -333,8 +333,8 @@ export default function BookPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -342,14 +342,14 @@ export default function BookPage() {
   // If user is an owner, show error message
   if (isOwner) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center max-w-md">
-          <p className="text-[#E8D5B7] text-lg mb-4">
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center max-w-md">
+          <p className="text-[var(--text)] text-lg mb-4">
             {getTranslation(language, 'onlyUsersCanBook') || 'Only users can book viewing appointments. Owners should use the set availability page.'}
           </p>
           <Link
             href="/homes/approved"
-            className="inline-block px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+            className="inline-block px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
           >
             {getTranslation(language, 'back')}
           </Link>
@@ -359,31 +359,31 @@ export default function BookPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Link
             href="/homes/approved"
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] mb-4 inline-block transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'bookViewing')}
           </h1>
           {home && (
-            <p className="text-[#E8D5B7]/70">
+            <p className="text-[var(--text-muted)]">
               {home.title}
             </p>
           )}
         </div>
 
         {availabilities.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center">
-            <p className="text-[#E8D5B7]/70 text-lg mb-4">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">
+            <p className="text-[var(--text-muted)] text-lg mb-4">
               {getTranslation(language, 'noAvailabilitySlots')}
             </p>
-            <p className="text-[#E8D5B7]/60 text-sm">
+            <p className="text-[var(--text-muted)] text-sm">
               {getTranslation(language, 'waitingForOwnerToSetAvailability')}
             </p>
           </div>
@@ -394,9 +394,9 @@ export default function BookPage() {
               .map(([date, timeSlots]) => (
                 <div
                   key={date}
-                  className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20"
+                  className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
                 >
-                  <h2 className="text-2xl font-bold text-[#E8D5B7] mb-4">
+                  <h2 className="text-2xl font-bold text-[var(--text)] mb-4">
                     {new Date(date).toLocaleDateString(
                       language === 'el' ? 'el-GR' : 'en-US',
                       {
@@ -409,7 +409,7 @@ export default function BookPage() {
                   </h2>
                   
                   <div className="flex items-center gap-4">
-                    <label className="text-[#E8D5B7]/70 font-medium min-w-[120px]">
+                    <label className="text-[var(--text-muted)] font-medium min-w-[120px]">
                       {getTranslation(language, 'selectTime')}:
                     </label>
                     <select
@@ -418,7 +418,7 @@ export default function BookPage() {
                         setSelectedDate(date)
                         setSelectedTimeSlot(e.target.value)
                       }}
-                      className="flex-1 px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                      className="flex-1 px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                     >
                       <option value="">
                         {getTranslation(language, 'selectTimeSlot')}
@@ -440,7 +440,7 @@ export default function BookPage() {
                   </div>
                   
                   {timeSlots.filter(slot => slot.isBooked).length > 0 && (
-                    <p className="text-xs text-[#E8D5B7]/50 mt-2">
+                    <p className="text-xs text-[var(--text)]/50 mt-2">
                       {getTranslation(language, 'bookedSlots')}: {timeSlots.filter(slot => slot.isBooked).map(slot => slot.time).join(', ')}
                     </p>
                   )}
@@ -449,9 +449,9 @@ export default function BookPage() {
             
             {/* Book Button */}
             {selectedDate && selectedTimeSlot && (
-              <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-green-500/50">
+              <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-green-500/50">
                 <div className="mb-4">
-                  <p className="text-[#E8D5B7] mb-2">
+                  <p className="text-[var(--text)] mb-2">
                     <strong>{getTranslation(language, 'selectedDate')}:</strong>{' '}
                     {new Date(selectedDate).toLocaleDateString(
                       language === 'el' ? 'el-GR' : 'en-US',
@@ -463,7 +463,7 @@ export default function BookPage() {
                       }
                     )}
                   </p>
-                  <p className="text-[#E8D5B7]">
+                  <p className="text-[var(--text)]">
                     <strong>{getTranslation(language, 'selectedTime')}:</strong>{' '}
                     {selectedTimeSlot} - {(() => {
                       const [hour, minute] = selectedTimeSlot.split(':').map(Number)

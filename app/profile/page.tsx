@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue, translateRole } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
+import { GraphicProfile } from '@/app/components/visual/PageGraphics'
 
 interface User {
   id: number
@@ -109,8 +110,8 @@ function ProfilePageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -119,16 +120,16 @@ function ProfilePageInner() {
   // This allows Clerk to handle auth and redirect if needed
   if (!user && !loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex flex-col items-center justify-center px-4">
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20 max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-[#E8D5B7] mb-4">
+      <div className="min-h-screen bg-[var(--ink-soft)] flex flex-col items-center justify-center px-4">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold text-[var(--text)] mb-4">
             {getTranslation(language, 'welcome')}
           </h1>
-          <p className="text-[#E8D5B7]/70 mb-6">
+          <p className="text-[var(--text-muted)] mb-6">
             {getTranslation(language, 'or')}{' '}
             <Link
               href="/login"
-              className="font-semibold text-[#E8D5B7] hover:text-[#D4C19F] transition-colors underline"
+              className="font-semibold text-[var(--text)] hover:text-[var(--accent)] transition-colors underline"
             >
               {getTranslation(language, 'login')}
             </Link>
@@ -141,8 +142,8 @@ function ProfilePageInner() {
   // If still loading, show loading state
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -208,14 +209,17 @@ function ProfilePageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen py-12 px-4">
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50">
+          <GraphicProfile className="h-12 w-full sm:h-14" />
+        </div>
         {/* Profile Incomplete Banner */}
         {isProfileIncomplete && !bannerDismissed && (
           <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-3xl p-6 shadow-xl relative">
             <button
               onClick={handleDismissBanner}
-              className="absolute top-4 right-4 text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors"
+              className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
               aria-label={getTranslation(language, 'close')}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,22 +229,19 @@ function ProfilePageInner() {
             <div className="flex items-start gap-4">
               <div className="text-3xl">⚠️</div>
               <div className="flex-1 pr-8">
-                <h2 className="text-xl font-bold text-[#E8D5B7] mb-2">
+                <h2 className="text-xl font-bold text-[var(--text)] mb-2">
                   {getTranslation(language, 'completeYourProfile')}
                 </h2>
-                <p className="text-[#E8D5B7]/80 mb-3">
+                <p className="text-[var(--text-muted)] mb-3">
                   {getTranslation(language, 'profileIncomplete')}
                 </p>
                 {missingFields.length > 0 && (
-                  <p className="text-sm text-[#E8D5B7]/70">
+                  <p className="text-sm text-[var(--text-muted)]">
                     <span className="font-semibold">{getTranslation(language, 'missingInformation')}:</span>{' '}
                     {missingFields.join(', ')}
                   </p>
                 )}
-                <Link
-                  href="/profile/edit"
-                  className="inline-block mt-4 px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
-                >
+                <Link href="/profile/edit" className="btn-primary mt-4 inline-flex text-sm">
                   {getTranslation(language, 'editProfile')}
                 </Link>
               </div>
@@ -248,13 +249,13 @@ function ProfilePageInner() {
           </div>
         )}
 
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
+        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-8 shadow-xl backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-[var(--accent)]/8">
           {/* Avatar and Basic Info */}
-          <div className="flex flex-col items-center mb-8">
+          <div className="mb-8 flex flex-col items-center">
             {/* Genderless Avatar */}
-            <div className="w-32 h-32 rounded-full bg-[#E8D5B7] flex items-center justify-center mb-4 border-4 border-[#E8D5B7]/30">
+            <div className="mb-4 flex h-32 w-32 items-center justify-center rounded-full border-4 border-[var(--border-subtle)] bg-gradient-to-br from-[var(--accent-light)] to-[var(--accent-deep)] shadow-lg transition-transform duration-300 hover:scale-[1.02]">
               <svg
-                className="w-20 h-20 text-[#2D3748]"
+                className="w-20 h-20 text-[var(--btn-primary-fg)]"
                 fill="currentColor"
                 viewBox="0 0 24 24"
                 xmlns="http://www.w3.org/2000/svg"
@@ -263,7 +264,7 @@ function ProfilePageInner() {
               </svg>
             </div>
 
-                    <h1 className="text-3xl font-bold text-[#E8D5B7] mb-6">{displayName}</h1>
+                    <h1 className="text-3xl font-bold text-[var(--text)] mb-6">{displayName}</h1>
           </div>
 
           {/* Ratings Section - Show based on display role */}
@@ -271,28 +272,28 @@ function ProfilePageInner() {
             <div className="grid gap-4 mb-6 grid-cols-1">
               {/* Show owner rating only when display role is owner (NOT broker) */}
               {displayRole === 'owner' && user && user.role !== 'broker' && (
-                <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
-                  <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asOwner')}</h3>
+                <div className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)] flex flex-col items-center justify-center">
+                  <h3 className="text-sm font-medium text-[var(--text-muted)] mb-3">{getTranslation(language, 'asOwner')}</h3>
                 {ratings.ownerRating !== null ? (
                     <Link
                       href={`/profile/ratings/${user?.id}?type=owner`}
                       className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
-                      <p className="text-2xl font-bold text-[#E8D5B7]">
+                      <p className="text-2xl font-bold text-[var(--text)]">
                         {ratings.ownerRating.toFixed(1)}
                       </p>
                       <StarRating rating={ratings.ownerRating!} size="base" />
                       {ratings.ownerCount > 0 && (
-                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                        <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
                           {ratings.ownerCount} {ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
                       )}
                     </Link>
                 ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
+                      <p className="text-2xl font-bold text-[var(--text)]">0.0</p>
                       <StarRating rating={0} size="base" />
-                      <p className="text-xs text-[#E8D5B7]/60">
+                      <p className="text-xs text-[var(--text-muted)]">
                         {getTranslation(language, 'notRatedYet')}
                       </p>
                     </div>
@@ -302,28 +303,28 @@ function ProfilePageInner() {
             
               {/* Show user rating only when display role is user */}
               {displayRole === 'user' && (
-                <div className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 flex flex-col items-center justify-center">
-                  <h3 className="text-sm font-medium text-[#E8D5B7]/70 mb-3">{getTranslation(language, 'asUser')}</h3>
+                <div className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)] flex flex-col items-center justify-center">
+                  <h3 className="text-sm font-medium text-[var(--text-muted)] mb-3">{getTranslation(language, 'asUser')}</h3>
                 {ratings.renterRating !== null ? (
                     <Link
                       href={`/profile/ratings/${user?.id}?type=renter`}
                       className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
-                      <p className="text-2xl font-bold text-[#E8D5B7]">
+                      <p className="text-2xl font-bold text-[var(--text)]">
                         {ratings.renterRating.toFixed(1)}
                       </p>
                       <StarRating rating={ratings.renterRating!} size="base" />
                       {ratings.renterCount > 0 && (
-                        <span className="text-xs text-[#E8D5B7]/60 hover:text-[#E8D5B7] underline transition-colors">
+                        <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
                           {ratings.renterCount} {ratings.renterCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
                         </span>
                       )}
                     </Link>
                 ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-2xl font-bold text-[#E8D5B7]">0.0</p>
+                      <p className="text-2xl font-bold text-[var(--text)]">0.0</p>
                       <StarRating rating={0} size="base" />
-                      <p className="text-xs text-[#E8D5B7]/60">
+                      <p className="text-xs text-[var(--text-muted)]">
                         {getTranslation(language, 'notRatedYet')}
                       </p>
                     </div>
@@ -335,35 +336,35 @@ function ProfilePageInner() {
 
           {/* Profile Information */}
           <div className="space-y-4 mb-6">
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'userName')}</label>
-              <p className={`text-lg ${user.name ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+            <div className="pb-4 border-b border-[var(--border-subtle)]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'userName')}</label>
+              <p className={`text-lg ${user.name ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
                 {user.name || getTranslation(language, 'notSet')}
               </p>
             </div>
             {/* Don't show age/date of birth for brokers */}
             {user.role !== 'broker' && (
-              <div className="pb-4 border-b border-[#E8D5B7]/20">
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'age')}</label>
-                <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+              <div className="pb-4 border-b border-[var(--border-subtle)]">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'age')}</label>
+                <p className={`text-lg ${typeof computedAge === 'number' ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
                   {typeof computedAge === 'number' ? computedAge : getTranslation(language, 'notSet')}
                 </p>
               </div>
             )}
             {/* Occupation - show for brokers as "Broker", editable for others */}
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'occupation')}</label>
-              <p className={`text-lg ${user.occupation ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/50 italic'}`}>
+            <div className="pb-4 border-b border-[var(--border-subtle)]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'occupation')}</label>
+              <p className={`text-lg ${user.occupation ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
                 {user.occupation ? translateValue(language, user.occupation) : getTranslation(language, 'notSet')}
               </p>
             </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'email')}</label>
-              <p className="text-lg text-[#E8D5B7]">{user.email}</p>
+            <div className="pb-4 border-b border-[var(--border-subtle)]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'email')}</label>
+              <p className="text-lg text-[var(--text)]">{user.email}</p>
             </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'role')}</label>
-              <p className="text-lg text-[#E8D5B7]">
+            <div className="pb-4 border-b border-[var(--border-subtle)]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'role')}</label>
+              <p className="text-lg text-[var(--text)]">
                 {user.role === 'owner' && `🏠 ${translateRole(language, 'owner')}`}
                 {user.role === 'user' && `👤 ${translateRole(language, 'user')}`}
                 {user.role === 'both' && `🔄 ${translateRole(language, 'both')}`}
@@ -371,8 +372,8 @@ function ProfilePageInner() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'memberSince')}</label>
-              <p className="text-lg text-[#E8D5B7]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'memberSince')}</label>
+              <p className="text-lg text-[var(--text)]">
                 {new Date(user.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -385,11 +386,8 @@ function ProfilePageInner() {
           {/* Edit Profile Button - Only show for own profile */}
           {isOwnProfile && (
           <div className="flex justify-center pt-4">
-            <Link
-              href="/profile/edit"
-              className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl"
-            >
-                {getTranslation(language, 'editProfile')}
+            <Link href="/profile/edit" className="btn-primary px-8 py-3">
+              {getTranslation(language, 'editProfile')}
             </Link>
           </div>
           )}
@@ -403,8 +401,8 @@ export default function ProfilePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#2D3748] flex items-center justify-center px-4">
-          <p className="text-[#E8D5B7]">Loading...</p>
+        <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center px-4">
+          <p className="text-[var(--text)]">Loading...</p>
         </div>
       }
     >

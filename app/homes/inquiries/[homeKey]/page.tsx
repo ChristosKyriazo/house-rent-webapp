@@ -145,8 +145,8 @@ export default function HomeInquiriesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -156,13 +156,13 @@ export default function HomeInquiriesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <Link
             href="/homes/inquiries"
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] mb-4 inline-block transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
           </Link>
@@ -170,19 +170,19 @@ export default function HomeInquiriesPage() {
             href={`/homes/${home.key}?from=inquiries`}
             className="block group"
           >
-            <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2 group-hover:text-[#D4C19F] transition-colors">
+            <h1 className="text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
               {home.title}
             </h1>
           </Link>
-          <p className="text-[#E8D5B7]/70">
+          <p className="text-[var(--text-muted)]">
             {home.street && `${home.street}, `}
             {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
           </p>
         </div>
 
         {inquiries.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center">
-            <p className="text-[#E8D5B7]/70 text-lg">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">
+            <p className="text-[var(--text-muted)] text-lg">
               {getTranslation(language, 'noInquiriesForThisHome')}
             </p>
           </div>
@@ -208,14 +208,14 @@ export default function HomeInquiriesPage() {
                 <div
                   id={`inquiry-${inquiry.id}`}
                   key={inquiry.id}
-                  className={`bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all ${
+                  className={`bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all ${
                     isGrayedOut
-                      ? 'border-[#E8D5B7]/10 opacity-50'
+                      ? 'border-[var(--border-subtle)] opacity-50'
                       : isApproved
                       ? 'border-green-500/50'
                       : isHighlighted
                       ? 'border-yellow-500/70 ring-4 ring-yellow-500/30'
-                      : 'border-[#E8D5B7]/40'
+                      : 'border-[var(--border-subtle)]'
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -223,7 +223,7 @@ export default function HomeInquiriesPage() {
                       <div className="flex items-center gap-3 mb-3">
                         <Link
                           href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
-                          className="text-xl font-bold text-[#E8D5B7] hover:text-[#D4C19F] underline transition-colors cursor-pointer"
+                          className="text-xl font-bold text-[var(--text)] hover:text-[var(--accent)] underline transition-colors cursor-pointer"
                         >
                           {inquiry.user.name || inquiry.user.email.split('@')[0]}
                         </Link>
@@ -233,8 +233,8 @@ export default function HomeInquiriesPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[#E8D5B7]/70 mb-2">{inquiry.user.email}</p>
-                      <p className="text-[#E8D5B7]/60 text-xs mt-2">
+                      <p className="text-[var(--text-muted)] mb-2">{inquiry.user.email}</p>
+                      <p className="text-[var(--text-muted)] text-xs mt-2">
                         {getTranslation(language, 'inquiryDate')}:{' '}
                         {new Date(inquiry.createdAt).toLocaleDateString(
                           language === 'el' ? 'el-GR' : 'en-US',
@@ -273,7 +273,7 @@ export default function HomeInquiriesPage() {
                             </button>
                           </>
                         ) : (
-                          <p className="text-[#E8D5B7]/50 text-sm italic">
+                          <p className="text-[var(--text)]/50 text-sm italic">
                             {getTranslation(language, 'pendingApproval')}
                           </p>
                         )}

@@ -83,29 +83,29 @@ export default function RateUserModal({
       )}
       
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-[#1A202C] rounded-3xl shadow-2xl border border-[#E8D5B7]/20 max-w-md w-full p-6">
+        <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-md w-full p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-[#E8D5B7]">
+            <h2 className="text-2xl font-bold text-[var(--text)]">
               {getTranslation(language, 'rateUser')}
             </h2>
             <button
               onClick={onClose}
-              className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors text-2xl"
+              className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-2xl"
             >
               ×
             </button>
           </div>
 
           <div className="mb-6">
-            <p className="text-[#E8D5B7] mb-2">
+            <p className="text-[var(--text)] mb-2">
               <span className="font-semibold">{getTranslation(language, 'user')}:</span>{' '}
               {userName || userEmail.split('@')[0]}
             </p>
-            <p className="text-[#E8D5B7]/70 text-sm">{userEmail}</p>
+            <p className="text-[var(--text-muted)] text-sm">{userEmail}</p>
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-3">
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-3">
               {getTranslation(language, 'rating')}
             </label>
             <div className="flex items-center gap-2">
@@ -117,18 +117,18 @@ export default function RateUserModal({
                   className={`text-4xl transition-all ${
                     i < rating
                       ? 'text-yellow-400 scale-110'
-                      : 'text-[#E8D5B7]/30 hover:text-[#E8D5B7]/50'
+                      : 'text-[var(--text)]/30 hover:text-[var(--text)]/50'
                   }`}
                 >
                   ★
                 </button>
               ))}
-              <span className="ml-2 text-[#E8D5B7] font-semibold">{rating}/5</span>
+              <span className="ml-2 text-[var(--text)] font-semibold">{rating}/5</span>
             </div>
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
               {getTranslation(language, 'comment')} ({getTranslation(language, 'optional') || 'Optional'})
             </label>
             <textarea
@@ -136,7 +136,7 @@ export default function RateUserModal({
               onChange={(e) => setComment(e.target.value)}
               placeholder={getTranslation(language, 'commentPlaceholder')}
               rows={4}
-              className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7] resize-none"
+              className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)] resize-none"
             />
           </div>
 
@@ -144,7 +144,7 @@ export default function RateUserModal({
             <button
               onClick={onClose}
               disabled={submitting}
-              className="flex-1 px-4 py-2 bg-[#2D3748] hover:bg-[#374151] text-[#E8D5B7] rounded-xl font-semibold transition-all disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-[var(--ink-soft)] hover:bg-[rgba(32,42,58,0.98)] text-[var(--text)] rounded-xl font-semibold transition-all disabled:opacity-50"
             >
               {getTranslation(language, 'cancel')}
             </button>

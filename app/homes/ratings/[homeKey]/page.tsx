@@ -136,20 +136,20 @@ export default function HomeRatingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#E8D5B7] text-xl mb-4">{error}</p>
+          <p className="text-[var(--text)] text-xl mb-4">{error}</p>
           <button
             onClick={() => router.back()}
-            className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold"
+            className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
           >
             {getTranslation(language, 'goBack')}
           </button>
@@ -162,29 +162,29 @@ export default function HomeRatingsPage() {
   const myRatings = ratings.filter(rating => rating.rater.id === currentUserId)
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <button
             onClick={() => router.back()}
-            className="mb-4 text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors flex items-center gap-2"
+            className="mb-4 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-2"
           >
             <span>←</span>
             <span>{getTranslation(language, 'goBack')}</span>
           </button>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'houseRatings') || 'House Ratings'}
           </h1>
           {ratings.length > 0 && (
-            <p className="text-[#E8D5B7]/70">
+            <p className="text-[var(--text-muted)]">
               {ratings[0].homeTitle}
             </p>
           )}
         </div>
 
         {myRatings.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
-            <p className="text-xl text-[#E8D5B7]/70">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
+            <p className="text-xl text-[var(--text-muted)]">
               {getTranslation(language, 'noRatingsForThisHouse') || 'No ratings for this house yet'}
             </p>
           </div>
@@ -197,24 +197,24 @@ export default function HomeRatingsPage() {
               return (
                 <div
                   key={rating.id}
-                  className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20"
+                  className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
                 >
                   {!isEditing ? (
                     <>
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <span className="text-lg font-semibold text-[#E8D5B7]">
+                            <span className="text-lg font-semibold text-[var(--text)]">
                               {rating.isBrokerOwned && rating.ratingType === 'owner' 
                                 ? getTranslation(language, 'ownerRating') || 'Owner Rating'
                                 : `${getTranslation(language, 'rated')}: ${rating.ratedUser.name || rating.ratedUser.email.split('@')[0]}`}
                             </span>
                             <StarRating rating={rating.score} size="lg" />
-                            <span className="text-lg font-bold text-[#E8D5B7] ml-2">
+                            <span className="text-lg font-bold text-[var(--text)] ml-2">
                               {rating.score.toFixed(1)}
                             </span>
                           </div>
-                          <p className="text-sm text-[#E8D5B7]/60">
+                          <p className="text-sm text-[var(--text-muted)]">
                             {new Date(rating.createdAt).toLocaleDateString(
                               language === 'el' ? 'el-GR' : 'en-US',
                               { year: 'numeric', month: 'long', day: 'numeric' }
@@ -232,22 +232,22 @@ export default function HomeRatingsPage() {
                         {canEdit && (
                           <button
                             onClick={() => handleEdit(rating)}
-                            className="ml-4 px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold whitespace-nowrap"
+                            className="ml-4 px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold whitespace-nowrap"
                           >
                             {getTranslation(language, 'edit') || 'Edit'}
                           </button>
                         )}
                       </div>
                       {rating.comment && (
-                        <div className="mt-4 pt-4 border-t border-[#E8D5B7]/20">
-                          <p className="text-[#E8D5B7]/80">{rating.comment}</p>
+                        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                          <p className="text-[var(--text-muted)]">{rating.comment}</p>
                         </div>
                       )}
                     </>
                   ) : (
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-[#E8D5B7] mb-3">
+                        <label className="block text-sm font-medium text-[var(--text)] mb-3">
                           {getTranslation(language, 'rating')}:
                         </label>
                         <div className="flex items-center gap-2">
@@ -256,25 +256,25 @@ export default function HomeRatingsPage() {
                               key={star}
                               onClick={() => setEditScore(star)}
                               className={`text-4xl transition-transform hover:scale-110 ${
-                                star <= editScore ? 'text-yellow-400' : 'text-[#E8D5B7]/30'
+                                star <= editScore ? 'text-yellow-400' : 'text-[var(--text)]/30'
                               }`}
                             >
                               ⭐
                             </button>
                           ))}
-                          <span className="ml-4 text-lg font-semibold text-[#E8D5B7]">
+                          <span className="ml-4 text-lg font-semibold text-[var(--text)]">
                             {editScore}/5
                           </span>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                        <label className="block text-sm font-medium text-[var(--text)] mb-2">
                           {getTranslation(language, 'comment')}:
                         </label>
                         <textarea
                           value={editComment}
                           onChange={(e) => setEditComment(e.target.value)}
-                          className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 resize-none"
+                          className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50 resize-none"
                           rows={4}
                           placeholder={getTranslation(language, 'commentPlaceholder')}
                         />
@@ -283,7 +283,7 @@ export default function HomeRatingsPage() {
                         <button
                           onClick={handleSaveEdit}
                           disabled={submitting}
-                          className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold disabled:opacity-50"
+                          className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold disabled:opacity-50"
                         >
                           {submitting ? getTranslation(language, 'saving') : getTranslation(language, 'save')}
                         </button>
@@ -293,7 +293,7 @@ export default function HomeRatingsPage() {
                             setEditComment('')
                             setEditScore(5)
                           }}
-                          className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold"
+                          className="px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold"
                         >
                           {getTranslation(language, 'cancel')}
                         </button>

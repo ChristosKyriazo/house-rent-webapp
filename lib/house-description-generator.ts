@@ -31,6 +31,8 @@ export async function generateHouseDescriptions(
     areaSafety: number | null
     areaVibe: string | null
     availableFrom: string | null
+    /** Short landlord notes (rules, tenant preferences, pets, etc.) to weave into both descriptions */
+    ownerNotes?: string | null
   },
   openai: OpenAI | null
 ): Promise<{ description: string | null; descriptionGreek: string | null }> {
@@ -107,24 +109,33 @@ export async function generateHouseDescriptions(
       ? `€${houseData.pricePerMonth.toLocaleString()}/month`
       : `€${houseData.pricePerMonth.toLocaleString()}`
 
-    // Generate both English and Greek descriptions in a single response
+    const notesBlock = houseData.ownerNotes?.trim()
+      ? `
+
+LANDLORD RULES (BINDING — treat as factual requirements, not marketing angles):
+The owner specified the following. These are rules or eligibility criteria for this listing, NOT vague "lifestyle" suggestions.
+${houseData.ownerNotes.trim()}`
+      : ''
+
+    const model =
+      process.env.OPENAI_HOUSE_DESCRIPTION_MODEL ||
+      process.env.OPENAI_COMPATIBILITY_MODEL ||
+      'gpt-4o-mini'
+
+    // JSON output avoids fragile ENGLISH:/GREEK: parsing when models reorder or use markdown
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model,
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
           content: `You are a professional real estate broker writing property descriptions to attract potential ${listingTypeText === 'rental' ? 'tenants' : 'buyers'}. 
 
-Your task is to create TWO descriptions in a single response:
-1. An English description (exactly 200 words, complete and natural)
-2. A Greek description (exactly 200 words, complete and natural)
+Your task is to output a single JSON object with exactly two string fields:
+- "description": full English listing text (about 180–220 words, 2–3 paragraphs separated by blank lines)
+- "descriptionGreek": full Greek listing text (about 180–220 words, same structure)
 
-Format your response EXACTLY as follows:
-ENGLISH:
-[Your English description here - exactly 200 words, 2-3 paragraphs with blank lines between]
-
-GREEK:
-[Your Greek description here - exactly 200 words, 2-3 paragraphs with blank lines between]
+Do not include markdown code fences. Do not add any other keys.
 
 Requirements for BOTH descriptions:
 - IMPORTANT: Vary your opening sentences. Do NOT start every description with the same phrases like "nestled in", "located in", "situated in", "βρίσκεται σε", "τοποθετημένο σε", etc. Be creative and unpredictable with how you begin each description.
@@ -143,9 +154,18 @@ Requirements for BOTH descriptions:
   * If floor is positive (e.g., 1, 2, 3): In English say "Xth floor", in Greek say "Xος όροφος" or "Xο όροφο"
 - CRITICAL: Format each description in 2-3 separate, well-structured paragraphs. Each paragraph should be on its own line with a blank line between paragraphs.
 - Keep descriptions general and appealing, not overly technical
-- CRITICAL: Each description MUST be exactly 200 words and complete - do not cut off mid-sentence. Make sure both descriptions end naturally.
+- CRITICAL: Each description MUST be about 180–220 words and complete - do not cut off mid-sentence. Make sure both descriptions end naturally.
+${houseData.ownerNotes?.trim() ? `
+RULES LANGUAGE (mandatory when LANDLORD RULES are provided above):
+- State each rule in **direct, assertive, honest** wording. Renters must understand what is allowed and what is not.
+- Do NOT soften rules into vague positives. FORBIDDEN examples: "ideal for families", "perfect for students", "great for pet lovers" when the owner meant exclusivity or a ban — that misleads.
+- REQUIRED style examples (adapt to the actual rules): "This property is available only to families." / "Letting is restricted to students." / "Pets are not permitted." / "Smoking is not allowed on the premises." / "The landlord requires…"
+- If the owner wrote "only X" or "no Y", reflect **exclusivity or prohibition** explicitly in both languages (English + Greek with equivalent legal/ everyday clarity).
+- You may use a short dedicated paragraph for tenancy rules if that keeps them clearest; you may also weave rules into the text, but they must read as **requirements**, not optional perks.
+- Greek: same assertive clarity (e.g. μόνο για οικογένειες, δεν επιτρέπονται κατοικίδια, αποκλειστικά για φοιτητές — as appropriate to the notes).
+` : ''}
 
-Write in a warm, inviting but subtle tone. Vary your writing style to make each description unique and engaging. Do not include the price in either description.`
+Write in a warm, inviting but subtle tone for the property itself${houseData.ownerNotes?.trim() ? '; for the rules section, prioritize clarity and honesty over sales language' : ''}. Vary your writing style to make each description unique and engaging. Do not include the price in either description.`
         },
         {
           role: 'user',
@@ -155,61 +175,32 @@ Type: For ${listingTypeText} at ${priceText}
 Details: ${propertyDetails}
 ${houseData.availableFrom ? `Available from: ${houseData.availableFrom}` : ''}
 ${proximityInfo.length > 0 ? `Nearby amenities: ${proximityInfo.join(', ')}` : ''}
-${areaInfo.length > 0 ? `Area information: ${areaInfo.join(', ')}` : ''}
+${areaInfo.length > 0 ? `Area information: ${areaInfo.join(', ')}` : ''}${notesBlock}
 
-Generate BOTH an English description (exactly 200 words) and a Greek description (exactly 200 words) in your response. Format as:
-ENGLISH:
-[English description - 2-3 paragraphs]
-
-GREEK:
-[Greek description - 2-3 paragraphs]
-
-Both descriptions must be complete, natural, and exactly 200 words each. ${houseData.availableFrom ? `If available from date is provided, mention it naturally in both descriptions.` : ''}Do not mention hospitals, specific distances, or numbers except for house qualities.`
+Return JSON only with "description" and "descriptionGreek". Both must be complete, natural, multi-paragraph text. ${houseData.availableFrom ? `If available from date is provided, mention it naturally in both descriptions.` : ''}${houseData.ownerNotes?.trim() ? ' The LANDLORD RULES above must appear in both languages as clear, assertive tenancy rules (who may rent, what is forbidden), not as soft marketing.' : ''} Do not mention hospitals, specific distances, or numbers except for house qualities.`,
         },
       ],
-      temperature: 0.9,
-      max_tokens: 1200,
+      temperature: 0.85,
+      max_tokens: 4096,
     })
 
-    // Parse the single response to extract English and Greek descriptions
-    const fullResponse = completion.choices[0]?.message?.content?.trim() || ''
-    
+    const raw = completion.choices[0]?.message?.content?.trim() || ''
     let finalEnglishDescription: string | null = null
     let finalGreekDescription: string | null = null
-    
-    if (fullResponse) {
-      // Find the positions of the markers
-      const englishMarkerIndex = fullResponse.search(/ENGLISH:\s*/i)
-      const greekMarkerIndex = fullResponse.search(/GREEK:\s*/i)
-      
-      if (englishMarkerIndex >= 0 && greekMarkerIndex > englishMarkerIndex) {
-        // Extract English description (everything between ENGLISH: and GREEK:)
-        const englishMarkerLen =
-          fullResponse.substring(englishMarkerIndex).match(/ENGLISH:\s*/i)?.[0]?.length ?? 0
-        const englishStart = englishMarkerIndex + englishMarkerLen
-        const englishEnd = greekMarkerIndex
-        finalEnglishDescription = fullResponse.substring(englishStart, englishEnd).trim()
-        // Ensure paragraph breaks are preserved
-        finalEnglishDescription = finalEnglishDescription.replace(/\n\n+/g, '\n\n')
-      }
-      
-      if (greekMarkerIndex >= 0) {
-        // Extract Greek description (everything after GREEK: to the end)
-        const greekMarkerLen =
-          fullResponse.substring(greekMarkerIndex).match(/GREEK:\s*/i)?.[0]?.length ?? 0
-        const greekStart = greekMarkerIndex + greekMarkerLen
-        finalGreekDescription = fullResponse.substring(greekStart).trim()
-        // Ensure paragraph breaks are preserved
-        finalGreekDescription = finalGreekDescription.replace(/\n\n+/g, '\n\n')
-      }
-      
-      // Log if parsing failed
-      if (!finalEnglishDescription || !finalGreekDescription) {
-        console.warn('Could not parse descriptions. Full response length:', fullResponse.length)
-        console.warn('English marker found:', englishMarkerIndex >= 0)
-        console.warn('Greek marker found:', greekMarkerIndex >= 0)
-        console.warn('Response preview:', fullResponse.substring(0, 500))
-        console.warn('Response end:', fullResponse.substring(Math.max(0, fullResponse.length - 500)))
+
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        const en = parsed.description ?? parsed.Description
+        const el = parsed.descriptionGreek ?? parsed.description_greek ?? parsed.DescriptionGreek
+        if (typeof en === 'string' && en.trim()) {
+          finalEnglishDescription = en.trim().replace(/\n\n+/g, '\n\n')
+        }
+        if (typeof el === 'string' && el.trim()) {
+          finalGreekDescription = el.trim().replace(/\n\n+/g, '\n\n')
+        }
+      } catch {
+        console.warn('House description JSON parse failed, raw length:', raw.length)
       }
     }
 

@@ -1,8 +1,311 @@
 @import "tailwindcss";
 
+/* Dark UI hint — Safari/Chrome align native form controls, scrollbars */
+html {
+  color-scheme: dark;
+}
+
+/* Warm editorial dusk — cohesive tokens (see frontend-design skill) */
 :root {
-  --background: #2D3748;
-  --foreground: #E8D5B7;
+  --canvas: #0f1218;
+  --canvas-mid: #151a24;
+  --text: #f3ece4;
+  --text-muted: rgba(243, 236, 228, 0.68);
+  --accent: #e3a75f;
+  --accent-light: #f2c882;
+  --accent-deep: #b87a3d;
+  --ink: #0c0f14;
+  --ink-soft: #1a2230;
+  --border-subtle: rgba(227, 167, 95, 0.22);
+  --surface: rgba(20, 26, 36, 0.78);
+  --glow-amber: rgba(227, 167, 95, 0.12);
+  --glow-sage: rgba(120, 155, 140, 0.1);
+  --background: var(--canvas);
+  --foreground: var(--text);
+  /* Graphics + buttons: one accent, solid fills — consistent Safari/Chrome */
+  --graphic-stroke: #e3a75f;
+  --btn-primary-bg: #e3a75f;
+  --btn-primary-fg: #0c0f14;
+  --btn-primary-hover-bg: #ebb86d;
+  --btn-primary-border: #e3a75f;
+  --btn-secondary-bg: rgba(26, 34, 48, 0.94);
+  --btn-secondary-fg: #f3ece4;
+  --btn-secondary-border: rgba(233, 212, 196, 0.32);
+  --dock-bg: rgba(22, 29, 42, 0.94);
+  /* Above page content: transforms/backdrops create stacking contexts that can paint over z-[9999] */
+  --z-chrome: 30000;
+  --z-menu-backdrop: 25000;
+  --z-menu-panel: 25001;
+}
+
+.font-display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+/* Unified actions — no near-matching gradient vs flat */
+.btn-primary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.875rem;
+  padding: 0.625rem 1.75rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.25;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: 1px solid var(--btn-primary-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.btn-primary:hover {
+  background-color: var(--btn-primary-hover-bg);
+  border-color: var(--btn-primary-hover-bg);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.btn-primary:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.875rem;
+  padding: 0.625rem 1.75rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.25;
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
+  border: 1px solid var(--btn-secondary-border);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.btn-secondary:hover {
+  background-color: rgba(32, 42, 58, 0.98);
+  border-color: rgba(233, 212, 196, 0.45);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.btn-secondary:active {
+  transform: translateY(1px);
+}
+
+.btn-icon-dock {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  padding: 0 0.875rem;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: 1px solid var(--btn-primary-border);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  transition: background-color 0.18s ease;
+}
+.btn-icon-dock:hover {
+  background-color: var(--btn-primary-hover-bg);
+  border-color: var(--btn-primary-hover-bg);
+}
+.btn-icon-dock:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-glass {
+  background-color: var(--surface);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border-subtle);
+}
+
+.surface-dock {
+  background-color: var(--dock-bg);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(233, 212, 196, 0.12);
+}
+
+/* Safari / older engines: blur unsupported → opaque panel so UI stays visible */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .ui-glass,
+  .surface-dock {
+    background-color: rgba(26, 34, 48, 0.98) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* Ambient background mesh — CSS gradients only (Safari matches Chrome; SVG dot patterns moiré badly in WebKit) */
+.atmosphere-mesh {
+  background:
+    radial-gradient(ellipse 90% 70% at 12% 8%, rgba(227, 167, 95, 0.11), transparent 52%),
+    radial-gradient(ellipse 65% 50% at 92% 12%, rgba(100, 140, 130, 0.12), transparent 48%),
+    radial-gradient(ellipse 55% 45% at 48% 96%, rgba(227, 167, 95, 0.06), transparent 55%),
+    linear-gradient(165deg, #0f1218 0%, #141b28 48%, #10151f 100%);
+}
+
+/* Fine dot texture — same in Chrome & Safari (no SVG filter noise) */
+.atmosphere-dots {
+  opacity: 0.09;
+  background-image: radial-gradient(rgba(243, 236, 228, 0.2) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+@keyframes floatA {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4%, 6%) scale(1.05);
+  }
+}
+
+@keyframes floatB {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-5%, 4%);
+  }
+}
+
+@keyframes floatC {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(3%, -4%) scale(1.08);
+  }
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-delayed {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-float-a {
+  animation: floatA 22s ease-in-out infinite;
+}
+
+.animate-float-b {
+  animation: floatB 18s ease-in-out infinite;
+}
+
+.animate-float-c {
+  animation: floatC 26s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.animate-fade-in-slow {
+  animation: fade-in-delayed 0.9s ease-out 0.15s both;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drift-line {
+  0%,
+  100% {
+    transform: translateX(0) scaleX(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(2%) scaleX(1.02);
+    opacity: 0.55;
+  }
+}
+
+.will-rise {
+  animation: rise-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.will-rise-delay-1 {
+  animation-delay: 0.12s;
+}
+.will-rise-delay-2 {
+  animation-delay: 0.24s;
+}
+.will-rise-delay-3 {
+  animation-delay: 0.38s;
+}
+
+.hero-drift {
+  animation: drift-line 14s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere-mesh,
+  .animate-float-a,
+  .animate-float-b,
+  .animate-float-c,
+  .animate-pulse-glow,
+  .animate-fade-up,
+  .animate-fade-in-slow,
+  .will-rise,
+  .hero-drift {
+    animation: none !important;
+  }
 }
 
 @keyframes slideIn {
@@ -23,19 +326,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
 }
 
 html {
-  background: #2D3748;
+  background: var(--canvas);
   min-height: 100%;
 }
 
 body {
-  background: #2D3748;
-  color: #E8D5B7;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
 }
 
@@ -57,18 +360,18 @@ body > div:last-child[style*="position: fixed"][style*="bottom"][style*="left"] 
 
 /* Clerk - Beautiful gradients and colors */
 .cl-formButtonPrimary {
-  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
-  color: #2D3748 !important;
+  background: linear-gradient(135deg, #e9d4c4 0%, #d8c4a8 50%, #c4a67a 100%) !important;
+  color: #1c222f !important;
   border: none !important;
   border-radius: 0.75rem !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(233, 212, 196, 0.3) !important;
   transition: all 0.2s ease !important;
 }
 
 .cl-formButtonPrimary:hover {
-  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
-  box-shadow: 0 6px 16px rgba(232, 213, 183, 0.4) !important;
+  background: linear-gradient(135deg, #f7ecdf 0%, #e9d4c4 50%, #d8c4a8 100%) !important;
+  box-shadow: 0 6px 16px rgba(233, 212, 196, 0.4) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -77,21 +380,21 @@ button[data-localization-key*="continue"],
 button[data-localization-key*="Continue"],
 button[aria-label*="Continue" i],
 button[aria-label*="continue" i] {
-  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
+  background: linear-gradient(135deg, #e9d4c4 0%, #d8c4a8 50%, #c4a67a 100%) !important;
   background-color: transparent !important;
-  background-image: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 50%, #C9B08A 100%) !important;
-  color: #2D3748 !important;
+  background-image: linear-gradient(135deg, #e9d4c4 0%, #d8c4a8 50%, #c4a67a 100%) !important;
+  color: #1c222f !important;
   border: none !important;
-  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(233, 212, 196, 0.3) !important;
 }
 
 button[data-localization-key*="continue"]:hover,
 button[data-localization-key*="Continue"]:hover,
 button[aria-label*="Continue" i]:hover,
 button[aria-label*="continue" i]:hover {
-  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
-  background-image: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 50%, #D4C19F 100%) !important;
-  box-shadow: 0 6px 16px rgba(232, 213, 183, 0.4) !important;
+  background: linear-gradient(135deg, #f7ecdf 0%, #e9d4c4 50%, #d8c4a8 100%) !important;
+  background-image: linear-gradient(135deg, #f7ecdf 0%, #e9d4c4 50%, #d8c4a8 100%) !important;
+  box-shadow: 0 6px 16px rgba(233, 212, 196, 0.4) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -100,11 +403,11 @@ button[data-localization-key*="signUp"]:not([data-localization-key*="continue"])
 button[data-localization-key*="createAccount"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]),
 button[aria-label*="Sign up" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]),
 button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria-label*="Continue" i]) {
-  background: #2D3748 !important;
-  background-color: #2D3748 !important;
+  background: #1c222f !important;
+  background-color: #1c222f !important;
   background-image: none !important;
-  color: #E8D5B7 !important;
-  border: 2px solid rgba(232, 213, 183, 0.3) !important;
+  color: #e9d4c4 !important;
+  border: 2px solid rgba(233, 212, 196, 0.3) !important;
 }
 
 button[data-localization-key*="signUp"]:not([data-localization-key*="continue"]):not([data-localization-key*="Continue"]):hover,
@@ -114,14 +417,14 @@ button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria
   background: #1a1f2e !important;
   background-color: #1a1f2e !important;
   background-image: none !important;
-  border-color: rgba(232, 213, 183, 0.5) !important;
+  border-color: rgba(233, 212, 196, 0.5) !important;
 }
 
 /* Card/box backgrounds - dark grey gradient with hard edges */
 .cl-card,
 .cl-main,
 .cl-rootBox {
-  background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 50%, #1a1f2e 100%) !important;
+  background: linear-gradient(135deg, #1a1f2e 0%, #1c222f 50%, #1a1f2e 100%) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -155,7 +458,7 @@ button[aria-label*="Create account" i]:not([aria-label*="continue" i]):not([aria
 .cl-identityPreviewText,
 .cl-alertText,
 .cl-dividerText {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
 }
 
 /* Input fields - transparent to blend with banner, beige text */
@@ -167,8 +470,8 @@ input[type="password"]:not([data-input-otp="true"]),
 input[type="tel"]:not([data-input-otp="true"]),
 input[type="number"]:not([data-input-otp="true"]) {
   background: transparent !important;
-  border: 2px solid rgba(232, 213, 183, 0.3) !important;
-  color: #E8D5B7 !important;
+  border: 2px solid rgba(233, 212, 196, 0.3) !important;
+  color: #e9d4c4 !important;
   border-radius: 0 !important;
   outline: none !important;
   transition: all 0.2s ease !important;
@@ -184,7 +487,7 @@ input[type="email"]::placeholder,
 input[type="password"]::placeholder,
 input[type="tel"]::placeholder,
 input[type="number"]::placeholder {
-  color: rgba(232, 213, 183, 0.5) !important;
+  color: rgba(233, 212, 196, 0.5) !important;
   opacity: 1 !important;
 }
 
@@ -194,20 +497,20 @@ input[type="email"]:focus:not([data-input-otp="true"]),
 input[type="password"]:focus:not([data-input-otp="true"]),
 input[type="tel"]:focus:not([data-input-otp="true"]),
 input[type="number"]:focus:not([data-input-otp="true"]) {
-  border-color: #E8D5B7 !important;
+  border-color: #e9d4c4 !important;
   box-shadow: none !important;
   outline: none !important;
   background: transparent !important;
 }
 
 .cl-formFieldInput:hover {
-  border-color: rgba(232, 213, 183, 0.4) !important;
+  border-color: rgba(233, 212, 196, 0.4) !important;
 }
 
 /* Links - beige with hover effects */
 .cl-formResendCodeLink,
 .cl-identityPreviewEditButton {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
   text-decoration: underline !important;
   text-underline-offset: 4px !important;
   text-decoration-thickness: 2px !important;
@@ -215,14 +518,14 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 }
 
 .cl-formResendCodeLink:hover {
-  color: #F5E6D3 !important;
-  text-shadow: 0 0 8px rgba(232, 213, 183, 0.5) !important;
+  color: #f7ecdf !important;
+  text-shadow: 0 0 8px rgba(233, 212, 196, 0.5) !important;
   text-decoration-thickness: 3px !important;
 }
 
 /* Sign up link in footer - dark gray */
 .cl-footerActionLink {
-  color: #2D3748 !important;
+  color: #1c222f !important;
   text-decoration: underline !important;
   text-underline-offset: 4px !important;
   text-decoration-thickness: 2px !important;
@@ -237,18 +540,18 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 
 /* Social buttons - beige gradient, dark grey text */
 .cl-socialButtonsBlockButton {
-  background: linear-gradient(135deg, #E8D5B7 0%, #D4C19F 100%) !important;
-  border: 2px solid rgba(232, 213, 183, 0.4) !important;
-  color: #2D3748 !important;
+  background: linear-gradient(135deg, #e9d4c4 0%, #d8c4a8 100%) !important;
+  border: 2px solid rgba(233, 212, 196, 0.4) !important;
+  color: #1c222f !important;
   border-radius: 0.75rem !important;
   font-weight: 600 !important;
   transition: all 0.2s ease !important;
 }
 
 .cl-socialButtonsBlockButton:hover {
-  background: linear-gradient(135deg, #F5E6D3 0%, #E8D5B7 100%) !important;
-  border-color: #E8D5B7 !important;
-  box-shadow: 0 4px 12px rgba(232, 213, 183, 0.3) !important;
+  background: linear-gradient(135deg, #f7ecdf 0%, #e9d4c4 100%) !important;
+  border-color: #e9d4c4 !important;
+  box-shadow: 0 4px 12px rgba(233, 212, 196, 0.3) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -257,7 +560,7 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 
 /* Dividers */
 .cl-dividerLine {
-  background-color: rgba(45, 55, 72, 0.2) !important;
+  background-color: rgba(28, 34, 47, 0.22) !important;
 }
 
 /* Error text - keep red */
@@ -271,13 +574,13 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 [class*="optional"],
 [class*="Optional"],
 .cl-optional {
-  color: rgba(232, 213, 183, 0.6) !important;
+  color: rgba(233, 212, 196, 0.6) !important;
 }
 
 /* Force beige for main label text (not optional) */
 .cl-formFieldLabel,
 .cl-formFieldLabelText {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
 }
 
 /* Target all label children - full opacity beige for main text */
@@ -285,13 +588,13 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 .cl-formFieldLabel small:not([class*="optional"]):not([class*="Optional"]),
 .cl-formFieldLabel div:not([class*="optional"]):not([class*="Optional"]),
 .cl-formFieldLabelText:not([class*="optional"]):not([class*="Optional"]) {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
 }
 
 /* Force beige for main label text only (not children that might be optional) */
 .cl-formFieldLabel:not([class*="optional"]):not([class*="Optional"]),
 .cl-formFieldLabelText:not([class*="optional"]):not([class*="Optional"]) {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
 }
 
 
@@ -302,7 +605,7 @@ input[type="number"]:focus:not([data-input-otp="true"]) {
 .cl-formFieldRow .cl-formFieldLabel span:not([class*="optional"]):not([class*="Optional"]),
 .cl-formFieldRow .cl-formFieldLabel small:not([class*="optional"]):not([class*="Optional"]),
 .cl-formFieldRow .cl-formFieldLabel div:not([class*="optional"]):not([class*="Optional"]) {
-  color: #E8D5B7 !important;
+  color: #e9d4c4 !important;
 }
 
 /* Ensure ALL wrapper elements are transparent - only banner gradient should show */

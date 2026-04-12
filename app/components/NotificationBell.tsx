@@ -136,53 +136,65 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
+  const removeFromBell = async (notification: Notification) => {
+    try {
+      const response = await fetch(`/api/notifications?id=${notification.id}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
+        if (!notification.viewed) {
+          setUnviewedCount((c) => Math.max(0, c - 1))
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error)
+    }
+  }
+
   const handleNotificationClick = async (notification: Notification) => {
     setIsOpen(false)
-    
-    // Delete approved notification when clicked (it will also be deleted when house is finalized)
+
+    // Finalize: open modal; still remove from dropdown so the bell matches “already seen”
+    if (notification.type === 'finalize') {
+      await removeFromBell(notification)
+      setFinalizeNotification(notification)
+      return
+    }
+
+    await removeFromBell(notification)
+
     if (notification.type === 'approved') {
-      try {
-        await fetch(`/api/notifications?id=${notification.id}`, {
-          method: 'DELETE',
-        })
-        setNotifications(notifications.filter(n => n.id !== notification.id))
-        if (!notification.viewed) {
-          setUnviewedCount(Math.max(0, unviewedCount - 1))
-        }
-      } catch (error) {
-        console.error('Error deleting notification:', error)
-      }
       router.push('/homes/approved')
       return
     }
-    
-    if (notification.type === 'finalize') {
-      setFinalizeNotification(notification)
-    } else if (displayRole === 'owner' && notification.type === 'inquiry') {
-      // Inquiry notifications don't disappear when clicked, only when approved/rejected
-      // If inquiryId is available, pass it to highlight the specific inquiry
+
+    if (displayRole === 'owner' && notification.type === 'inquiry') {
       if (notification.inquiryId) {
         router.push(`/homes/inquiries/${notification.homeKey}?inquiryId=${notification.inquiryId}`)
       } else {
         router.push(`/homes/inquiries/${notification.homeKey}`)
       }
-    } else if (notification.type === 'dismissed' || notification.type === 'rejected') {
+      return
+    }
+
+    if (notification.type === 'dismissed' || notification.type === 'rejected') {
       router.push('/homes/my-inquiries')
-    } else if (notification.type === 'availability_set') {
-      // Navigate to booking page for the home
-      if (notification.homeKey) {
-        // Include inquiryId if available
-        const queryParams = notification.inquiryId ? `?inquiryId=${notification.inquiryId}` : ''
-        router.push(`/homes/${notification.homeKey}/book${queryParams}`)
-      }
-    } else if (notification.type === 'booking_created') {
-      // Navigate to approved inquiries page to see the booking
-      if (notification.homeKey) {
-        router.push('/homes/approved')
-      }
-    } else if (notification.type === 'rate') {
-      // Redirect to rating page based on role
-      // Owner rates user, User rates owner
+      return
+    }
+
+    if (notification.type === 'availability_set' && notification.homeKey) {
+      const queryParams = notification.inquiryId ? `?inquiryId=${notification.inquiryId}` : ''
+      router.push(`/homes/${notification.homeKey}/book${queryParams}`)
+      return
+    }
+
+    if (notification.type === 'booking_created' && notification.homeKey) {
+      router.push('/homes/approved')
+      return
+    }
+
+    if (notification.type === 'rate') {
       if (displayRole === 'owner' || (actualRole === 'both' && selectedRole === 'owner')) {
         router.push('/homes/rate-user')
       } else {
@@ -197,7 +209,7 @@ export default function NotificationBell() {
 
   const handleFinalizeApprove = async () => {
     if (finalizeNotification) {
-      // Delete the notification when finalized
+      // Idempotent: already soft-deleted when the bell row was clicked
       try {
         await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
           method: 'DELETE',
@@ -205,17 +217,13 @@ export default function NotificationBell() {
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
-      setNotifications(notifications.filter(n => n.id !== finalizeNotification.id))
-      if (!finalizeNotification.viewed) {
-        setUnviewedCount(Math.max(0, unviewedCount - 1))
-      }
+      setNotifications((prev) => prev.filter((n) => n.id !== finalizeNotification.id))
       setFinalizeNotification(null)
     }
   }
 
   const handleFinalizeDismiss = async () => {
     if (finalizeNotification) {
-      // Delete the notification when dismissed
       try {
         await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
           method: 'DELETE',
@@ -223,30 +231,16 @@ export default function NotificationBell() {
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
-      setNotifications(notifications.filter(n => n.id !== finalizeNotification.id))
-      if (!finalizeNotification.viewed) {
-        setUnviewedCount(Math.max(0, unviewedCount - 1))
-      }
+      setNotifications((prev) => prev.filter((n) => n.id !== finalizeNotification.id))
       setFinalizeNotification(null)
     }
   }
 
   const handleDeleteNotification = async (e: React.MouseEvent, notificationId: number) => {
     e.stopPropagation()
-    const notification = notifications.find(n => n.id === notificationId)
-    try {
-      const response = await fetch(`/api/notifications?id=${notificationId}`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        setNotifications(notifications.filter(n => n.id !== notificationId))
-        // Update unviewed count if notification was unviewed
-        if (notification && !notification.viewed) {
-          setUnviewedCount(Math.max(0, unviewedCount - 1))
-        }
-      }
-    } catch (error) {
-      console.error('Error deleting notification:', error)
+    const notification = notifications.find((n) => n.id === notificationId)
+    if (notification) {
+      await removeFromBell(notification)
     }
   }
 
@@ -282,7 +276,7 @@ export default function NotificationBell() {
     <div className="relative pointer-events-auto" ref={notificationRef} style={{ isolation: 'isolate' }}>
       <button
         onClick={handleBellClick}
-        className="relative px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5 pointer-events-auto h-[40px] flex items-center justify-center"
+        className="btn-icon-dock relative pointer-events-auto px-4"
         aria-label="Notifications"
         style={{ pointerEvents: 'auto', isolation: 'isolate' }}
       >
@@ -292,7 +286,7 @@ export default function NotificationBell() {
           viewBox="0 0 24 24" 
           fill="none" 
           xmlns="http://www.w3.org/2000/svg"
-          className="text-[#2D3748]"
+          className="text-[var(--ink)]"
         >
           <path 
             d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" 
@@ -310,26 +304,26 @@ export default function NotificationBell() {
           />
         </svg>
         {unviewedCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-[#2D3748]">
+          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)] bg-red-500 text-xs font-bold text-white">
             {unviewedCount > 9 ? '9+' : unviewedCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute top-14 right-0 w-80 bg-[#1A202C]/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-[#E8D5B7]/20 overflow-hidden animate-fadeIn">
-          <div className="p-4 border-b border-[#E8D5B7]/20 bg-[#2D3748]/50">
-            <h3 className="text-lg font-bold text-[#E8D5B7]">
+        <div className="absolute right-0 top-14 w-80 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl backdrop-blur-xl animate-fadeIn">
+          <div className="border-b border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 p-4">
+            <h3 className="font-display text-lg font-semibold text-[var(--text)]">
               {getTranslation(language, 'notifications')}
             </h3>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
-              <div className="p-4 text-center text-[#E8D5B7]/70">
+              <div className="p-4 text-center text-[var(--text-muted)]">
                 {getTranslation(language, 'loading')}
               </div>
             ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-[#E8D5B7]/70">
+              <div className="p-4 text-center text-[var(--text-muted)]">
                 {getTranslation(language, 'noNotifications')}
               </div>
             ) : (
@@ -337,14 +331,14 @@ export default function NotificationBell() {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className="p-4 border-b border-[#E8D5B7]/10 hover:bg-[#2D3748]/50 transition-colors cursor-pointer group relative"
+                  className="group relative cursor-pointer border-b border-[var(--border-subtle)]/50 p-4 transition-colors hover:bg-[var(--ink-soft)]/80"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-sm text-[#E8D5B7] group-hover:text-[#D4C19F] transition-colors">
+                      <p className="text-sm text-[var(--text)] transition-colors group-hover:text-[var(--accent-light)]">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-[#E8D5B7]/60 mt-1">
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
                         {new Date(notification.createdAt).toLocaleDateString(
                           language === 'el' ? 'el-GR' : 'en-US',
                           {
@@ -358,7 +352,7 @@ export default function NotificationBell() {
                     </div>
                     <button
                       onClick={(e) => handleDeleteNotification(e, notification.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[#E8D5B7]/70 hover:text-red-400 text-lg"
+                      className="text-lg text-[var(--text-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                       aria-label="Delete notification"
                     >
                       ×

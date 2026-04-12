@@ -157,73 +157,73 @@ export default function SetAvailabilityPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Link
             href={`/homes/inquiries/${homeKey}`}
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] mb-4 inline-block transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'setAvailability')}
           </h1>
           {home && (
-            <p className="text-[#E8D5B7]/70">
+            <p className="text-[var(--text-muted)]">
               {home.title}
             </p>
           )}
-          <p className="text-sm text-[#E8D5B7]/60 mt-2">
+          <p className="text-sm text-[var(--text-muted)] mt-2">
             {getTranslation(language, 'setAvailabilityDescription')}
           </p>
         </div>
 
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
           {inquiryId && (
-            <div className="mb-6 p-4 bg-[#2D3748]/50 rounded-2xl border border-[#E8D5B7]/20">
-              <h2 className="text-xl font-semibold text-[#E8D5B7] mb-4">Contact and Scheduling Details</h2>
+            <div className="mb-6 p-4 bg-[var(--ink-soft)]/50 rounded-2xl border border-[var(--border-subtle)]">
+              <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Contact and Scheduling Details</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Name</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Name</label>
                   <input
                     type="text"
                     value={ownerDetails.name}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                    className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Email</label>
                   <input
                     type="email"
                     value={ownerDetails.email}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, email: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                    className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Phone</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Phone</label>
                   <input
                     type="text"
                     value={ownerDetails.phone}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, phone: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                    className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Appointment Duration</label>
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Appointment Duration</label>
                   <select
                     value={ownerDetails.appointmentThresholdMinutes}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, appointmentThresholdMinutes: Number(e.target.value) })}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                    className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   >
                     <option value={15}>15 minutes</option>
                     <option value={30}>30 minutes</option>
@@ -236,13 +236,13 @@ export default function SetAvailabilityPage() {
           )}
 
           {/* Add New Slot Form */}
-          <div className="mb-6 p-4 bg-[#2D3748]/50 rounded-2xl border border-[#E8D5B7]/20">
-            <h2 className="text-xl font-semibold text-[#E8D5B7] mb-4">
+          <div className="mb-6 p-4 bg-[var(--ink-soft)]/50 rounded-2xl border border-[var(--border-subtle)]">
+            <h2 className="text-xl font-semibold text-[var(--text)] mb-4">
               {getTranslation(language, 'addAvailabilitySlot')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                   {getTranslation(language, 'date')}
                 </label>
                 <input
@@ -250,35 +250,35 @@ export default function SetAvailabilityPage() {
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                   {getTranslation(language, 'startTime')}
                 </label>
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                   {getTranslation(language, 'endTime')}
                 </label>
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div className="flex items-end">
                 <button
                   onClick={addSlot}
-                  className="w-full px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+                  className="w-full px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
                 >
                   {getTranslation(language, 'add')}
                 </button>
@@ -289,16 +289,16 @@ export default function SetAvailabilityPage() {
           {/* List of Added Slots */}
           {slots.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-xl font-semibold text-[#E8D5B7] mb-4">
+              <h2 className="text-xl font-semibold text-[var(--text)] mb-4">
                 {getTranslation(language, 'availabilitySlots')}
               </h2>
               <div className="space-y-2">
                 {slots.map((slot, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 bg-[#2D3748]/50 rounded-xl border border-[#E8D5B7]/20"
+                    className="flex items-center justify-between p-3 bg-[var(--ink-soft)]/50 rounded-xl border border-[var(--border-subtle)]"
                   >
-                    <div className="flex items-center gap-4 text-[#E8D5B7]">
+                    <div className="flex items-center gap-4 text-[var(--text)]">
                       <span className="font-semibold">
                         {new Date(slot.date).toLocaleDateString(
                           language === 'el' ? 'el-GR' : 'en-US',
@@ -337,7 +337,7 @@ export default function SetAvailabilityPage() {
             </button>
             <Link
               href={`/homes/inquiries/${homeKey}`}
-              className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold"
+              className="px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold"
             >
               {getTranslation(language, 'cancel')}
             </Link>

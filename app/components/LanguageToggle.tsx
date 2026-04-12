@@ -13,25 +13,25 @@ export default function LanguageToggle() {
 
   if (!mounted) {
     return (
-      <div className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl pointer-events-auto h-[40px] flex items-center">
-        <span className="opacity-0">🇬🇷 ΕΛ</span>
+      <div className="btn-icon-dock pointer-events-auto opacity-0" aria-hidden>
+        <span>EN</span>
       </div>
     )
   }
 
   return (
     <button
+      type="button"
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
         toggleLanguage()
       }}
-      className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-0.5 pointer-events-auto h-[40px] flex items-center justify-center"
+      className="btn-icon-dock pointer-events-auto"
       aria-label="Toggle language"
       style={{ pointerEvents: 'auto', isolation: 'isolate' }}
     >
-      {language === 'el' ? '🇬🇷 ΕΛ' : '🇬🇧 EN'}
+      {language === 'el' ? 'ΕΛ' : 'EN'}
     </button>
   )
 }
-

@@ -43,7 +43,7 @@ export default function NotificationPopup({ type, message, onClose, language, cl
       case 'info':
         return 'bg-blue-600/90 border-blue-500'
       default:
-        return 'bg-[#2D3748]/90 border-[#E8D5B7]/30'
+        return 'bg-[var(--ink-soft)]/90 border-[var(--border-subtle)]'
     }
   }
 

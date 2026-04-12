@@ -66,18 +66,18 @@ export default function SetRolePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">Ρύθμιση ρόλου...</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">Ρύθμιση ρόλου...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
-          <p className="text-[#E8D5B7]">Ανακατεύθυνση...</p>
+          <p className="text-[var(--text)]">Ανακατεύθυνση...</p>
         </div>
       </div>
     )

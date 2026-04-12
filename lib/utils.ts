@@ -25,6 +25,11 @@ export function removeGreekAccents(str: string): string {
     .replace(/[\u0300-\u036f]/g, '')
 }
 
+/** Greek all-caps display without tonos/diacritics (e.g. ΕΝΟΙΚΙΑΣΗ not ΕΝΟΙΚΊΑΣΗ). */
+export function greekUppercaseNoAnnotations(str: string): string {
+  return removeGreekAccents(str).toUpperCase()
+}
+
 type AreaCountryRow = { country: string | null; countryGreek: string | null }
 type AreaCityRow = { city: string | null; cityGreek: string | null }
 type AreaNameRow = { name: string | null; nameGreek: string | null }

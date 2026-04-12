@@ -60,20 +60,20 @@ export default function UserRatingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#E8D5B7] text-xl mb-4">{error}</p>
+          <p className="text-[var(--text)] text-xl mb-4">{error}</p>
           <button
             onClick={() => router.back()}
-            className="px-6 py-3 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold"
+            className="px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
           >
             {getTranslation(language, 'goBack')}
           </button>
@@ -87,50 +87,50 @@ export default function UserRatingsPage() {
     : getTranslation(language, 'asUser')
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <button
             onClick={() => router.back()}
-            className="mb-4 text-[#E8D5B7]/70 hover:text-[#E8D5B7] transition-colors flex items-center gap-2"
+            className="mb-4 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-2"
           >
             <span>←</span>
             <span>{getTranslation(language, 'goBack')}</span>
           </button>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'allRatings')}
           </h1>
-          <p className="text-[#E8D5B7]/70">
+          <p className="text-[var(--text-muted)]">
             {ratingTypeLabel} • {ratings.length} {ratings.length === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
           </p>
         </div>
 
         {ratings.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[#E8D5B7]/20">
-            <p className="text-xl text-[#E8D5B7]/70">{getTranslation(language, 'noRatingsYet')}</p>
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
+            <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noRatingsYet')}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {ratings.map((rating) => (
               <div
                 key={rating.id}
-                className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20"
+                className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <Link
                         href={`/profile?userId=${rating.rater.id}&role=${rating.rater.role}`}
-                        className="text-xl font-bold text-[#E8D5B7] hover:text-[#D4C19F] underline transition-colors cursor-pointer"
+                        className="text-xl font-bold text-[var(--text)] hover:text-[var(--accent)] underline transition-colors cursor-pointer"
                       >
                         {rating.rater.name || rating.rater.email.split('@')[0]}
                       </Link>
                       <StarRating rating={rating.score} size="lg" />
-                      <span className="text-lg font-bold text-[#E8D5B7] ml-2">
+                      <span className="text-lg font-bold text-[var(--text)] ml-2">
                         {rating.score.toFixed(1)}
                       </span>
                     </div>
-                    <p className="text-sm text-[#E8D5B7]/60">
+                    <p className="text-sm text-[var(--text-muted)]">
                       {new Date(rating.createdAt).toLocaleDateString(
                         language === 'el' ? 'el-GR' : 'en-US',
                         { year: 'numeric', month: 'long', day: 'numeric' }
@@ -139,8 +139,8 @@ export default function UserRatingsPage() {
                   </div>
                 </div>
                 {rating.comment && (
-                  <div className="mt-4 pt-4 border-t border-[#E8D5B7]/20">
-                    <p className="text-[#E8D5B7]/80">{rating.comment}</p>
+                  <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                    <p className="text-[var(--text-muted)]">{rating.comment}</p>
                   </div>
                 )}
               </div>

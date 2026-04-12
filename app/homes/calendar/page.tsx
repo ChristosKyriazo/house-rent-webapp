@@ -173,8 +173,8 @@ export default function CalendarPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
@@ -186,23 +186,23 @@ export default function CalendarPage() {
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-4">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-4">
             {getTranslation(language, 'calendar')}
           </h1>
           
           {/* View Toggle */}
           <div className="flex items-center gap-4 mb-4">
-            <div className="flex gap-2 bg-[#1A202C]/80 rounded-xl p-1">
+            <div className="flex gap-2 bg-[var(--surface)] rounded-xl p-1">
               <button
                 onClick={() => setView('day')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   view === 'day'
-                    ? 'bg-[#E8D5B7] text-[#2D3748] font-semibold'
-                    : 'text-[#E8D5B7]/70 hover:text-[#E8D5B7]'
+                    ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
                 }`}
               >
                 {getTranslation(language, 'day')}
@@ -211,8 +211,8 @@ export default function CalendarPage() {
                 onClick={() => setView('week')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   view === 'week'
-                    ? 'bg-[#E8D5B7] text-[#2D3748] font-semibold'
-                    : 'text-[#E8D5B7]/70 hover:text-[#E8D5B7]'
+                    ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
                 }`}
               >
                 {getTranslation(language, 'week')}
@@ -221,8 +221,8 @@ export default function CalendarPage() {
                 onClick={() => setView('month')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   view === 'month'
-                    ? 'bg-[#E8D5B7] text-[#2D3748] font-semibold'
-                    : 'text-[#E8D5B7]/70 hover:text-[#E8D5B7]'
+                    ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
                 }`}
               >
                 {getTranslation(language, 'month')}
@@ -232,7 +232,7 @@ export default function CalendarPage() {
             {/* Today Button */}
             <button
               onClick={() => setSelectedDate(new Date())}
-              className="px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold"
+              className="px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold"
             >
               {getTranslation(language, 'today')}
             </button>
@@ -241,7 +241,7 @@ export default function CalendarPage() {
 
         {/* Day View */}
         {view === 'day' && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
             <div className="flex items-center justify-between mb-6">
               <button
                 onClick={() => {
@@ -249,11 +249,11 @@ export default function CalendarPage() {
                   newDate.setDate(selectedDate.getDate() - 1)
                   setSelectedDate(newDate)
                 }}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 ←
               </button>
-              <h2 className="text-2xl font-bold text-[#E8D5B7]">
+              <h2 className="text-2xl font-bold text-[var(--text)]">
                 {selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                   weekday: 'long',
                   year: 'numeric',
@@ -267,7 +267,7 @@ export default function CalendarPage() {
                   newDate.setDate(selectedDate.getDate() + 1)
                   setSelectedDate(newDate)
                 }}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 →
               </button>
@@ -275,7 +275,7 @@ export default function CalendarPage() {
 
             <div className="space-y-4">
               {getBookingsForDate(selectedDate).length === 0 ? (
-                <p className="text-[#E8D5B7]/70 text-center py-8">
+                <p className="text-[var(--text-muted)] text-center py-8">
                   {getTranslation(language, 'noBookings')}
                 </p>
               ) : (
@@ -285,23 +285,23 @@ export default function CalendarPage() {
                     <div
                       key={booking.id}
                       onClick={() => setSelectedBooking(booking)}
-                      className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20 cursor-pointer hover:bg-[#2D3748] hover:border-[#E8D5B7]/40 transition-all"
+                      className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--ink-soft)] hover:border-[var(--accent)]/35 transition-all"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-[#E8D5B7] mb-2">
+                          <h3 className="text-lg font-semibold text-[var(--text)] mb-2">
                             {booking.title}
                           </h3>
                           {booking.description && (
-                            <p className="text-[#E8D5B7]/70 text-sm mb-2">{booking.description}</p>
+                            <p className="text-[var(--text-muted)] text-sm mb-2">{booking.description}</p>
                           )}
-                          <div className="space-y-1 text-sm text-[#E8D5B7]/70">
+                          <div className="space-y-1 text-sm text-[var(--text-muted)]">
                             <p>🕐 {formatTime(booking.startTime)} - {formatTime(booking.endTime)}</p>
                             <p>👤 {getTranslation(language, 'with')}: {booking.owner.name || booking.owner.email}</p>
                             {booking.home && (
                               <Link
                                 href={`/homes/${booking.home.key}`}
-                                className="text-[#E8D5B7] hover:text-[#D4C19F] underline"
+                                className="text-[var(--text)] hover:text-[var(--accent)] underline"
                               >
                                 🏠 {booking.home.title}
                               </Link>
@@ -327,7 +327,7 @@ export default function CalendarPage() {
 
         {/* Week View */}
         {view === 'week' && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
             <div className="flex items-center justify-between mb-6">
               <button
                 onClick={() => {
@@ -335,11 +335,11 @@ export default function CalendarPage() {
                   newDate.setDate(selectedDate.getDate() - 7)
                   setSelectedDate(newDate)
                 }}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 ←
               </button>
-              <h2 className="text-2xl font-bold text-[#E8D5B7]">
+              <h2 className="text-2xl font-bold text-[var(--text)]">
                 {getWeekRange(selectedDate)}
               </h2>
               <button
@@ -348,7 +348,7 @@ export default function CalendarPage() {
                   newDate.setDate(selectedDate.getDate() + 7)
                   setSelectedDate(newDate)
                 }}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 →
               </button>
@@ -362,14 +362,14 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`border border-[#E8D5B7]/20 rounded-xl p-3 min-h-[200px] ${
-                      isToday ? 'bg-[#E8D5B7]/10 border-[#E8D5B7]/40' : 'bg-[#2D3748]/50'
+                    className={`border border-[var(--border-subtle)] rounded-xl p-3 min-h-[200px] ${
+                      isToday ? 'bg-[var(--btn-primary-bg)]/10 border-[var(--border-subtle)]' : 'bg-[var(--ink-soft)]/50'
                     }`}
                   >
-                    <div className={`text-sm font-semibold mb-2 ${isToday ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/70'}`}>
+                    <div className={`text-sm font-semibold mb-2 ${isToday ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                       {weekDays[index]}
                     </div>
-                    <div className={`text-lg font-bold mb-2 ${isToday ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/70'}`}>
+                    <div className={`text-lg font-bold mb-2 ${isToday ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                       {day.getDate()}
                     </div>
                     <div className="space-y-1">
@@ -393,19 +393,19 @@ export default function CalendarPage() {
 
         {/* Month View */}
         {view === 'month' && (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20">
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
             {/* Month Navigation */}
             <div className="flex items-center justify-between mb-6">
               <button
                 onClick={() => navigateMonth('prev')}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 ←
               </button>
-              <h2 className="text-2xl font-bold text-[#E8D5B7]">{monthName}</h2>
+              <h2 className="text-2xl font-bold text-[var(--text)]">{monthName}</h2>
               <button
                 onClick={() => navigateMonth('next')}
-                className="px-4 py-2 text-[#E8D5B7] hover:bg-[#2D3748] rounded-xl transition-all"
+                className="px-4 py-2 text-[var(--text)] hover:bg-[var(--ink-soft)] rounded-xl transition-all"
               >
                 →
               </button>
@@ -415,7 +415,7 @@ export default function CalendarPage() {
             <div className="grid grid-cols-7 gap-2">
               {/* Week Day Headers */}
               {weekDays.map(day => (
-                <div key={day} className="text-center text-sm font-semibold text-[#E8D5B7]/70 py-2">
+                <div key={day} className="text-center text-sm font-semibold text-[var(--text-muted)] py-2">
                   {day}
                 </div>
               ))}
@@ -432,11 +432,11 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`aspect-square border border-[#E8D5B7]/20 rounded-xl p-2 ${
-                      isToday ? 'bg-[#E8D5B7]/10 border-[#E8D5B7]/40' : 'bg-[#2D3748]/50'
+                    className={`aspect-square border border-[var(--border-subtle)] rounded-xl p-2 ${
+                      isToday ? 'bg-[var(--btn-primary-bg)]/10 border-[var(--border-subtle)]' : 'bg-[var(--ink-soft)]/50'
                     }`}
                   >
-                    <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-[#E8D5B7]' : 'text-[#E8D5B7]/70'}`}>
+                    <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                       {day.getDate()}
                     </div>
                     <div className="space-y-1">
@@ -451,7 +451,7 @@ export default function CalendarPage() {
                         </div>
                       ))}
                       {dayBookings.length > 3 && (
-                        <div className="text-xs text-[#E8D5B7]/60">
+                        <div className="text-xs text-[var(--text-muted)]">
                           +{dayBookings.length - 3} {getTranslation(language, 'more')}
                         </div>
                       )}
@@ -867,26 +867,26 @@ function RescheduleModal({
       onClick={onClose}
     >
       <div
-        className="bg-[#1A202C] rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#E8D5B7]/20 shadow-2xl animate-scaleIn"
+        className="bg-[var(--ink-soft)] rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[var(--border-subtle)] shadow-2xl animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-[#E8D5B7]">
+          <h2 className="text-3xl font-bold text-[var(--text)]">
             {getTranslation(language, 'rescheduleBooking')}
           </h2>
           <button
             onClick={onClose}
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl transition-colors"
           >
             ×
           </button>
         </div>
 
         <div className="mb-4">
-          <p className="text-[#E8D5B7]/70 mb-2">
+          <p className="text-[var(--text-muted)] mb-2">
             <strong>{getTranslation(language, 'currentBooking')}:</strong>
           </p>
-          <p className="text-[#E8D5B7]">
+          <p className="text-[var(--text)]">
             {new Date(booking.startTime).toLocaleDateString(
               language === 'el' ? 'el-GR' : 'en-US',
               {
@@ -903,9 +903,9 @@ function RescheduleModal({
         </div>
 
         {loading ? (
-          <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+          <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
         ) : Object.keys(groupedByDate).length === 0 ? (
-          <p className="text-[#E8D5B7]/70">{getTranslation(language, 'noAvailabilitySlots')}</p>
+          <p className="text-[var(--text-muted)]">{getTranslation(language, 'noAvailabilitySlots')}</p>
         ) : (
           <div className="space-y-6">
             {Object.entries(groupedByDate)
@@ -913,9 +913,9 @@ function RescheduleModal({
               .map(([date, timeSlots]) => (
                 <div
                   key={date}
-                  className="bg-[#2D3748]/50 rounded-2xl p-4 border border-[#E8D5B7]/20"
+                  className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]"
                 >
-                  <h3 className="text-lg font-semibold text-[#E8D5B7] mb-3">
+                  <h3 className="text-lg font-semibold text-[var(--text)] mb-3">
                     {new Date(date).toLocaleDateString(
                       language === 'el' ? 'el-GR' : 'en-US',
                       {
@@ -928,7 +928,7 @@ function RescheduleModal({
                   </h3>
                   
                   <div className="flex items-center gap-4">
-                    <label className="text-[#E8D5B7]/70 font-medium min-w-[120px]">
+                    <label className="text-[var(--text-muted)] font-medium min-w-[120px]">
                       {getTranslation(language, 'selectTime')}:
                     </label>
                     <select
@@ -937,7 +937,7 @@ function RescheduleModal({
                         setSelectedDate(date)
                         setSelectedTimeSlot(e.target.value)
                       }}
-                      className="flex-1 px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                      className="flex-1 px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                     >
                       <option value="">
                         {getTranslation(language, 'selectTimeSlot')}
@@ -969,11 +969,11 @@ function RescheduleModal({
         )}
 
         {selectedDate && selectedTimeSlot && (
-          <div className="mt-6 bg-[#2D3748]/50 rounded-2xl p-4 border border-green-500/50">
-            <p className="text-[#E8D5B7] mb-2">
+          <div className="mt-6 bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-green-500/50">
+            <p className="text-[var(--text)] mb-2">
               <strong>{getTranslation(language, 'newBookingTime')}:</strong>
             </p>
-            <p className="text-[#E8D5B7]">
+            <p className="text-[var(--text)]">
               {new Date(selectedDate).toLocaleDateString(
                 language === 'el' ? 'el-GR' : 'en-US',
                 {
@@ -996,7 +996,7 @@ function RescheduleModal({
         <div className="mt-6 flex justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold"
+            className="px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold"
           >
             {getTranslation(language, 'cancel')}
           </button>

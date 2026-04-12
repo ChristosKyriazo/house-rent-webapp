@@ -16,7 +16,6 @@ export default function RoleSwitch() {
     setMounted(true)
   }, [])
 
-  // Only show if user has "both" role
   if (!mounted || actualRole !== 'both' || !selectedRole) {
     return null
   }
@@ -24,42 +23,44 @@ export default function RoleSwitch() {
   const handleRoleChange = (role: 'owner' | 'user') => {
     if (role !== selectedRole) {
       setSelectedRole(role)
-      // Redirect to profile page when role changes
       router.push('/profile')
     }
   }
 
   return (
-    <div className="flex items-center gap-0.5 bg-[#2D3748]/50 rounded-xl p-0.5 shadow-md border border-[#E8D5B7]/20 pointer-events-auto h-[40px]" style={{ isolation: 'isolate' }}>
-      {/* Owner Option */}
+    <div
+      className="pointer-events-auto flex h-[44px] items-center gap-0.5 rounded-xl border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] p-0.5"
+      style={{ isolation: 'isolate' }}
+    >
       <button
+        type="button"
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
           handleRoleChange('owner')
         }}
-        className={`px-2.5 py-2 rounded-lg font-medium text-xs transition-all duration-300 ease-in-out transform h-full flex items-center ${
+        className={`flex h-full items-center rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors ${
           selectedRole === 'owner'
-            ? 'bg-[#E8D5B7] text-[#2D3748] shadow-sm scale-105'
-            : 'bg-transparent text-[#E8D5B7]/40 hover:text-[#E8D5B7]/60 hover:bg-[#2D3748]/30'
+            ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
+            : 'text-[var(--text-muted)] hover:bg-[rgba(32,42,58,0.9)] hover:text-[var(--text)]'
         }`}
         aria-label="Switch to owner role"
         style={{ pointerEvents: 'auto' }}
       >
         🏠 {getTranslation(language, 'owner')}
       </button>
-      
-      {/* User Option */}
+
       <button
+        type="button"
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
           handleRoleChange('user')
         }}
-        className={`px-2.5 py-2 rounded-lg font-medium text-xs transition-all duration-300 ease-in-out transform h-full flex items-center ${
+        className={`flex h-full items-center rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors ${
           selectedRole === 'user'
-            ? 'bg-[#E8D5B7] text-[#2D3748] shadow-sm scale-105'
-            : 'bg-transparent text-[#E8D5B7]/40 hover:text-[#E8D5B7]/60 hover:bg-[#2D3748]/30'
+            ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
+            : 'text-[var(--text-muted)] hover:bg-[rgba(32,42,58,0.9)] hover:text-[var(--text)]'
         }`}
         aria-label="Switch to user role"
         style={{ pointerEvents: 'auto' }}
@@ -69,4 +70,3 @@ export default function RoleSwitch() {
     </div>
   )
 }
-

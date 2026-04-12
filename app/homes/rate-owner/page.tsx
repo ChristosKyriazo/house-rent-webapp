@@ -137,33 +137,33 @@ export default function RateOwnerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Link
             href="/homes/approved"
-            className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] mb-4 inline-block transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[#E8D5B7] mb-2">
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'rateOwner')}
           </h1>
-          <p className="text-[#E8D5B7]/70">
+          <p className="text-[var(--text-muted)]">
             {getTranslation(language, 'rateOwnerDescription')}
           </p>
         </div>
 
         {finalizedInquiries.length === 0 ? (
-          <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[#E8D5B7]/20 text-center">
-            <p className="text-xl text-[#E8D5B7]/70">{getTranslation(language, 'noFinalizedInquiries')}</p>
+          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">
+            <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noFinalizedInquiries')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -183,25 +183,25 @@ export default function RateOwnerPage() {
                 <div key={inquiry.id} className="space-y-3">
                   <Link
                     href={`/homes/ratings/${inquiry.home.key}`}
-                    className="block bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20 transition-all duration-300 hover:scale-105 hover:border-[#E8D5B7]/40 hover:shadow-2xl cursor-pointer"
+                    className="block bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)] transition-all duration-300 hover:scale-105 hover:border-[var(--accent)]/35 hover:shadow-2xl cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-[#E8D5B7] mb-2">
+                        <h3 className="text-2xl font-bold text-[var(--text)] mb-2">
                           {inquiry.home.title}
                         </h3>
-                        <p className="text-[#E8D5B7]/70 mb-3">
+                        <p className="text-[var(--text-muted)] mb-3">
                           📍 {inquiry.home.street && `${inquiry.home.street}, `}
                           {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
                         </p>
-                        <div className="bg-[#2D3748]/50 rounded-xl p-4 border border-[#E8D5B7]/20">
-                          <p className="text-sm text-[#E8D5B7]/70 mb-1">
+                        <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)]">
+                          <p className="text-sm text-[var(--text-muted)] mb-1">
                             {getTranslation(language, 'owner')}:
                           </p>
-                          <p className="text-lg font-semibold text-[#E8D5B7]">
+                          <p className="text-lg font-semibold text-[var(--text)]">
                             {inquiry.otherUser.name || inquiry.otherUser.email.split('@')[0]}
                           </p>
-                          <p className="text-sm text-[#E8D5B7]/60">
+                          <p className="text-sm text-[var(--text-muted)]">
                             {inquiry.otherUser.email}
                           </p>
                         </div>
@@ -218,7 +218,7 @@ export default function RateOwnerPage() {
                   {canReRate && (
                     <button
                       onClick={() => setSelectedInquiry(inquiry)}
-                      className="w-full px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+                      className="w-full px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm"
                     >
                       {getTranslation(language, 'rateAgain') || 'Rate Again'}
                     </button>
@@ -228,7 +228,7 @@ export default function RateOwnerPage() {
                   {!inquiry.alreadyRated && (
                     <button
                       onClick={() => setSelectedInquiry(inquiry)}
-                      className="w-full px-4 py-2 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-sm"
+                      className="w-full px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm"
                     >
                       {getTranslation(language, 'rateNow')}
                     </button>
@@ -242,9 +242,9 @@ export default function RateOwnerPage() {
         {/* Rating Modal */}
         {selectedInquiry && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-[#1A202C] rounded-3xl shadow-2xl border border-[#E8D5B7]/20 max-w-2xl w-full p-6">
+            <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-[#E8D5B7]">
+                <h2 className="text-2xl font-bold text-[var(--text)]">
                   {getTranslation(language, 'rateOwner')}
                 </h2>
                 <button
@@ -253,7 +253,7 @@ export default function RateOwnerPage() {
                     setComment('')
                     setRating(5)
                   }}
-                  className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl"
+                  className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
                 >
                   ×
                 </button>
@@ -261,16 +261,16 @@ export default function RateOwnerPage() {
 
               <div className="space-y-6">
                 <div>
-                  <p className="text-[#E8D5B7] mb-2">
+                  <p className="text-[var(--text)] mb-2">
                     {getTranslation(language, 'property')}: {selectedInquiry.home.title}
                   </p>
-                  <p className="text-[#E8D5B7]/70 mb-4">
+                  <p className="text-[var(--text-muted)] mb-4">
                     {getTranslation(language, 'owner')}: {selectedInquiry.otherUser.name || selectedInquiry.otherUser.email.split('@')[0]}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-3">
+                  <label className="block text-sm font-medium text-[var(--text)] mb-3">
                     {getTranslation(language, 'rating')}:
                   </label>
                   <div className="flex items-center gap-2">
@@ -279,27 +279,27 @@ export default function RateOwnerPage() {
                         key={star}
                         onClick={() => setRating(star)}
                         className={`text-4xl transition-transform hover:scale-110 ${
-                          star <= rating ? 'text-yellow-400' : 'text-[#E8D5B7]/30'
+                          star <= rating ? 'text-yellow-400' : 'text-[var(--text)]/30'
                         }`}
                       >
                         ⭐
                       </button>
                     ))}
-                    <span className="ml-4 text-lg font-semibold text-[#E8D5B7]">
+                    <span className="ml-4 text-lg font-semibold text-[var(--text)]">
                       {rating}/5
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                  <label className="block text-sm font-medium text-[var(--text)] mb-2">
                     {getTranslation(language, 'comment')} ({getTranslation(language, 'optional')}):
                   </label>
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={4}
-                    className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'commentPlaceholder')}
                   />
                 </div>
@@ -311,14 +311,14 @@ export default function RateOwnerPage() {
                       setComment('')
                       setRating(5)
                     }}
-                    className="flex-1 px-6 py-3 bg-[#2D3748] hover:bg-[#2D3748]/80 text-[#E8D5B7] rounded-xl font-semibold transition-all"
+                    className="flex-1 px-6 py-3 bg-[var(--ink-soft)] hover:bg-[var(--ink-soft)]/80 text-[var(--text)] rounded-xl font-semibold transition-all"
                   >
                     {getTranslation(language, 'cancel')}
                   </button>
                   <button
                     onClick={handleSubmitRating}
                     disabled={submitting}
-                    className="flex-1 px-6 py-3 bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748] rounded-xl font-semibold transition-all disabled:opacity-50"
+                    className="flex-1 px-6 py-3 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold transition-all disabled:opacity-50"
                   >
                     {submitting ? getTranslation(language, 'submitting') : getTranslation(language, 'submitRating')}
                   </button>

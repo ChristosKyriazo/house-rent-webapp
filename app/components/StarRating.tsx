@@ -38,7 +38,7 @@ export default function StarRating({ rating, size = 'base', showNumber = false }
           return (
             <span key={i} className={`${starSize} relative inline-block`} style={{ width: '1em', height: '1em', lineHeight: '1' }}>
               {/* Gray background star */}
-              <span className="absolute inset-0 text-[#E8D5B7]/30" style={{ display: 'block' }}>⭐</span>
+              <span className="absolute inset-0 text-[var(--text)]/30" style={{ display: 'block' }}>⭐</span>
               {/* Yellow foreground star with width-based clipping */}
               <span
                 className="absolute inset-0 text-yellow-400"
@@ -56,14 +56,14 @@ export default function StarRating({ rating, size = 'base', showNumber = false }
         } else {
           // Empty star - explicitly gray
           return (
-            <span key={i} className={`${starSize} text-[#E8D5B7]/30`}>
+            <span key={i} className={`${starSize} text-[var(--text)]/30`}>
               ⭐
             </span>
           )
         }
       })}
       {showNumber && (
-        <span className={`ml-2 font-bold text-[#E8D5B7] ${starSize}`}>
+        <span className={`ml-2 font-bold text-[var(--text)] ${starSize}`}>
           {clampedRating.toFixed(1)}
         </span>
       )}

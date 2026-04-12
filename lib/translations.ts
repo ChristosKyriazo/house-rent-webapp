@@ -5,6 +5,13 @@ export const translations = {
     // App
     appTitle: 'Καλώς ήρθατε',
     appDescription: 'Βρείτε το ιδανικό σπίτι για ενοικίαση ή αγορά',
+    homeLogoAria: 'Αρχική σελίδα',
+    welcomeSubtitleOwner: 'Δημοσιεύστε ακίνητα και διαχειριστείτε τις αγγελίες σας από εδώ.',
+    welcomeSubtitleUser: 'Αναζητήστε ενοικίαση ή αγορά — ξεκινήστε με το τι ψάχνετε.',
+    welcomeSubtitleBoth: 'Δημοσιεύστε ακίνητα ή βρείτε το επόμενό σας σπίτι.',
+    welcomeEyebrowOwner: 'Για ιδιοκτήτες & μεσίτες',
+    welcomeEyebrowUser: 'Για ενοικιαστές & αγοραστές',
+    welcomeEyebrowBoth: 'Λογαριασμός ιδιοκτήτη & χρήστη',
     signUp: 'Εγγραφή',
     signIn: 'Σύνδεση',
     welcome: 'Καλώς ήρθατε',
@@ -139,6 +146,12 @@ export const translations = {
     useAIDescription: 'Χρήση AI για δημιουργία περιγραφής',
     useAIDescriptionForAll: 'Χρήση AI για δημιουργία περιγραφών για όλα τα ακίνητα',
     aiDescriptionWillGenerate: 'Η AI θα δημιουργήσει την περιγραφή',
+    aiDescriptionHintsPlaceholder:
+      'Προαιρετικά: κανόνες ή προτιμήσεις (π.χ. μόνο φοιτητές, χωρίς κατοικίδια). Αφήστε κενό για τυπική περιγραφή.',
+    aiDescriptionHintsHelper:
+      'Η AI γράφει ολόκληρη την αγγελία. Ό,τι πληκτρολογείτε ενσωματώνεται ως σημειώσεις ιδιοκτήτη ή κανόνες.',
+    bulkAiDescriptionExcelHint:
+      'Με ενεργό AI, η στήλη «Description» στο Excel είναι προαιρετικές σημειώσεις ανά γραμμή (π.χ. μόνο οικογένειες, χωρίς κατοικίδια). Κενό = τυπική περιγραφή από την AI.',
     cannotBeChanged: 'Δεν μπορεί να αλλάξει',
     ownerProfile: 'Προφίλ Ιδιοκτήτη',
     notProvided: 'Δεν δόθηκε',
@@ -454,6 +467,13 @@ export const translations = {
     // App
     appTitle: 'Welcome',
     appDescription: 'Find your ideal home for rent or purchase',
+    homeLogoAria: 'Home page',
+    welcomeSubtitleOwner: 'Publish listings and manage your properties from here.',
+    welcomeSubtitleUser: 'Search for rent or purchase — start by choosing what you need.',
+    welcomeSubtitleBoth: 'Publish a listing or find your next home.',
+    welcomeEyebrowOwner: 'For owners & brokers',
+    welcomeEyebrowUser: 'For renters & buyers',
+    welcomeEyebrowBoth: 'Owner & renter account',
     signUp: 'Sign Up',
     signIn: 'Sign In',
     welcome: 'Welcome',
@@ -589,6 +609,12 @@ export const translations = {
     useAIDescription: 'Use AI to generate description',
     useAIDescriptionForAll: 'Use AI to generate descriptions for all homes',
     aiDescriptionWillGenerate: 'AI will generate description',
+    aiDescriptionHintsPlaceholder:
+      'Optional: tenant rules or preferences (e.g. students only, no pets). Leave blank for a standard description.',
+    aiDescriptionHintsHelper:
+      'AI writes the full listing. Anything you type here is woven in as landlord notes or rules.',
+    bulkAiDescriptionExcelHint:
+      'With AI enabled, the Excel "Description" column is optional per-row notes (e.g. families only, no pets). Leave blank for a standard AI-generated description.',
     notSet: 'Not set',
     cannotBeChanged: 'Cannot be changed',
     

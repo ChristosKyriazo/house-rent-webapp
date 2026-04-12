@@ -121,21 +121,21 @@ export default function EditProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#2D3748] flex items-center justify-center">
-        <p className="text-[#E8D5B7]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
+        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#2D3748] py-12 px-4">
+    <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[#E8D5B7]/20">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-[#E8D5B7]">{getTranslation(language, 'editProfileTitle')}</h1>
+            <h1 className="text-3xl font-bold text-[var(--text)]">{getTranslation(language, 'editProfileTitle')}</h1>
             <Link
               href="/profile"
-              className="px-4 py-2 text-sm text-[#E8D5B7] hover:text-[#D4C19F] transition-colors"
+              className="px-4 py-2 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
             >
               ← {getTranslation(language, 'cancel')}
             </Link>
@@ -149,14 +149,14 @@ export default function EditProfilePage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">
                 {getTranslation(language, 'userNameOrName')}
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                 placeholder={getTranslation(language, 'placeholderName')}
               />
             </div>
@@ -164,14 +164,14 @@ export default function EditProfilePage() {
             {/* Don't show date of birth for brokers */}
             {currentRole !== 'broker' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">
                   {getTranslation(language, 'dateOfBirth')}
                 </label>
                 <input
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7] placeholder:text-[#E8D5B7]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'yourDateOfBirth')}
                 />
               </div>
@@ -180,13 +180,13 @@ export default function EditProfilePage() {
             {/* Don't show occupation for brokers (it's auto-set to "Broker") */}
             {currentRole !== 'broker' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                  {getTranslation(language, 'occupation')} <span className="text-[#E8D5B7]/50">({getTranslation(language, 'optional')})</span>
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">
+                  {getTranslation(language, 'occupation')} <span className="text-[var(--text)]/50">({getTranslation(language, 'optional')})</span>
                 </label>
                 <select
                   value={formData.occupation}
                   onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                  className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
                 >
                   <option value="">{getTranslation(language, 'selectOccupation')}</option>
                   <option value="Employed">{translateValue(language, 'Employed')}</option>
@@ -201,13 +201,13 @@ export default function EditProfilePage() {
             {/* Show occupation as read-only for brokers */}
             {currentRole === 'broker' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">
                   {getTranslation(language, 'occupation')}
                 </label>
-                <p className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748]/50 rounded-2xl text-[#E8D5B7]">
+                <p className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 rounded-2xl text-[var(--text)]">
                   {translateValue(language, 'Broker')}
                 </p>
-                <p className="text-xs text-[#E8D5B7]/50 mt-1">
+                <p className="text-xs text-[var(--text)]/50 mt-1">
                   {getTranslation(language, 'brokerOccupationLocked') || 'Occupation is automatically set for brokers'}
                 </p>
               </div>
@@ -216,13 +216,13 @@ export default function EditProfilePage() {
             {/* Only show role field if user is not a broker */}
             {currentRole !== 'broker' && (
             <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+              <label className="block text-sm font-medium text-[var(--text)] mb-2">
                   {getTranslation(language, 'role')}
               </label>
               <select
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
+                className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)]"
               >
                   <option value="user">👤 {getTranslation(language, 'userSearchProperties')}</option>
                   <option value="owner">🏠 {getTranslation(language, 'ownerPublishProperties')}</option>
@@ -234,10 +234,10 @@ export default function EditProfilePage() {
             {/* Show read-only broker role info if user is a broker */}
             {currentRole === 'broker' && (
               <div>
-                <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
+                <label className="block text-sm font-medium text-[var(--text)] mb-2">
                   {getTranslation(language, 'role')}
                 </label>
-                <div className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748]/50 rounded-2xl text-[#E8D5B7]/70">
+                <div className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 rounded-2xl text-[var(--text-muted)]">
                   🏢 {translateRole(language, 'broker')} ({getTranslation(language, 'cannotBeChanged')})
                 </div>
               </div>
@@ -247,7 +247,7 @@ export default function EditProfilePage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-3 px-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-base shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
+                className="w-full py-3 px-4 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-2xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-base shadow-lg shadow-[var(--accent)]/15 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
               >
                 {saving ? getTranslation(language, 'saving') : getTranslation(language, 'saveChanges')}
               </button>
@@ -268,7 +268,7 @@ export default function EditProfilePage() {
           {/* Delete Account Confirmation Modal */}
           {showDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="bg-[#1A202C] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+              <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
                 <div className="text-center mb-6">
                   <div className="text-6xl mb-4">⚠️</div>
                   <h2 className="text-2xl font-bold text-red-400 mb-4">
@@ -277,7 +277,7 @@ export default function EditProfilePage() {
                   <p className="text-red-300 font-semibold text-lg mb-2">
                     {getTranslation(language, 'deleteAccountConfirm')}
                   </p>
-                  <p className="text-[#E8D5B7]/70 text-sm">
+                  <p className="text-[var(--text-muted)] text-sm">
                     {getTranslation(language, 'deleteAccountDescription')}
                   </p>
                 </div>
@@ -285,7 +285,7 @@ export default function EditProfilePage() {
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
                     disabled={deleting}
-                    className="flex-1 px-6 py-3 bg-[#2D3748] text-[#E8D5B7] rounded-xl hover:bg-[#1A202C] transition-all font-semibold text-sm disabled:opacity-50"
+                    className="flex-1 px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm disabled:opacity-50"
                   >
                     {getTranslation(language, 'cancel')}
                   </button>
