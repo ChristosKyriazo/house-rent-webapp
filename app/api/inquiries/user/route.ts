@@ -77,8 +77,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ homes, totalInquiries: homes.length }, { status: 200 })
   } catch (error) {
     console.error('Get user inquiries error:', error)
+    const details = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' ? { details } : {}),
+      },
       { status: 500 }
     )
   }

@@ -172,7 +172,11 @@ export async function GET(request: NextRequest) {
             // Find the booking for this home and recipient
             const booking = await prisma.booking.findFirst({
               where: {
-                homeId: home.id,
+                availability: {
+                  is: {
+                    homeId: home.id,
+                  },
+                },
                 status: 'scheduled',
                 startTime: {
                   gte: new Date(),

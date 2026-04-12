@@ -7,7 +7,6 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
-import PromoteModal from '@/app/components/PromoteModal'
 
 interface Home {
   id: number
@@ -35,9 +34,6 @@ export default function MyListingsPage() {
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('user')
   const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
-  const [subscription, setSubscription] = useState<number | null>(null)
-  const [showPromoteModal, setShowPromoteModal] = useState(false)
-  const [selectedHome, setSelectedHome] = useState<Home | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,7 +57,6 @@ export default function MyListingsPage() {
         }
 
         setUserRole(role)
-        setSubscription(profileData.user.subscription || 1)
 
         // Fetch user's homes using dedicated endpoint
         const homesResponse = await fetch('/api/homes/my-listings')
@@ -163,19 +158,6 @@ export default function MyListingsPage() {
                         }`}>
                           {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'sell')}`}
                         </span>
-                        {subscription !== null && subscription !== 1 && !home.finalized && (
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              setSelectedHome(home)
-                              setShowPromoteModal(true)
-                            }}
-                            className="ml-auto px-3 py-1.5 bg-[#E8D5B7] text-[#2D3748] rounded-lg hover:bg-[#D4C19F] transition-all text-xs font-semibold"
-                          >
-                            {getTranslation(language, 'promote') || 'Promote'}
-                          </button>
-                        )}
                       </div>
                       <p className="text-[#E8D5B7]/70 flex items-center gap-1 mb-2">
                         <span>📍</span>
@@ -224,25 +206,6 @@ export default function MyListingsPage() {
           </div>
         )}
 
-        {showPromoteModal && selectedHome && (
-          <PromoteModal
-            home={selectedHome}
-            subscription={subscription}
-            onClose={() => {
-              setShowPromoteModal(false)
-              setSelectedHome(null)
-            }}
-            onSuccess={() => {
-              // Refresh homes list
-              fetch('/api/homes/my-listings')
-                .then((res) => res.json())
-                .then((data) => {
-                  setUserHomes(data.homes || [])
-                })
-                .catch((err) => console.error('Error refreshing homes:', err))
-            }}
-          />
-        )}
       </div>
     </div>
   )

@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
           dateOfBirth: true,
         occupation: true,
         role: true,
-        subscription: true,
         createdAt: true,
       },
     })
@@ -49,7 +48,6 @@ export async function GET(request: NextRequest) {
           dateOfBirth: true,
           occupation: true,
           role: true,
-          subscription: true,
           createdAt: true,
         },
       })
@@ -67,7 +65,6 @@ export async function GET(request: NextRequest) {
         dateOfBirth: user.dateOfBirth,
         occupation: user.occupation,
         role: user.role,
-        subscription: user.subscription,
         createdAt: user.createdAt,
       }
     }, { status: 200 })
@@ -89,7 +86,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { name, dateOfBirth, occupation, role } = await request.json()
+    const { name, dateOfBirth, occupation, role, calComUsername } = await request.json()
     
     // If user is a broker, they cannot change their role or occupation
     if (user.role === 'broker') {
@@ -102,6 +99,7 @@ export async function PATCH(request: NextRequest) {
           dateOfBirth: null, // Brokers don't have date of birth
           occupation: 'Broker', // Always keep as "Broker" for brokers
           role: 'broker', // Keep broker role
+          calComUsername: calComUsername || null,
         },
         select: {
           id: true,
@@ -110,7 +108,6 @@ export async function PATCH(request: NextRequest) {
           dateOfBirth: true,
           occupation: true,
           role: true,
-          subscription: true,
           createdAt: true,
         },
       })
@@ -137,7 +134,6 @@ export async function PATCH(request: NextRequest) {
         dateOfBirth: true,
         occupation: true,
         role: true,
-        subscription: true,
         calComUsername: true,
         createdAt: true,
       },

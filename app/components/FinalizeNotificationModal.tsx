@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface FinalizeNotification {
   id: number
@@ -33,6 +34,7 @@ export default function FinalizeNotificationModal({
   const [sender, setSender] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   useEffect(() => {
     if (!notification || !notification.inquiryId) {
@@ -106,11 +108,11 @@ export default function FinalizeNotificationModal({
         }
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'finalizeFailed'))
+        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
       }
     } catch (error) {
       console.error('Error approving finalization:', error)
-      alert(getTranslation(language, 'finalizeFailed'))
+      setToast({ type: 'error', message: getTranslation(language, 'finalizeFailed') })
     } finally {
       setProcessing(false)
     }
@@ -131,11 +133,11 @@ export default function FinalizeNotificationModal({
         onDismiss()
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'finalizeFailed'))
+        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
       }
     } catch (error) {
       console.error('Error dismissing finalization:', error)
-      alert(getTranslation(language, 'finalizeFailed'))
+      setToast({ type: 'error', message: getTranslation(language, 'finalizeFailed') })
     } finally {
       setProcessing(false)
     }
@@ -144,6 +146,7 @@ export default function FinalizeNotificationModal({
   if (!notification) return null
 
   return (
+    <>
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-[#1A202C] rounded-3xl shadow-2xl border border-[#E8D5B7]/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -240,6 +243,17 @@ export default function FinalizeNotificationModal({
         </div>
       </div>
     </div>
+
+    {toast && (
+      <NotificationPopup
+        type={toast.type}
+        message={toast.message}
+        language={language}
+        onClose={() => setToast(null)}
+        className="z-[10001]"
+      />
+    )}
+    </>
   )
 }
 

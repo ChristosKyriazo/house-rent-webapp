@@ -184,7 +184,9 @@ Both descriptions must be complete, natural, and exactly 200 words each. ${house
       
       if (englishMarkerIndex >= 0 && greekMarkerIndex > englishMarkerIndex) {
         // Extract English description (everything between ENGLISH: and GREEK:)
-        const englishStart = englishMarkerIndex + fullResponse.substring(englishMarkerIndex).match(/ENGLISH:\s*/i)?.[0].length || 0
+        const englishMarkerLen =
+          fullResponse.substring(englishMarkerIndex).match(/ENGLISH:\s*/i)?.[0]?.length ?? 0
+        const englishStart = englishMarkerIndex + englishMarkerLen
         const englishEnd = greekMarkerIndex
         finalEnglishDescription = fullResponse.substring(englishStart, englishEnd).trim()
         // Ensure paragraph breaks are preserved
@@ -193,7 +195,9 @@ Both descriptions must be complete, natural, and exactly 200 words each. ${house
       
       if (greekMarkerIndex >= 0) {
         // Extract Greek description (everything after GREEK: to the end)
-        const greekStart = greekMarkerIndex + fullResponse.substring(greekMarkerIndex).match(/GREEK:\s*/i)?.[0].length || 0
+        const greekMarkerLen =
+          fullResponse.substring(greekMarkerIndex).match(/GREEK:\s*/i)?.[0]?.length ?? 0
+        const greekStart = greekMarkerIndex + greekMarkerLen
         finalGreekDescription = fullResponse.substring(greekStart).trim()
         // Ensure paragraph breaks are preserved
         finalGreekDescription = finalGreekDescription.replace(/\n\n+/g, '\n\n')

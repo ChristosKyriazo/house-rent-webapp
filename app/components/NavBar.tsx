@@ -9,9 +9,9 @@ export default async function NavBar() {
   try {
     const user = await getCurrentUser()
 
-    // Show navbar only when user is logged in
+    // If no user, show a guest hamburger menu with only Profile -> Login
     if (!user) {
-      return null
+      return <HamburgerMenu userRole="guest" />
     }
 
     const userRole = (user.role || 'user').toLowerCase()
@@ -24,6 +24,6 @@ export default async function NavBar() {
   } catch (error) {
     // Silently fail - navbar just won't show if there's an error
     console.error('NavBar error:', error)
-    return null
+    return <HamburgerMenu userRole="guest" />
   }
 }

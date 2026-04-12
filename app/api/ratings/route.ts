@@ -66,9 +66,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify that there's a relationship between these users
-    // For owner rating renter: check if owner has inquiry with this user AND a scheduled booking that has passed
+    // For owner/broker rating renter: check if there's a booking that has passed (startTime < now)
     // For user rating owner: check if user has finalized inquiry with this owner
     let canRate = false
+    let booking = null
+    
     if (type === 'owner') {
       // User is rating owner - check if user has finalized inquiry with this owner
       const inquiry = await prisma.inquiry.findFirst({
@@ -82,19 +84,22 @@ export async function POST(request: NextRequest) {
       })
       canRate = !!inquiry
     } else {
-      // Owner is rating renter - check if there's a booking between owner and user that has passed
+      // Owner/broker is rating renter - check if there's a booking that has passed
       // We check for bookings where:
-      // - ownerId is the current user (owner)
+      // - ownerId is the current user (owner/broker)
       // - userId is the rated user
-      // - endTime has passed (meeting has ended)
+      // - startTime has passed (meeting has started/passed)
       const now = new Date()
-      const booking = await prisma.booking.findFirst({
+      booking = await prisma.booking.findFirst({
         where: {
           ownerId: user.id,
           userId: parseInt(ratedUserId),
-          endTime: {
-            lt: now, // Meeting has ended
+          startTime: {
+            lt: now, // Meeting has started/passed
           },
+        },
+        orderBy: {
+          startTime: 'desc', // Get the most recent meeting
         },
       })
       canRate = !!booking
@@ -106,6 +111,28 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    // Additional check for brokers: they can only rate once per user
+    // Owners can rate multiple times (even after finalization)
+    const userRole = (user.role || 'user').toLowerCase()
+    if (type === 'renter' && userRole === 'broker') {
+      // Check if this broker has already rated this user
+      const existingRating = await prisma.rating.findFirst({
+        where: {
+          raterId: user.id,
+          ratedUserId: parseInt(ratedUserId),
+          type: 'renter',
+        },
+      })
+      
+      if (existingRating) {
+        return NextResponse.json(
+          { error: 'Brokers can only rate a user once.' },
+          { status: 403 }
+        )
+      }
+    }
+    // Note: Users with role "both" (owner and broker) are treated as owners and can rate multiple times
 
     // Always create a new rating (allow multiple ratings between same users)
     // Note: This requires removing the unique constraint from the schema

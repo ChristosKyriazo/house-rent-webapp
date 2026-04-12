@@ -51,9 +51,19 @@ export default function UserInquiriesPage() {
             router.push('/login')
             return
           }
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-          console.error('Failed to fetch inquiries:', errorData)
-          throw new Error(errorData.error || 'Failed to fetch inquiries')
+          const raw = await response.text()
+          let message = `Request failed (${response.status})`
+          try {
+            const parsed = raw ? JSON.parse(raw) : {}
+            message =
+              (typeof parsed === 'object' && parsed && 'error' in parsed && typeof (parsed as { error?: string }).error === 'string'
+                ? (parsed as { error: string }).error
+                : null) || raw.slice(0, 200) || message
+          } catch {
+            message = raw.slice(0, 200) || message
+          }
+          console.error('Failed to fetch inquiries:', { status: response.status, statusText: response.statusText, message })
+          throw new Error(message)
         }
 
         const data = await response.json()

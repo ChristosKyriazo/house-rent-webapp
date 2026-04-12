@@ -9,14 +9,13 @@ import { getTranslation } from '@/lib/translations'
 import { useClerk } from '@clerk/nextjs'
 
 interface HamburgerMenuProps {
-  userRole: string // 'owner', 'user', or 'both'
+  userRole: string // 'owner', 'user', 'both', 'broker', or 'guest'
 }
 
 export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuProps) {
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
   const [isOpen, setIsOpen] = useState(false)
-  const [hasFinalizedInquiries, setHasFinalizedInquiries] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { signOut } = useClerk()
@@ -30,52 +29,108 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
 
   // Normalize role to lowercase for comparison
   const normalizedRole = displayRole.toLowerCase()
+  const isGuest = normalizedRole !== 'owner' && normalizedRole !== 'user' && normalizedRole !== 'both' && normalizedRole !== 'broker'
 
-  // Check if user has finalized inquiries
-  useEffect(() => {
-    const checkFinalizedInquiries = async () => {
-      try {
-        // Check for finalized inquiries based on the display role
-        // If role is 'both', check both owner and user roles
-        if (normalizedRole === 'both') {
-          const [ownerRes, userRes] = await Promise.all([
-            fetch('/api/inquiries/finalized?role=owner'),
-            fetch('/api/inquiries/finalized?role=user')
-          ])
-          
-          let ownerHasFinalized = false
-          let userHasFinalized = false
-          
-          if (ownerRes.ok) {
-            const ownerData = await ownerRes.json()
-            ownerHasFinalized = ownerData.finalizedInquiries && ownerData.finalizedInquiries.length > 0
-          }
-          
-          if (userRes.ok) {
-            const userData = await userRes.json()
-            userHasFinalized = userData.finalizedInquiries && userData.finalizedInquiries.length > 0
-          }
-          
-          setHasFinalizedInquiries(ownerHasFinalized || userHasFinalized)
-        } else {
-          const roleParam = (normalizedRole === 'owner' || normalizedRole === 'broker') ? 'owner' : 'user'
-          const response = await fetch(`/api/inquiries/finalized?role=${roleParam}`)
-          if (response.ok) {
-            const data = await response.json()
-            setHasFinalizedInquiries(data.finalizedInquiries && data.finalizedInquiries.length > 0)
-          }
-        }
-      } catch (error) {
-        console.error('Error checking finalized inquiries:', error)
-        setHasFinalizedInquiries(false)
-      }
-    }
+  // Guest menu: only Profile -> Login
+  if (isGuest) {
+    const guestMenuItems = [
+      {
+        href: '/login?from=profile',
+        icon: '👤',
+        label: getTranslation(language, 'profile'),
+      },
+    ]
 
-    // Always check if role is owner, user, both, or broker
-    if (normalizedRole === 'owner' || normalizedRole === 'user' || normalizedRole === 'both' || normalizedRole === 'broker') {
-      checkFinalizedInquiries()
-    }
-  }, [normalizedRole])
+    const toggleMenu = () => setIsOpen(!isOpen)
+    const closeMenu = () => setIsOpen(false)
+
+    return (
+      <>
+        {/* Hamburger Button */}
+        <button
+          onClick={toggleMenu}
+          className="fixed top-4 left-4 z-[9999] p-3 bg-[#E8D5B7] rounded-xl shadow-lg hover:bg-[#D4C19F] transition-all duration-300 transform hover:scale-110 active:scale-95 pointer-events-auto"
+          aria-label={getTranslation(language, 'showMenu')}
+        >
+          <div className="w-6 h-5 flex flex-col justify-between">
+            <span
+              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
+                isOpen ? 'rotate-45 translate-y-2' : ''
+              }`}
+            />
+            <span
+              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
+                isOpen ? 'opacity-0' : 'opacity-100'
+              }`}
+            />
+            <span
+              className={`block h-0.5 w-full bg-[#2D3748] rounded transition-all duration-300 ${
+                isOpen ? '-rotate-45 -translate-y-2' : ''
+              }`}
+            />
+          </div>
+        </button>
+
+        {/* Overlay - only block when menu is open */}
+        {isOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
+            onClick={closeMenu}
+          />
+        )}
+
+        {/* Menu Panel */}
+        <div
+          className={`fixed top-0 left-0 h-full w-80 bg-[#1A202C] shadow-2xl z-40 transform transition-transform duration-300 ease-in-out ${
+            isOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="p-6 pt-20 flex flex-col h-full">
+            <h2 className="text-2xl font-bold text-[#E8D5B7] mb-8">{getTranslation(language, 'menu')}</h2>
+            <nav className="space-y-2 flex-1">
+              {guestMenuItems.map((item, index) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    closeMenu()
+                    router.push(item.href)
+                  }}
+                  className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 bg-[#2D3748]/50 text-[#E8D5B7] hover:bg-[#2D3748]"
+                  style={
+                    isOpen
+                      ? {
+                          animation: `slideInLeft 0.3s ease-out ${index * 50}ms both`,
+                        }
+                      : undefined
+                  }
+                >
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="text-lg">{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        <style jsx global>{`
+          @keyframes slideInLeft {
+            from {
+              opacity: 0;
+              transform: translateX(-20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+        `}</style>
+      </>
+    )
+  }
+
+  // Authenticated menu below
 
   // Define all possible menu items with translations
   // Inquiries item will be dynamically set based on selected role
@@ -117,58 +172,19 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
       href: inquiriesHref,
       labelKey: 'inquiries',
       icon: '📬',
-      label: getTranslation(language, 'inquiries')
-    })
+      label: getTranslation(language, 'inquiries'),
+      roles: [], // roles not used after initial filter
+    } as any)
 
     // Add approved inquiries link after inquiries
     menuItems.splice(insertIndex + 1, 0, {
       href: '/homes/approved',
       labelKey: 'approvedInquiries',
       icon: '✅',
-      label: getTranslation(language, 'approvedInquiries')
-    })
+      label: getTranslation(language, 'approvedInquiries'),
+      roles: [],
+    } as any)
 
-    // Add rating pages after approved inquiries (always show for users with finalized inquiries)
-    // This allows re-rating at intervals (e.g., every 6 months)
-    // Show "Rate Owner" when viewing as user, "Rate User" when viewing as owner
-    if (hasFinalizedInquiries) {
-      if (normalizedRole === 'owner' || normalizedRole === 'broker') {
-        // Owner/broker rates the user/renter
-        menuItems.splice(insertIndex + 2, 0, {
-          href: '/homes/rate-user',
-          labelKey: 'rateUser',
-          icon: '⭐',
-          label: getTranslation(language, 'rateUser')
-        })
-      } else if (normalizedRole === 'user') {
-        // User rates the owner
-        menuItems.splice(insertIndex + 2, 0, {
-          href: '/homes/rate-owner',
-          labelKey: 'rateOwner',
-          icon: '⭐',
-          label: getTranslation(language, 'rateOwner')
-        })
-      } else if (normalizedRole === 'both') {
-        // For 'both' role, show rating option based on selectedRole
-        // If selectedRole is 'owner', show "Rate User"
-        // If selectedRole is 'user', show "Rate Owner"
-        if (selectedRole === 'owner') {
-          menuItems.splice(insertIndex + 2, 0, {
-            href: '/homes/rate-user',
-            labelKey: 'rateUser',
-            icon: '⭐',
-            label: getTranslation(language, 'rateUser')
-          })
-        } else if (selectedRole === 'user') {
-          menuItems.splice(insertIndex + 2, 0, {
-            href: '/homes/rate-owner',
-            labelKey: 'rateOwner',
-            icon: '⭐',
-            label: getTranslation(language, 'rateOwner')
-          })
-        }
-      }
-    }
   }
 
   const toggleMenu = () => {

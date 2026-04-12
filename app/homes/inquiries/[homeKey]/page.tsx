@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import NotificationPopup from '@/app/components/NotificationPopup'
 import { getCityName, getCountryName } from '@/lib/area-utils'
-import StarRating from '@/app/components/StarRating'
 
 interface Inquiry {
   id: number
@@ -19,6 +19,7 @@ interface Inquiry {
     rating: number
   }
   approved: boolean
+  dismissed: boolean
   createdAt: string
 }
 
@@ -39,15 +40,9 @@ export default function HomeInquiriesPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<number | null>(null)
-  const [showApproveModal, setShowApproveModal] = useState(false)
-  const [selectedInquiryId, setSelectedInquiryId] = useState<number | null>(null)
-  const [ownerProfile, setOwnerProfile] = useState<{ name: string | null; email: string } | null>(null)
-  const [contactInfo, setContactInfo] = useState({
-    phone: '',
-  })
-  const [useContactPerson, setUseContactPerson] = useState(false)
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [highlightedInquiryId, setHighlightedInquiryId] = useState<number | null>(null)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,17 +70,6 @@ export default function HomeInquiriesPage() {
         setHome(data.home)
         setInquiries(data.inquiries || [])
 
-        // Fetch owner profile
-        const profileRes = await fetch('/api/profile')
-        if (profileRes.ok) {
-          const profileData = await profileRes.json()
-          if (profileData.user) {
-            setOwnerProfile({
-              name: profileData.user.name,
-              email: profileData.user.email,
-            })
-          }
-        }
       } catch (error) {
         console.error('Error fetching inquiries:', error)
         router.push('/homes/inquiries')
@@ -125,70 +109,6 @@ export default function HomeInquiriesPage() {
       })
   }, [])
 
-  const handleApproveClick = (inquiryId: number) => {
-    setSelectedInquiryId(inquiryId)
-    setShowApproveModal(true)
-    setContactInfo({ phone: '' })
-    setUseContactPerson(false)
-  }
-
-  const handleApproveConfirm = async () => {
-    if (!home || !selectedInquiryId) return
-
-    setProcessingId(selectedInquiryId)
-    try {
-      // Prepare contact info
-      const contactInfoData = useContactPerson
-        ? {
-            useContactPerson: true,
-            contactPerson: {
-              name: 'John Doe',
-              email: 'john.doe@example.com',
-              phone: '+30 210 1234567',
-            },
-          }
-        : {
-            useContactPerson: false,
-            name: ownerProfile?.name || '',
-            email: ownerProfile?.email || '',
-            phone: contactInfo.phone,
-          }
-
-      const response = await fetch(`/api/inquiries/${home.key}/${selectedInquiryId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          action: 'approve',
-          contactInfo: contactInfoData,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to process inquiry')
-      }
-
-      // Refresh inquiries to get updated data
-      const inquiriesRes = await fetch(`/api/inquiries/${home.key}`)
-      if (inquiriesRes.ok) {
-        const data = await inquiriesRes.json()
-        setInquiries(data.inquiries || [])
-      }
-
-      setShowApproveModal(false)
-      setSelectedInquiryId(null)
-      setContactInfo({ phone: '' })
-      setUseContactPerson(false)
-      
-      // Redirect to availability setting page
-      router.push(`/homes/${home.key}/set-availability?inquiryId=${selectedInquiryId}`)
-    } catch (error) {
-      console.error('Error processing inquiry:', error)
-      alert(getTranslation(language, 'somethingWentWrong'))
-    } finally {
-      setProcessingId(null)
-    }
-  }
-
   const handleDismiss = async (inquiryId: number) => {
     if (!home) return
 
@@ -212,16 +132,10 @@ export default function HomeInquiriesPage() {
       }
     } catch (error) {
       console.error('Error processing inquiry:', error)
-      alert(getTranslation(language, 'somethingWentWrong'))
+      setNotification({ type: 'error', message: getTranslation(language, 'somethingWentWrong') })
     } finally {
       setProcessingId(null)
     }
-  }
-
-  const handleHireContactPerson = () => {
-    setUseContactPerson(true)
-    // When hiring contact person, auto-approve with contact person info
-    handleApproveConfirm()
   }
 
   // Find the first unapproved and not dismissed inquiry (oldest)
@@ -320,30 +234,6 @@ export default function HomeInquiriesPage() {
                         )}
                       </div>
                       <p className="text-[#E8D5B7]/70 mb-2">{inquiry.user.email}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#E8D5B7]/70 text-sm">
-                          {getTranslation(language, 'rating')}:
-                        </span>
-                        {inquiry.user.rating !== null && inquiry.user.rating !== 0 ? (
-                          <Link
-                            href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
-                            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
-                          >
-                            <span className="text-[#E8D5B7] font-semibold">
-                              {inquiry.user.rating.toFixed(1)}
-                            </span>
-                            <StarRating rating={inquiry.user.rating} size="sm" />
-                          </Link>
-                        ) : (
-                          <>
-                            <span className="text-[#E8D5B7] font-semibold">0.0</span>
-                            <StarRating rating={0} size="sm" />
-                            <span className="text-xs text-[#E8D5B7]/60">
-                              ({getTranslation(language, 'notRatedYet')})
-                            </span>
-                          </>
-                        )}
-                      </div>
                       <p className="text-[#E8D5B7]/60 text-xs mt-2">
                         {getTranslation(language, 'inquiryDate')}:{' '}
                         {new Date(inquiry.createdAt).toLocaleDateString(
@@ -364,7 +254,7 @@ export default function HomeInquiriesPage() {
                         {isCurrent ? (
                           <>
                             <button
-                              onClick={() => handleApproveClick(inquiry.id)}
+                              onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
                               disabled={processingId === inquiry.id}
                               className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -398,124 +288,13 @@ export default function HomeInquiriesPage() {
         )}
       </div>
 
-      {/* Approve Modal */}
-      {showApproveModal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => {
-            setShowApproveModal(false)
-            setSelectedInquiryId(null)
-            setContactInfo({ phone: '' })
-          }}
-        >
-          <div
-            className="bg-[#1A202C] rounded-3xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-[#E8D5B7]/20 shadow-2xl animate-scaleIn"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-[#E8D5B7]">
-                {getTranslation(language, 'approve')} {getTranslation(language, 'inquiry')}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowApproveModal(false)
-                  setSelectedInquiryId(null)
-                  setContactInfo({ phone: '' })
-                  setUseContactPerson(false)
-                }}
-                className="text-[#E8D5B7]/70 hover:text-[#E8D5B7] text-2xl transition-colors"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Side - Contact Information Form */}
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-[#E8D5B7] mb-4">
-                  {getTranslation(language, 'sendContactInfo')}
-                </h3>
-
-                {/* Owner Name */}
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                    {getTranslation(language, 'name')}
-                  </label>
-                  <input
-                    type="text"
-                    value={ownerProfile?.name || ''}
-                    disabled
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] disabled:opacity-50"
-                  />
-                </div>
-
-                {/* Owner Email */}
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                    {getTranslation(language, 'email')}
-                  </label>
-                  <input
-                    type="email"
-                    value={ownerProfile?.email || ''}
-                    disabled
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] disabled:opacity-50"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                    {getTranslation(language, 'phone')} ({getTranslation(language, 'optional')})
-                  </label>
-                  <input
-                    type="tel"
-                    value={contactInfo.phone}
-                    onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                    placeholder={getTranslation(language, 'enterPhone')}
-                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:border-[#E8D5B7] focus:outline-none"
-                  />
-                </div>
-                
-                <p className="text-sm text-[#E8D5B7]/70 mt-4">
-                  {getTranslation(language, 'afterApprovalSetAvailability')}
-                </p>
-
-                {/* Send Button */}
-                <button
-                  onClick={handleApproveConfirm}
-                  disabled={processingId !== null}
-                  className="w-full px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-                >
-                  {processingId !== null
-                    ? getTranslation(language, 'loading')
-                    : getTranslation(language, 'sendAndApprove')}
-                </button>
-              </div>
-
-              {/* Right Side - Hire Contact Person */}
-              <div className="flex flex-col items-center justify-center border-l border-[#E8D5B7]/20 pl-6">
-                <div className="text-center space-y-4">
-                  <div className="text-6xl mb-4">👤</div>
-                  <h3 className="text-xl font-semibold text-[#E8D5B7] mb-2">
-                    {getTranslation(language, 'hireContactPerson')}
-                  </h3>
-                  <p className="text-[#E8D5B7]/70 text-sm mb-6">
-                    {getTranslation(language, 'hireContactPersonDescription')}
-                  </p>
-                  <button
-                    onClick={() => {
-                      setUseContactPerson(true)
-                      handleApproveConfirm()
-                    }}
-                    className="px-8 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-xl hover:bg-[#D4C19F] transition-all font-semibold text-lg"
-                  >
-                    {getTranslation(language, 'hireContactPerson')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {notification && (
+        <NotificationPopup
+          type={notification.type}
+          message={notification.message}
+          language={language}
+          onClose={() => setNotification(null)}
+        />
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -34,7 +34,7 @@ interface Home {
   }
 }
 
-export default function HomesPage() {
+function HomesPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
@@ -46,7 +46,6 @@ export default function HomesPage() {
   const [loading, setLoading] = useState(false)
   const [checkingRole, setCheckingRole] = useState(true)
   const [userRole, setUserRole] = useState<string>('user')
-  const [subscription, setSubscription] = useState<number | null>(null)
   
   // Determine display role for UI: if user has "both" role, use selectedRole, otherwise use actualRole or userRole
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -262,7 +261,6 @@ export default function HomesPage() {
           return
         }
         setUserRole(role)
-        setSubscription(data.user.subscription || 1) // Default to Free (1)
         setCheckingRole(false)
         
         // Fetch user's inquiry status
@@ -519,8 +517,10 @@ export default function HomesPage() {
     try {
       const params = new URLSearchParams()
       if (searchType) params.append('listingType', searchType)
-      if (manualFilters.city) params.append('city', manualFilters.city)
-      if (manualFilters.country) params.append('country', manualFilters.country)
+      const cityForApi = (manualFilters.city || citySearchQuery || '').trim()
+      const countryForApi = (manualFilters.country || countrySearchQuery || '').trim()
+      if (cityForApi) params.append('city', cityForApi)
+      if (countryForApi) params.append('country', countryForApi)
       if (manualFilters.minPrice) params.append('minPrice', manualFilters.minPrice)
       if (manualFilters.maxPrice) params.append('maxPrice', manualFilters.maxPrice)
       if (manualFilters.minSize) params.append('minSize', manualFilters.minSize)
@@ -610,28 +610,10 @@ export default function HomesPage() {
                 🔍 {getTranslation(language, 'manualFilter')}
               </button>
               <button
-                onClick={() => {
-                  if (subscription === 1) {
-                    // Free users - show upgrade message
-                    alert(getTranslation(language, 'upgradeToPlusForAISearch') || 'Please upgrade to Plus subscription to use AI search')
-                    return
-                  }
-                  setFilterType('ai')
-                }}
-                disabled={subscription === 1}
-                className={`px-6 py-4 rounded-2xl font-semibold text-lg shadow-lg transition-all ${
-                  subscription === 1
-                    ? 'bg-[#2D3748] text-[#E8D5B7]/50 border-2 border-[#E8D5B7]/30 cursor-not-allowed opacity-60'
-                    : 'bg-[#E8D5B7] text-[#2D3748] hover:bg-[#D4C19F] shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1'
-                }`}
-                title={subscription === 1 ? (getTranslation(language, 'upgradeToPlusForAISearch') || 'Upgrade to Plus for AI search') : ''}
+                onClick={() => setFilterType('ai')}
+                className="px-6 py-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] shadow-[#E8D5B7]/20 hover:shadow-xl transform hover:-translate-y-1 font-semibold text-lg shadow-lg transition-all"
               >
                 🤖 {getTranslation(language, 'aiSearch')}
-                {subscription === 1 && (
-                  <span className="block text-xs mt-1 text-[#E8D5B7]/70">
-                    {getTranslation(language, 'upgradeRequired') || 'Upgrade Required'}
-                  </span>
-                )}
               </button>
             </div>
           </div>
@@ -1009,7 +991,15 @@ export default function HomesPage() {
               onChange={(e) => setAiQuery(e.target.value)}
               className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] text-[#E8D5B7] placeholder:text-[#E8D5B7]/50 mb-4 resize-none"
               rows={6}
-              placeholder={language === 'el' ? 'Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα...' : 'Example: I need a 2-bedroom apartment in Athens for my family. We want to be close to schools and parks. Budget is around 800-1000€ per month...'}
+              placeholder={
+                searchType === 'buy'
+                  ? language === 'el'
+                    ? 'Παράδειγμα: Ψάχνω διαμέρισμα 2 υπνοδωματίων στην Αθήνα, κοντά σε σχολεία. Ο προϋπολογισμός αγοράς είναι περίπου 150000–180000€...'
+                    : 'Example: I want a 2-bedroom apartment in Athens near schools and parks. My purchase budget is around €150,000–180,000...'
+                  : language === 'el'
+                    ? 'Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα...'
+                    : 'Example: I need a 2-bedroom apartment in Athens for my family. We want to be close to schools and parks. Budget is around 800-1000€ per month...'
+              }
             />
             
             {/* Exclude Filters (checkboxes) */}
@@ -1072,9 +1062,10 @@ export default function HomesPage() {
           </div>
         )}
 
-        {/* Filters and Order Buttons - Hide when AI search is selected */}
-        {filterType === 'manual' && (
+        {/* Filters (manual only) + Order: same ordering for manual and AI once there are results */}
+        {filterType && (filterType === 'manual' || homes.length > 0) && (
           <div className="flex gap-4 mb-6">
+            {filterType === 'manual' && (
             <div className="relative">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -1083,6 +1074,7 @@ export default function HomesPage() {
                 {getTranslation(language, 'filters') || 'Filters'}
               </button>
             </div>
+            )}
             <div className="relative order-dropdown-container">
               <button
                 onClick={() => setShowOrderDropdown(!showOrderDropdown)}
@@ -1480,5 +1472,19 @@ export default function HomesPage() {
         ) : null}
       </div>
     </div>
+  )
+}
+
+export default function HomesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#2D3748] flex items-center justify-center px-4">
+          <p className="text-[#E8D5B7]">Loading...</p>
+        </div>
+      }
+    >
+      <HomesPageInner />
+    </Suspense>
   )
 }

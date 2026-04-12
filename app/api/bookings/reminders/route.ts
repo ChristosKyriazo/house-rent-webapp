@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
  * 1. Send 24-hour reminders to users about their upcoming bookings
  * 2. Send 1-day reminders to owners about meetings the following day
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const now = new Date()
     const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
@@ -42,10 +42,14 @@ export async function POST(request: NextRequest) {
             email: true,
           },
         },
-        home: {
-          select: {
-            key: true,
-            title: true,
+        availability: {
+          include: {
+            home: {
+              select: {
+                key: true,
+                title: true,
+              },
+            },
           },
         },
       },
@@ -64,6 +68,16 @@ export async function POST(request: NextRequest) {
         owner: {
           select: {
             id: true,
+          },
+        },
+        availability: {
+          include: {
+            home: {
+              select: {
+                key: true,
+                title: true,
+              },
+            },
           },
         },
       },
@@ -86,7 +100,7 @@ export async function POST(request: NextRequest) {
         where: {
           recipientId: booking.userId,
           type: 'booking_reminder',
-          homeKey: booking.home?.key || null,
+          homeKey: booking.availability?.home?.key || null,
           createdAt: {
             gte: new Date(now.getTime() - 2 * 60 * 60 * 1000), // Within last 2 hours
           },
@@ -98,7 +112,7 @@ export async function POST(request: NextRequest) {
           recipientId: booking.userId,
           role: 'user' as const,
           type: 'booking_reminder' as const,
-          homeKey: booking.home?.key || null,
+          homeKey: booking.availability?.home?.key || null,
           ownerKey: null,
         })
       }
@@ -137,7 +151,7 @@ export async function POST(request: NextRequest) {
             recipientId: ownerId,
             role: 'owner',
             type: 'booking_reminder',
-            homeKey: bookings[0].home?.key || null,
+            homeKey: bookings[0].availability?.home?.key || null,
             ownerKey: null,
           })
         }

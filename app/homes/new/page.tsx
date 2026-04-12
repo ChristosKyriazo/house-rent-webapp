@@ -50,12 +50,11 @@ export default function NewHomePage() {
   const [excelFile, setExcelFile] = useState<File | null>(null)
   const [housePhotos, setHousePhotos] = useState<{ [key: number]: File[] }>({})
   const [excelInputKey, setExcelInputKey] = useState(0)
-  const [subscription, setSubscription] = useState<number | null>(null)
   const [homeCount, setHomeCount] = useState<number>(0)
   const [useAIDescription, setUseAIDescription] = useState(false)
   const [useAIDescriptionBulk, setUseAIDescriptionBulk] = useState(false)
 
-  // Check user role and subscription on mount
+  // Check user role on mount
   useEffect(() => {
     fetch('/api/profile')
       .then((res) => res.json())
@@ -69,8 +68,6 @@ export default function NewHomePage() {
           router.push('/profile')
           return
         }
-        setSubscription(data.user.subscription || 1)
-        
         // Fetch home count
         fetch('/api/homes/my-listings')
           .then((res) => res.json())
@@ -231,18 +228,6 @@ export default function NewHomePage() {
     setError('')
     setLoading(true)
 
-    // Check home count limits based on subscription
-    if (subscription === 1 && homeCount >= 2) {
-      setError(getTranslation(language, 'freePlanLimitReached') || 'Free plan allows up to 2 homes. Please upgrade to Plus or Unlimited.')
-      setLoading(false)
-      return
-    }
-    if (subscription === 2 && homeCount >= 10) {
-      setError(getTranslation(language, 'plusPlanLimitReached') || 'Plus plan allows up to 10 homes. Please upgrade to Unlimited.')
-      setLoading(false)
-      return
-    }
-
     // If AI description is requested, clear the description field
     const descriptionToSend = useAIDescription ? '' : formData.description
 
@@ -377,15 +362,13 @@ export default function NewHomePage() {
               <h1 className="text-3xl font-bold text-[#E8D5B7]">
                 {getTranslation(language, 'createListing')}
               </h1>
-              {subscription !== null && subscription !== 1 && (
-                <button
-                  type="button"
-                  onClick={() => setShowBulkUploadModal(true)}
-                  className="px-4 py-2 bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 rounded-xl hover:bg-[#1a1f2e] hover:border-[#E8D5B7]/50 transition-all text-sm font-semibold"
-                >
-                  {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowBulkUploadModal(true)}
+                className="px-4 py-2 bg-[#2D3748] text-[#E8D5B7] border border-[#E8D5B7]/30 rounded-xl hover:bg-[#1a1f2e] hover:border-[#E8D5B7]/50 transition-all text-sm font-semibold"
+              >
+                {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
+              </button>
             </div>
             <p className="text-[#E8D5B7]/70">
               {getTranslation(language, 'listingDetails')}
@@ -421,19 +404,17 @@ export default function NewHomePage() {
                 rows={4}
                 placeholder={useAIDescription ? (getTranslation(language, 'aiDescriptionWillGenerate') || 'AI will generate description') : getTranslation(language, 'placeholderDescription')}
               />
-              {subscription !== null && subscription !== 1 && (
-                <label className="flex items-center gap-3 mt-4 p-3 bg-[#2D3748]/50 rounded-xl border border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transition-all cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useAIDescription}
-                    onChange={(e) => setUseAIDescription(e.target.checked)}
-                    className="w-5 h-5 rounded border-2 border-[#E8D5B7]/50 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer accent-[#E8D5B7]"
-                  />
-                  <span className="text-base font-medium text-[#E8D5B7]">
-                    {getTranslation(language, 'useAIDescription') || 'Use AI to generate description'}
-                  </span>
-                </label>
-              )}
+              <label className="flex items-center gap-3 mt-4 p-3 bg-[#2D3748]/50 rounded-xl border border-[#E8D5B7]/20 hover:border-[#E8D5B7]/40 transition-all cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useAIDescription}
+                  onChange={(e) => setUseAIDescription(e.target.checked)}
+                  className="w-5 h-5 rounded border-2 border-[#E8D5B7]/50 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer accent-[#E8D5B7]"
+                />
+                <span className="text-base font-medium text-[#E8D5B7]">
+                  {getTranslation(language, 'useAIDescription') || 'Use AI to generate description'}
+                </span>
+              </label>
             </div>
 
             {/* Photo Upload Section */}
@@ -949,20 +930,6 @@ export default function NewHomePage() {
                       return
                     }
 
-                    // Check home count limits
-                    const currentCount = homeCount
-                    const newCount = currentCount + parsedHouses.length
-                    if (subscription === 1 && newCount > 2) {
-                      setBulkUploadError(getTranslation(language, 'freePlanLimitReached') || 'Free plan allows up to 2 homes total.')
-                      setBulkUploadLoading(false)
-                      return
-                    }
-                    if (subscription === 2 && newCount > 10) {
-                      setBulkUploadError(getTranslation(language, 'plusPlanLimitReached') || 'Plus plan allows up to 10 homes total.')
-                      setBulkUploadLoading(false)
-                      return
-                    }
-
                     try {
                       const uploadFormData = new FormData()
                       uploadFormData.append('excelFile', excelFile)
@@ -1018,21 +985,19 @@ export default function NewHomePage() {
                   }}
                   className="space-y-4"
                 >
-                  {subscription !== null && subscription !== 1 && (
-                    <div className="bg-[#2D3748]/50 rounded-2xl p-4 mb-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={useAIDescriptionBulk}
-                          onChange={(e) => setUseAIDescriptionBulk(e.target.checked)}
-                          className="w-4 h-4 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer"
-                        />
-                        <span className="text-sm text-[#E8D5B7]/80">
-                          {getTranslation(language, 'useAIDescriptionForAll') || 'Use AI to generate descriptions for all homes'}
-                        </span>
-                      </label>
-                    </div>
-                  )}
+                  <div className="bg-[#2D3748]/50 rounded-2xl p-4 mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useAIDescriptionBulk}
+                        onChange={(e) => setUseAIDescriptionBulk(e.target.checked)}
+                        className="w-4 h-4 rounded border-[#E8D5B7]/30 bg-[#2D3748] text-[#E8D5B7] focus:ring-2 focus:ring-[#E8D5B7] cursor-pointer"
+                      />
+                      <span className="text-sm text-[#E8D5B7]/80">
+                        {getTranslation(language, 'useAIDescriptionForAll') || 'Use AI to generate descriptions for all homes'}
+                      </span>
+                    </label>
+                  </div>
                   <div className="bg-[#2D3748]/50 rounded-2xl p-4 mb-4">
                     <p className="text-[#E8D5B7] font-semibold mb-2">
                       {language === 'el' 

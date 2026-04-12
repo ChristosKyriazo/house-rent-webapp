@@ -9,7 +9,16 @@ import FinalizeNotificationModal from './FinalizeNotificationModal'
 
 interface Notification {
   id: number
-  type: 'inquiry' | 'approved' | 'dismissed' | 'finalize' | 'availability_set' | 'booking_reminder' | 'rate' | 'rejected'
+  type:
+    | 'inquiry'
+    | 'approved'
+    | 'dismissed'
+    | 'finalize'
+    | 'availability_set'
+    | 'booking_created'
+    | 'booking_reminder'
+    | 'rate'
+    | 'rejected'
   message: string
   homeKey: string
   inquiryId: number | null
@@ -34,7 +43,11 @@ export default function NotificationBell() {
     : (actualRole || 'user')
 
   useEffect(() => {
+    let inFlight = false
+
     const fetchNotifications = async () => {
+      if (inFlight) return
+      inFlight = true
       try {
         const response = await fetch(`/api/notifications?language=${language}`)
         if (response && response.ok) {
@@ -42,33 +55,68 @@ export default function NotificationBell() {
           setNotifications(data.notifications || [])
           setUnviewedCount(data.unviewedCount || 0)
         } else if (response) {
-          // If unauthorized, user might not be logged in - that's ok
           if (response.status !== 401) {
-            // Only log non-401 errors, but don't throw
             console.warn('Error fetching notifications:', response.status)
           }
           setNotifications([])
           setUnviewedCount(0)
         } else {
-          // Response is null/undefined - network error
           setNotifications([])
           setUnviewedCount(0)
         }
-      } catch (error) {
-        // Silently handle errors - bell will still show
-        // Don't log fetch errors as they're common (network issues, etc.)
+      } catch {
         setNotifications([])
         setUnviewedCount(0)
       } finally {
+        inFlight = false
         setLoading(false)
       }
     }
 
+    // Initial load
     fetchNotifications()
 
-    // Refresh notifications every 10 minutes
-    const interval = setInterval(fetchNotifications, 600000)
-    return () => clearInterval(interval)
+    // Near real-time: poll while tab is visible so owners see new inquiries within a couple of seconds
+    const POLL_MS_VISIBLE = 2000
+    const POLL_MS_HIDDEN = 30000
+
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const pollIntervalMs = () =>
+      typeof document !== 'undefined' && document.visibilityState === 'visible'
+        ? POLL_MS_VISIBLE
+        : POLL_MS_HIDDEN
+
+    const restartInterval = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId)
+        intervalId = null
+      }
+      intervalId = setInterval(fetchNotifications, pollIntervalMs())
+    }
+
+    restartInterval()
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications()
+      }
+      restartInterval()
+    }
+
+    const onFocus = () => fetchNotifications()
+    const onOnline = () => fetchNotifications()
+
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
+
+    return () => {
+      if (intervalId !== null) clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
+    }
   }, [language])
 
   // Close dropdown when clicking outside

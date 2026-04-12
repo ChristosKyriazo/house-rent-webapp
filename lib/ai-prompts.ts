@@ -14,6 +14,7 @@ Structure: {"filters": {"city": "Athens" or null, "country": "Greece" or null, "
 
 RULES:
 - HARD FILTERS (filter DB): city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (unless soft preference), floor, yearBuilt, yearRenovated
+- Price semantics: If the user query or appended context indicates RENT/rental, minPrice/maxPrice are monthly rent. If it indicates BUY/sale/purchase, minPrice/maxPrice are total purchase price. When ambiguous and context is provided, follow the context.
 - SOFT FILTERS (scoring only): distance categories, preferredAreas, heatingCategory, heatingAgent, parking (if soft preference)
 - CRITICAL: Only extract explicitly mentioned values. Do NOT infer. "heating" alone → heatingCategory: null, heatingAgent: null
 - Parking extraction: ONLY extract parking if user explicitly mentions "parking", "garage", "car", "vehicle", or similar parking-related terms. Do NOT infer parking from mentions of pets/dogs, family, or any other context. If user mentions "dog" or "pet" → parking: null (only Park distance category should be Essential). If parking is not explicitly mentioned → parking: null

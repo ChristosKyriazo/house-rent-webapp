@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { calculatePropertyDistances } from '@/lib/google-maps'
-import { removeGreekAccents } from '@/lib/utils'
+import { removeGreekAccents, resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue } from '@/lib/translations'
 import OpenAI from 'openai'
@@ -15,12 +15,11 @@ export async function GET(request: NextRequest) {
     // Build filter object
     const where: any = {}
     
-    // Map 'buy' (from search UI) to 'sell' (in database)
+    // Map 'buy' (from search UI) to sale listings (stored as "sale"; legacy rows may use "sell")
     const listingType = searchParams.get('listingType')
     if (listingType) {
-      // When user clicks "buy" in search, filter for "sell" listings
       if (listingType === 'buy') {
-        where.listingType = 'sell'
+        where.listingType = { in: ['sale', 'sell'] }
       } else {
         where.listingType = listingType
       }
@@ -117,19 +116,10 @@ export async function GET(request: NextRequest) {
       where.area = { in: areas }
     }
 
-    // Exclude owner's own houses if user is also an owner
-    // Also exclude finalized houses from search results
-    // Check if user is authenticated and has owner role
+    // Exclude finalized houses from search results (owners may see their own listings when browsing)
     let currentUser = null
     try {
       currentUser = await getCurrentUser()
-      if (currentUser) {
-        const userRole = (currentUser.role || 'user').toLowerCase()
-        // If user is owner, both, or broker, exclude their own houses from search
-        if (userRole === 'owner' || userRole === 'both' || userRole === 'broker') {
-          where.ownerId = { not: currentUser.id }
-        }
-      }
       // Always exclude finalized houses from search
       where.finalized = false
     } catch (error) {
@@ -369,12 +359,32 @@ export async function GET(request: NextRequest) {
         })
       })
       
-      // Filter homes by matching countries
+      // Filter homes by matching countries (canonical English so Greek-stored country e.g. ελλαδα matches "Greece")
       if (matchingEnglishCountries.size > 0) {
-        homes = homes.filter(home => home.country && matchingEnglishCountries.has(home.country))
+        homes = homes.filter(home => {
+          if (!home.country) return false
+          const canonical = resolveCountryToEnglishCanonical(home.country, allAreas)
+          return matchingEnglishCountries.has(canonical) || matchingEnglishCountries.has(home.country.trim())
+        })
       } else {
-        // No match found, return empty
-        homes = []
+        // Areas metadata may not list every spelling; fall back to matching stored country + Greek names
+        homes = homes.filter(home => {
+          if (!home.country) return false
+          const h = home.country.trim().toLowerCase()
+          const hNorm = removeGreekAccents(h)
+          if (h.includes(countrySearch) || hNorm.includes(countrySearchNormalized)) return true
+          const canonical = resolveCountryToEnglishCanonical(home.country, allAreas)
+          const areasForHome = allAreas.filter(
+            a => a.country === canonical || a.country === home.country.trim()
+          )
+          for (const a of areasForHome) {
+            if (!a.countryGreek) continue
+            const g = a.countryGreek.toLowerCase()
+            const gNorm = removeGreekAccents(g)
+            if (g.includes(countrySearch) || gNorm.includes(countrySearchNormalized)) return true
+          }
+          return false
+        })
       }
     }
     
@@ -439,33 +449,6 @@ export async function POST(request: NextRequest) {
       useAIDescription,
     } = body
 
-    // Check home count limits based on subscription
-    const subscription = user.subscription || 1
-    if (subscription === 1) {
-      // Free plan: max 2 homes
-      const homeCount = await prisma.home.count({
-        where: { ownerId: user.id },
-      })
-      if (homeCount >= 2) {
-        return NextResponse.json(
-          { error: 'Free plan allows up to 2 homes. Please upgrade to Plus or Unlimited.' },
-          { status: 403 }
-        )
-      }
-    } else if (subscription === 2) {
-      // Plus plan: max 10 homes
-      const homeCount = await prisma.home.count({
-        where: { ownerId: user.id },
-      })
-      if (homeCount >= 10) {
-        return NextResponse.json(
-          { error: 'Plus plan allows up to 10 homes. Please upgrade to Unlimited.' },
-          { status: 403 }
-        )
-      }
-    }
-    // Unlimited plan: no limit
-
     // Minimal validation
     if (!title || !city || !country || !pricePerMonth || !sizeSqMeters) {
       return NextResponse.json(
@@ -500,39 +483,19 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const convertAreaToEnglish = (input: string | null): string | null => {
-      if (!input) return null
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.nameGreek && a.nameGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.name || normalized
-    }
-
-    const convertCityToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.cityGreek && a.cityGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.city || normalized
-    }
-
-    const convertCountryToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.countryGreek && a.countryGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.country || normalized
-    }
-
-    const englishCity = convertCityToEnglish(city)
-    const englishCountry = convertCountryToEnglish(country)
-    const englishArea = convertAreaToEnglish(area)
+    const englishCity = resolveCityToEnglishCanonical(city, areas)
+    const englishCountry = resolveCountryToEnglishCanonical(country, areas)
+    const englishArea = resolveAreaToEnglishCanonical(area, areas)
 
     // Calculate distances using Google Maps API (7 API calls: 1 geocoding + 6 places in parallel)
-    let distances = {
+    let distances: {
+      closestMetro: number | null
+      closestBus: number | null
+      closestSchool: number | null
+      closestHospital: number | null
+      closestPark: number | null
+      closestUniversity: number | null
+    } = {
       closestMetro: null,
       closestBus: null,
       closestSchool: null,
@@ -613,10 +576,7 @@ export async function POST(request: NextRequest) {
     let finalDescription = description?.trim() || null
     let finalDescriptionGreek: string | null = null
     
-    // Only generate AI descriptions for Plus (2) or Unlimited (3) subscriptions
-    const canUseAI = subscription === 2 || subscription === 3
-    
-    if (useAIDescription && canUseAI) {
+    if (useAIDescription) {
       const openai = process.env.OPENAI_API_KEY ? new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
       }) : null

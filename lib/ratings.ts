@@ -45,9 +45,7 @@ export async function getHouseOwnerRatings(homeId: number) {
         },
       },
     },
-  })
-
-  // Get all ratings from users to owner for this home
+  })  // Get all ratings from users to owner for this home
   const houseOwnerRatings = []
   for (const inquiry of finalizedInquiries) {
     const ratings = await prisma.rating.findMany({
@@ -69,4 +67,3 @@ export async function getHouseOwnerRatings(homeId: number) {
     houseOwnerCount: houseOwnerRatings.length,
   }
 }
-

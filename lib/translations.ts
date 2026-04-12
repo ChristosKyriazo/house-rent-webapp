@@ -28,6 +28,10 @@ export const translations = {
     logout: 'Αποσύνδεση',
     showMenu: 'Εμφάνιση Μενού',
     calendar: 'Ημερολόγιο',
+    day: 'Ημέρα',
+    week: 'Εβδομάδα',
+    month: 'Μήνας',
+    today: 'Σήμερα',
     upcomingAppointments: 'Προσεχείς Ραντεβού',
     noBookings: 'Δεν υπάρχουν προγραμματισμένα ραντεβού',
     
@@ -42,6 +46,7 @@ export const translations = {
     back: 'Πίσω',
     city: 'Πόλη',
     country: 'Χώρα',
+    address: 'Διεύθυνση',
     anyCity: 'Οποιαδήποτε πόλη',
     anyCountry: 'Οποιαδήποτε χώρα',
     cityArea: 'Περιοχή',
@@ -113,6 +118,7 @@ export const translations = {
     broker: 'Μεσιτικό',
     description: 'Περιγραφή',
     price: 'Τιμή',
+    pricePerMonth: 'Τιμή ανά μήνα',
     sizeSqMeters: 'Μέγεθος (m²)',
     floor: 'Όροφος',
     bedrooms: 'Υπνοδωμάτια',
@@ -125,39 +131,14 @@ export const translations = {
     totalPrice: 'Συνολική Τιμή',
     close: 'Κλείσιμο',
     
-    // Subscription
-    chooseSubscription: 'Επιλέξτε Συνδρομή',
-    selectSubscriptionPlan: 'Επιλέξτε το σχέδιο συνδρομής που σας ταιριάζει',
-    freePlan: 'Δωρεάν',
-    plusPlan: 'Plus',
-    unlimitedPlan: 'Unlimited',
-    forever: 'Για πάντα',
-    popular: 'Δημοφιλές',
-    premium: 'Premium',
-    upTo2Homes: 'Έως 2 ακίνητα',
-    upTo10Homes: 'Έως 10 ακίνητα',
-    unlimitedHomes: 'Απεριόριστα ακίνητα',
+    // Listing features
     aiDescription: 'AI Περιγραφή',
     fileUpload: 'Ανέβασμα Αρχείου',
-    promoteButton: 'Κουμπί Προώθησης',
-    premiumPromote: 'Premium Προώθηση',
     basicSearch: 'Βασική Αναζήτηση',
-    aiSearch: 'AI Αναζήτηση',
     select: 'Επιλογή',
-    upgradeToPlusForAISearch: 'Παρακαλώ αναβαθμίστε σε συνδρομή Plus για να χρησιμοποιήσετε την AI αναζήτηση',
-    upgradeRequired: 'Απαιτείται Αναβάθμιση',
-    freePlanLimitReached: 'Το δωρεάν σχέδιο επιτρέπει έως 2 ακίνητα. Παρακαλώ αναβαθμίστε σε Plus ή Unlimited.',
-    plusPlanLimitReached: 'Το σχέδιο Plus επιτρέπει έως 10 ακίνητα. Παρακαλώ αναβαθμίστε σε Unlimited.',
     useAIDescription: 'Χρήση AI για δημιουργία περιγραφής',
     useAIDescriptionForAll: 'Χρήση AI για δημιουργία περιγραφών για όλα τα ακίνητα',
     aiDescriptionWillGenerate: 'Η AI θα δημιουργήσει την περιγραφή',
-    promote: 'Προώθηση',
-    promoteHome: 'Προώθηση Ακινήτου',
-    promoteFor7Days: 'Προώθηση για 7 ημέρες',
-    premiumPromoteFor30Days: 'Premium Προώθηση για 30 ημέρες',
-    promoteFailed: 'Αποτυχία προώθησης ακινήτου',
-    subscription: 'Συνδρομή',
-    notSet: 'Δεν ορίστηκε',
     cannotBeChanged: 'Δεν μπορεί να αλλάξει',
     ownerProfile: 'Προφίλ Ιδιοκτήτη',
     notProvided: 'Δεν δόθηκε',
@@ -190,6 +171,8 @@ export const translations = {
     startTime: 'Ώρα Έναρξης',
     endTime: 'Ώρα Λήξης',
     date: 'Ημερομηνία',
+    location: 'Τοποθεσία',
+    status: 'Κατάσταση',
     bookingCreated: 'Η κράτηση δημιουργήθηκε επιτυχώς!',
     calComConnection: 'Σύνδεση Cal.com',
     connected: 'Συνδεδεμένο',
@@ -212,7 +195,11 @@ export const translations = {
     fillAllFields: 'Παρακαλώ συμπληρώστε όλα τα πεδία',
     addAtLeastOneSlot: 'Παρακαλώ προσθέστε τουλάχιστον ένα διάστημα διαθεσιμότητας',
     availabilitySaved: 'Η διαθεσιμότητα αποθηκεύτηκε επιτυχώς!',
+    approveAndAvailabilitySaved: 'Η αίτηση εγκρίθηκε και η διαθεσιμότητα αποθηκεύτηκε.',
+    setAppointment: 'Ορισμός ραντεβού',
+    appointmentScheduled: 'Ραντεβού προγραμματισμένο',
     bookingConfirmed: 'Η κράτηση επιβεβαιώθηκε! Μπορείτε να τη δείτε στο ημερολόγιό σας.',
+    onlyUsersCanBook: 'Μόνο οι χρήστες μπορούν να κλείσουν ραντεβού επίσκεψης. Οι ιδιοκτήτες πρέπει να χρησιμοποιήσουν τη σελίδα ορισμού διαθεσιμότητας.',
     selectDateAndTime: 'Παρακαλώ επιλέξτε ημερομηνία και ώρα',
     selectTime: 'Επιλογή Ώρας',
     selectTimeSlot: 'Επιλέξτε χρονικό διάστημα',
@@ -228,7 +215,6 @@ export const translations = {
     userInformation: 'Πληροφορίες Χρήστη',
     ownerInformation: 'Πληροφορίες Ιδιοκτήτη',
     time: 'Ώρα',
-    close: 'Κλείσιμο',
     reschedule: 'Επαναπρογραμματισμός',
     rescheduleBooking: 'Επαναπρογραμματισμός Κράτησης',
     currentBooking: 'Τρέχουσα Κράτηση',
@@ -304,7 +290,6 @@ export const translations = {
     ratingSubmitted: 'Η αξιολόγηση υποβλήθηκε επιτυχώς',
     property: 'Ακίνητο',
     notRatedYet: 'Δεν έχει αξιολογηθεί ακόμα',
-    edit: 'Επεξεργασία',
     appeal: 'Έφεση',
     save: 'Αποθήκευση',
     saving: 'Αποθήκευση...',
@@ -353,7 +338,6 @@ export const translations = {
     memberSince: 'Μέλος από',
     editProfile: 'Επεξεργασία Προφίλ',
     editProfileTitle: 'Επεξεργασία Προφίλ',
-    cancel: 'Ακύρωση',
     userNameOrName: 'Όνομα ή Όνομα Χρήστη',
     userName: 'Όνομα Χρήστη',
     age: 'Ηλικία',
@@ -369,7 +353,6 @@ export const translations = {
     userSearchProperties: 'Χρήστης - Αναζήτηση Ακινήτων',
     ownerPublishProperties: 'Ιδιοκτήτης - Δημοσίευση Ακινήτων',
     ownerAndUserFull: 'Ιδιοκτήτης & Χρήστης - Πλήρης Πρόσβαση',
-    saving: 'Αποθήκευση...',
     saveChanges: 'Αποθήκευση Αλλαγών',
     profileUpdateFailed: 'Αποτυχία ενημέρωσης προφίλ',
     
@@ -395,6 +378,10 @@ export const translations = {
     loading: 'Φόρτωση...',
     refresh: 'Ανανέωση',
     somethingWentWrong: 'Κάτι πήγε στραβά',
+    viewAll: 'Προβολή όλων',
+    add: 'Προσθήκη',
+    remove: 'Αφαίρεση',
+    dismiss: 'Απόρριψη',
     confirm: 'Επιβεβαίωση',
     goBack: 'Πίσω',
     allRatings: 'Όλες οι Αξιολογήσεις',
@@ -460,7 +447,6 @@ export const translations = {
     'urban': 'Αστικό',
     'Urban': 'Αστικό',
     'student': 'Φοιτητικό',
-    'Student': 'Φοιτητικό',
     'Upscale, vibrant': 'Αριστοκρατικό, Ζωντανό',
     'Touristic, historic': 'Τουριστικό, Ιστορικό',
   },
@@ -491,6 +477,10 @@ export const translations = {
     logout: 'Logout',
     showMenu: 'Show Menu',
     calendar: 'Calendar',
+    day: 'Day',
+    week: 'Week',
+    month: 'Month',
+    today: 'Today',
     upcomingAppointments: 'Upcoming Appointments',
     noBookings: 'No scheduled appointments',
     
@@ -578,6 +568,7 @@ export const translations = {
     broker: 'Broker',
     description: 'Description',
     price: 'Price',
+    pricePerMonth: 'Price per month',
     sizeSqMeters: 'Size (m²)',
     floor: 'Floor',
     bedrooms: 'Bedrooms',
@@ -590,38 +581,14 @@ export const translations = {
     totalPrice: 'Total Price',
     close: 'Close',
     
-    // Subscription
-    chooseSubscription: 'Choose Subscription',
-    selectSubscriptionPlan: 'Select the subscription plan that suits you',
-    freePlan: 'Free',
-    plusPlan: 'Plus',
-    unlimitedPlan: 'Unlimited',
-    forever: 'Forever',
-    popular: 'Popular',
-    premium: 'Premium',
-    upTo2Homes: 'Up to 2 homes',
-    upTo10Homes: 'Up to 10 homes',
-    unlimitedHomes: 'Unlimited homes',
+    // Listing features
     aiDescription: 'AI Description',
     fileUpload: 'File Upload',
-    promoteButton: 'Promote Button',
-    premiumPromote: 'Premium Promote',
     basicSearch: 'Basic Search',
-    aiSearch: 'AI Search',
     select: 'Select',
-    upgradeToPlusForAISearch: 'Please upgrade to Plus subscription to use AI search',
-    upgradeRequired: 'Upgrade Required',
-    freePlanLimitReached: 'Free plan allows up to 2 homes. Please upgrade to Plus or Unlimited.',
-    plusPlanLimitReached: 'Plus plan allows up to 10 homes. Please upgrade to Unlimited.',
     useAIDescription: 'Use AI to generate description',
     useAIDescriptionForAll: 'Use AI to generate descriptions for all homes',
     aiDescriptionWillGenerate: 'AI will generate description',
-    promote: 'Promote',
-    promoteHome: 'Promote Home',
-    promoteFor7Days: 'Promote for 7 days',
-    premiumPromoteFor30Days: 'Premium Promote for 30 days',
-    promoteFailed: 'Failed to promote home',
-    subscription: 'Subscription',
     notSet: 'Not set',
     cannotBeChanged: 'Cannot be changed',
     
@@ -631,6 +598,7 @@ export const translations = {
     asUser: 'As User',
     rating: 'rating',
     ratings: 'ratings',
+    houseRatings: 'House Ratings',
     
     // Inquiries
     inquiryMade: 'You have inquired',
@@ -656,6 +624,8 @@ export const translations = {
     startTime: 'Start Time',
     endTime: 'End Time',
     date: 'Date',
+    location: 'Location',
+    status: 'Status',
     bookingCreated: 'Booking created successfully!',
     calComConnection: 'Cal.com Connection',
     connected: 'Connected',
@@ -678,7 +648,11 @@ export const translations = {
     fillAllFields: 'Please fill all fields',
     addAtLeastOneSlot: 'Please add at least one availability slot',
     availabilitySaved: 'Availability saved successfully!',
+    approveAndAvailabilitySaved: 'Inquiry approved and availability saved.',
+    setAppointment: 'Set appointment',
+    appointmentScheduled: 'Appointment scheduled',
     bookingConfirmed: 'Booking confirmed! You can view it in your calendar.',
+    onlyUsersCanBook: 'Only users can book viewing appointments. Owners should use the set availability page.',
     selectDateAndTime: 'Please select both date and time',
     selectTime: 'Select Time',
     selectTimeSlot: 'Select a time slot',
@@ -694,7 +668,6 @@ export const translations = {
     userInformation: 'User Information',
     ownerInformation: 'Owner Information',
     time: 'Time',
-    close: 'Close',
     reschedule: 'Reschedule',
     rescheduleBooking: 'Reschedule Booking',
     currentBooking: 'Current Booking',
@@ -745,24 +718,6 @@ export const translations = {
     noFinalizedInquiries: 'No finalized deals to rate',
     rated: 'Rated',
     rateNow: 'Rate Now',
-    comment: 'Comment',
-    commentPlaceholder: 'Write a comment (optional)',
-    submitRating: 'Submit Rating',
-    submitting: 'Submitting...',
-    ratingFailed: 'Failed to submit rating',
-    property: 'Property',
-    propertyInformation: 'Property Information',
-    senderInformation: 'Sender Information',
-    rateOwner: 'Rate Owner',
-    rateUser: 'Rate User',
-    rate: 'Rate',
-    completed: 'Completed',
-    rateOwnerDescription: 'Rate owners you have finalized deals with',
-    rateUserDescription: 'Rate users you have finalized deals with',
-    noFinalizedInquiries: 'No finalized deals to rate',
-    rated: 'Rated',
-    rateNow: 'Rate Now',
-    rating: 'Rating',
     comment: 'Comment',
     commentPlaceholder: 'Write a comment (optional)',
     submitRating: 'Submit Rating',
@@ -820,7 +775,6 @@ export const translations = {
     completeYourProfile: 'Complete Your Profile',
     profileIncomplete: 'Your profile is incomplete. Fill in your information for a better experience.',
     missingInformation: 'Missing',
-    notSet: 'Not set',
     userSearchProperties: 'User - Search Properties',
     ownerPublishProperties: 'Owner - Publish Properties',
     ownerAndUserFull: 'Owner & User - Full Access',
@@ -838,7 +792,6 @@ export const translations = {
     uploadPhotos: 'Upload Photos',
     upload: 'Upload',
     sell: 'Sell',
-    street: 'Street',
     updatingListing: 'Updating...',
     updateListing: 'Update Listing',
     delete: 'Delete',
@@ -850,6 +803,10 @@ export const translations = {
     loading: 'Loading...',
     refresh: 'Refresh',
     somethingWentWrong: 'Something went wrong',
+    viewAll: 'View all',
+    add: 'Add',
+    remove: 'Remove',
+    dismiss: 'Dismiss',
     confirm: 'Confirm',
     goBack: 'Go Back',
     allRatings: 'All Ratings',
@@ -915,27 +872,29 @@ export const translations = {
     'urban': 'Urban',
     'Urban': 'Urban',
     'student': 'Student',
-    'Student': 'Student',
     'Upscale, vibrant': 'Upscale, vibrant',
     'Touristic, historic': 'Touristic, historic',
   },
 } as const
 
-export function getTranslation(language: Language, key: keyof typeof translations.el): string {
-  return translations[language][key] || translations.el[key] || key
+export type TranslationKey = keyof typeof translations.el
+
+export function getTranslation(language: Language, key: TranslationKey): string {
+  const dict = translations[language] as Record<string, string>
+  const fallback = translations.el as Record<string, string>
+  return dict[key as string] ?? fallback[key as string] ?? String(key)
 }
 
 function translateSingleValue(language: Language, value: string): string {
   if (!value) return ''
   
   // Try exact match first
-  let key = value.trim() as keyof typeof translations.el
-  if (translations[language][key]) {
-    return translations[language][key]
-  }
-  if (translations.el[key]) {
-    return translations.el[key]
-  }
+  const dict = translations[language] as Record<string, string>
+  const fallback = translations.el as Record<string, string>
+
+  let key = value.trim() as string
+  if (dict[key]) return dict[key]
+  if (fallback[key]) return fallback[key]
   
   // Try case-insensitive match for vibe values (common values that might have different casing)
   const trimmed = value.trim()
@@ -943,22 +902,14 @@ function translateSingleValue(language: Language, value: string): string {
   const capitalizedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
   
   // Try lowercase version
-  key = lowerValue as keyof typeof translations.el
-  if (translations[language][key]) {
-    return translations[language][key]
-  }
-  if (translations.el[key]) {
-    return translations.el[key]
-  }
+  key = lowerValue
+  if (dict[key]) return dict[key]
+  if (fallback[key]) return fallback[key]
   
   // Try capitalized version
-  key = capitalizedValue as keyof typeof translations.el
-  if (translations[language][key]) {
-    return translations[language][key]
-  }
-  if (translations.el[key]) {
-    return translations.el[key]
-  }
+  key = capitalizedValue
+  if (dict[key]) return dict[key]
+  if (fallback[key]) return fallback[key]
   
   return trimmed
 }

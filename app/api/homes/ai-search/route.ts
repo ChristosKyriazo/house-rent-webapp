@@ -72,8 +72,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 1: Extract hard filters using AI only
-    const extractedFiltersResult: any = await extractFiltersHybrid(query, openai)
+    // Step 1: Extract hard filters using AI only (rent vs buy price semantics match manual search)
+    const listingMode = type === 'buy' || type === 'rent' ? type : undefined
+    const extractedFiltersResult: any = await extractFiltersHybrid(query, openai, {
+      listingMode,
+    })
     
     // Extract the filters (reasoning is extracted but not returned to client)
     let extractedFilters: any = {}
@@ -159,18 +162,26 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Build database query with extracted filters
     let where: any = {}
-    
-    // Filter by listing type if provided (from request or extracted filters)
-    // Check both camelCase (listingType) and lowercase (listingtype) from AI response
-    const listingTypeFilter = extractedFilters.listingType || (extractedFilters as any).listingtype || type
-    if (listingTypeFilter) {
-      const listingTypeLower = listingTypeFilter.toLowerCase()
-      if (listingTypeLower === 'buy') {
-        where.listingType = 'sell'
-      } else if (listingTypeLower === 'rent') {
-        where.listingType = 'rent'
-      } else {
-        where.listingType = listingTypeLower
+
+    // Match /api/homes: exclude finalized listings from browse
+    where.finalized = false
+
+    // Listing type: UI mode (rent vs buy) always wins over AI extraction — same as manual search
+    if (type === 'buy') {
+      where.listingType = { in: ['sale', 'sell'] }
+    } else if (type === 'rent') {
+      where.listingType = 'rent'
+    } else {
+      const listingTypeFilter = extractedFilters.listingType || (extractedFilters as any).listingtype
+      if (listingTypeFilter) {
+        const listingTypeLower = String(listingTypeFilter).toLowerCase()
+        if (listingTypeLower === 'buy' || listingTypeLower === 'sale' || listingTypeLower === 'sell') {
+          where.listingType = { in: ['sale', 'sell'] }
+        } else if (listingTypeLower === 'rent') {
+          where.listingType = 'rent'
+        } else {
+          where.listingType = listingTypeLower
+        }
       }
     }
 
@@ -252,19 +263,6 @@ export async function POST(request: NextRequest) {
     // Distance filters will be applied in JavaScript after fetching
     // City/area/country filters will be applied in JavaScript for better Greek/English matching
     // Don't add them to where clause - we'll filter in JavaScript
-
-    // Exclude owner's own houses if user is also an owner
-    try {
-      const user = await getCurrentUser()
-      if (user) {
-        const userRole = (user.role || 'user').toLowerCase()
-        if (userRole === 'owner' || userRole === 'both') {
-          where.ownerId = { not: user.id }
-        }
-      }
-    } catch (error) {
-      // If getCurrentUser fails (user not logged in), continue without filtering
-    }
 
     // Step 3: Fetch homes with filters applied (reduces dataset before AI processing)
     // Note: City/area/country filters will be applied in JavaScript for better Greek/English matching

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
+import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
 
@@ -16,7 +17,6 @@ interface Booking {
   description: string | null
   startTime: string
   endTime: string
-  location: string | null
   status: string
   availabilityId?: number | null
   owner: {
@@ -40,6 +40,7 @@ interface Booking {
     city?: string
     country?: string
   }
+  inquiryId?: number | null
 }
 
 export default function CalendarPage() {
@@ -59,7 +60,7 @@ export default function CalendarPage() {
     ? selectedRole 
     : (actualRole || 'user')
   const isOwner = displayRole === 'owner' || displayRole === 'broker' || displayRole === 'both'
-
+  
   const handleReschedule = () => {
     if (selectedBooking) {
       setReschedulingBooking(selectedBooking)
@@ -296,7 +297,6 @@ export default function CalendarPage() {
                           )}
                           <div className="space-y-1 text-sm text-[#E8D5B7]/70">
                             <p>🕐 {formatTime(booking.startTime)} - {formatTime(booking.endTime)}</p>
-                            {booking.location && <p>📍 {booking.location}</p>}
                             <p>👤 {getTranslation(language, 'with')}: {booking.owner.name || booking.owner.email}</p>
                             {booking.home && (
                               <Link
@@ -529,6 +529,29 @@ function RescheduleModal({
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [appointmentDurationMinutes, setAppointmentDurationMinutes] = useState(30)
+
+  useEffect(() => {
+    const loadSlotLength = async () => {
+      if (booking.inquiryId) {
+        try {
+          const res = await fetch(`/api/inquiries/${homeKey}/${booking.inquiryId}`)
+          if (res.ok) {
+            const data = await res.json()
+            const t = parseAppointmentThresholdMinutes(data?.inquiry?.contactInfo)
+            if (t != null) {
+              setAppointmentDurationMinutes(t)
+              return
+            }
+          }
+        } catch (e) {
+          console.error('Error loading inquiry for slot length:', e)
+        }
+      }
+      setAppointmentDurationMinutes(minutesBetween(booking.startTime, booking.endTime))
+    }
+    loadSlotLength()
+  }, [homeKey, booking])
 
   useEffect(() => {
     const fetchAvailabilities = async () => {
@@ -557,7 +580,7 @@ function RescheduleModal({
     const startMinutes = startHour * 60 + startMin
     const endMinutes = endHour * 60 + endMin
     
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+    for (let minutes = startMinutes; minutes + appointmentDurationMinutes <= endMinutes; minutes += appointmentDurationMinutes) {
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
       const timeString = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
@@ -565,7 +588,7 @@ function RescheduleModal({
       // Check if this specific time slot is booked
       const dateStr = availability.date.includes('T') ? availability.date.split('T')[0] : availability.date
       const slotStart = new Date(`${dateStr}T${timeString}:00`)
-      const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000)
+      const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
       
       let isBooked = false
       
@@ -674,7 +697,9 @@ function RescheduleModal({
   }
 
   // Group availabilities by date
-  const groupedByDate = availabilities.reduce((acc, availability) => {
+  type TimeSlot = { time: string; availabilityId: number; isBooked: boolean }
+
+  const groupedByDate: Record<string, TimeSlot[]> = availabilities.reduce((acc, availability) => {
     const dateStr = availability.date
     let dateKey: string
     
@@ -692,19 +717,7 @@ function RescheduleModal({
     acc[dateKey].push(...slots)
     
     return acc
-  }, {} as Record<string, Array<{ time: string; availabilityId: number; isBooked: boolean }>>)
-
-  // Debug: Log grouped dates and slot counts
-  useEffect(() => {
-    if (availabilities.length > 0) {
-      console.log('Reschedule Modal - Availabilities:', availabilities.length)
-      console.log('Reschedule Modal - Grouped dates:', Object.keys(groupedByDate))
-      Object.entries(groupedByDate).forEach(([date, slots]) => {
-        const availableSlots = slots.filter(s => !s.isBooked)
-        console.log(`Date ${date}: ${slots.length} total slots, ${availableSlots.length} available`)
-      })
-    }
-  }, [availabilities, groupedByDate])
+  }, {} as Record<string, TimeSlot[]>)
 
   // Remove duplicates
   Object.keys(groupedByDate).forEach(date => {
@@ -757,7 +770,7 @@ function RescheduleModal({
         
         // Check if this specific time slot has any bookings (excluding the current booking being rescheduled)
         const slotStart = new Date(`${dateStr}T${selectedTimeSlot}:00`)
-        const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000)
+        const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
           const hasOverlappingBooking = av.bookings.some((b: any) => {
@@ -808,7 +821,7 @@ function RescheduleModal({
       }
 
       const startDateTime = new Date(`${selectedDate}T${selectedTimeSlot}:00`)
-      const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000)
+      const endDateTime = new Date(startDateTime.getTime() + appointmentDurationMinutes * 60 * 1000)
 
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
         throw new Error('Invalid date/time')
@@ -936,7 +949,7 @@ function RescheduleModal({
                             <option key={`${slot.time}-${slot.availabilityId}`} value={slot.time}>
                               {slot.time} - {(() => {
                                 const [hour, minute] = slot.time.split(':').map(Number)
-                                const endMinutes = hour * 60 + minute + 30
+                                const endMinutes = hour * 60 + minute + appointmentDurationMinutes
                                 const endHour = Math.floor(endMinutes / 60)
                                 const endMin = endMinutes % 60
                                 return `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`

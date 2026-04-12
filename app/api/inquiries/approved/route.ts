@@ -99,26 +99,43 @@ export async function GET(request: NextRequest) {
       })
       const pendingFinalizationInquiryIds = new Set(pendingFinalizations.map(n => n.inquiryId).filter((id): id is number => id !== null))
 
-      // Get all bookings for these inquiries (any booking means the inquiry is scheduled)
+      // Get all bookings for these inquiries, including inquiryId=null rows tied via availability.homeId + renter
       const bookings = await prisma.booking.findMany({
         where: {
-          inquiryId: { in: inquiryIds },
+          OR: [
+            { inquiryId: { in: inquiryIds } },
+            {
+              inquiryId: null,
+              ownerId: user.id,
+              NOT: { status: 'cancelled' },
+              availability: { homeId: { in: homeIds } },
+            },
+          ],
         },
         select: {
           inquiryId: true,
+          userId: true,
           startTime: true,
           endTime: true,
+          availability: { select: { homeId: true } },
         },
       })
 
-      // Group bookings by inquiryId
       const bookingsByInquiry = new Map<number, typeof bookings>()
-      bookings.forEach(booking => {
-        if (booking.inquiryId) {
-          if (!bookingsByInquiry.has(booking.inquiryId)) {
-            bookingsByInquiry.set(booking.inquiryId, [])
+      bookings.forEach((booking) => {
+        let targetId: number | null = booking.inquiryId
+        if (!targetId && booking.availability?.homeId != null) {
+          const hid = booking.availability.homeId
+          const match = inquiries.find(
+            (iq) => iq.home.id === hid && iq.user.id === booking.userId
+          )
+          if (match) targetId = match.id
+        }
+        if (targetId) {
+          if (!bookingsByInquiry.has(targetId)) {
+            bookingsByInquiry.set(targetId, [])
           }
-          bookingsByInquiry.get(booking.inquiryId)!.push(booking)
+          bookingsByInquiry.get(targetId)!.push(booking)
         }
       })
 
@@ -188,7 +205,6 @@ export async function GET(request: NextRequest) {
             }
           }
         }
-
         return {
           id: inquiry.id,
           key: inquiry.key,
@@ -217,7 +233,8 @@ export async function GET(request: NextRequest) {
             email: inquiry.user.email,
             role: inquiry.user.role,
           },
-          contactInfo: contactInfo,
+          owner: undefined, // Don't show owner's own info
+          contactInfo: contactInfo, // Show user's contact info from slot pick
           approvedAt: inquiry.updatedAt,
           createdAt: inquiry.createdAt,
         }
@@ -291,31 +308,45 @@ export async function GET(request: NextRequest) {
       })
       const pendingFinalizationInquiryIds = new Set(pendingFinalizations.map(n => n.inquiryId).filter((id): id is number => id !== null))
 
-      // Get all bookings for these inquiries (any booking means the inquiry is scheduled)
+      const homeIdsForUsers = inquiries.map(inq => inq.home!.id)
+
+      // Get all bookings for these inquiries, including inquiryId=null rows tied via availability.homeId
       const bookings = await prisma.booking.findMany({
         where: {
-          inquiryId: { in: inquiryIds },
+          OR: [
+            { inquiryId: { in: inquiryIds } },
+            {
+              inquiryId: null,
+              userId: user.id,
+              NOT: { status: 'cancelled' },
+              availability: { homeId: { in: homeIdsForUsers } },
+            },
+          ],
         },
         select: {
           inquiryId: true,
           startTime: true,
           endTime: true,
+          availability: { select: { homeId: true } },
         },
       })
 
-      // Group bookings by inquiryId
       const bookingsByInquiry = new Map<number, typeof bookings>()
-      bookings.forEach(booking => {
-        if (booking.inquiryId) {
-          if (!bookingsByInquiry.has(booking.inquiryId)) {
-            bookingsByInquiry.set(booking.inquiryId, [])
+      bookings.forEach((booking) => {
+        let targetId: number | null = booking.inquiryId
+        if (!targetId && booking.availability?.homeId != null) {
+          const match = inquiries.find((iq) => iq.homeId === booking.availability!.homeId)
+          if (match) targetId = match.id
+        }
+        if (targetId) {
+          if (!bookingsByInquiry.has(targetId)) {
+            bookingsByInquiry.set(targetId, [])
           }
-          bookingsByInquiry.get(booking.inquiryId)!.push(booking)
+          bookingsByInquiry.get(targetId)!.push(booking)
         }
       })
 
       // Get all availabilities for these homes
-      const homeIdsForUsers = inquiries.map(inq => inq.home!.id)
       const availabilities = await prisma.availability.findMany({
         where: {
           homeId: { in: homeIdsForUsers },
@@ -358,7 +389,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Determine status for users (same logic as owners)
+        // Determine status for users
         let status: 'approved' | 'waiting_for_schedule' | 'scheduled' | 'pre_finalization' | 'awaiting_finalization' = 'approved'
         
         if (pendingFinalizationInquiryIds.has(inquiry.id)) {
@@ -384,7 +415,6 @@ export async function GET(request: NextRequest) {
             }
           }
         }
-
         return {
           id: inquiry.id,
           key: inquiry.key,
@@ -413,7 +443,8 @@ export async function GET(request: NextRequest) {
             email: home.owner.email,
             occupation: home.owner.occupation,
           },
-          contactInfo: null, // Don't show user's own contact info
+          user: undefined, // Don't show user's own info
+          contactInfo: contactInfo,
           approvedAt: inquiry.updatedAt,
           createdAt: inquiry.createdAt,
         }

@@ -49,6 +49,14 @@ export async function GET(request: NextRequest) {
               street: true,
               city: true,
               country: true,
+              owner: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
         },
@@ -64,6 +72,14 @@ export async function GET(request: NextRequest) {
           finalized: true,
         },
         include: {
+          user: {
+            select: {
+              id: true,
+              key: true,
+              name: true,
+              email: true,
+            },
+          },
           home: {
             select: {
               id: true,

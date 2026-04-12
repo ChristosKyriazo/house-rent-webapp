@@ -21,10 +21,11 @@ export function createLocationMaps(areas: Array<{
   const areaNameMap = new Map<string, Set<string>>()
   
   areas.forEach(area => {
-    // City mapping
+    // City mapping (include accent-stripped Greek keys so e.g. "αθηνα" matches "Αθήνα")
     if (area.city && area.cityGreek) {
       const cityLower = area.city.toLowerCase()
       const cityGreekLower = area.cityGreek.toLowerCase()
+      const cityGreekNorm = removeGreekAccents(cityGreekLower)
       
       if (!cityMap.has(cityLower)) {
         cityMap.set(cityLower, new Set())
@@ -35,12 +36,19 @@ export function createLocationMaps(areas: Array<{
         cityMap.set(cityGreekLower, new Set())
       }
       cityMap.get(cityGreekLower)!.add(cityLower)
+
+      if (cityGreekNorm !== cityGreekLower) {
+        if (!cityMap.has(cityGreekNorm)) cityMap.set(cityGreekNorm, new Set())
+        cityMap.get(cityGreekNorm)!.add(cityLower)
+        cityMap.get(cityLower)!.add(cityGreekNorm)
+      }
     }
     
     // Country mapping
     if (area.country && area.countryGreek) {
       const countryLower = area.country.toLowerCase()
       const countryGreekLower = area.countryGreek.toLowerCase()
+      const countryGreekNorm = removeGreekAccents(countryGreekLower)
       
       if (!countryMap.has(countryLower)) {
         countryMap.set(countryLower, new Set())
@@ -51,12 +59,19 @@ export function createLocationMaps(areas: Array<{
         countryMap.set(countryGreekLower, new Set())
       }
       countryMap.get(countryGreekLower)!.add(countryLower)
+
+      if (countryGreekNorm !== countryGreekLower) {
+        if (!countryMap.has(countryGreekNorm)) countryMap.set(countryGreekNorm, new Set())
+        countryMap.get(countryGreekNorm)!.add(countryLower)
+        countryMap.get(countryLower)!.add(countryGreekNorm)
+      }
     }
     
     // Area name mapping
     if (area.name && area.nameGreek) {
       const nameLower = area.name.toLowerCase()
       const nameGreekLower = area.nameGreek.toLowerCase()
+      const nameGreekNorm = removeGreekAccents(nameGreekLower)
       
       if (!areaNameMap.has(nameLower)) {
         areaNameMap.set(nameLower, new Set())
@@ -67,6 +82,12 @@ export function createLocationMaps(areas: Array<{
         areaNameMap.set(nameGreekLower, new Set())
       }
       areaNameMap.get(nameGreekLower)!.add(nameLower)
+
+      if (nameGreekNorm !== nameGreekLower) {
+        if (!areaNameMap.has(nameGreekNorm)) areaNameMap.set(nameGreekNorm, new Set())
+        areaNameMap.get(nameGreekNorm)!.add(nameLower)
+        areaNameMap.get(nameLower)!.add(nameGreekNorm)
+      }
     }
   })
   

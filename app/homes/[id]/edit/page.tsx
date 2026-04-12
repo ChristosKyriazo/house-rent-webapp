@@ -398,13 +398,17 @@ export default function EditHomePage() {
       
       if (!response.ok) {
         const text = await response.text()
-        let data = {}
+        let data: unknown = {}
         try {
           data = text ? JSON.parse(text) : {}
         } catch {
           data = { error: text || getTranslation(language, 'deleteFailed') }
         }
-        setError(data.error || getTranslation(language, 'deleteFailed'))
+        const errorFromBody =
+          typeof data === 'object' && data !== null && 'error' in data
+            ? String((data as { error?: unknown }).error || '')
+            : ''
+        setError(errorFromBody || getTranslation(language, 'deleteFailed'))
         setDeleting(false)
         setShowDeleteConfirm(false)
         return

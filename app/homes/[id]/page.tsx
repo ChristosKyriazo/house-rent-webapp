@@ -9,6 +9,8 @@ import { getTranslation, translateValue } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
 import { useTranslatedDescription } from '@/app/hooks/useTranslatedDescription'
 import StarRating from '@/app/components/StarRating'
+import NotificationPopup from '@/app/components/NotificationPopup'
+import ConfirmDialog from '@/app/components/ConfirmDialog'
 
 interface Home {
   id: number
@@ -82,6 +84,10 @@ export default function HomeDetailPage() {
   const [dismissingFinalization, setDismissingFinalization] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null; safety: number | null; vibe: string | null }>>([])
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [rejectFinalizationConfirmOpen, setRejectFinalizationConfirmOpen] = useState(false)
+  const [hasBookableAvailability, setHasBookableAvailability] = useState(false)
+  const [hasScheduledViewingAppointment, setHasScheduledViewingAppointment] = useState(false)
   const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
   
@@ -170,7 +176,9 @@ export default function HomeDetailPage() {
       }
       
       setHome(data.home)
-      
+      setHasBookableAvailability(false)
+      setHasScheduledViewingAppointment(false)
+
       // Check if user has an inquiry for this home and its status
       if (profileData && profileData.user) {
         const inquiriesRes = await fetch('/api/inquiries')
@@ -214,6 +222,41 @@ export default function HomeDetailPage() {
                     setPendingFinalization(true)
                   }
                 }
+              }
+            }
+
+            const isRenterViewing = data.home.owner.id !== profileData.user.id
+            if (
+              inquiriesData.inquiryStatus &&
+              status === 'approved' &&
+              currentInquiryId &&
+              isRenterViewing
+            ) {
+              const [avRes, bookingsRes] = await Promise.all([
+                fetch(`/api/homes/${data.home.key}/availability`),
+                fetch(`/api/bookings?inquiryId=${currentInquiryId}`),
+              ])
+
+              if (bookingsRes.ok) {
+                const bookingsData = await bookingsRes.json()
+                const hasScheduled = (bookingsData.bookings || []).some(
+                  (b: { status?: string }) => (b.status || '').toLowerCase() === 'scheduled'
+                )
+                setHasScheduledViewingAppointment(hasScheduled)
+              }
+
+              if (avRes.ok) {
+                const avData = await avRes.json()
+                const avs = avData.availabilities || []
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const has = avs.some((a: { date: string; inquiryId: number | null }) => {
+                  const d = new Date(a.date)
+                  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                  if (day < today) return false
+                  return a.inquiryId == null || a.inquiryId === currentInquiryId
+                })
+                setHasBookableAvailability(has)
               }
             }
             
@@ -311,11 +354,11 @@ export default function HomeDetailPage() {
         setFinalizeRequestSent(true)
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'finalizeFailed'))
+        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
       }
     } catch (error) {
       console.error('Error finalizing:', error)
-      alert(getTranslation(language, 'finalizeFailed'))
+      setToast({ type: 'error', message: getTranslation(language, 'finalizeFailed') })
     } finally {
       setFinalizing(false)
     }
@@ -338,23 +381,25 @@ export default function HomeDetailPage() {
         window.location.reload()
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'finalizeFailed'))
+        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
       }
     } catch (error) {
       console.error('Error approving finalization:', error)
-      alert(getTranslation(language, 'finalizeFailed'))
+      setToast({ type: 'error', message: getTranslation(language, 'finalizeFailed') })
     } finally {
       setFinalizing(false)
     }
   }
 
-  const handleRejectFinalization = async () => {
+  const handleRejectFinalization = () => {
     if (!home || !inquiryId || dismissingFinalization) return
-    
-    if (!confirm(getTranslation(language, 'confirmRejectFinalization') || 'Are you sure you want to reject this finalization? The property will be removed from your search results.')) {
-      return
-    }
-    
+    setRejectFinalizationConfirmOpen(true)
+  }
+
+  const confirmRejectFinalization = async () => {
+    if (!home || !inquiryId) return
+
+    setRejectFinalizationConfirmOpen(false)
     setDismissingFinalization(true)
     try {
       const response = await fetch(`/api/inquiries/${home.key}/${inquiryId}/finalize`, {
@@ -364,15 +409,14 @@ export default function HomeDetailPage() {
       })
       
       if (response.ok) {
-        // Redirect to search page since the house will be hidden
         router.push('/homes')
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'somethingWentWrong'))
+        setToast({ type: 'error', message: data.error || getTranslation(language, 'somethingWentWrong') })
       }
     } catch (error) {
       console.error('Error rejecting finalization:', error)
-      alert(getTranslation(language, 'somethingWentWrong'))
+      setToast({ type: 'error', message: getTranslation(language, 'somethingWentWrong') })
     } finally {
       setDismissingFinalization(false)
     }
@@ -1111,7 +1155,7 @@ export default function HomeDetailPage() {
             {home && displayRole === 'user' && currentUserId !== home.owner.id && inquiryStatus !== 'approved' && (
               <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
                 {/* Inquire/Remove Button - Only show if inquiry is not approved or dismissed */}
-                {inquiryStatus !== 'approved' && inquiryStatus !== 'dismissed' && (
+                {inquiryStatus !== 'dismissed' && (
                   <button
                     onClick={handleInquiry}
                     disabled={updatingInquiry}
@@ -1131,6 +1175,33 @@ export default function HomeDetailPage() {
                 )}
               </div>
             )}
+
+            {home &&
+              displayRole === 'user' &&
+              currentUserId !== null &&
+              currentUserId !== home.owner.id &&
+              inquiryStatus === 'approved' &&
+              inquiryId &&
+              (hasScheduledViewingAppointment || hasBookableAvailability) && (
+                <div className="mt-8 pt-8 border-t border-[#E8D5B7]/20">
+                  {hasScheduledViewingAppointment ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full px-6 py-4 rounded-xl font-semibold text-lg bg-[#2D3748] border border-[#E8D5B7]/40 text-[#E8D5B7]/80 cursor-not-allowed"
+                    >
+                      {getTranslation(language, 'appointmentScheduled')}
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/homes/${home.key}/book?inquiryId=${inquiryId}`}
+                      className="block w-full text-center px-6 py-4 rounded-xl font-semibold text-lg transition-all bg-[#E8D5B7] hover:bg-[#D4C19F] text-[#2D3748]"
+                    >
+                      {getTranslation(language, 'setAppointment')}
+                    </Link>
+                  )}
+                </div>
+              )}
           </div>
 
         {/* Photo Lightbox Modal */}
@@ -1338,6 +1409,27 @@ export default function HomeDetailPage() {
           </div>
         )}
       </div>
+
+      {toast && (
+        <NotificationPopup
+          type={toast.type}
+          message={toast.message}
+          language={language}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={rejectFinalizationConfirmOpen}
+        message={
+          getTranslation(language, 'confirmRejectFinalization') ||
+          'Are you sure you want to reject this finalization? The property will be removed from your search results.'
+        }
+        onConfirm={confirmRejectFinalization}
+        onCancel={() => setRejectFinalizationConfirmOpen(false)}
+        language={language}
+        variant="danger"
+      />
     </div>
   )
 }

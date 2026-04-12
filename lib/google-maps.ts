@@ -231,7 +231,14 @@ async function findClosestPlace(
       }
 
       // Calculate distance for all valid results and find the closest one
-      const placesWithDistance = validPlaces.map((place: any) => {
+      type PlaceDistance = {
+        place: any
+        distance: number
+        coordinates: Coordinates
+        name: string | undefined
+      }
+
+      const placesWithDistance: PlaceDistance[] = validPlaces.map((place: any) => {
         const placeLat = place.geometry.location.lat
         const placeLng = place.geometry.location.lng
         const distance = calculateDistance(
@@ -244,7 +251,7 @@ async function findClosestPlace(
           place,
           distance,
           coordinates: { lat: placeLat, lng: placeLng },
-          name: place.name || null,
+          name: place.name || undefined,
         }
       })
 
@@ -333,7 +340,14 @@ async function findClosestUniversity(
       // Filter results to only include:
       // 1. Valid university type (using isValidPlaceType)
       // 2. Universities that match names in our database
-      const validUniversities = data.results
+      type UniversityDistance = {
+        place: any
+        distance: number
+        coordinates: Coordinates
+        name: string | undefined
+      }
+
+      const validUniversities: UniversityDistance[] = data.results
         .filter((place: any) => {
           // First check if it's a valid university type
           if (!isValidPlaceType(place, 'university')) {
@@ -367,7 +381,7 @@ async function findClosestUniversity(
             place,
             distance,
             coordinates: { lat: placeLat, lng: placeLng },
-            name: place.name || null,
+            name: place.name || undefined,
           }
         })
 

@@ -53,14 +53,14 @@ export async function PUT(
       )
     }
 
-    // Check if rating is within 1 week of creation
+    // Check if rating is within 3 days of creation
     const now = new Date()
     const ratingDate = new Date(existingRating.createdAt)
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
     
-    if (ratingDate <= oneWeekAgo) {
+    if (ratingDate <= threeDaysAgo) {
       return NextResponse.json(
-        { error: 'Rating can only be edited within 1 week of creation' },
+        { error: 'Rating can only be edited within 3 days of creation' },
         { status: 403 }
       )
     }

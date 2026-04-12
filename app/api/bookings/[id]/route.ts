@@ -291,3 +291,133 @@ export async function PATCH(
   }
 }
 
+// DELETE /api/bookings/[id] - Cancel a booking (only if meeting hasn't started)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const resolvedParams = await Promise.resolve(params)
+    const bookingId = parseInt(resolvedParams.id)
+
+    if (isNaN(bookingId)) {
+      return NextResponse.json({ error: 'Invalid booking ID' }, { status: 400 })
+    }
+
+    // Find the booking
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        availability: {
+          include: {
+            home: {
+              select: {
+                key: true,
+                id: true,
+                ownerId: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!booking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+
+    // Verify user is either the owner or the user who booked
+    if (booking.userId !== user.id && booking.ownerId !== user.id) {
+      return NextResponse.json(
+        { error: 'Only the user or owner can cancel this booking' },
+        { status: 403 }
+      )
+    }
+
+    // Check if booking is scheduled
+    if (booking.status !== 'scheduled') {
+      return NextResponse.json(
+        { error: 'Only scheduled bookings can be cancelled' },
+        { status: 400 }
+      )
+    }
+
+    // Check if meeting has already started - cannot cancel after meeting starts
+    const now = new Date()
+    const bookingStartTime = new Date(booking.startTime)
+    
+    if (bookingStartTime <= now) {
+      return NextResponse.json(
+        { error: 'Cannot cancel a meeting that has already started' },
+        { status: 400 }
+      )
+    }
+
+    // Free up the availability slot if it exists
+    if (booking.availabilityId) {
+      await prisma.availability.update({
+        where: { id: booking.availabilityId },
+        data: { isAvailable: true },
+      })
+    }
+
+    // Update booking status to cancelled
+    const cancelledBooking = await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: 'cancelled',
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            occupation: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            occupation: true,
+          },
+        },
+        availability: {
+          include: {
+            home: {
+              select: {
+                key: true,
+                title: true,
+                street: true,
+                city: true,
+                country: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    // Transform to include home at top level for easier access
+    const transformedBooking = {
+      ...cancelledBooking,
+      home: cancelledBooking.availability?.home || null,
+    }
+
+    return NextResponse.json({ booking: transformedBooking }, { status: 200 })
+  } catch (error) {
+    console.error('Error cancelling booking:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+

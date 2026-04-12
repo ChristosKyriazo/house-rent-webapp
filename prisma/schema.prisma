@@ -17,7 +17,6 @@ model User {
   title           String?
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
-  subscription    Int?      @default(1) // 1 = Free, 2 = Plus, 3 = Unlimited
   calComUsername  String?   // Cal.com username (optional, for direct link)
   calComAccessToken String? // Cal.com OAuth access token
   calComRefreshToken String? // Cal.com OAuth refresh token
@@ -66,8 +65,6 @@ model Home {
   closestUniversity Float?   // Distance to closest university (in km or minutes)
   parking           Boolean? // Whether parking is available (yes/no)
   energyClass       String?  // Energy class: "A+", "A", "B", "C", "D", "E", "F", "G"
-  promotedUntil     DateTime? // When the standard promotion expires (7 days)
-  premiumPromotedUntil DateTime? // When the premium promotion expires (30 days)
   ownerId           Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -251,9 +248,7 @@ model Booking {
   updatedAt       DateTime @updatedAt
   user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
   owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
-  availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
+  availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)  @@index([userId])
   @@index([ownerId])
   @@index([startTime])
   @@index([status])

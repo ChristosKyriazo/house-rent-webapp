@@ -8,7 +8,7 @@ export default function LoginPage() {
       <SignIn 
         routing="hash" 
         signUpUrl="/signup" 
-        afterSignInUrl="/profile"
+        afterSignInUrl="/"
       />
     </div>
   )

@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface Availability {
@@ -44,43 +45,37 @@ export default function BookPage() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [isOwner, setIsOwner] = useState(false)
+  const [appointmentDurationMinutes, setAppointmentDurationMinutes] = useState(30)
+  const [effectiveInquiryId, setEffectiveInquiryId] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [profileRes, homeRes, availabilityRes] = await Promise.all([
+        const [profileRes, homeRes, availabilityRes, inquiriesRes] = await Promise.all([
           fetch('/api/profile'),
           fetch(`/api/homes/${homeKey}`),
           fetch(`/api/homes/${homeKey}/availability`),
+          fetch('/api/inquiries'),
         ])
 
-        // Read home data once
-        let homeData = null
-        if (homeRes.ok) {
-          homeData = await homeRes.json()
-        }
+        const profileData = profileRes.ok ? await profileRes.json() : null
+        const homeData = homeRes.ok ? await homeRes.json() : null
+        const inquiriesData = inquiriesRes.ok ? await inquiriesRes.json() : null
 
-        // Check user profile to determine if they're an owner
-        let profileData = null
-        if (profileRes.ok) {
-          profileData = await profileRes.json()
-          if (profileData.user) {
-            const userRole = (profileData.user.role || 'user').toLowerCase()
-            const isOwnerRole = userRole === 'owner' || userRole === 'broker' || userRole === 'both'
-            
-            // Also check if user is the owner of this specific home
-            let isHomeOwner = false
-            if (homeData && homeData.home && homeData.home.owner) {
-              isHomeOwner = profileData.user.id === homeData.home.owner.id
-            }
-            
-            // If user is owner/broker role OR owns this home, redirect them
-            if (isOwnerRole || isHomeOwner) {
-              setIsOwner(true)
-              // Redirect owners away from booking page
-              router.push('/homes/approved')
-              return
-            }
+        // Check user profile to determine if they're an owner (owners/brokers shouldn't book)
+        if (profileData?.user) {
+          const userRole = (profileData.user.role || 'user').toLowerCase()
+          const isOwnerRole = userRole === 'owner' || userRole === 'broker' || userRole === 'both'
+
+          // Also check if user is the owner of this specific home
+          const isHomeOwner =
+            !!homeData?.home?.owner && profileData.user.id === homeData.home.owner.id
+
+          // If user is owner/broker role OR owns this home, redirect them
+          if (isOwnerRole || isHomeOwner) {
+            setIsOwner(true)
+            router.push('/homes/approved')
+            return
           }
         }
 
@@ -92,21 +87,30 @@ export default function BookPage() {
         if (availabilityRes.ok) {
           const availabilityData = await availabilityRes.json()
           const availabilitiesWithBookings = availabilityData.availabilities || []
-          
-          // Debug: Log bookings data to verify they're being received
-          console.log('Availabilities received:', availabilitiesWithBookings.map((av: any) => ({
-            id: av.id,
-            date: av.date,
-            startTime: av.startTime,
-            endTime: av.endTime,
-            bookingsCount: av.bookings?.length || 0,
-            bookings: av.bookings?.map((b: any) => ({
-              startTime: b.startTime,
-              endTime: b.endTime,
-            })),
-          })))
-          
+
           setAvailabilities(availabilitiesWithBookings)
+        }
+
+        let resolvedInquiryId: number | null = null
+        if (inquiryId) {
+          const parsed = parseInt(inquiryId, 10)
+          if (!Number.isNaN(parsed)) resolvedInquiryId = parsed
+        } else if (homeData?.home?.id != null && inquiriesData?.inquiryIds) {
+          const fromMap = inquiriesData.inquiryIds[homeData.home.id]
+          if (typeof fromMap === 'number') resolvedInquiryId = fromMap
+        }
+
+        setEffectiveInquiryId(resolvedInquiryId)
+
+        if (resolvedInquiryId != null) {
+          const inquiryRes = await fetch(`/api/inquiries/${homeKey}/${resolvedInquiryId}`)
+          if (inquiryRes.ok) {
+            const inquiryData = await inquiryRes.json()
+            const threshold = parseAppointmentThresholdMinutes(inquiryData?.inquiry?.contactInfo)
+            if (threshold != null) {
+              setAppointmentDurationMinutes(threshold)
+            }
+          }
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -116,7 +120,7 @@ export default function BookPage() {
     }
 
     fetchData()
-  }, [homeKey])
+  }, [homeKey, router, inquiryId])
 
   // Generate half-hour time slots from availability ranges
   const generateTimeSlots = (availability: Availability): TimeSlot[] => {
@@ -127,7 +131,7 @@ export default function BookPage() {
     const startMinutes = startHour * 60 + startMin
     const endMinutes = endHour * 60 + endMin
     
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 30) {
+    for (let minutes = startMinutes; minutes + appointmentDurationMinutes <= endMinutes; minutes += appointmentDurationMinutes) {
       const hours = Math.floor(minutes / 60)
       const mins = minutes % 60
       const timeString = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
@@ -136,7 +140,7 @@ export default function BookPage() {
       // Normalize the date string to ensure consistent format
       const dateStr = availability.date.includes('T') ? availability.date.split('T')[0] : availability.date
       const slotStart = new Date(`${dateStr}T${timeString}:00`)
-      const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000)
+      const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
       
       let isBooked = !availability.isAvailable
       
@@ -165,18 +169,6 @@ export default function BookPage() {
           
           // Check for overlap: slot starts before booking ends AND slot ends after booking starts
           const overlaps = (slotStartMinutes < bookingEndMinutes && slotEndMinutes > bookingStartMinutes)
-          
-          // Debug logging (remove in production)
-          if (overlaps) {
-            console.log('Found overlapping booking:', {
-              slotTime: timeString,
-              slotDate: dateStr,
-              slotMinutes: `${slotStartMinutes}-${slotEndMinutes}`,
-              bookingMinutes: `${bookingStartMinutes}-${bookingEndMinutes}`,
-              bookingStart: booking.startTime,
-              bookingEnd: booking.endTime,
-            })
-          }
           
           return overlaps
         })
@@ -259,7 +251,7 @@ export default function BookPage() {
         
         // Check if this specific time slot has any bookings
         const slotStart = new Date(`${dateStr}T${selectedTimeSlot}:00`)
-        const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000)
+        const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
           const hasOverlappingBooking = av.bookings.some((booking: any) => {
@@ -277,10 +269,10 @@ export default function BookPage() {
         throw new Error('Time slot not available')
       }
 
-      // Create start and end times (30-minute slot)
+      // Create start and end times based on owner threshold
       const [hour, minute] = selectedTimeSlot.split(':').map(Number)
       const startDateTime = new Date(`${selectedDate}T${selectedTimeSlot}:00`)
-      const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000) // Add 30 minutes
+      const endDateTime = new Date(startDateTime.getTime() + appointmentDurationMinutes * 60 * 1000)
 
       // Validate dates
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
@@ -292,7 +284,7 @@ export default function BookPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ownerId: home.owner.id,
-          inquiryId: inquiryId ? parseInt(inquiryId) : null,
+          inquiryId: effectiveInquiryId,
           availabilityId: matchingAvailability.id,
           title: 'Property Viewing',
           description: `Viewing for ${home.title}`,
@@ -437,7 +429,7 @@ export default function BookPage() {
                           <option key={`${slot.time}-${slot.availabilityId}`} value={slot.time}>
                             {slot.time} - {(() => {
                               const [hour, minute] = slot.time.split(':').map(Number)
-                              const endMinutes = hour * 60 + minute + 30
+                              const endMinutes = hour * 60 + minute + appointmentDurationMinutes
                               const endHour = Math.floor(endMinutes / 60)
                               const endMin = endMinutes % 60
                               return `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
@@ -475,7 +467,7 @@ export default function BookPage() {
                     <strong>{getTranslation(language, 'selectedTime')}:</strong>{' '}
                     {selectedTimeSlot} - {(() => {
                       const [hour, minute] = selectedTimeSlot.split(':').map(Number)
-                      const endMinutes = hour * 60 + minute + 30
+                      const endMinutes = hour * 60 + minute + appointmentDurationMinutes
                       const endHour = Math.floor(endMinutes / 60)
                       const endMin = endMinutes % 60
                       return `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`

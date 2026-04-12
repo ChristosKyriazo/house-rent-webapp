@@ -9,6 +9,7 @@ import OpenAI from 'openai'
 import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
+import { resolveAreaToEnglishCanonical, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,12 +41,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check subscription and home count limits
-    const subscription = user.subscription || 1
-    const currentHomeCount = await prisma.home.count({
-      where: { ownerId: user.id },
-    })
-
     // Read Excel file to get row count and check limits
     const arrayBuffer = await excelFile.arrayBuffer()
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
@@ -53,23 +48,6 @@ export async function POST(request: NextRequest) {
     const worksheet = workbook.Sheets[sheetName]
     const data = XLSX.utils.sheet_to_json(worksheet) as any[]
     const newHomesCount = data.length
-
-    if (subscription === 1) {
-      if (currentHomeCount + newHomesCount > 2) {
-        return NextResponse.json(
-          { error: 'Free plan allows up to 2 homes total. Please upgrade to Plus or Unlimited.' },
-          { status: 403 }
-        )
-      }
-    } else if (subscription === 2) {
-      if (currentHomeCount + newHomesCount > 10) {
-        return NextResponse.json(
-          { error: 'Plus plan allows up to 10 homes total. Please upgrade to Unlimited.' },
-          { status: 403 }
-        )
-      }
-    }
-    // Unlimited: no limit
 
     if (data.length === 0) {
       return NextResponse.json(
@@ -93,19 +71,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Get unique values from database for matching
-    const [uniqueHeatingCategories, uniqueHeatingAgents, uniqueEnergyClasses, areas] = await Promise.all([
+    const [uniqueHeatingCategories, uniqueHeatingAgents, uniqueEnergyClasses] = await Promise.all([
       getUniqueFieldValues(prisma, 'heatingCategory'),
       getUniqueFieldValues(prisma, 'heatingAgent'),
       getUniqueFieldValues(prisma, 'energyClass'),
-      prisma.area.findMany({
-        select: {
-          city: true,
-          cityGreek: true,
-          country: true,
-          countryGreek: true,
-        },
-        distinct: ['city', 'country']
-      })
     ])
 
     // Get all areas with name translations for area field conversion
@@ -119,80 +88,6 @@ export async function POST(request: NextRequest) {
         countryGreek: true,
       }
     })
-
-    // Helper function to convert area from Greek to English
-    const convertAreaToEnglish = (input: string | null): string | null => {
-      if (!input) return null
-      const normalized = input.trim()
-      
-      // Find matching area with Greek name
-      const matchingArea = allAreas.find(a => 
-        a.nameGreek && a.nameGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      if (matchingArea && matchingArea.name) {
-        return matchingArea.name
-      }
-      
-      // Check if it's already in English (exists in areas as English)
-      const englishMatch = allAreas.find(a => 
-        a.name && a.name.toLowerCase() === normalized.toLowerCase()
-      )
-      if (englishMatch && englishMatch.name) {
-        return englishMatch.name
-      }
-      
-      // If not found, return as-is (might be a new area)
-      return normalized
-    }
-
-    // Helper function to convert city/country from Greek to English
-    const convertCityToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      
-      // Find matching area with Greek city name
-      const matchingArea = areas.find(a => 
-        a.cityGreek && a.cityGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      if (matchingArea && matchingArea.city) {
-        return matchingArea.city
-      }
-      
-      // Check if it's already in English (exists in areas as English)
-      const englishMatch = areas.find(a => 
-        a.city && a.city.toLowerCase() === normalized.toLowerCase()
-      )
-      if (englishMatch && englishMatch.city) {
-        return englishMatch.city
-      }
-      
-      // If not found, return as-is (might be a new city)
-      return normalized
-    }
-
-    const convertCountryToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      
-      // Find matching area with Greek country name
-      const matchingArea = areas.find(a => 
-        a.countryGreek && a.countryGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      if (matchingArea && matchingArea.country) {
-        return matchingArea.country
-      }
-      
-      // Check if it's already in English (exists in areas as English)
-      const englishMatch = areas.find(a => 
-        a.country && a.country.toLowerCase() === normalized.toLowerCase()
-      )
-      if (englishMatch && englishMatch.country) {
-        return englishMatch.country
-      }
-      
-      // If not found, return as-is (might be a new country)
-      return normalized
-    }
 
     // Define valid values (fallback if DB is empty)
     const validHeatingCategories = uniqueHeatingCategories.length > 0 
@@ -259,14 +154,14 @@ export async function POST(request: NextRequest) {
         
         // Convert city, country, and area to English
         const cityInput = String(row['City']).trim()
-        const city = convertCityToEnglish(cityInput)
+        const city = resolveCityToEnglishCanonical(cityInput, allAreas)
         
         const countryInput = String(row['Country']).trim()
-        const country = convertCountryToEnglish(countryInput)
+        const country = resolveCountryToEnglishCanonical(countryInput, allAreas)
         
         // Convert area to English
         const areaInput = row['Area'] ? String(row['Area']).trim() : null
-        const area = convertAreaToEnglish(areaInput)
+        const area = resolveAreaToEnglishCanonical(areaInput, allAreas)
         
         // Listing type - convert to English (rent or sale)
         const listingTypeInput = row['Listing Type'] ? String(row['Listing Type']).trim().toLowerCase() : 'rent'
@@ -344,7 +239,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate distances using Google Maps API
-        let distances = {
+        let distances: {
+          closestMetro: number | null
+          closestBus: number | null
+          closestSchool: number | null
+          closestHospital: number | null
+          closestPark: number | null
+          closestUniversity: number | null
+        } = {
           closestMetro: null,
           closestBus: null,
           closestSchool: null,
@@ -402,10 +304,7 @@ export async function POST(request: NextRequest) {
         let finalDescription = description
         let finalDescriptionGreek: string | null = null
         
-        // Only generate AI descriptions for Plus (2) or Unlimited (3) subscriptions
-        const canUseAI = subscription === 2 || subscription === 3
-        
-        if (useAIDescription && canUseAI && (!finalDescription || finalDescription.trim() === '')) {
+        if (useAIDescription && (!finalDescription || finalDescription.trim() === '')) {
           const openai = process.env.OPENAI_API_KEY ? new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
           }) : null
@@ -492,7 +391,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       created: results.length,
-      errors: errors.length,
+      errorCount: errors.length,
       results,
       errors: errors.length > 0 ? errors : undefined,
     })

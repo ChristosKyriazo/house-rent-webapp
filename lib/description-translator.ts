@@ -65,7 +65,9 @@ Return only the translated text, nothing else.`
       // Limit cache size to prevent memory issues
       if (translationCache.size > 100) {
         const firstKey = translationCache.keys().next().value
-        translationCache.delete(firstKey)
+        if (typeof firstKey === 'string') {
+          translationCache.delete(firstKey)
+        }
       }
       return translated
     }

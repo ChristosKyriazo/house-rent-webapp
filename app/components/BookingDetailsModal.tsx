@@ -5,6 +5,8 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import Link from 'next/link'
+import NotificationPopup from '@/app/components/NotificationPopup'
+import ConfirmDialog from '@/app/components/ConfirmDialog'
 
 interface Booking {
   id: number
@@ -13,7 +15,6 @@ interface Booking {
   description: string | null
   startTime: string
   endTime: string
-  location: string | null
   status: string
   userId?: number
   owner: {
@@ -21,6 +22,7 @@ interface Booking {
     name: string | null
     email: string
     occupation?: string | null
+    role?: string
   }
   user: {
     id: number
@@ -44,6 +46,11 @@ interface UserRatings {
   renterCount: number
 }
 
+interface HouseRatings {
+  houseOwnerRating: number | null
+  houseOwnerCount: number
+}
+
 interface BookingDetailsModalProps {
   booking: Booking | null
   onClose: () => void
@@ -56,29 +63,46 @@ interface BookingDetailsModalProps {
 export default function BookingDetailsModal({ booking, onClose, isOwner, onReschedule, onCancel, currentUserId }: BookingDetailsModalProps) {
   const { language } = useLanguage()
   const [ratings, setRatings] = useState<UserRatings | null>(null)
+  const [houseRatings, setHouseRatings] = useState<HouseRatings | null>(null)
   const [loadingRatings, setLoadingRatings] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  
+  // Check if current user is the user (not owner) in this booking
+  const isUser = currentUserId && booking && (booking.userId === currentUserId || booking.user.id === currentUserId)
+  
+  // Check if owner is a broker
+  const isBroker = booking?.owner?.role === 'broker'
+  // Check if user is viewing (not owner)
+  const isUserViewing = !isOwner && isUser
 
   // Check if booking can be rescheduled
   // Users: scheduled status, >24 hours away
   // Owners: scheduled status, anytime
-  const isUser = currentUserId && booking && (booking.userId === currentUserId || booking.user.id === currentUserId)
   const canReschedule = booking?.status === 'scheduled' && (
     isUser 
       ? (new Date(booking.startTime).getTime() - new Date().getTime()) > 24 * 60 * 60 * 1000
       : !isUser // Owners can reschedule anytime
   )
 
-  // Check if booking can be cancelled (both user and owner, scheduled status)
-  const canCancel = booking?.status === 'scheduled' && (isUser || isOwner)
+  // Check if booking can be cancelled (both user and owner, scheduled status, and meeting hasn't started)
+  const now = new Date()
+  const meetingStartTime = booking ? new Date(booking.startTime) : null
+  const canCancel = booking?.status === 'scheduled' && 
+                   (isUser || isOwner) && 
+                   meetingStartTime && 
+                   meetingStartTime > now // Meeting hasn't started yet
 
-  const handleCancel = async () => {
+  const handleCancelClick = () => {
     if (!booking || !onCancel) return
-    
-    if (!confirm(getTranslation(language, 'confirmCancelBooking'))) {
-      return
-    }
+    setCancelConfirmOpen(true)
+  }
 
+  const performCancelBooking = async () => {
+    if (!booking || !onCancel) return
+
+    setCancelConfirmOpen(false)
     setCancelling(true)
     try {
       const response = await fetch(`/api/bookings/${booking.id}`, {
@@ -94,7 +118,10 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
       onClose()
     } catch (error) {
       console.error('Error cancelling booking:', error)
-      alert(error instanceof Error ? error.message : getTranslation(language, 'somethingWentWrong'))
+      setToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : getTranslation(language, 'somethingWentWrong'),
+      })
     } finally {
       setCancelling(false)
     }
@@ -106,12 +133,27 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
     const fetchRatings = async () => {
       setLoadingRatings(true)
       try {
-        // If user viewing, get owner ratings. If owner viewing, get user ratings
-        const targetUserId = isOwner ? booking.user.id : booking.owner.id
-        const response = await fetch(`/api/ratings?userId=${targetUserId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setRatings(data.ratings)
+        // If user viewing a broker's booking, get house ratings instead of broker ratings
+        if (isUserViewing && isBroker && booking.home?.key) {
+          // Fetch house ratings for broker-owned properties
+          const homeResponse = await fetch(`/api/homes/${booking.home.key}`)
+          if (homeResponse.ok) {
+            const homeData = await homeResponse.json()
+            if (homeData.home?.owner?.ratings) {
+              setHouseRatings({
+                houseOwnerRating: homeData.home.owner.ratings.ownerRating,
+                houseOwnerCount: homeData.home.owner.ratings.ownerCount,
+              })
+            }
+          }
+        } else {
+          // If user viewing, get owner ratings. If owner viewing, get user ratings
+          const targetUserId = isOwner ? booking.user.id : booking.owner.id
+          const response = await fetch(`/api/ratings?userId=${targetUserId}`)
+          if (response.ok) {
+            const data = await response.json()
+            setRatings(data.ratings)
+          }
         }
       } catch (error) {
         console.error('Error fetching ratings:', error)
@@ -121,7 +163,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
     }
 
     fetchRatings()
-  }, [booking, isOwner])
+  }, [booking, isOwner, isUserViewing, isBroker])
 
   if (!booking) return null
 
@@ -145,8 +187,17 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
   const otherPerson = isOwner ? booking.user : booking.owner
   const ratingType = isOwner ? 'renter' : 'owner'
-  const relevantRating = isOwner ? ratings?.renterRating : ratings?.ownerRating
-  const relevantCount = isOwner ? ratings?.renterCount : ratings?.ownerCount
+  
+  // For user viewing broker: use house ratings, otherwise use person ratings
+  const relevantRating = isUserViewing && isBroker 
+    ? houseRatings?.houseOwnerRating 
+    : (isOwner ? ratings?.renterRating : ratings?.ownerRating)
+  const relevantCount = isUserViewing && isBroker
+    ? houseRatings?.houseOwnerCount
+    : (isOwner ? ratings?.renterCount : ratings?.ownerCount)
+  
+  // Determine if rating should be clickable (only for house ratings when user views broker)
+  const isRatingClickable = isUserViewing && isBroker && booking.home?.key && relevantRating !== null
 
   return (
     <div
@@ -196,14 +247,6 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
                 {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
               </p>
             </div>
-            {booking.location && (
-              <div>
-                <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
-                  {getTranslation(language, 'location')}
-                </label>
-                <p className="text-[#E8D5B7]">{booking.location}</p>
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">
                 {getTranslation(language, 'status')}
@@ -281,12 +324,20 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
               {/* Ratings */}
               <div>
                 <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">
-                  {getTranslation(language, 'ratings')}
+                  {isUserViewing && isBroker ? getTranslation(language, 'houseRatings') || 'House Ratings' : getTranslation(language, 'ratings')}
                 </label>
                 {loadingRatings ? (
                   <p className="text-[#E8D5B7]/70">{getTranslation(language, 'loading')}</p>
                 ) : relevantRating ? (
-                  <div className="flex items-center gap-2">
+                  <Link
+                    href={isRatingClickable ? `/homes/ratings/${booking.home?.key}` : '#'}
+                    onClick={(e) => {
+                      if (!isRatingClickable) {
+                        e.preventDefault()
+                      }
+                    }}
+                    className={isRatingClickable ? 'flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer' : 'flex items-center gap-2'}
+                  >
                     <div className="flex items-center">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <span
@@ -307,7 +358,12 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
                     <span className="text-[#E8D5B7]/70 text-sm">
                       ({relevantCount} {getTranslation(language, 'ratings')})
                     </span>
-                  </div>
+                    {isRatingClickable && (
+                      <span className="text-[#E8D5B7]/70 text-xs ml-2 underline">
+                        {getTranslation(language, 'viewAll') || 'View all'}
+                      </span>
+                    )}
+                  </Link>
                 ) : (
                   <p className="text-[#E8D5B7]/70">
                     {getTranslation(language, 'noRatingsYet')}
@@ -322,7 +378,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
         <div className="mt-8 flex justify-end gap-4">
           {canCancel && onCancel && (
             <button
-              onClick={handleCancel}
+              onClick={handleCancelClick}
               disabled={cancelling}
               className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -348,6 +404,25 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
           </button>
         </div>
       </div>
+
+      {toast && (
+        <NotificationPopup
+          type={toast.type}
+          message={toast.message}
+          language={language}
+          onClose={() => setToast(null)}
+          className="z-[60]"
+        />
+      )}
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        message={getTranslation(language, 'confirmCancelBooking')}
+        onConfirm={performCancelBooking}
+        onCancel={() => setCancelConfirmOpen(false)}
+        language={language}
+        variant="danger"
+      />
     </div>
   )
 }

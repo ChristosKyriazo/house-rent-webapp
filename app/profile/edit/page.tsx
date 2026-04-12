@@ -21,11 +21,9 @@ export default function EditProfilePage() {
     dateOfBirth: '',
     occupation: '',
     role: 'user',
-    subscription: 1,
   })
   const [currentRole, setCurrentRole] = useState<string>('')
   const [error, setError] = useState('')
-  const [updatingSubscription, setUpdatingSubscription] = useState(false)
 
   useEffect(() => {
     fetch('/api/profile')
@@ -47,7 +45,6 @@ export default function EditProfilePage() {
               : '',
             occupation: data.user.occupation ? reverseTranslateValue(data.user.occupation) : '',
             role: userRole === 'broker' ? 'owner' : userRole, // Show 'owner' in form if broker, but track actual role
-            subscription: data.user.subscription || 1,
           })
         } else {
           router.push('/profile')
@@ -63,30 +60,6 @@ export default function EditProfilePage() {
     setSaving(true)
 
     try {
-      // Update subscription separately if it changed
-      if (formData.subscription) {
-        setUpdatingSubscription(true)
-        try {
-          const subResponse = await fetch('/api/profile/subscription', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscription: formData.subscription }),
-          })
-          if (!subResponse.ok) {
-            const subData = await subResponse.json()
-            setError(subData.error || 'Failed to update subscription')
-            setUpdatingSubscription(false)
-            return
-          }
-        } catch (subErr) {
-          setError('Failed to update subscription')
-          setUpdatingSubscription(false)
-          return
-        } finally {
-          setUpdatingSubscription(false)
-        }
-      }
-
       const response = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -270,32 +243,13 @@ export default function EditProfilePage() {
               </div>
             )}
 
-            {/* Subscription Selection */}
-            <div>
-              <label className="block text-sm font-medium text-[#E8D5B7] mb-2">
-                {getTranslation(language, 'subscription')}
-              </label>
-              <select
-                value={formData.subscription}
-                onChange={(e) => setFormData({ ...formData, subscription: Number(e.target.value) })}
-                className="w-full px-4 py-3 border border-[#E8D5B7]/30 bg-[#2D3748] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E8D5B7] focus:border-[#E8D5B7] transition-all text-[#E8D5B7]"
-              >
-                <option value={1}>🆓 {getTranslation(language, 'freePlan')}</option>
-                <option value={2}>⭐ {getTranslation(language, 'plusPlan')}</option>
-                {(currentRole === 'owner' || currentRole === 'broker' || currentRole === 'both') && (
-                  <option value={3}>🚀 {getTranslation(language, 'unlimitedPlan')}</option>
-                )}
-              </select>
-            </div>
-
-
             <div className="pt-4">
               <button
                 type="submit"
-                disabled={saving || updatingSubscription}
+                disabled={saving}
                 className="w-full py-3 px-4 bg-[#E8D5B7] text-[#2D3748] rounded-2xl hover:bg-[#D4C19F] transition-all font-semibold text-base shadow-lg shadow-[#E8D5B7]/20 hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5"
               >
-                {(saving || updatingSubscription) ? getTranslation(language, 'saving') : getTranslation(language, 'saveChanges')}
+                {saving ? getTranslation(language, 'saving') : getTranslation(language, 'saveChanges')}
               </button>
             </div>
           </form>

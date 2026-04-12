@@ -8,9 +8,11 @@ interface NotificationPopupProps {
   message: string
   onClose: () => void
   language: 'el' | 'en'
+  /** Override z-index when shown above another overlay (e.g. modal at z-[10000]). */
+  className?: string
 }
 
-export default function NotificationPopup({ type, message, onClose, language }: NotificationPopupProps) {
+export default function NotificationPopup({ type, message, onClose, language, className }: NotificationPopupProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose()
@@ -46,7 +48,7 @@ export default function NotificationPopup({ type, message, onClose, language }: 
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50 animate-slideIn">
+    <div className={`fixed top-4 right-4 animate-slideIn ${className ?? 'z-50'}`}>
       <div
         className={`${getBgColor()} backdrop-blur-sm rounded-2xl p-4 shadow-2xl border-2 min-w-[300px] max-w-md`}
       >

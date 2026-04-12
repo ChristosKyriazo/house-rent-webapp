@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface AvailabilitySlot {
   date: string
@@ -27,14 +28,37 @@ export default function SetAvailabilityPage() {
   const [selectedDate, setSelectedDate] = useState('')
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
+  const [ownerDetails, setOwnerDetails] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    appointmentThresholdMinutes: 30,
+  })
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   useEffect(() => {
     const fetchHome = async () => {
       try {
-        const response = await fetch(`/api/homes/${homeKey}`)
-        if (response.ok) {
-          const data = await response.json()
+        const [homeRes, profileRes] = await Promise.all([
+          fetch(`/api/homes/${homeKey}`),
+          fetch('/api/profile'),
+        ])
+
+        if (homeRes.ok) {
+          const data = await homeRes.json()
           setHome(data.home)
+        }
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          const u = profileData?.user
+          if (u) {
+            setOwnerDetails((prev) => ({
+              ...prev,
+              name: u.name || '',
+              email: u.email || '',
+            }))
+          }
         }
       } catch (error) {
         console.error('Error fetching home:', error)
@@ -44,16 +68,16 @@ export default function SetAvailabilityPage() {
     }
 
     fetchHome()
-  }, [homeKey])
+  }, [homeKey, router])
 
   const addSlot = () => {
     if (!selectedDate || !startTime || !endTime) {
-      alert(getTranslation(language, 'fillAllFields'))
+      setNotification({ type: 'error', message: getTranslation(language, 'fillAllFields') })
       return
     }
 
     if (startTime >= endTime) {
-      alert(getTranslation(language, 'startTimeMustBeBeforeEndTime'))
+      setNotification({ type: 'error', message: getTranslation(language, 'startTimeMustBeBeforeEndTime') })
       return
     }
 
@@ -75,12 +99,32 @@ export default function SetAvailabilityPage() {
 
   const handleSave = async () => {
     if (slots.length === 0) {
-      alert(getTranslation(language, 'addAtLeastOneSlot'))
+      setNotification({ type: 'error', message: getTranslation(language, 'addAtLeastOneSlot') })
       return
     }
 
     setSaving(true)
     try {
+      if (inquiryId) {
+        const approveRes = await fetch(`/api/inquiries/${homeKey}/${inquiryId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'approve',
+            contactInfo: {
+              name: ownerDetails.name,
+              email: ownerDetails.email,
+              phone: ownerDetails.phone,
+              appointmentThresholdMinutes: ownerDetails.appointmentThresholdMinutes,
+            },
+          }),
+        })
+
+        if (!approveRes.ok) {
+          throw new Error('Failed to approve inquiry')
+        }
+      }
+
       const response = await fetch(`/api/homes/${homeKey}/availability`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,11 +138,18 @@ export default function SetAvailabilityPage() {
         throw new Error('Failed to save availability')
       }
 
-      alert(getTranslation(language, 'availabilitySaved'))
-      router.push(`/homes/inquiries/${homeKey}`)
+      setNotification({
+        type: 'success',
+        message: inquiryId
+          ? getTranslation(language, 'approveAndAvailabilitySaved')
+          : getTranslation(language, 'availabilitySaved'),
+      })
+      setTimeout(() => {
+        router.push(`/homes/inquiries/${homeKey}`)
+      }, 1200)
     } catch (error) {
       console.error('Error saving availability:', error)
-      alert(getTranslation(language, 'somethingWentWrong'))
+      setNotification({ type: 'error', message: getTranslation(language, 'somethingWentWrong') })
     } finally {
       setSaving(false)
     }
@@ -136,6 +187,54 @@ export default function SetAvailabilityPage() {
         </div>
 
         <div className="bg-[#1A202C]/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[#E8D5B7]/20">
+          {inquiryId && (
+            <div className="mb-6 p-4 bg-[#2D3748]/50 rounded-2xl border border-[#E8D5B7]/20">
+              <h2 className="text-xl font-semibold text-[#E8D5B7] mb-4">Contact and Scheduling Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={ownerDetails.name}
+                    onChange={(e) => setOwnerDetails({ ...ownerDetails, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={ownerDetails.email}
+                    onChange={(e) => setOwnerDetails({ ...ownerDetails, email: e.target.value })}
+                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Phone</label>
+                  <input
+                    type="text"
+                    value={ownerDetails.phone}
+                    onChange={(e) => setOwnerDetails({ ...ownerDetails, phone: e.target.value })}
+                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-2">Appointment Duration</label>
+                  <select
+                    value={ownerDetails.appointmentThresholdMinutes}
+                    onChange={(e) => setOwnerDetails({ ...ownerDetails, appointmentThresholdMinutes: Number(e.target.value) })}
+                    className="w-full px-4 py-2 bg-[#2D3748] border border-[#E8D5B7]/30 rounded-xl text-[#E8D5B7] focus:outline-none focus:border-[#E8D5B7]"
+                  >
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>60 minutes</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Add New Slot Form */}
           <div className="mb-6 p-4 bg-[#2D3748]/50 rounded-2xl border border-[#E8D5B7]/20">
             <h2 className="text-xl font-semibold text-[#E8D5B7] mb-4">
@@ -245,6 +344,15 @@ export default function SetAvailabilityPage() {
           </div>
         </div>
       </div>
+
+      {notification && (
+        <NotificationPopup
+          type={notification.type}
+          message={notification.message}
+          language={language}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   )
 }

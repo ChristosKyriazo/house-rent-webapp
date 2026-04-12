@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -15,7 +15,6 @@ interface User {
   dateOfBirth: string | null
   occupation: string | null
   role: string
-  subscription: number | null
   createdAt: string
 }
 
@@ -26,7 +25,7 @@ interface Ratings {
   renterCount: number
 }
 
-export default function ProfilePage() {
+function ProfilePageInner() {
   const searchParams = useSearchParams()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
@@ -49,7 +48,6 @@ export default function ProfilePage() {
     const fetchData = async () => {
       try {
         const userIdParam = searchParams.get('userId')
-        const roleParam = searchParams.get('role') // Get role from query parameter
         const profileUrl = userIdParam ? `/api/profile?userId=${userIdParam}` : '/api/profile'
         
         // Always fetch current user's profile to get their ID for comparison
@@ -372,15 +370,6 @@ export default function ProfilePage() {
                 {user.role === 'broker' && `🏢 ${translateRole(language, 'broker')}`}
               </p>
             </div>
-            <div className="pb-4 border-b border-[#E8D5B7]/20">
-              <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'subscription')}</label>
-              <p className="text-lg text-[#E8D5B7]">
-                {user.subscription === 1 && `🆓 ${getTranslation(language, 'freePlan')}`}
-                {user.subscription === 2 && `⭐ ${getTranslation(language, 'plusPlan')}`}
-                {user.subscription === 3 && `🚀 ${getTranslation(language, 'unlimitedPlan')}`}
-                {!user.subscription && getTranslation(language, 'notSet')}
-              </p>
-            </div>
             <div>
               <label className="block text-sm font-medium text-[#E8D5B7]/70 mb-1">{getTranslation(language, 'memberSince')}</label>
               <p className="text-lg text-[#E8D5B7]">
@@ -407,5 +396,19 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#2D3748] flex items-center justify-center px-4">
+          <p className="text-[#E8D5B7]">Loading...</p>
+        </div>
+      }
+    >
+      <ProfilePageInner />
+    </Suspense>
   )
 }

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
+import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface Rating {
   id: number
@@ -43,6 +44,7 @@ export default function HomeRatingsPage() {
   const [editComment, setEditComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   const homeKey = params.homeKey as string
 
@@ -78,14 +80,14 @@ export default function HomeRatingsPage() {
     }
   }, [homeKey, language])
 
-  // Check if rating can be edited (within 1 week of creation)
+  // Check if rating can be edited (within 3 days of creation)
   // Note: Since we now create new ratings instead of updating, we only check createdAt
   const canEditRating = (rating: Rating) => {
     if (!currentUserId || rating.rater.id !== currentUserId) return false
     const now = new Date()
     const ratingDate = new Date(rating.createdAt)
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    return ratingDate > oneWeekAgo
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    return ratingDate > threeDaysAgo
   }
 
   const handleEdit = (rating: Rating) => {
@@ -121,11 +123,11 @@ export default function HomeRatingsPage() {
         setEditScore(5)
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'ratingFailed'))
+        setNotification({ type: 'error', message: data.error || getTranslation(language, 'ratingFailed') })
       }
     } catch (error) {
       console.error('Error updating rating:', error)
-      alert(getTranslation(language, 'ratingFailed'))
+      setNotification({ type: 'error', message: getTranslation(language, 'ratingFailed') })
     } finally {
       setSubmitting(false)
     }
@@ -304,6 +306,15 @@ export default function HomeRatingsPage() {
           </div>
         )}
       </div>
+
+      {notification && (
+        <NotificationPopup
+          type={notification.type}
+          message={notification.message}
+          language={language}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   )
 }

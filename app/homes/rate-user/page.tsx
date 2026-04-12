@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
+import NotificationPopup from '@/app/components/NotificationPopup'
 import { getCityName, getCountryName } from '@/lib/area-utils'
 
 interface FinalizedInquiry {
@@ -41,6 +42,7 @@ export default function RateUserPage() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   const displayRole = (actualRole === 'both' && selectedRole) 
     ? selectedRole 
@@ -123,11 +125,11 @@ export default function RateUserPage() {
         setRating(5)
       } else {
         const data = await response.json()
-        alert(data.error || getTranslation(language, 'ratingFailed'))
+        setNotification({ type: 'error', message: data.error || getTranslation(language, 'ratingFailed') })
       }
     } catch (error) {
       console.error('Error submitting rating:', error)
-      alert(getTranslation(language, 'ratingFailed'))
+      setNotification({ type: 'error', message: getTranslation(language, 'ratingFailed') })
     } finally {
       setSubmitting(false)
     }
@@ -326,6 +328,15 @@ export default function RateUserPage() {
           </div>
         )}
       </div>
+
+      {notification && (
+        <NotificationPopup
+          type={notification.type}
+          message={notification.message}
+          language={language}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   )
 }

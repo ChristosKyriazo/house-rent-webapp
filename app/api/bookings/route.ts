@@ -10,10 +10,115 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if inquiryId filter is provided
     const searchParams = request.nextUrl.searchParams
     const inquiryIdParam = searchParams.get('inquiryId')
-    
+
+    // When filtering by inquiry (approved listings → slot picker), return bookings directly.
+    // Include bookings with inquiryId set, plus "orphan" rows (inquiryId null) that still belong to this
+    // inquiry's home or user↔owner pair — e.g. booked without ?inquiryId= or availability row removed.
+    if (inquiryIdParam) {
+      const inquiryId = parseInt(inquiryIdParam, 10)
+      if (!isNaN(inquiryId)) {
+        const bookingInclude = {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              occupation: true,
+              role: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              occupation: true,
+            },
+          },
+          availability: {
+            include: {
+              home: {
+                select: {
+                  key: true,
+                  title: true,
+                  street: true,
+                  city: true,
+                  country: true,
+                },
+              },
+            },
+          },
+        } as const
+
+        const inquiryRow = await prisma.inquiry.findUnique({
+          where: { id: inquiryId },
+          select: {
+            id: true,
+            userId: true,
+            homeId: true,
+            home: {
+              select: {
+                ownerId: true,
+                key: true,
+                title: true,
+                street: true,
+                city: true,
+                country: true,
+              },
+            },
+          },
+        })
+        const fallbackHome = inquiryRow?.home ?? null
+
+        const access = [{ userId: user.id }, { ownerId: user.id }] as const
+
+        const [directRows, homeOrphans] = await Promise.all([
+          prisma.booking.findMany({
+            where: {
+              inquiryId,
+              OR: [...access],
+            },
+            include: bookingInclude,
+            orderBy: { startTime: 'asc' },
+          }),
+          inquiryRow
+            ? prisma.booking.findMany({
+                where: {
+                  inquiryId: null,
+                  OR: [...access],
+                  NOT: { status: 'cancelled' },
+                  availability: { homeId: inquiryRow.homeId },
+                },
+                include: bookingInclude,
+                orderBy: { startTime: 'asc' },
+              })
+            : Promise.resolve([]),
+        ])
+
+        const byId = new Map<number, (typeof directRows)[0]>()
+        for (const b of directRows) byId.set(b.id, b)
+        for (const b of homeOrphans) {
+          if (!byId.has(b.id)) byId.set(b.id, b)
+        }
+
+        const merged = [...byId.values()].sort(
+          (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+        )
+
+        const transformedBookings = merged.map((booking) => ({
+          ...booking,
+          home: booking.availability?.home ?? fallbackHome,
+          availabilityId: booking.availabilityId,
+          inquiryId: booking.inquiryId,
+          userId: booking.userId,
+        }))
+
+        return NextResponse.json({ bookings: transformedBookings }, { status: 200 })
+      }
+    }
+
     // Build where clause
     const whereClause: any = {
       OR: [
@@ -109,6 +214,7 @@ export async function GET(request: NextRequest) {
             name: true,
             email: true,
             occupation: true,
+            role: true,
           },
         },
         user: {
@@ -238,6 +344,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const rawInq = body.inquiryId
+    let finalInquiryId: number | null =
+      rawInq !== undefined && rawInq !== null && rawInq !== '' && Number.isFinite(Number(rawInq))
+        ? parseInt(String(rawInq), 10)
+        : null
+
+    if (finalInquiryId === null && availabilityId) {
+      const av = await prisma.availability.findUnique({
+        where: { id: parseInt(String(availabilityId), 10) },
+        select: { homeId: true },
+      })
+      if (av) {
+        const match = await prisma.inquiry.findFirst({
+          where: {
+            userId: user.id,
+            homeId: av.homeId,
+            approved: true,
+            finalized: false,
+            dismissed: false,
+          },
+          select: { id: true },
+        })
+        if (match) finalInquiryId = match.id
+      }
+    }
+
     // Check for existing bookings that overlap with this time slot
     // Check for user's existing bookings
     const userExistingBookings = await prisma.booking.findMany({
@@ -285,7 +417,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         ownerId: finalOwnerId,
-        inquiryId: inquiryId || null,
+        inquiryId: finalInquiryId,
         availabilityId: availabilityId || null,
         title,
         description: description || null,
@@ -330,7 +462,7 @@ export async function POST(request: NextRequest) {
             homeKey: finalHomeKey,
             userId: user.id,
             ownerKey: finalOwnerKey,
-            inquiryId: inquiryId || null,
+            inquiryId: finalInquiryId,
           },
         })
       }

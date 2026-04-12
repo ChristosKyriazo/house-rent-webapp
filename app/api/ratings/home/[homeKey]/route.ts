@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
+type RatingRow = Awaited<ReturnType<typeof prisma.rating.findMany>>[number]
+type HomeRating = RatingRow & {
+  inquiryId: number
+  homeKey: string
+  homeTitle: string
+  ratingType: 'owner' | 'renter'
+  isBrokerOwned?: boolean
+}
+
 // GET: Get all ratings for a specific house
 // Returns ratings made by both owner and user for finalized inquiries on this home
 export async function GET(
@@ -68,7 +77,7 @@ export async function GET(
 
     // Get all ratings between the owner and users for this home
     // Fetch ALL ratings (not just the first one) to show re-ratings
-    const ratings = []
+    const ratings: HomeRating[] = []
     for (const inquiry of finalizedInquiries) {
       // Get all ratings from user to owner
       const userToOwnerRatings = await prisma.rating.findMany({

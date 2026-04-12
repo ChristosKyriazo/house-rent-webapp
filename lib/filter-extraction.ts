@@ -89,19 +89,28 @@ export async function extractFiltersWithAI(
   }
 }
 
+export type ListingSearchMode = 'rent' | 'buy'
+
 /**
  * Extract filters using AI only (removed simple pattern matching)
+ * @param options.listingMode When set, tells the model whether prices are monthly rent vs purchase total (same rules as manual search).
  */
 export async function extractFiltersHybrid(
   query: string,
-  openai: any | null
+  openai: any | null,
+  options?: { listingMode?: ListingSearchMode }
 ): Promise<ExtractedFilters> {
-  // Always use AI for filter extraction
+  const modeHint =
+    options?.listingMode === 'buy'
+      ? '\n\n[Search page: properties FOR SALE (buy). minPrice/maxPrice are total purchase price in EUR unless the user clearly states otherwise.]'
+      : options?.listingMode === 'rent'
+        ? '\n\n[Search page: properties FOR RENT. minPrice/maxPrice are monthly rent in EUR unless the user clearly states otherwise.]'
+        : ''
+
   if (openai && process.env.OPENAI_API_KEY) {
-    return await extractFiltersWithAI(query, openai)
+    return await extractFiltersWithAI(query + modeHint, openai)
   }
 
-  // Fallback if AI is not available
   return { confidence: 0 }
 }
 

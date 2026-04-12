@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { SignUp } from '@clerk/nextjs'
-import { useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateRole } from '@/lib/translations'
 
@@ -10,7 +9,6 @@ export default function SignupPage() {
   const { language } = useLanguage()
   const [selectedRole, setSelectedRole] = useState<string>('')
   const [showRoleSelection, setShowRoleSelection] = useState(true)
-  const searchParams = useSearchParams()
 
   // Always show role selection when visiting signup page
   useEffect(() => {
@@ -108,8 +106,8 @@ export default function SignupPage() {
       <SignUp 
         routing="hash" 
         signInUrl="/login" 
-        afterSignUpUrl="/subscription"
-        forceRedirectUrl="/subscription"
+        afterSignUpUrl="/"
+        forceRedirectUrl="/"
       />
     </div>
   )

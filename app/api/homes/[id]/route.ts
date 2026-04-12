@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
 import { toEnglishValue } from '@/lib/translations'
+import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 
 export async function GET(
   request: NextRequest,
@@ -209,48 +210,20 @@ export async function PUT(
       }
     })
 
-    const convertAreaToEnglish = (input: string | null): string | null => {
-      if (!input) return null
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.nameGreek && a.nameGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.name || normalized
-    }
-
-    const convertCityToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.cityGreek && a.cityGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.city || normalized
-    }
-
-    const convertCountryToEnglish = (input: string): string => {
-      if (!input) return input
-      const normalized = input.trim()
-      const matchingArea = areas.find(a => 
-        a.countryGreek && a.countryGreek.toLowerCase() === normalized.toLowerCase()
-      )
-      return matchingArea?.country || normalized
-    }
-
-    const englishCity = convertCityToEnglish(city)
-    const englishCountry = convertCountryToEnglish(country)
-    const englishArea = convertAreaToEnglish(area)
+    const englishCity = resolveCityToEnglishCanonical(city, areas)
+    const englishCountry = resolveCountryToEnglishCanonical(country, areas)
+    const englishArea = resolveAreaToEnglishCanonical(area, areas)
 
     // Check if address has changed - only recalculate distances if it has
-    const addressChanged = hasAddressChanged(
-      existingHome.street,
-      existingHome.area,
-      existingHome.city,
-      existingHome.country,
-      street?.trim() || null,
-      area?.trim() || null,
-      englishCity,
-      englishCountry
-    )
+    const addressChanged =
+      hasAddressChanged(
+        existingHome.street,
+        existingHome.area,
+        existingHome.city,
+        street?.trim() || null,
+        area?.trim() || null,
+        englishCity
+      ) || existingHome.country.trim().toLowerCase() !== englishCountry.trim().toLowerCase()
 
     // Prepare update data
     const updateData: any = {
