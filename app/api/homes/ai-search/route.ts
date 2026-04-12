@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus } from '@/lib/ai-search-helpers'
+import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
@@ -44,11 +44,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get user ID if available
+    // User id + profile (occupation used for student transit boost)
+    let appUserOccupation: string | null = null
     try {
       const user = await getCurrentUser()
       if (user) {
         userId = user.id
+        appUserOccupation = user.occupation ?? null
       }
     } catch (error) {
       // User not logged in, continue without userId
@@ -589,9 +591,16 @@ export async function POST(request: NextRequest) {
       (extractedFilters.Safety && extractedFilters.Safety !== 'Not mentioned') ||
       extractedFilters.vibePreference ||
       parkingSoftPreference
+
+    const studentContext = inferStudentContext(userQuery, appUserOccupation)
+    /** Students care about uni + transit; treat as soft criteria so we rank by distance, not flat 100%. */
+    const effectiveSoftCriteria = hasSoftCriteria || studentContext
+    const filtersForDistanceScoring = studentContext
+      ? applyStudentTransitBoost(extractedFilters as Record<string, unknown>)
+      : extractedFilters
     
     // If we have hard filters but NO soft criteria, all matching properties get 100%
-    const shouldForce100 = hasHardFilters && !hasSoftCriteria
+    const shouldForce100 = hasHardFilters && !effectiveSoftCriteria
 
     // PROGRAMMATIC MATCH CALCULATION (replaces AI match calculation)
     // Calculate match percentages based on distance scores and vibe matching
@@ -607,14 +616,15 @@ export async function POST(request: NextRequest) {
       const vibePreference = extractedFilters.vibePreference || null
       const safetyCategory = extractedFilters.Safety || null
       
-      // Get distance fields
-      const distanceFields = getDistanceFields(extractedFilters)
+      // Get distance fields (student: metro, bus, university weighted as Strong when unset)
+      const distanceFields = getDistanceFields(filtersForDistanceScoring)
       const distancesToConsider = distanceFields.filter(d => 
         d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
       )
       
       // TEST LOG - DELETE AFTER: Show calculation inputs
       console.log('\n========== CALCULATION INPUTS ==========')
+      console.log('Student context (boost metro/bus/uni):', studentContext)
       console.log('Vibe Preference:', vibePreference)
       console.log('Safety Category:', safetyCategory)
       console.log('Distances to Consider:', distancesToConsider.map(d => ({ field: d.name, category: d.category })))
@@ -1149,7 +1159,7 @@ export async function POST(request: NextRequest) {
       
       // Check if only description matching is requested (no other hard/soft criteria except maybe country)
       // If so, filter to only houses with description score > 0
-      const hasOnlyDescriptionMatching = (!hasHardFilters || onlyCountryFilter) && !hasSoftCriteria && hasAnyDescriptionBonus
+      const hasOnlyDescriptionMatching = (!hasHardFilters || onlyCountryFilter) && !effectiveSoftCriteria && hasAnyDescriptionBonus
       if (hasOnlyDescriptionMatching) {
         homes = homes.filter(home => {
           const bonus = descriptionBonusMap.get(home.id) || 0
@@ -1177,7 +1187,7 @@ export async function POST(request: NextRequest) {
       
       // If no hard filters (or only country) and all description scores are 0 AND no soft criteria, return nothing
       // If there are soft criteria (Safety, vibe, distances), we should still return results
-      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus && !hasSoftCriteria) {
+      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus && !effectiveSoftCriteria) {
         return NextResponse.json(
           { 
             homes: [],

@@ -752,3 +752,59 @@ export function calculateDescriptionBonus(
   }
 }
 
+/** True if profile/query indicates the searcher is a student (English + Greek). */
+export function inferStudentContext(
+  query: string,
+  occupation: string | null | undefined
+): boolean {
+  const occ = (occupation || '').trim()
+  if (occ) {
+    if (
+      /\b(phd|master'?s?|undergraduate|postgraduate)\s+student\b/i.test(occ) ||
+      /\bstudent\b/i.test(occ) ||
+      /φοιτητ(ής|ές)/i.test(occ) ||
+      /προπτυχιακ(ός|οί)|μεταπτυχιακ(ός|οί)/i.test(occ)
+    ) {
+      return true
+    }
+  }
+
+  const q = query.trim()
+  if (!q) return false
+
+  if (
+    /(^|[\s,.;])(student|students)([\s,.;]|$)/i.test(q) ||
+    /\b(undergraduate|postgraduate)\b/i.test(q) ||
+    /\bi'?m\s+a\s+student\b/i.test(q) ||
+    /\bcollege\s+student\b/i.test(q) ||
+    /φοιτητ(ής|ές|ικό|ική)/i.test(q) ||
+    /\bσπουδάζω\b/i.test(q) ||
+    /\bπροπτυχιακ(ός|ή|οί)\b/i.test(q) ||
+    /\bμεταπτυχιακ(ός|ή|οί)\b/i.test(q)
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * When the user is a student, treat metro / bus / university distance preferences as at least "Strong"
+ * if they were unset or "not important", so listings near transit and campus rank higher.
+ * Never overrides Essential or Avoid.
+ */
+export function applyStudentTransitBoost<T extends Record<string, unknown>>(filters: T): T {
+  const out = { ...filters } as Record<string, unknown>
+  const lift = (v: unknown): string | unknown => {
+    if (v == null) return 'Strong'
+    const s = String(v).trim()
+    if (s === 'Avoid' || s === 'Essential' || s === 'Strong') return v
+    if (s === '' || s === 'Not mentioned' || s === 'Not important') return 'Strong'
+    return v
+  }
+  out.Metro = lift(out.Metro)
+  out.Bus = lift(out.Bus)
+  out.University = lift(out.University)
+  return out as T
+}
+
