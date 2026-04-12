@@ -15,7 +15,7 @@ INSERT INTO areas (
   createdAt, 
   updatedAt
 ) VALUES (
-  'clxxxxxxxxxxxxxxxxxxxxxxxx',  -- Generate using: node scripts/generate-cuid.js
+  'clxxxxxxxxxxxxxxxxxxxxxxxx',  -- Generate using: node scripts/tools/generate-cuid.js
   'Area Name',                    -- English name (required)
   'Όνομα Περιοχής',              -- Greek name (optional, can be NULL)
   'City Name',                    -- City (optional, can be NULL)
@@ -35,7 +35,7 @@ INSERT INTO areas (
   createdAt,
   updatedAt
 ) VALUES (
-  'clxxxxxxxxxxxxxxxxxxxxxxxx',  -- Generate using: node scripts/generate-cuid.js
+  'clxxxxxxxxxxxxxxxxxxxxxxxx',  -- Generate using: node scripts/tools/generate-cuid.js
   'Area Name',
   datetime('now'),
   datetime('now')

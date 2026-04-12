@@ -1,18 +1,32 @@
 # House Rent Webapp
 
-Next.js app (App Router) + Prisma + SQLite for local dev. Work on branch **`dev`**.
+Next.js (App Router) + Prisma + SQLite for local dev. Default branch: **`dev`**.
 
 ## Quick start
 
 ```bash
 cd webapp
 npm install
-npx prisma generate
-npx prisma migrate dev
+npm run db:generate
+npm run db:migrate
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## npm scripts
+
+| Script | Purpose |
+|--------|--------|
+| `dev` | Next.js dev server |
+| `build` / `start` | Production build / run |
+| `lint` / `lint:fix` | ESLint |
+| `typecheck` | `tsc --noEmit` (no emit) |
+| `db:generate` | `prisma generate` |
+| `db:migrate` | `prisma migrate dev` |
+| `db:studio` | `prisma studio` |
+| `db:seed:universities` | Seed Athens universities |
+| `db:seed:nea-smirni` | Seed / update Nea Smirni area |
 
 ## Environment
 
@@ -21,14 +35,22 @@ cp .env.example .env
 # edit .env — never commit it
 ```
 
-At minimum set `DATABASE_URL`. Optional keys for some features: `OPENAI_API_KEY`, `GOOGLE_MAPS_API_KEY` (see `lib/` and `app/api/`).
+Minimum: `DATABASE_URL`. Optional: `OPENAI_API_KEY`, `GOOGLE_MAPS_API_KEY` (see `lib/` and `app/api/`).
 
-## Database
+## Repo layout
 
-```bash
-npx prisma studio          # GUI at http://localhost:5555
-npx prisma migrate dev      # after schema changes
-```
+| Path | Purpose |
+|------|--------|
+| `app/` | Routes: `app/page.tsx`, features under `app/homes/`, `app/profile/`, … |
+| `app/api/` | HTTP handlers only |
+| `app/components/` | Shared React components |
+| `app/contexts/` | React context providers |
+| `app/hooks/` | Shared hooks |
+| `lib/` | Server/shared TS helpers (Prisma, auth, translations, AI helpers) |
+| `prisma/` | `schema.prisma`, migrations |
+| `scripts/sql/` | Raw SQL helpers (manual / one-off) |
+| `scripts/seeds/` | Prisma seed scripts (`tsx`) |
+| `scripts/tools/` | Small Node one-offs (e.g. generate CUID) |
 
 ## Git
 
@@ -38,12 +60,4 @@ git add -A && git commit -m "your message"
 git push origin dev
 ```
 
-## Layout (where to look)
-
-| Path | Purpose |
-|------|--------|
-| `app/` | Pages and `app/api/` route handlers |
-| `lib/` | Shared helpers, Prisma client |
-| `prisma/` | `schema.prisma`, migrations |
-
-Troubleshooting: if Prisma errors, run `npx prisma generate` then `npx prisma migrate dev`. Port in use: run `next dev` on another port, e.g. `npx next dev -p 3001`.
+**Troubleshooting:** Prisma errors → `npm run db:generate` then `npm run db:migrate`. Port busy → `npx next dev -p 3001`.

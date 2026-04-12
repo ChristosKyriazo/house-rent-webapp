@@ -1,5 +1,5 @@
 // Simple CUID generator for manual inserts
-// Usage: node scripts/generate-cuid.js
+// Usage: node scripts/tools/generate-cuid.js
 
 function generateCUID() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
