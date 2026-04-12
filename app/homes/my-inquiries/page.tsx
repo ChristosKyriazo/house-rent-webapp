@@ -44,25 +44,32 @@ export default function UserInquiriesPage() {
           return
         }
 
-        // Fetch user inquiries
-        const response = await fetch('/api/inquiries/user')
+        // Use /api/inquiries/me — not /user (avoids clash with /api/inquiries/[homeKey])
+        const response = await fetch('/api/inquiries/me', {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        })
         if (!response.ok) {
           if (response.status === 401) {
             router.push('/login')
             return
           }
           const raw = await response.text()
-          let message = `Request failed (${response.status})`
+          let message = `Request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''})`
           try {
-            const parsed = raw ? JSON.parse(raw) : {}
-            message =
-              (typeof parsed === 'object' && parsed && 'error' in parsed && typeof (parsed as { error?: string }).error === 'string'
-                ? (parsed as { error: string }).error
-                : null) || raw.slice(0, 200) || message
+            const parsed = raw ? (JSON.parse(raw) as { error?: string; details?: string }) : null
+            if (parsed && typeof parsed.error === 'string') {
+              message = parsed.error
+              if (typeof parsed.details === 'string') {
+                message = `${message} (${parsed.details})`
+              }
+            } else if (raw) {
+              message = raw.slice(0, 300)
+            }
           } catch {
-            message = raw.slice(0, 200) || message
+            if (raw) message = raw.slice(0, 300)
           }
-          console.error('Failed to fetch inquiries:', { status: response.status, statusText: response.statusText, message })
+          console.error(`Failed to fetch inquiries: ${message}`)
           throw new Error(message)
         }
 
