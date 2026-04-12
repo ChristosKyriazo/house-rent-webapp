@@ -248,7 +248,9 @@ model Booking {
   updatedAt       DateTime @updatedAt
   user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
   owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
-  availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)  @@index([userId])
+  availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
   @@index([ownerId])
   @@index([startTime])
   @@index([status])
