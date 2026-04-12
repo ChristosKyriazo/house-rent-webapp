@@ -38,7 +38,7 @@ Edit `.env` and never commit it.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `DATABASE_URL` | Yes | SQLite file for local dev, e.g. `file:./prisma/dev.db` |
+| `DATABASE_URL` | Yes | SQLite for local dev: `file:./dev.db` (→ `prisma/dev.db`; avoid `file:./prisma/dev.db` or Prisma resolves to `prisma/prisma/dev.db`) |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key (browser) |
 | `CLERK_SECRET_KEY` | Yes | Clerk secret key (server) |
 | `OPENAI_API_KEY` | No | AI search, descriptions, translation, bulk-upload helpers |

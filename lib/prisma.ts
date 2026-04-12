@@ -3,9 +3,10 @@ import fs from 'fs'
 import { PrismaClient } from '@prisma/client'
 
 /**
- * SQLite URLs like file:./prisma/dev.db are relative to process.cwd().
- * Next/Turbopack may run with cwd = repo root instead of webapp/, which breaks relative paths.
- * Resolve to an absolute file: URL that exists (prefer webapp/prisma/dev.db when cwd is parent).
+ * SQLite `file:` URLs in .env are relative to prisma/schema.prisma, but at runtime
+ * process.cwd() is usually the Next app root (webapp/). We normalize to an absolute
+ * `file:` path. Prefer `prisma/<file>` next to cwd — never `cwd/<file>` when that
+ * creates a second empty DB (e.g. ./dev.db vs prisma/dev.db).
  */
 function resolveSqliteDatabaseUrl(): string | undefined {
   const url = process.env.DATABASE_URL
@@ -15,18 +16,33 @@ function resolveSqliteDatabaseUrl(): string | undefined {
   const relative = rest.replace(/^\.\//, '')
 
   const candidates = [
+    path.resolve(process.cwd(), 'prisma', relative),
+    path.join(process.cwd(), 'webapp', 'prisma', relative),
     path.resolve(process.cwd(), relative),
     path.join(process.cwd(), 'webapp', relative),
   ]
 
   for (const absolute of candidates) {
-    const dir = path.dirname(absolute)
-    if (fs.existsSync(dir)) {
-      return `file:${absolute}`
+    try {
+      if (fs.existsSync(absolute) && fs.statSync(absolute).size > 0) {
+        return `file:${absolute}`
+      }
+    } catch {
+      /* ignore */
     }
   }
 
-  return `file:${path.resolve(process.cwd(), relative)}`
+  const preferred = path.resolve(process.cwd(), 'prisma', relative)
+  if (fs.existsSync(path.dirname(preferred))) {
+    return `file:${preferred}`
+  }
+
+  const fallback = path.join(process.cwd(), 'webapp', 'prisma', relative)
+  if (fs.existsSync(path.dirname(fallback))) {
+    return `file:${fallback}`
+  }
+
+  return `file:${path.resolve(process.cwd(), 'prisma', relative)}`
 }
 
 const resolvedDatabaseUrl = resolveSqliteDatabaseUrl()
