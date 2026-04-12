@@ -38,6 +38,8 @@ yarn-error.log*
 *.db
 *.db-journal
 prisma/dev.db
+# local SQLite snapshots from merge/backup (not for repo)
+prisma/*.bak-*
 
 # vercel
 .vercel

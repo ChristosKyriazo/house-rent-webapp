@@ -44,7 +44,7 @@ Edit `.env` and never commit it.
 | `OPENAI_API_KEY` | No | AI search, descriptions, translation, bulk-upload helpers |
 | `GOOGLE_MAPS_API_KEY` | No | Maps / geocoding features in `lib/google-maps.ts` |
 
-Create keys in the Clerk dashboard and paste them into `.env`. Without Clerk keys, auth and middleware-backed flows will not work.
+Create keys in the Clerk dashboard and paste them into `.env`. Without Clerk keys, auth and Clerk-backed flows will not work.
 
 ### 4. Database: generate client and apply migrations
 
@@ -112,7 +112,7 @@ Point `DATABASE_URL` at your production database if you move off SQLite; keep se
 | `app/contexts/` | React context providers |
 | `app/hooks/` | Shared hooks |
 | `lib/` | Server/shared helpers (Prisma, auth, translations, AI, maps) |
-| `middleware.ts` | Clerk middleware for protected routes and API |
+| `proxy.ts` | Clerk auth (`clerkMiddleware`) for protected routes and API (Next.js 16 convention; replaces `middleware.ts`) |
 | `prisma/` | `schema.prisma` and migrations |
 | `scripts/sql/` | Raw SQL snippets (manual / one-off) |
 | `scripts/seeds/` | Prisma seed scripts (`tsx`) |
