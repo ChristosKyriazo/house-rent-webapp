@@ -1,4 +1,0 @@
-- Use component-based architecture
-- Handle loading/error states
-- Avoid global state unless necessary
-- Use proper API abstraction layer
