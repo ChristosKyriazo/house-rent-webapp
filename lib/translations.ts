@@ -117,6 +117,7 @@ export const translations = {
     returnToSearch: 'Επιστροφή στην Αναζήτηση',
     returnToListings: 'Επιστροφή στις Καταχωρήσεις',
     returnToApproved: 'Επιστροφή στις Εγκεκριμένες Καταχωρήσεις',
+    viewFullListing: 'Προβολή πλήρους καταχώρησης',
     returnToInquiries: 'Επιστροφή στις Ερωτήσεις',
     edit: 'Επεξεργασία',
     noPhotos: 'Δεν υπάρχουν φωτογραφίες',
@@ -209,6 +210,13 @@ export const translations = {
     addAtLeastOneSlot: 'Παρακαλώ προσθέστε τουλάχιστον ένα διάστημα διαθεσιμότητας',
     availabilitySaved: 'Η διαθεσιμότητα αποθηκεύτηκε επιτυχώς!',
     approveAndAvailabilitySaved: 'Η αίτηση εγκρίθηκε και η διαθεσιμότητα αποθηκεύτηκε.',
+    preAppointmentNotesLabel: 'Μήνυμα για τον ενδιαφερόμενο πριν το ραντεβού',
+    preAppointmentNotesPlaceholder:
+      'Π.χ. κωδικός θυροτηλεφώνου, όροφος, πού να παρκάρει, τι να φέρει μαζί του…',
+    preAppointmentNotesHint:
+      'Θα εμφανίζεται στον χρήστη όταν επιλέγει ώρα επίσκεψης (μαζί με τα στοιχεία επικοινωνίας σας).',
+    ownerMessageBeforeVisit: 'Μήνυμα από τον ιδιοκτήτη',
+    ownerSharedForYourVisit: 'Στοιχεία που κοινοποιήθηκαν με την έγκριση',
     setAppointment: 'Ορισμός ραντεβού',
     appointmentScheduled: 'Ραντεβού προγραμματισμένο',
     bookingConfirmed: 'Η κράτηση επιβεβαιώθηκε! Μπορείτε να τη δείτε στο ημερολόγιό σας.',
@@ -580,6 +588,7 @@ export const translations = {
     returnToSearch: 'Return to Search',
     returnToListings: 'Return to Listings',
     returnToApproved: 'Return to Approved Listings',
+    viewFullListing: 'View full listing',
     returnToInquiries: 'Return to Inquiries',
     edit: 'Edit',
     noPhotos: 'No photos',
@@ -675,6 +684,13 @@ export const translations = {
     addAtLeastOneSlot: 'Please add at least one availability slot',
     availabilitySaved: 'Availability saved successfully!',
     approveAndAvailabilitySaved: 'Inquiry approved and availability saved.',
+    preAppointmentNotesLabel: 'Message for the renter before the visit',
+    preAppointmentNotesPlaceholder:
+      'e.g. door code, floor, parking, what to bring…',
+    preAppointmentNotesHint:
+      'Shown to the user when they pick a viewing time (together with your contact details).',
+    ownerMessageBeforeVisit: 'Message from the owner',
+    ownerSharedForYourVisit: 'Details shared when your inquiry was approved',
     setAppointment: 'Set appointment',
     appointmentScheduled: 'Appointment scheduled',
     bookingConfirmed: 'Booking confirmed! You can view it in your calendar.',

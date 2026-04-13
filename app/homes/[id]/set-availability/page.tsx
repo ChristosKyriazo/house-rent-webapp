@@ -33,6 +33,7 @@ export default function SetAvailabilityPage() {
     email: '',
     phone: '',
     appointmentThresholdMinutes: 30,
+    ownerNotesBeforeAppointment: '',
   })
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
@@ -116,6 +117,9 @@ export default function SetAvailabilityPage() {
               email: ownerDetails.email,
               phone: ownerDetails.phone,
               appointmentThresholdMinutes: ownerDetails.appointmentThresholdMinutes,
+              ...(ownerDetails.ownerNotesBeforeAppointment.trim().length > 0
+                ? { ownerNotesBeforeAppointment: ownerDetails.ownerNotesBeforeAppointment.trim() }
+                : {}),
             },
           }),
         })
@@ -230,6 +234,23 @@ export default function SetAvailabilityPage() {
                     <option value={45}>45 minutes</option>
                     <option value={60}>60 minutes</option>
                   </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+                    {getTranslation(language, 'preAppointmentNotesLabel')}
+                  </label>
+                  <textarea
+                    value={ownerDetails.ownerNotesBeforeAppointment}
+                    onChange={(e) =>
+                      setOwnerDetails({ ...ownerDetails, ownerNotesBeforeAppointment: e.target.value })
+                    }
+                    rows={4}
+                    placeholder={getTranslation(language, 'preAppointmentNotesPlaceholder')}
+                    className="w-full px-4 py-3 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)] resize-y min-h-[100px]"
+                  />
+                  <p className="text-xs text-[var(--text-muted)] mt-2">
+                    {getTranslation(language, 'preAppointmentNotesHint')}
+                  </p>
                 </div>
               </div>
             </div>

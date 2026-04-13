@@ -5,10 +5,20 @@ export function isValidAppointmentSlotMinutes(n: number): boolean {
   return APPOINTMENT_SLOT_MINUTES.includes(n as (typeof APPOINTMENT_SLOT_MINUTES)[number])
 }
 
+/** Owner-provided contact + notes stored on Inquiry.contactInfo (JSON). */
+export interface ParsedOwnerContactInfo {
+  name?: string
+  email?: string
+  phone?: string
+  appointmentThresholdMinutes?: number
+  /** Free text shown to the renter before the viewing */
+  ownerNotesBeforeAppointment?: string
+}
+
 /**
- * Reads appointmentThresholdMinutes from inquiry.contactInfo (DB JSON string or parsed object).
+ * Parses inquiry.contactInfo (DB JSON string or object) for display on the book slot page.
  */
-export function parseAppointmentThresholdMinutes(contactInfo: unknown): number | null {
+export function parseContactInfo(contactInfo: unknown): ParsedOwnerContactInfo | null {
   if (contactInfo == null) return null
 
   let parsed: Record<string, unknown> | null = null
@@ -23,8 +33,29 @@ export function parseAppointmentThresholdMinutes(contactInfo: unknown): number |
   }
 
   if (!parsed) return null
+
+  const out: ParsedOwnerContactInfo = {}
+  if (typeof parsed.name === 'string' && parsed.name.trim()) out.name = parsed.name.trim()
+  if (typeof parsed.email === 'string' && parsed.email.trim()) out.email = parsed.email.trim()
+  if (typeof parsed.phone === 'string' && parsed.phone.trim()) out.phone = parsed.phone.trim()
   const n = Number(parsed.appointmentThresholdMinutes)
-  if (isValidAppointmentSlotMinutes(n)) return n
+  if (isValidAppointmentSlotMinutes(n)) out.appointmentThresholdMinutes = n
+  if (
+    typeof parsed.ownerNotesBeforeAppointment === 'string' &&
+    parsed.ownerNotesBeforeAppointment.trim().length > 0
+  ) {
+    out.ownerNotesBeforeAppointment = parsed.ownerNotesBeforeAppointment.trim()
+  }
+
+  return Object.keys(out).length > 0 ? out : null
+}
+
+/**
+ * Reads appointmentThresholdMinutes from inquiry.contactInfo (DB JSON string or parsed object).
+ */
+export function parseAppointmentThresholdMinutes(contactInfo: unknown): number | null {
+  const parsed = parseContactInfo(contactInfo)
+  if (parsed?.appointmentThresholdMinutes != null) return parsed.appointmentThresholdMinutes
   return null
 }
 

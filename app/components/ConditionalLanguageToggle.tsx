@@ -14,7 +14,7 @@ export default function ConditionalLanguageToggle() {
 
   return (
     <div
-      className="pointer-events-none fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[var(--z-chrome)] flex max-w-[calc(100vw-1rem)] items-center gap-1.5 overflow-x-auto rounded-2xl surface-dock px-2 py-2 pr-[max(0.5rem,env(safe-area-inset-right))] shadow-[0_12px_40px_-8px_rgba(0,0,0,0.45)]"
+      className="pointer-events-auto fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[var(--z-chrome)] flex max-w-[calc(100vw-1rem)] flex-shrink-0 items-center gap-1.5 overflow-visible rounded-2xl surface-dock px-2 py-2 pr-[max(0.5rem,env(safe-area-inset-right))] shadow-[0_12px_40px_-8px_rgba(0,0,0,0.45)]"
       style={{ isolation: 'isolate' }}
     >
       <RoleSwitch />

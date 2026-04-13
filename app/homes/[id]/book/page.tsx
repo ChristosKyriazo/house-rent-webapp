@@ -5,7 +5,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
-import { parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
+import {
+  parseAppointmentThresholdMinutes,
+  parseContactInfo,
+  type ParsedOwnerContactInfo,
+} from '@/lib/appointment-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface Availability {
@@ -37,7 +41,15 @@ export default function BookPage() {
   const homeKey = params.id as string
   const inquiryId = searchParams.get('inquiryId')
   
-  const [home, setHome] = useState<{ id: number; key: string; title: string; owner: { id: number } } | null>(null)
+  const [home, setHome] = useState<{
+    id: number
+    key: string
+    title: string
+    street?: string | null
+    city: string
+    country: string
+    owner: { id: number }
+  } | null>(null)
   const [availabilities, setAvailabilities] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
   const [booking, setBooking] = useState(false)
@@ -47,6 +59,7 @@ export default function BookPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [appointmentDurationMinutes, setAppointmentDurationMinutes] = useState(30)
   const [effectiveInquiryId, setEffectiveInquiryId] = useState<number | null>(null)
+  const [ownerSharedInfo, setOwnerSharedInfo] = useState<ParsedOwnerContactInfo | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -106,11 +119,16 @@ export default function BookPage() {
           const inquiryRes = await fetch(`/api/inquiries/${homeKey}/${resolvedInquiryId}`)
           if (inquiryRes.ok) {
             const inquiryData = await inquiryRes.json()
-            const threshold = parseAppointmentThresholdMinutes(inquiryData?.inquiry?.contactInfo)
+            const ci = inquiryData?.inquiry?.contactInfo
+            const parsed = parseContactInfo(ci)
+            setOwnerSharedInfo(parsed)
+            const threshold = parseAppointmentThresholdMinutes(ci)
             if (threshold != null) {
               setAppointmentDurationMinutes(threshold)
             }
           }
+        } else {
+          setOwnerSharedInfo(null)
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -213,15 +231,21 @@ export default function BookPage() {
     return acc
   }, {} as Record<string, TimeSlot[]>)
 
-  // Remove duplicate time slots (keep only available ones if there are conflicts)
+  // Same clock time can come from overlapping availability rows; if any row marks it
+  // booked (overlap with user/owner/home), the slot must stay hidden to avoid double booking.
   Object.keys(groupedByDate).forEach(date => {
     const slots = groupedByDate[date]
     const uniqueSlots = new Map<string, TimeSlot>()
     
     slots.forEach(slot => {
       const existing = uniqueSlots.get(slot.time)
-      if (!existing || (!slot.isBooked && existing.isBooked)) {
+      if (!existing) {
         uniqueSlots.set(slot.time, slot)
+      } else {
+        uniqueSlots.set(slot.time, {
+          ...existing,
+          isBooked: existing.isBooked || slot.isBooked,
+        })
       }
     })
     
@@ -358,25 +382,139 @@ export default function BookPage() {
     )
   }
 
+  const addressLine =
+    home &&
+    [home.street, home.city, home.country].filter(Boolean).join(', ')
+
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <Link
-            href="/homes/approved"
-            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
-          >
-            ← {getTranslation(language, 'back')}
-          </Link>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back()
+                } else {
+                  router.push('/homes/approved')
+                }
+              }}
+              className="rounded-xl border border-[var(--border-subtle)] bg-[var(--ink)]/40 px-4 py-2 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--ink)]"
+            >
+              ← {getTranslation(language, 'back')}
+            </button>
+            <Link
+              href="/homes/approved"
+              className="rounded-xl border border-[var(--border-subtle)] bg-[var(--ink)]/40 px-4 py-2 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--ink)]"
+            >
+              {getTranslation(language, 'returnToApproved')}
+            </Link>
+            <Link
+              href="/homes/calendar"
+              className="rounded-xl border border-[var(--border-subtle)] bg-[var(--ink)]/40 px-4 py-2 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--ink)]"
+            >
+              {getTranslation(language, 'upcomingAppointments')}
+            </Link>
+          </div>
           <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'bookViewing')}
           </h1>
           {home && (
-            <p className="text-[var(--text-muted)]">
-              {home.title}
-            </p>
+            <Link
+              href={`/homes/${home.key}`}
+              className="mt-4 block rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm transition-colors hover:border-[var(--accent)]/40 hover:bg-[var(--ink-soft)]"
+            >
+              <p className="font-display text-xl font-semibold text-[var(--text)]">{home.title}</p>
+              {addressLine ? (
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  <span className="font-medium text-[var(--text)]/90">
+                    {getTranslation(language, 'address')}:{' '}
+                  </span>
+                  {addressLine}
+                </p>
+              ) : null}
+              <p className="mt-3 text-sm font-semibold text-[var(--accent-light)]">
+                {getTranslation(language, 'viewFullListing')} →
+              </p>
+            </Link>
           )}
         </div>
+
+        {ownerSharedInfo &&
+          (ownerSharedInfo.name ||
+            ownerSharedInfo.email ||
+            ownerSharedInfo.phone ||
+            ownerSharedInfo.ownerNotesBeforeAppointment) && (
+            <div className="mb-8 rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/90 p-5 shadow-sm">
+              <p className="text-sm font-semibold text-[var(--text)] mb-3">
+                {getTranslation(language, 'ownerSharedForYourVisit')}
+              </p>
+              {(ownerSharedInfo.name || ownerSharedInfo.email || ownerSharedInfo.phone) && (
+                <ul className="space-y-2 text-sm text-[var(--text)]">
+                  {ownerSharedInfo.name && (
+                    <li>
+                      <span className="font-medium text-[var(--text-muted)]">
+                        {getTranslation(language, 'name')}:{' '}
+                      </span>
+                      {home?.owner?.id != null ? (
+                        <Link
+                          href={`/profile/ratings/${home.owner.id}?type=owner`}
+                          className="font-medium text-[var(--accent-light)] underline-offset-2 hover:underline"
+                        >
+                          {ownerSharedInfo.name}
+                        </Link>
+                      ) : (
+                        ownerSharedInfo.name
+                      )}
+                    </li>
+                  )}
+                  {ownerSharedInfo.email && (
+                    <li>
+                      <span className="font-medium text-[var(--text-muted)]">
+                        {getTranslation(language, 'email')}:{' '}
+                      </span>
+                      <a
+                        href={`mailto:${ownerSharedInfo.email}`}
+                        className="text-[var(--accent-light)] underline-offset-2 hover:underline"
+                      >
+                        {ownerSharedInfo.email}
+                      </a>
+                    </li>
+                  )}
+                  {ownerSharedInfo.phone && (
+                    <li>
+                      <span className="font-medium text-[var(--text-muted)]">
+                        {getTranslation(language, 'phone')}:{' '}
+                      </span>
+                      <a
+                        href={`tel:${ownerSharedInfo.phone.replace(/\s/g, '')}`}
+                        className="text-[var(--accent-light)] underline-offset-2 hover:underline"
+                      >
+                        {ownerSharedInfo.phone}
+                      </a>
+                    </li>
+                  )}
+                </ul>
+              )}
+              {ownerSharedInfo.ownerNotesBeforeAppointment && (
+                <div
+                  className={
+                    ownerSharedInfo.name || ownerSharedInfo.email || ownerSharedInfo.phone
+                      ? 'mt-4 border-t border-[var(--border-subtle)] pt-4'
+                      : ''
+                  }
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">
+                    {getTranslation(language, 'ownerMessageBeforeVisit')}
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)] whitespace-pre-wrap">
+                    {ownerSharedInfo.ownerNotesBeforeAppointment}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
         {availabilities.length === 0 ? (
           <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">

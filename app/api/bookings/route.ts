@@ -471,6 +471,24 @@ export async function POST(request: NextRequest) {
       // Don't fail the booking creation if notification fails
     }
 
+    // Renter no longer needs "owner set availability" nudges for this home
+    try {
+      const hk = homeKey || booking.availability?.home?.key
+      if (hk) {
+        await prisma.notification.updateMany({
+          where: {
+            recipientId: user.id,
+            type: 'availability_set',
+            homeKey: hk,
+            deleted: false,
+          },
+          data: { deleted: true },
+        })
+      }
+    } catch (e) {
+      console.error('Failed to clear availability_set notifications:', e)
+    }
+
     return NextResponse.json({ booking }, { status: 201 })
   } catch (error) {
     console.error('Error creating booking:', error)

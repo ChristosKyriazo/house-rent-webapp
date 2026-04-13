@@ -1061,20 +1061,7 @@ export default function NewHomePage() {
                     ))}
                   </div>
 
-                  <div className="flex gap-4 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setParsedHouses([])
-                        setExcelFile(null)
-                        setHousePhotos({})
-                        setBulkUploadError('')
-                        setExcelInputKey(prev => prev + 1)
-                      }}
-                      className="flex-1 px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm"
-                    >
-                      {language === 'el' ? 'Επιστροφή' : 'Back'}
-                    </button>
+                  <div className="flex flex-wrap justify-end gap-4 pt-4">
                     <button
                       type="button"
                       onClick={() => {
@@ -1086,14 +1073,14 @@ export default function NewHomePage() {
                         setHousePhotos({})
                         setExcelInputKey(prev => prev + 1)
                       }}
-                      className="flex-1 px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm"
+                      className="min-w-[8rem] px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm border border-[var(--border-subtle)]"
                     >
                       {getTranslation(language, 'cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={bulkUploadLoading}
-                      className="flex-1 px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="min-w-[8rem] px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {bulkUploadLoading 
                         ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')

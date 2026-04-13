@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const t = translations[language]
 
     // Get all non-deleted notifications for this user
-    const notifications = await prisma.notification.findMany({
+    const notificationsRaw = await prisma.notification.findMany({
       where: {
         recipientId: user.id,
         deleted: false,
@@ -25,6 +25,40 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: 'desc',
       },
+    })
+
+    // Hide "availability_set" once the user has a scheduled viewing for that home (no need to keep nudging)
+    const userScheduledBookings = await prisma.booking.findMany({
+      where: { userId: user.id, status: 'scheduled' },
+      include: {
+        availability: { include: { home: { select: { key: true } } } },
+      },
+    })
+    const homeKeysWithScheduledBooking = new Set<string>()
+    for (const b of userScheduledBookings) {
+      const k = b.availability?.home?.key
+      if (k) homeKeysWithScheduledBooking.add(k)
+    }
+    const inquiryIdsForOrphans = [
+      ...new Set(
+        userScheduledBookings
+          .filter((b) => !b.availability?.home?.key && b.inquiryId)
+          .map((b) => b.inquiryId!)
+      ),
+    ]
+    if (inquiryIdsForOrphans.length > 0) {
+      const inqRows = await prisma.inquiry.findMany({
+        where: { id: { in: inquiryIdsForOrphans } },
+        include: { home: { select: { key: true } } },
+      })
+      for (const row of inqRows) {
+        if (row.home?.key) homeKeysWithScheduledBooking.add(row.home.key)
+      }
+    }
+
+    const notifications = notificationsRaw.filter((n) => {
+      if (n.type !== 'availability_set' || !n.homeKey) return true
+      return !homeKeysWithScheduledBooking.has(n.homeKey)
     })
 
     // Get home titles for notifications that have homeKey

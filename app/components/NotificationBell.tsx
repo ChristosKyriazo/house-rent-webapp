@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useRole } from '../contexts/RoleContext'
@@ -35,7 +36,10 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(true)
   const [unviewedCount, setUnviewedCount] = useState(0)
   const [finalizeNotification, setFinalizeNotification] = useState<Notification | null>(null)
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null)
   const notificationRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   // Determine display role
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -119,20 +123,53 @@ export default function NotificationBell() {
     }
   }, [language])
 
-  // Close dropdown when clicking outside
+  // Position fixed panel under bell (portal) — avoids overflow:hidden on chrome dock clipping the dropdown
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setPanelPos(null)
+      return
+    }
+    const button = buttonRef.current
+    if (!button) return
+
+    const update = () => {
+      const r = button.getBoundingClientRect()
+      setPanelPos({ top: r.bottom + 8, right: window.innerWidth - r.right })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [isOpen])
+
+  // Close when tapping/clicking outside. Defer registration so Safari/iOS does not treat the
+  // same gesture that opened the panel as an outside close (mousedown/touch order differs).
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
+    if (!isOpen) return
+
+    const handleOutside = (event: Event) => {
+      const t = event.target as Node
+      if (notificationRef.current?.contains(t)) return
+      if (panelRef.current?.contains(t)) return
+      setIsOpen(false)
     }
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
+    let cleanup: (() => void) | undefined
+    const timer = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleOutside)
+      document.addEventListener('touchstart', handleOutside, { passive: true })
+      cleanup = () => {
+        document.removeEventListener('mousedown', handleOutside)
+        document.removeEventListener('touchstart', handleOutside)
+      }
+    }, 0)
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
+      window.clearTimeout(timer)
+      cleanup?.()
     }
   }, [isOpen])
 
@@ -169,12 +206,10 @@ export default function NotificationBell() {
       return
     }
 
-    if (displayRole === 'owner' && notification.type === 'inquiry') {
-      if (notification.inquiryId) {
-        router.push(`/homes/inquiries/${notification.homeKey}?inquiryId=${notification.inquiryId}`)
-      } else {
-        router.push(`/homes/inquiries/${notification.homeKey}`)
-      }
+    // Inquiry alerts are always for the listing owner — do not gate on selectedRole ("both" was breaking owner flow)
+    if (notification.type === 'inquiry' && notification.homeKey) {
+      const q = notification.inquiryId ? `?inquiryId=${notification.inquiryId}` : ''
+      router.push(`/homes/inquiries/${notification.homeKey}${q}`)
       return
     }
 
@@ -184,6 +219,29 @@ export default function NotificationBell() {
     }
 
     if (notification.type === 'availability_set' && notification.homeKey) {
+      try {
+        const [profileRes, bookingsRes] = await Promise.all([
+          fetch('/api/profile'),
+          fetch('/api/bookings'),
+        ])
+        const profile = profileRes.ok ? await profileRes.json() : null
+        const myId = profile?.user?.id as number | undefined
+        const bookingsData = bookingsRes.ok ? await bookingsRes.json() : { bookings: [] }
+        const hasScheduled =
+          myId &&
+          (bookingsData.bookings || []).some(
+            (b: { userId?: number; status?: string; home?: { key?: string } }) =>
+              b.userId === myId &&
+              b.status === 'scheduled' &&
+              b.home?.key === notification.homeKey
+          )
+        if (hasScheduled) {
+          router.push('/homes/calendar')
+          return
+        }
+      } catch {
+        /* fall through to book page */
+      }
       const queryParams = notification.inquiryId ? `?inquiryId=${notification.inquiryId}` : ''
       router.push(`/homes/${notification.homeKey}/book${queryParams}`)
       return
@@ -246,9 +304,9 @@ export default function NotificationBell() {
 
   // Mark all notifications as viewed when bell is opened
   const handleBellClick = async (e: React.MouseEvent) => {
-    e.preventDefault()
+    // Do not preventDefault — breaks tap/click on Safari (especially iOS)
     e.stopPropagation()
-    
+
     const wasOpen = isOpen
     setIsOpen(!isOpen)
     
@@ -275,10 +333,13 @@ export default function NotificationBell() {
   return (
     <div className="relative pointer-events-auto" ref={notificationRef} style={{ isolation: 'isolate' }}>
       <button
+        ref={buttonRef}
+        type="button"
         onClick={handleBellClick}
-        className="btn-icon-dock relative pointer-events-auto px-4"
+        className="btn-icon-dock relative cursor-pointer px-4 [-webkit-tap-highlight-color:transparent]"
         aria-label="Notifications"
-        style={{ pointerEvents: 'auto', isolation: 'isolate' }}
+        aria-expanded={isOpen}
+        style={{ pointerEvents: 'auto', touchAction: 'manipulation', isolation: 'isolate' }}
       >
         <svg 
           width="20" 
@@ -310,60 +371,78 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {isOpen && (
-        <div className="absolute right-0 top-14 w-80 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl backdrop-blur-xl animate-fadeIn">
-          <div className="border-b border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 p-4">
-            <h3 className="font-display text-lg font-semibold text-[var(--text)]">
-              {getTranslation(language, 'notifications')}
-            </h3>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            {loading ? (
-              <div className="p-4 text-center text-[var(--text-muted)]">
-                {getTranslation(language, 'loading')}
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-[var(--text-muted)]">
-                {getTranslation(language, 'noNotifications')}
-              </div>
-            ) : (
-              notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className="group relative cursor-pointer border-b border-[var(--border-subtle)]/50 p-4 transition-colors hover:bg-[var(--ink-soft)]/80"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm text-[var(--text)] transition-colors group-hover:text-[var(--accent-light)]">
-                        {notification.message}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--text-muted)]">
-                        {new Date(notification.createdAt).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
-                          {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteNotification(e, notification.id)}
-                      className="text-lg text-[var(--text-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                      aria-label="Delete notification"
-                    >
-                      ×
-                    </button>
-                  </div>
+      {isOpen &&
+        panelPos &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="animate-fadeIn w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl backdrop-blur-xl"
+            style={{
+              position: 'fixed',
+              top: panelPos.top,
+              right: panelPos.right,
+              maxHeight: 'min(24rem, calc(100vh - 1rem))',
+              zIndex: 30001,
+              WebkitOverflowScrolling: 'touch',
+            }}
+            role="dialog"
+            aria-label={getTranslation(language, 'notifications')}
+          >
+            <div className="border-b border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 p-4">
+              <h3 className="font-display text-lg font-semibold text-[var(--text)]">
+                {getTranslation(language, 'notifications')}
+              </h3>
+            </div>
+            <div className="max-h-[min(24rem,calc(100vh-8rem))] overflow-y-auto">
+              {loading ? (
+                <div className="p-4 text-center text-[var(--text-muted)]">
+                  {getTranslation(language, 'loading')}
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+              ) : notifications.length === 0 ? (
+                <div className="p-4 text-center text-[var(--text-muted)]">
+                  {getTranslation(language, 'noNotifications')}
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className="group relative cursor-pointer border-b border-[var(--border-subtle)]/50 p-4 transition-colors hover:bg-[var(--ink-soft)]/80"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className="text-sm text-[var(--text)] transition-colors group-hover:text-[var(--accent-light)]">
+                          {notification.message}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                          {new Date(notification.createdAt).toLocaleDateString(
+                            language === 'el' ? 'el-GR' : 'en-US',
+                            {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteNotification(e, notification.id)}
+                        className="text-lg text-[var(--text-muted)] opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                        aria-label="Delete notification"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Finalize Notification Modal */}
       {finalizeNotification && (
