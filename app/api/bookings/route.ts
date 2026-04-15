@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { findBookingConflicts } from '@/lib/booking-conflicts'
+import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET /api/bookings - Get all bookings for the current user
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const searchParams = request.nextUrl.searchParams
@@ -260,10 +262,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ bookings: transformedBookings }, { status: 200 })
   } catch (error) {
     console.error('Error fetching bookings:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -272,17 +271,14 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
     const { ownerId, inquiryId, availabilityId, title, description, startTime, endTime, location } = body
 
     if (!title || !startTime || !endTime) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields')
     }
 
     // If availabilityId is provided, get ownerId and homeKey from the availability
@@ -290,9 +286,18 @@ export async function POST(request: NextRequest) {
     let homeKey: string | null = null
     let ownerKey: string | null = null
     
-    if (availabilityId && !ownerId) {
+    const parsedAvailabilityId = availabilityId ? parsePositiveInt(availabilityId) : null
+    const parsedOwnerId = ownerId ? parsePositiveInt(ownerId) : null
+    const parsedStartTime = parseValidDate(startTime)
+    const parsedEndTime = parseValidDate(endTime)
+
+    if (!parsedStartTime || !parsedEndTime || parsedEndTime <= parsedStartTime) {
+      return badRequest('Invalid appointment time range')
+    }
+
+    if (availabilityId && !parsedOwnerId) {
       const availability = await prisma.availability.findUnique({
-        where: { id: availabilityId },
+        where: { id: parsedAvailabilityId ?? -1 },
         include: { 
           home: { 
             select: { 
@@ -338,10 +343,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!finalOwnerId) {
-      return NextResponse.json(
-        { error: 'Owner ID is required' },
-        { status: 400 }
-      )
+      return badRequest('Owner ID is required')
     }
 
     const rawInq = body.inquiryId
@@ -350,9 +352,9 @@ export async function POST(request: NextRequest) {
         ? parseInt(String(rawInq), 10)
         : null
 
-    if (finalInquiryId === null && availabilityId) {
+    if (finalInquiryId === null && parsedAvailabilityId) {
       const av = await prisma.availability.findUnique({
-        where: { id: parseInt(String(availabilityId), 10) },
+        where: { id: parsedAvailabilityId },
         select: { homeId: true },
       })
       if (av) {
@@ -370,81 +372,55 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check for existing bookings that overlap with this time slot
-    // Check for user's existing bookings
-    const userExistingBookings = await prisma.booking.findMany({
-      where: {
-        userId: user.id,
-        status: 'scheduled',
-        startTime: {
-          lt: new Date(endTime), // Existing booking starts before new booking ends
-        },
-        endTime: {
-          gt: new Date(startTime), // Existing booking ends after new booking starts
-        },
-      },
-    })
-
-    // Check for owner's existing bookings
-    const ownerExistingBookings = await prisma.booking.findMany({
-      where: {
-        ownerId: finalOwnerId,
-        status: 'scheduled',
-        startTime: {
-          lt: new Date(endTime), // Existing booking starts before new booking ends
-        },
-        endTime: {
-          gt: new Date(startTime), // Existing booking ends after new booking starts
-        },
-      },
-    })
-
-    if (userExistingBookings.length > 0) {
-      return NextResponse.json(
-        { error: 'You already have an appointment at this time' },
-        { status: 400 }
-      )
-    }
-
-    if (ownerExistingBookings.length > 0) {
-      return NextResponse.json(
-        { error: 'The owner/broker already has an appointment at this time' },
-        { status: 400 }
-      )
-    }
-
-    const booking = await prisma.booking.create({
-      data: {
+    const booking = await prisma.$transaction(async (tx) => {
+      const conflictState = await findBookingConflicts({
+        tx,
         userId: user.id,
         ownerId: finalOwnerId,
-        inquiryId: finalInquiryId,
-        availabilityId: availabilityId || null,
-        title,
-        description: description || null,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        location: location || null,
-        status: 'scheduled',
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            key: true,
+        startTime: parsedStartTime,
+        endTime: parsedEndTime,
+      })
+
+      if (conflictState.userHasConflict) {
+        throw new Error('USER_CONFLICT')
+      }
+      if (conflictState.ownerHasConflict) {
+        throw new Error('OWNER_CONFLICT')
+      }
+
+      return tx.booking.create({
+        data: {
+          userId: user.id,
+          ownerId: finalOwnerId,
+          inquiryId: finalInquiryId,
+          availabilityId: parsedAvailabilityId,
+          title,
+          description: description || null,
+          startTime: parsedStartTime,
+          endTime: parsedEndTime,
+          location: location || null,
+          status: 'scheduled',
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              key: true,
+            },
           },
-        },
-        availability: {
-          include: {
-            home: {
-              select: {
-                key: true,
+          availability: {
+            include: {
+              home: {
+                select: {
+                  key: true,
+                },
               },
             },
           },
         },
-      },
+      })
     })
 
     // Create notification for owner/broker about the new booking
@@ -491,11 +467,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ booking }, { status: 201 })
   } catch (error) {
+    if (error instanceof Error && error.message === 'USER_CONFLICT') {
+      return badRequest('You already have an appointment at this time')
+    }
+    if (error instanceof Error && error.message === 'OWNER_CONFLICT') {
+      return badRequest('The owner/broker already has an appointment at this time')
+    }
     console.error('Error creating booking:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

@@ -1,0 +1,170 @@
+# Phase 1 Execution Log (Production Hardening)
+
+Audience: engineering + business stakeholders.
+
+This document explains what was changed, why it matters for production, and how to operate it.
+
+## Goal
+
+Reduce production risk in the booking and availability flow by tightening:
+
+- input validation
+- authorization checks
+- double-booking protection
+- consistency of API error behavior
+
+## What Was Implemented
+
+### 1) Shared API response and parsing helpers
+
+Files:
+
+- `lib/api-utils.ts`
+
+What changed:
+
+- Added shared helpers for common API responses (`400`, `401`, `403`, `404`, `500`).
+- Added safe parsing helpers for integers and dates.
+
+Why it matters:
+
+- Fewer ad-hoc checks and fewer inconsistent API responses.
+- Easier maintenance and faster onboarding for new developers.
+
+Business impact:
+
+- More predictable errors for frontend handling.
+- Lower support/debug time when users report issues.
+
+### 2) Shared conflict detection for bookings
+
+Files:
+
+- `lib/booking-conflicts.ts`
+
+What changed:
+
+- Added a single function to evaluate overlapping scheduled bookings for both user and owner.
+- Supports optional exclusion of a booking (needed for rescheduling).
+
+Why it matters:
+
+- Centralized overlap logic prevents divergence between create and reschedule flows.
+- One source of truth lowers regression risk.
+
+Business impact:
+
+- Stronger protection against double booking.
+- Better trust in scheduling reliability.
+
+### 3) Booking creation hardening (`POST /api/bookings`)
+
+Files:
+
+- `app/api/bookings/route.ts`
+
+What changed:
+
+- Added stricter validation for `availabilityId`, `ownerId`, `startTime`, and `endTime`.
+- Enforced valid time range (`endTime > startTime`).
+- Moved conflict check + booking insert into a database transaction.
+- Standardized error responses using shared API helpers.
+
+Why it matters:
+
+- Validation catches invalid requests before they affect data.
+- Transaction reduces race-condition windows in booking creation.
+
+Business impact:
+
+- Fewer broken bookings in production.
+- Less manual correction effort.
+
+### 4) Booking reschedule/cancel hardening (`PATCH/DELETE /api/bookings/[id]`)
+
+Files:
+
+- `app/api/bookings/[id]/route.ts`
+
+What changed:
+
+- Added strict parsing for booking IDs and payload fields.
+- Reused shared booking conflict detection for reschedule.
+- Wrapped availability updates + booking update in a transaction for rescheduling.
+- Removed verbose debug logging of booking overlap payloads.
+- Standardized unauthorized/forbidden/not-found/bad-request responses.
+
+Why it matters:
+
+- Reduces data inconsistencies when changing slots.
+- Prevents accidental info leakage from debug logging.
+
+Business impact:
+
+- More reliable changes to existing appointments.
+- Cleaner operational logs.
+
+### 5) Availability update authorization hardening
+
+Files:
+
+- `app/api/homes/[id]/availability/route.ts`
+
+What changed:
+
+- `PATCH` now verifies:
+  - home exists,
+  - requester is owner (or broker),
+  - target availability belongs to that home.
+- Added safer validation for `availabilityId`.
+- Standardized error responses with shared helpers.
+
+Why it matters:
+
+- Closes a permission gap where updates could rely on ID alone.
+
+Business impact:
+
+- Better tenant isolation and stronger data integrity.
+
+### 6) Unused dependency cleanup
+
+Files:
+
+- `package.json`
+- `package-lock.json`
+
+What changed:
+
+- Removed unused dependencies:
+  - `bcryptjs`
+  - `@types/bcryptjs`
+
+Why it matters:
+
+- Smaller dependency surface and lower supply-chain risk.
+
+Business impact:
+
+- Reduced attack surface and maintenance overhead.
+
+## Operational Notes
+
+- Backup references remain available:
+  - branch: `backup/pre-production-20260415`
+  - tag: `pre-production-snapshot-20260415`
+  - archive: `webapp-source-backup-20260415.tar.gz`
+- Active hardening branch:
+  - `hardening/production-readiness`
+
+## Known Constraints
+
+- Full repository typecheck currently includes unrelated in-progress files under `app/api/homes/promote/route.ts` that are not part of this Phase 1 hardening change set.
+- This should be resolved or isolated before turning on strict CI gates for the entire repository.
+
+## Next Recommended Step (Phase 1 continuation)
+
+1. Apply shared validation/auth helpers to `notifications`, `inquiries`, and `ratings` APIs.
+2. Add request schema validation for route payloads (lightweight runtime checks or Zod).
+3. Add automated integration tests for booking create and reschedule conflict scenarios.
+

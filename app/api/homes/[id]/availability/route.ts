@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET: Get availability for a home
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
@@ -23,7 +24,7 @@ export async function GET(
     })
 
     if (!home) {
-      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+      return notFound('Home not found')
     }
 
     // Get availability slots
@@ -156,10 +157,7 @@ export async function GET(
     return NextResponse.json({ availabilities: availabilitiesWithBookings }, { status: 200 })
   } catch (error) {
     console.error('Error fetching availability:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -171,7 +169,7 @@ export async function PATCH(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
@@ -180,26 +178,42 @@ export async function PATCH(
     const body = await request.json()
     const { availabilityId, isAvailable } = body
 
-    if (!availabilityId) {
-      return NextResponse.json(
-        { error: 'Availability ID is required' },
-        { status: 400 }
-      )
+    if (!availabilityId || !Number.isInteger(Number(availabilityId))) {
+      return badRequest('Availability ID is required')
+    }
+
+    const home = await prisma.home.findUnique({
+      where: { key: homeKey },
+      select: { id: true, ownerId: true },
+    })
+
+    if (!home) {
+      return notFound('Home not found')
+    }
+
+    if (home.ownerId !== user.id && user.role !== 'broker') {
+      return forbidden('Only the owner can update availability')
+    }
+
+    const targetAvailability = await prisma.availability.findUnique({
+      where: { id: Number(availabilityId) },
+      select: { id: true, homeId: true },
+    })
+
+    if (!targetAvailability || targetAvailability.homeId !== home.id) {
+      return badRequest('Availability does not belong to this home')
     }
 
     // Update availability
     const availability = await prisma.availability.update({
-      where: { id: availabilityId },
+      where: { id: Number(availabilityId) },
       data: { isAvailable: isAvailable !== undefined ? isAvailable : false },
     })
 
     return NextResponse.json({ availability }, { status: 200 })
   } catch (error) {
     console.error('Error updating availability:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -211,7 +225,7 @@ export async function POST(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
@@ -221,10 +235,7 @@ export async function POST(
     const { inquiryId, slots } = body
 
     if (!slots || !Array.isArray(slots) || slots.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one availability slot is required' },
-        { status: 400 }
-      )
+      return badRequest('At least one availability slot is required')
     }
 
     // Find the home
@@ -234,7 +245,7 @@ export async function POST(
     })
 
     if (!home) {
-      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+      return notFound('Home not found')
     }
 
     // Verify user is the owner
@@ -306,10 +317,7 @@ export async function POST(
     )
   } catch (error) {
     console.error('Error creating availability:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
