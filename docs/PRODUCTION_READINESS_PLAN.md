@@ -50,3 +50,19 @@ Deliverable: production can be monitored and incidents can be handled quickly.
 - Logs/errors provide enough context to debug incidents quickly.
 - Team follows documented branch workflow in `docs/BRANCHING_STRATEGY.md`.
 
+## Phase 2 Completion Notes
+
+Phase 2 implementation scope is complete in this branch:
+
+- Route-to-service extraction started and applied to:
+  - inquiry finalization workflows
+  - inquiry approval/dismiss/reject workflows
+  - notification mutation workflows
+- API integration tests are in place for booking and availability safety paths.
+- E2E smoke scaffolding is now added with Playwright (`tests/e2e/smoke.spec.ts`) and a runnable `test:e2e` script.
+
+Remaining operational actions (outside code) to close the loop:
+
+- Enable branch protection and required checks on `main`.
+- Wire CI to run `lint`, `typecheck`, `test`, and `test:e2e` in your deployment environment.
+

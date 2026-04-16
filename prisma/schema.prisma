@@ -57,6 +57,8 @@ model Home {
   availableFrom     DateTime
   photos            String?  // JSON array of photo file paths/URLs
   finalized         Boolean  @default(false) // Whether any inquiry for this home has been finalized
+  promotedUntil     DateTime? // Standard promotion expiry
+  premiumPromotedUntil DateTime? // Premium promotion expiry
   closestMetro      Float?   // Distance to closest metro (in km or minutes)
   closestBus        Float?   // Distance to closest bus stop (in km or minutes)
   closestSchool     Float?   // Distance to closest school (in km or minutes)

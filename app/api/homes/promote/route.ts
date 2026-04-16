@@ -1,42 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     // Check if user has owner/broker role
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can promote homes' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can promote homes')
     }
 
     const body = await request.json()
     const { homeKey, days, isPremium } = body
 
-    if (!homeKey || !days) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
+    const parsedDays = parsePositiveInt(days)
+
+    if (!homeKey || !parsedDays) {
+      return badRequest('Missing required fields')
     }
 
     // Validate days
-    if (days !== 7 && days !== 30) {
-      return NextResponse.json(
-        { error: 'Invalid promotion duration. Must be 7 or 30 days.' },
-        { status: 400 }
-      )
+    if (parsedDays !== 7 && parsedDays !== 30) {
+      return badRequest('Invalid promotion duration. Must be 7 or 30 days.')
     }
 
     // Find the home and verify ownership
@@ -46,17 +37,11 @@ export async function POST(request: NextRequest) {
     })
 
     if (!home) {
-      return NextResponse.json(
-        { error: 'Home not found' },
-        { status: 404 }
-      )
+      return notFound('Home not found')
     }
 
     if (home.ownerId !== user.id) {
-      return NextResponse.json(
-        { error: 'You do not own this home' },
-        { status: 403 }
-      )
+      return forbidden('You do not own this home')
     }
 
     // Get current home to check existing promotions
@@ -67,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Calculate promotion end date
     const now = new Date()
-    const promotedUntil = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+    const promotedUntil = new Date(now.getTime() + parsedDays * 24 * 60 * 60 * 1000)
 
     // Update home with promotion
     if (isPremium) {
@@ -97,10 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error promoting home:', error)
-    return NextResponse.json(
-      { error: 'Failed to promote home' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

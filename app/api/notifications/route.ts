@@ -8,6 +8,12 @@ import {
   serverError,
   unauthorized,
 } from '@/lib/api-utils'
+import {
+  createNotification,
+  deleteNotificationForUser,
+  markAllNotificationsAsViewed,
+  NotificationServiceError,
+} from '@/lib/services/notification-service'
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
@@ -350,23 +356,13 @@ export async function DELETE(request: NextRequest) {
       return badRequest('Notification ID required')
     }
 
-    // Mark notification as deleted (don't actually delete it)
-    const updated = await prisma.notification.updateMany({
-      where: {
-        id: notificationId,
-        recipientId: user.id, // Ensure user can only delete their own notifications
-      },
-      data: {
-        deleted: true,
-      },
-    })
-
-    if (updated.count === 0) {
-      return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
-    }
+    await deleteNotificationForUser(notificationId, user.id)
 
     return NextResponse.json({ message: 'Notification deleted' }, { status: 200 })
   } catch (error) {
+    if (error instanceof NotificationServiceError && error.status === 404) {
+      return NextResponse.json({ error: error.message }, { status: 404 })
+    }
     console.error('Delete notification error:', error)
     return serverError()
   }
@@ -384,17 +380,7 @@ export async function PATCH(request: NextRequest) {
     const { markAllAsViewed } = body
 
     if (markAllAsViewed) {
-      // Mark all unviewed notifications for this user as viewed
-      await prisma.notification.updateMany({
-        where: {
-          recipientId: user.id,
-          viewed: false,
-          deleted: false,
-        },
-        data: {
-          viewed: true,
-        },
-      })
+      await markAllNotificationsAsViewed(user.id)
 
       return NextResponse.json({ message: 'All notifications marked as viewed' }, { status: 200 })
     }
@@ -424,16 +410,13 @@ export async function POST(request: NextRequest) {
       return badRequest('recipientId, role, and type are required')
     }
 
-    // Create notification
-    const notification = await prisma.notification.create({
-      data: {
-        recipientId: parsedRecipientId,
-        role: role,
-        type: type,
-        homeKey: homeKey || null,
-        userId: parsedUserId,
-        ownerKey: ownerKey || null,
-      },
+    const notification = await createNotification({
+      recipientId: parsedRecipientId,
+      role,
+      type,
+      homeKey: homeKey || null,
+      userId: parsedUserId,
+      ownerKey: ownerKey || null,
     })
 
     return NextResponse.json({ notification }, { status: 201 })

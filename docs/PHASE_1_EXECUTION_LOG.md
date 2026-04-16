@@ -290,3 +290,125 @@ Recommendation:
 
 - treat `homes/promote` as a separate feature track and either complete its schema migration or keep it out of the hardening PR gate until stabilized.
 
+## Phase 2 Kickoff (Current Session)
+
+### A) Removed typecheck blocker by aligning promotions schema
+
+Files:
+
+- `prisma/schema.prisma`
+- `app/api/homes/promote/route.ts`
+
+What changed:
+
+- Added missing `Home` fields back to Prisma schema:
+  - `promotedUntil`
+  - `premiumPromotedUntil`
+- Regenerated Prisma client.
+- Hardened promotions route with shared API helpers and strict days parsing (`7` or `30` only).
+
+Outcome:
+
+- Repository typecheck is now green again.
+- Promotions endpoint follows the same validation/error patterns as other hardened routes.
+
+### B) Phase 2 test baseline introduced
+
+Files:
+
+- `vitest.config.ts`
+- `tests/api/bookings.post.test.ts`
+- `tests/api/availability.patch.test.ts`
+- `package.json`
+
+What changed:
+
+- Added Vitest-based API test runner (`test`, `test:integration` scripts).
+- Added two integration-style route tests for core risk paths:
+  - booking creation rejects invalid time ranges pre-transaction
+  - availability patch rejects cross-home updates
+
+Outcome:
+
+- `npm run test:integration` passes.
+- Hardening work now has executable checks beyond lint/typecheck.
+
+### C) Inquiry finalization service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/inquiry-finalization-service.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/finalize/route.ts`
+- `tests/services/inquiry-finalization-service.test.ts`
+
+What changed:
+
+- Extracted the finalization business workflow from route handlers into a dedicated service module.
+- Introduced explicit domain error type (`InquiryFinalizationError`) with status-aware mapping in route handlers.
+- Added service-level test coverage for a core rule (cannot finalize without a scheduled booking).
+
+Outcome:
+
+- Route file is slimmer and focused on HTTP concerns.
+- Business logic is reusable and easier to test independently.
+- `npm run test` and `npm run typecheck` both pass after extraction.
+
+### D) Notification mutation service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/notification-service.ts`
+- `app/api/notifications/route.ts`
+- `tests/services/notification-service.test.ts`
+
+What changed:
+
+- Moved notification mutation operations into a dedicated service:
+  - delete notification (ownership-aware)
+  - mark all viewed
+  - create notification
+- Added explicit domain error (`NotificationServiceError`) for status-aware route mapping.
+- Added service-level test coverage for ownership/not-found deletion handling.
+
+Outcome:
+
+- Notification route now keeps business logic out of handler branches.
+- Mutation paths are easier to reuse, test, and extend without route bloat.
+
+### E) Inquiry action workflow service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/inquiry-management-service.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/route.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/reject/route.ts`
+- `tests/services/inquiry-management-service.test.ts`
+
+What changed:
+
+- Extracted approve/dismiss/reject business workflows into a reusable inquiry management service.
+- Introduced status-aware domain error mapping (`InquiryManagementError`) in route handlers.
+- Added service-level rule coverage for reject-after-meeting constraint.
+
+Outcome:
+
+- Inquiry action routes are slimmer and easier to maintain.
+- Workflow rules are reusable and testable outside HTTP route glue code.
+
+### F) E2E smoke scaffolding for Phase 2
+
+Files:
+
+- `playwright.config.ts`
+- `tests/e2e/smoke.spec.ts`
+- `package.json` (`test:e2e`)
+
+What changed:
+
+- Added Playwright test runner configuration and baseline smoke tests for core page availability.
+- Added runnable script for E2E checks.
+
+Outcome:
+
+- Phase 2 now includes both API/service tests and initial browser smoke coverage.
+
