@@ -375,3 +375,40 @@ Outcome:
 - Notification route now keeps business logic out of handler branches.
 - Mutation paths are easier to reuse, test, and extend without route bloat.
 
+### E) Inquiry action workflow service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/inquiry-management-service.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/route.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/reject/route.ts`
+- `tests/services/inquiry-management-service.test.ts`
+
+What changed:
+
+- Extracted approve/dismiss/reject business workflows into a reusable inquiry management service.
+- Introduced status-aware domain error mapping (`InquiryManagementError`) in route handlers.
+- Added service-level rule coverage for reject-after-meeting constraint.
+
+Outcome:
+
+- Inquiry action routes are slimmer and easier to maintain.
+- Workflow rules are reusable and testable outside HTTP route glue code.
+
+### F) E2E smoke scaffolding for Phase 2
+
+Files:
+
+- `playwright.config.ts`
+- `tests/e2e/smoke.spec.ts`
+- `package.json` (`test:e2e`)
+
+What changed:
+
+- Added Playwright test runner configuration and baseline smoke tests for core page availability.
+- Added runnable script for E2E checks.
+
+Outcome:
+
+- Phase 2 now includes both API/service tests and initial browser smoke coverage.
+

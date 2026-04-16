@@ -9,6 +9,10 @@ import {
   serverError,
   unauthorized,
 } from '@/lib/api-utils'
+import {
+  InquiryManagementError,
+  manageInquiryApproval,
+} from '@/lib/services/inquiry-management-service'
 
 // GET: Get inquiry details (for finalize modal)
 export async function GET(
@@ -86,12 +90,6 @@ export async function PATCH(
       return unauthorized()
     }
 
-    // Check if user is an owner (brokers are treated like owners)
-    const userRole = user.role || 'user'
-    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return forbidden('Only owners and brokers can manage inquiries')
-    }
-
     const resolvedParams = await Promise.resolve(params)
     const { inquiryId } = resolvedParams
     const parsedInquiryId = parsePositiveInt(inquiryId)
@@ -106,178 +104,20 @@ export async function PATCH(
       return badRequest('Invalid action. Must be "approve" or "dismiss"')
     }
 
-    // Find the inquiry
-    const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parsedInquiryId },
-      include: {
-        home: {
-          select: {
-            id: true,
-            key: true,
-            ownerId: true,
-          },
-        },
-      },
+    const result = await manageInquiryApproval({
+      inquiryId: parsedInquiryId,
+      actorId: user.id,
+      actorRole: user.role,
+      action,
+      contactInfo,
     })
-
-    if (!inquiry) {
-      return notFound('Inquiry not found')
-    }
-
-    // Verify the home belongs to the user
-    if (inquiry.home.ownerId !== user.id) {
-      return forbidden('Not authorized to manage this inquiry')
-    }
-
-    // Get the inquiry user and home for notifications
-    const inquiryWithDetails = await prisma.inquiry.findUnique({
-      where: { id: inquiry.id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            key: true,
-          },
-        },
-        home: {
-          select: {
-            key: true,
-            owner: {
-              select: {
-                key: true,
-              },
-            },
-          },
-        },
-      },
-    })
-
-    if (action === 'approve') {
-      // Mark as approved and store contact info
-      const updateData: { approved: boolean; dismissed: boolean; contactInfo?: string } = {
-        approved: true,
-        dismissed: false // Ensure dismissed is false when approving
-      }
-      
-      // Store contact info as JSON string if provided
-      if (contactInfo) {
-        updateData.contactInfo = JSON.stringify(contactInfo)
-      }
-      
-      await prisma.inquiry.update({
-        where: { id: inquiry.id },
-        data: updateData,
-      })
-
-      // Create notification for the user
-      if (inquiryWithDetails) {
-        try {
-          await prisma.notification.create({
-            data: {
-              recipientId: inquiryWithDetails.user.id,
-              role: 'user',
-              type: 'approved',
-              homeKey: inquiryWithDetails.home.key,
-              ownerKey: inquiryWithDetails.home.owner.key,
-            },
-          })
-        } catch (error) {
-          console.error('Failed to create notification:', error)
-        }
-      }
-
-      // Delete inquiry notifications for the owner when inquiry is approved
-      // This ensures the inquiry notification is automatically deleted when approved
-      try {
-        await prisma.notification.updateMany({
-          where: {
-            homeKey: inquiryWithDetails?.home.key,
-            type: 'inquiry',
-            recipientId: user.id,
-            deleted: false, // Only delete if not already deleted
-          },
-          data: {
-            deleted: true,
-          },
-        })
-      } catch (error) {
-        console.error('Failed to delete inquiry notifications:', error)
-      }
-
-      // Delete inquiry notifications for the user when inquiry is approved
-      if (inquiryWithDetails) {
-        try {
-          await prisma.notification.updateMany({
-            where: {
-              homeKey: inquiryWithDetails.home.key,
-              type: 'inquiry',
-              recipientId: inquiryWithDetails.user.id,
-              deleted: false,
-            },
-            data: {
-              deleted: true,
-            },
-          })
-        } catch (error) {
-          console.error('Failed to delete user inquiry notifications:', error)
-        }
-      }
-
-      return NextResponse.json(
-        { message: 'Inquiry approved', approved: true },
-        { status: 200 }
-      )
-    } else {
-      // Dismiss - mark as dismissed instead of deleting
-      await prisma.inquiry.update({
-        where: { id: inquiry.id },
-        data: { 
-          dismissed: true,
-          approved: false // Ensure approved is false when dismissing
-        },
-      })
-
-      // Delete inquiry notifications for the owner when inquiry is dismissed/rejected
-      // This ensures the inquiry notification is automatically deleted when dismissed
-      try {
-        await prisma.notification.updateMany({
-          where: {
-            homeKey: inquiryWithDetails?.home.key,
-            type: 'inquiry',
-            recipientId: user.id,
-            deleted: false, // Only delete if not already deleted
-          },
-          data: {
-            deleted: true,
-          },
-        })
-      } catch (error) {
-        console.error('Failed to delete inquiry notifications:', error)
-      }
-
-      // Create notification for the user
-      if (inquiryWithDetails) {
-        try {
-          await prisma.notification.create({
-            data: {
-              recipientId: inquiryWithDetails.user.id,
-              role: 'user',
-              type: 'dismissed',
-              homeKey: inquiryWithDetails.home.key,
-              ownerKey: inquiryWithDetails.home.owner.key,
-            },
-          })
-        } catch (error) {
-          console.error('Failed to create notification:', error)
-        }
-      }
-
-      return NextResponse.json(
-        { message: 'Inquiry dismissed' },
-        { status: 200 }
-      )
-    }
+    return NextResponse.json(result, { status: 200 })
   } catch (error) {
+    if (error instanceof InquiryManagementError) {
+      if (error.status === 400) return badRequest(error.message)
+      if (error.status === 403) return forbidden(error.message)
+      if (error.status === 404) return notFound(error.message)
+    }
     console.error('Manage inquiry error:', error)
     return serverError()
   }

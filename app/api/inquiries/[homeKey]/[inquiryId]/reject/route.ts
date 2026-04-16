@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import {
+  InquiryManagementError,
+  rejectInquiryAfterMeeting,
+} from '@/lib/services/inquiry-management-service'
 
 // POST: Reject inquiry (owner/broker only, after scheduled meeting)
 export async function POST(
@@ -21,87 +24,18 @@ export async function POST(
       return badRequest('Invalid inquiry ID')
     }
 
-    // Find the inquiry
-    const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parsedInquiryId },
-      include: {
-        home: {
-          select: {
-            id: true,
-            key: true,
-            title: true,
-            ownerId: true,
-            owner: {
-              select: {
-                id: true,
-                key: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            key: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    })
-
-    if (!inquiry) {
-      return notFound('Inquiry not found')
-    }
-
-    // Verify user is the owner/broker
-    const userRole = (user.role || 'user').toLowerCase()
-    const isOwner = user.id === inquiry.home.ownerId || userRole === 'broker' || userRole === 'both'
-    
-    if (!isOwner) {
-      return forbidden('Only owners and brokers can reject inquiries')
-    }
-
-    // Check if there's a scheduled booking for this inquiry
-    const scheduledBooking = await prisma.booking.findFirst({
-      where: {
-        inquiryId: inquiry.id,
-        status: 'scheduled',
-      },
-    })
-
-    if (!scheduledBooking) {
-      return badRequest('Can only reject after a scheduled meeting')
-    }
-
-    // Mark inquiry as dismissed (rejected)
-    await prisma.inquiry.update({
-      where: { id: inquiry.id },
-      data: {
-        dismissed: true,
-      },
-    })
-
-    // Create a "rejected" notification for the user
-    await prisma.notification.create({
-      data: {
-        recipientId: inquiry.user.id,
-        role: 'user',
-        type: 'rejected',
-        homeKey: inquiry.home.key,
-        userId: inquiry.userId,
-        ownerKey: inquiry.home.owner.key,
-        inquiryId: inquiry.id,
-      },
-    })
+    await rejectInquiryAfterMeeting(parsedInquiryId, user.id, user.role)
 
     return NextResponse.json(
       { message: 'Inquiry rejected and user notified' },
       { status: 200 }
     )
   } catch (error) {
+    if (error instanceof InquiryManagementError) {
+      if (error.status === 400) return badRequest(error.message)
+      if (error.status === 403) return forbidden(error.message)
+      if (error.status === 404) return notFound(error.message)
+    }
     console.error('Reject inquiry error:', error)
     return serverError()
   }

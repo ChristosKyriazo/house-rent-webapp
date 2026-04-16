@@ -8,5 +8,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     clearMocks: true,
+    exclude: ['tests/e2e/**'],
   },
 })
