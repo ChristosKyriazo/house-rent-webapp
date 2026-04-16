@@ -333,3 +333,23 @@ Outcome:
 - `npm run test:integration` passes.
 - Hardening work now has executable checks beyond lint/typecheck.
 
+### C) Inquiry finalization service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/inquiry-finalization-service.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/finalize/route.ts`
+- `tests/services/inquiry-finalization-service.test.ts`
+
+What changed:
+
+- Extracted the finalization business workflow from route handlers into a dedicated service module.
+- Introduced explicit domain error type (`InquiryFinalizationError`) with status-aware mapping in route handlers.
+- Added service-level test coverage for a core rule (cannot finalize without a scheduled booking).
+
+Outcome:
+
+- Route file is slimmer and focused on HTTP concerns.
+- Business logic is reusable and easier to test independently.
+- `npm run test` and `npm run typecheck` both pass after extraction.
+
