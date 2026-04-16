@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { serverError, unauthorized } from '@/lib/api-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ export async function GET(_request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const inquiries = await prisma.inquiry.findMany({
@@ -105,13 +106,6 @@ export async function GET(_request: NextRequest) {
     )
   } catch (error) {
     console.error('Get user inquiries error:', error)
-    const details = error instanceof Error ? error.message : String(error)
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' ? { details } : {}),
-      },
-      { status: 500 }
-    )
+    return serverError()
   }
 }

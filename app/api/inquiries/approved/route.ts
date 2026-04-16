@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { badRequest, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET: Get all approved inquiries
 // For owners: shows all inquiries they approved with user info
@@ -9,12 +10,15 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     // Get the selected role from query parameter (for users with 'both' role)
     const searchParams = request.nextUrl.searchParams
     const selectedRole = searchParams.get('role') // 'owner' or 'user'
+    if (selectedRole && selectedRole !== 'owner' && selectedRole !== 'user') {
+      return badRequest('Invalid role. Must be "owner" or "user"')
+    }
     
     const userRole = (user.role || 'user').toLowerCase()
     
@@ -454,10 +458,7 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error('Get approved inquiries error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

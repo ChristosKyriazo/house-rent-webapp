@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
+import { forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET: Get all inquiries for a specific home (only for the owner)
 export async function GET(
@@ -11,16 +12,13 @@ export async function GET(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     // Check if user is an owner (brokers are treated like owners)
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can view inquiries' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can view inquiries')
     }
 
     const resolvedParams = await Promise.resolve(params)
@@ -46,14 +44,11 @@ export async function GET(
     })
 
     if (!home) {
-      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+      return notFound('Home not found')
     }
 
     if (home.ownerId !== user.id) {
-      return NextResponse.json(
-        { error: 'Not authorized to view inquiries for this home' },
-        { status: 403 }
-      )
+      return forbidden('Not authorized to view inquiries for this home')
     }
 
     // Get all inquiries for this home, ordered by creation date (oldest first)
@@ -115,10 +110,7 @@ export async function GET(
     )
   } catch (error) {
     console.error('Get home inquiries error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

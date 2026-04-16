@@ -215,3 +215,78 @@ Business impact:
 - Cleaner behavior for users and owners.
 - Lower risk profile for externally callable endpoints.
 
+## Phase 1 - Part 3 (Current Session)
+
+### 9) Inquiry subroute hardening sweep
+
+Files:
+
+- `app/api/inquiries/finalized/route.ts`
+- `app/api/inquiries/owner/route.ts`
+- `app/api/inquiries/me/route.ts`
+- `app/api/inquiries/approved/route.ts`
+- `app/api/inquiries/[homeKey]/route.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/route.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/reject/route.ts`
+- `app/api/inquiries/[homeKey]/[inquiryId]/finalize/route.ts`
+
+What changed:
+
+- Standardized auth and server error handling through shared API helpers.
+- Added strict numeric parsing for `inquiryId` route params in action routes.
+- Replaced broad ad-hoc `403/404/400` blocks with shared helper paths for clearer consistency.
+- Removed remaining internal-error detail leakage patterns from user-facing responses.
+
+Why it matters:
+
+- Inquiry lifecycle endpoints now behave consistently under invalid input and unauthorized access.
+- Lower chance of subtle auth bypasses due to inconsistent guard code.
+
+Business impact:
+
+- Fewer production support issues around inquiry actions and finalization flows.
+- More predictable API contracts for frontend and future partner integrations.
+
+### 10) Ratings API hardening sweep
+
+Files:
+
+- `app/api/ratings/route.ts`
+- `app/api/ratings/[userId]/route.ts`
+- `app/api/ratings/update/[id]/route.ts`
+- `app/api/ratings/home/[homeKey]/route.ts`
+
+What changed:
+
+- Added strict integer parsing for `userId`, `ratingId`, and `ratedUserId`.
+- Standardized error handling via shared API helpers.
+- Normalized auth failure responses and reduced inconsistent message patterns.
+
+Why it matters:
+
+- Prevents invalid ID payloads from reaching database operations.
+- Keeps rating create/update/read behavior stable and easier to reason about.
+
+Business impact:
+
+- Better reliability for trust features (ratings and reputation signals).
+- Reduced operational noise from malformed requests.
+
+## Phase 1 Completion Status
+
+Phase 1 is functionally complete for the targeted hardening scope:
+
+- booking and availability safety
+- notifications and inquiries validation/auth consistency
+- ratings endpoint validation/auth consistency
+- branching and delivery documentation for stakeholders
+- dependency surface cleanup
+
+Remaining blocker before a strict green CI gate:
+
+- repository-wide typecheck currently fails due to unrelated in-progress schema mismatch in `app/api/homes/promote/route.ts` (new fields not present in Prisma model yet).
+
+Recommendation:
+
+- treat `homes/promote` as a separate feature track and either complete its schema migration or keep it out of the hardening PR gate until stabilized.
+

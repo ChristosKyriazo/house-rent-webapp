@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  badRequest,
+  forbidden,
+  notFound,
+  parsePositiveInt,
+  serverError,
+  unauthorized,
+} from '@/lib/api-utils'
 
 // GET: Get inquiry details (for finalize modal)
 export async function GET(
@@ -10,14 +18,18 @@ export async function GET(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const { homeKey, inquiryId } = resolvedParams
+    const { inquiryId } = resolvedParams
+    const parsedInquiryId = parsePositiveInt(inquiryId)
+    if (!parsedInquiryId) {
+      return badRequest('Invalid inquiry ID')
+    }
 
     const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parseInt(inquiryId) },
+      where: { id: parsedInquiryId },
       include: {
         home: {
           select: {
@@ -48,24 +60,18 @@ export async function GET(
     })
 
     if (!inquiry) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFound('Inquiry not found')
     }
 
     // Verify user is authorized (must be either owner or the user who made the inquiry)
     if (user.id !== inquiry.home.owner.id && user.id !== inquiry.user.id) {
-      return NextResponse.json(
-        { error: 'Not authorized to view this inquiry' },
-        { status: 403 }
-      )
+      return forbidden('Not authorized to view this inquiry')
     }
 
     return NextResponse.json({ inquiry }, { status: 200 })
   } catch (error) {
     console.error('Get inquiry error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -77,34 +83,32 @@ export async function PATCH(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     // Check if user is an owner (brokers are treated like owners)
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can manage inquiries' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can manage inquiries')
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const { homeKey, inquiryId } = resolvedParams
+    const { inquiryId } = resolvedParams
+    const parsedInquiryId = parsePositiveInt(inquiryId)
+    if (!parsedInquiryId) {
+      return badRequest('Invalid inquiry ID')
+    }
 
     const body = await request.json()
     const { action, contactInfo } = body // 'approve' or 'dismiss', and optional contactInfo
 
     if (!action || (action !== 'approve' && action !== 'dismiss')) {
-      return NextResponse.json(
-        { error: 'Invalid action. Must be "approve" or "dismiss"' },
-        { status: 400 }
-      )
+      return badRequest('Invalid action. Must be "approve" or "dismiss"')
     }
 
     // Find the inquiry
     const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parseInt(inquiryId) },
+      where: { id: parsedInquiryId },
       include: {
         home: {
           select: {
@@ -117,15 +121,12 @@ export async function PATCH(
     })
 
     if (!inquiry) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFound('Inquiry not found')
     }
 
     // Verify the home belongs to the user
     if (inquiry.home.ownerId !== user.id) {
-      return NextResponse.json(
-        { error: 'Not authorized to manage this inquiry' },
-        { status: 403 }
-      )
+      return forbidden('Not authorized to manage this inquiry')
     }
 
     // Get the inquiry user and home for notifications
@@ -153,7 +154,7 @@ export async function PATCH(
 
     if (action === 'approve') {
       // Mark as approved and store contact info
-      const updateData: any = { 
+      const updateData: { approved: boolean; dismissed: boolean; contactInfo?: string } = {
         approved: true,
         dismissed: false // Ensure dismissed is false when approving
       }
@@ -278,9 +279,6 @@ export async function PATCH(
     }
   } catch (error) {
     console.error('Manage inquiry error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }

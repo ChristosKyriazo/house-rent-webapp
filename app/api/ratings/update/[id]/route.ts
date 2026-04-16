@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
 
 // PUT: Update an existing rating (for editing)
 export async function PUT(
@@ -10,31 +11,24 @@ export async function PUT(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const ratingId = parseInt(resolvedParams.id)
-
-    if (isNaN(ratingId)) {
-      return NextResponse.json({ error: 'Invalid rating ID' }, { status: 400 })
+    const ratingId = parsePositiveInt(resolvedParams.id)
+    if (!ratingId) {
+      return badRequest('Invalid rating ID')
     }
 
     const body = await request.json()
     const { score, comment } = body
 
     if (score === undefined && comment === undefined) {
-      return NextResponse.json(
-        { error: 'At least one field (score or comment) must be provided' },
-        { status: 400 }
-      )
+      return badRequest('At least one field (score or comment) must be provided')
     }
 
     if (score !== undefined && (score < 1 || score > 5)) {
-      return NextResponse.json(
-        { error: 'Score must be between 1 and 5' },
-        { status: 400 }
-      )
+      return badRequest('Score must be between 1 and 5')
     }
 
     // Check if rating exists and belongs to current user
@@ -43,14 +37,11 @@ export async function PUT(
     })
 
     if (!existingRating) {
-      return NextResponse.json({ error: 'Rating not found' }, { status: 404 })
+      return notFound('Rating not found')
     }
 
     if (existingRating.raterId !== user.id) {
-      return NextResponse.json(
-        { error: 'You can only edit your own ratings' },
-        { status: 403 }
-      )
+      return forbidden('You can only edit your own ratings')
     }
 
     // Check if rating is within 3 days of creation
@@ -59,10 +50,7 @@ export async function PUT(
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
     
     if (ratingDate <= threeDaysAgo) {
-      return NextResponse.json(
-        { error: 'Rating can only be edited within 3 days of creation' },
-        { status: 403 }
-      )
+      return forbidden('Rating can only be edited within 3 days of creation')
     }
 
     // Update the rating
@@ -77,10 +65,7 @@ export async function PUT(
     return NextResponse.json({ rating: updatedRating }, { status: 200 })
   } catch (error) {
     console.error('Update rating error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

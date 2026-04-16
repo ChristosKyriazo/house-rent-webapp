@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { notFound, serverError, unauthorized } from '@/lib/api-utils'
 
 type RatingRow = Awaited<ReturnType<typeof prisma.rating.findMany>>[number]
 type HomeRating = RatingRow & {
@@ -14,13 +15,13 @@ type HomeRating = RatingRow & {
 // GET: Get all ratings for a specific house
 // Returns ratings made by both owner and user for finalized inquiries on this home
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ homeKey: string }> | { homeKey: string } }
 ) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
@@ -44,7 +45,7 @@ export async function GET(
     })
 
     if (!home) {
-      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+      return notFound('Home not found')
     }
 
     // Get all finalized inquiries for this home
@@ -166,10 +167,7 @@ export async function GET(
     return NextResponse.json({ ratings }, { status: 200 })
   } catch (error) {
     console.error('Get home ratings error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

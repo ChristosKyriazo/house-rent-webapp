@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { forbidden, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET: Get all inquiries for homes owned by the current user
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     // Check if user is an owner (brokers are treated like owners)
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can view inquiries' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can view inquiries')
     }
 
     // Get all homes owned by the user
@@ -91,10 +89,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Get owner inquiries error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

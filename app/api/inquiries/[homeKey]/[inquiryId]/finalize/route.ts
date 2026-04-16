@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
 
 // POST: Initiate finalization (send notification to other party)
 export async function POST(
@@ -10,15 +11,19 @@ export async function POST(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const { homeKey, inquiryId } = resolvedParams
+    const { inquiryId } = resolvedParams
+    const parsedInquiryId = parsePositiveInt(inquiryId)
+    if (!parsedInquiryId) {
+      return badRequest('Invalid inquiry ID')
+    }
 
     // Find the inquiry
     const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parseInt(inquiryId) },
+      where: { id: parsedInquiryId },
       include: {
         home: {
           select: {
@@ -48,23 +53,17 @@ export async function POST(
     })
 
     if (!inquiry) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFound('Inquiry not found')
     }
 
     // Check if inquiry is approved
     if (!inquiry.approved) {
-      return NextResponse.json(
-        { error: 'Inquiry must be approved before finalization' },
-        { status: 400 }
-      )
+      return badRequest('Inquiry must be approved before finalization')
     }
 
     // Check if already finalized
     if (inquiry.finalized) {
-      return NextResponse.json(
-        { error: 'Inquiry already finalized' },
-        { status: 400 }
-      )
+      return badRequest('Inquiry already finalized')
     }
 
     // Only owners/brokers can initiate finalization
@@ -72,10 +71,7 @@ export async function POST(
     const isOwner = user.id === inquiry.home.ownerId || userRole === 'broker' || userRole === 'both'
     
     if (!isOwner) {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can initiate finalization' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can initiate finalization')
     }
 
     // Check if there's a scheduled booking for this inquiry
@@ -87,10 +83,7 @@ export async function POST(
     })
 
     if (!scheduledBooking) {
-      return NextResponse.json(
-        { error: 'Can only finalize after a scheduled meeting' },
-        { status: 400 }
-      )
+      return badRequest('Can only finalize after a scheduled meeting')
     }
 
     // Owner is initiating - notify the user for approval
@@ -116,10 +109,7 @@ export async function POST(
     )
   } catch (error) {
     console.error('Finalize inquiry error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -131,25 +121,26 @@ export async function PATCH(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const { homeKey, inquiryId } = resolvedParams
+    const { inquiryId } = resolvedParams
+    const parsedInquiryId = parsePositiveInt(inquiryId)
+    if (!parsedInquiryId) {
+      return badRequest('Invalid inquiry ID')
+    }
 
     const body = await request.json()
     const { action } = body // 'approve' or 'dismiss'
 
     if (!action || (action !== 'approve' && action !== 'dismiss')) {
-      return NextResponse.json(
-        { error: 'Invalid action. Must be "approve" or "dismiss"' },
-        { status: 400 }
-      )
+      return badRequest('Invalid action. Must be "approve" or "dismiss"')
     }
 
     // Find the inquiry
     const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parseInt(inquiryId) },
+      where: { id: parsedInquiryId },
       include: {
         home: {
           select: {
@@ -174,15 +165,12 @@ export async function PATCH(
     })
 
     if (!inquiry) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFound('Inquiry not found')
     }
 
     // Verify user is authorized (must be either owner or the user who made the inquiry)
     if (user.id !== inquiry.home.ownerId && user.id !== inquiry.user.id) {
-      return NextResponse.json(
-        { error: 'Not authorized to manage this finalization' },
-        { status: 403 }
-      )
+      return forbidden('Not authorized to manage this finalization')
     }
 
     if (action === 'approve') {
@@ -330,10 +318,7 @@ export async function PATCH(
     }
   } catch (error) {
     console.error('Manage finalization error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

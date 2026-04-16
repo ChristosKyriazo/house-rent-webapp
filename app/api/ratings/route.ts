@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { badRequest, forbidden, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
 
 // GET: Get ratings for current user or a specific user by userId query param
 export async function GET(request: NextRequest) {
@@ -11,15 +12,16 @@ export async function GET(request: NextRequest) {
     let targetUserId: number
     if (userIdParam) {
       // Fetch ratings for specific user (public view)
-      targetUserId = parseInt(userIdParam)
-      if (isNaN(targetUserId)) {
-        return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
+      const parsedUserId = parsePositiveInt(userIdParam)
+      if (!parsedUserId) {
+        return badRequest('Invalid user ID')
       }
+      targetUserId = parsedUserId
     } else {
       // Get current user's ratings (requires authentication)
       const user = await getCurrentUser()
       if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+        return unauthorized()
       }
       targetUserId = user.id
     }
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ratings }, { status: 200 })
   } catch (error) {
     console.error('Get ratings error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return serverError()
   }
 }
 
@@ -38,31 +40,23 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
     const { ratedUserId, type, score, comment } = body
+    const parsedRatedUserId = parsePositiveInt(ratedUserId)
 
-    if (!ratedUserId || !type || score === undefined) {
-      return NextResponse.json(
-        { error: 'ratedUserId, type, and score are required' },
-        { status: 400 }
-      )
+    if (!parsedRatedUserId || !type || score === undefined) {
+      return badRequest('ratedUserId, type, and score are required')
     }
 
     if (score < 1 || score > 5) {
-      return NextResponse.json(
-        { error: 'Score must be between 1 and 5' },
-        { status: 400 }
-      )
+      return badRequest('Score must be between 1 and 5')
     }
 
     if (type !== 'owner' && type !== 'renter') {
-      return NextResponse.json(
-        { error: 'Type must be "owner" or "renter"' },
-        { status: 400 }
-      )
+      return badRequest('Type must be "owner" or "renter"')
     }
 
     // Verify that there's a relationship between these users
@@ -77,7 +71,7 @@ export async function POST(request: NextRequest) {
         where: {
           userId: user.id,
           home: {
-            ownerId: parseInt(ratedUserId),
+            ownerId: parsedRatedUserId,
           },
           finalized: true,
         },
@@ -93,7 +87,7 @@ export async function POST(request: NextRequest) {
       booking = await prisma.booking.findFirst({
         where: {
           ownerId: user.id,
-          userId: parseInt(ratedUserId),
+          userId: parsedRatedUserId,
           startTime: {
             lt: now, // Meeting has started/passed
           },
@@ -106,10 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!canRate) {
-      return NextResponse.json(
-        { error: 'Cannot rate this user. A completed meeting is required.' },
-        { status: 403 }
-      )
+      return forbidden('Cannot rate this user. A completed meeting is required.')
     }
 
     // Additional check for brokers: they can only rate once per user
@@ -120,16 +111,13 @@ export async function POST(request: NextRequest) {
       const existingRating = await prisma.rating.findFirst({
         where: {
           raterId: user.id,
-          ratedUserId: parseInt(ratedUserId),
+          ratedUserId: parsedRatedUserId,
           type: 'renter',
         },
       })
       
       if (existingRating) {
-        return NextResponse.json(
-          { error: 'Brokers can only rate a user once.' },
-          { status: 403 }
-        )
+        return forbidden('Brokers can only rate a user once.')
       }
     }
     // Note: Users with role "both" (owner and broker) are treated as owners and can rate multiple times
@@ -139,7 +127,7 @@ export async function POST(request: NextRequest) {
     const rating = await prisma.rating.create({
       data: {
         raterId: user.id,
-        ratedUserId: parseInt(ratedUserId),
+        ratedUserId: parsedRatedUserId,
         type: type,
         score: score,
         comment: comment || null,
@@ -149,9 +137,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ rating }, { status: 200 })
   } catch (error) {
     console.error('Create rating error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }

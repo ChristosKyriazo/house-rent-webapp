@@ -1,24 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
 
 // POST: Reject inquiry (owner/broker only, after scheduled meeting)
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)
-    const { homeKey, inquiryId } = resolvedParams
+    const { inquiryId } = resolvedParams
+    const parsedInquiryId = parsePositiveInt(inquiryId)
+    if (!parsedInquiryId) {
+      return badRequest('Invalid inquiry ID')
+    }
 
     // Find the inquiry
     const inquiry = await prisma.inquiry.findUnique({
-      where: { id: parseInt(inquiryId) },
+      where: { id: parsedInquiryId },
       include: {
         home: {
           select: {
@@ -48,7 +53,7 @@ export async function POST(
     })
 
     if (!inquiry) {
-      return NextResponse.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFound('Inquiry not found')
     }
 
     // Verify user is the owner/broker
@@ -56,10 +61,7 @@ export async function POST(
     const isOwner = user.id === inquiry.home.ownerId || userRole === 'broker' || userRole === 'both'
     
     if (!isOwner) {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can reject inquiries' },
-        { status: 403 }
-      )
+      return forbidden('Only owners and brokers can reject inquiries')
     }
 
     // Check if there's a scheduled booking for this inquiry
@@ -71,10 +73,7 @@ export async function POST(
     })
 
     if (!scheduledBooking) {
-      return NextResponse.json(
-        { error: 'Can only reject after a scheduled meeting' },
-        { status: 400 }
-      )
+      return badRequest('Can only reject after a scheduled meeting')
     }
 
     // Mark inquiry as dismissed (rejected)
@@ -104,10 +103,7 @@ export async function POST(
     )
   } catch (error) {
     console.error('Reject inquiry error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 

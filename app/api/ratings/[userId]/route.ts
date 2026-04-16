@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { badRequest, parsePositiveInt, serverError } from '@/lib/api-utils'
 
 // GET: Get all individual ratings for a specific user by type
 export async function GET(
@@ -8,20 +9,16 @@ export async function GET(
 ) {
   try {
     const resolvedParams = await Promise.resolve(params)
-    const userId = parseInt(resolvedParams.userId)
-
-    if (isNaN(userId)) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
+    const userId = parsePositiveInt(resolvedParams.userId)
+    if (!userId) {
+      return badRequest('Invalid user ID')
     }
 
     const searchParams = request.nextUrl.searchParams
     const type = searchParams.get('type') // 'owner' or 'renter'
 
     if (!type || (type !== 'owner' && type !== 'renter')) {
-      return NextResponse.json(
-        { error: 'Type parameter is required and must be "owner" or "renter"' },
-        { status: 400 }
-      )
+      return badRequest('Type parameter is required and must be "owner" or "renter"')
     }
 
     // Fetch all ratings for this user with the specified type
@@ -48,10 +45,7 @@ export async function GET(
     return NextResponse.json({ ratings }, { status: 200 })
   } catch (error) {
     console.error('Get user ratings error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
