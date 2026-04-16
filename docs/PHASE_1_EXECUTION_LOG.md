@@ -353,3 +353,25 @@ Outcome:
 - Business logic is reusable and easier to test independently.
 - `npm run test` and `npm run typecheck` both pass after extraction.
 
+### D) Notification mutation service extraction (Phase 2 maintainability)
+
+Files:
+
+- `lib/services/notification-service.ts`
+- `app/api/notifications/route.ts`
+- `tests/services/notification-service.test.ts`
+
+What changed:
+
+- Moved notification mutation operations into a dedicated service:
+  - delete notification (ownership-aware)
+  - mark all viewed
+  - create notification
+- Added explicit domain error (`NotificationServiceError`) for status-aware route mapping.
+- Added service-level test coverage for ownership/not-found deletion handling.
+
+Outcome:
+
+- Notification route now keeps business logic out of handler branches.
+- Mutation paths are easier to reuse, test, and extend without route bloat.
+
