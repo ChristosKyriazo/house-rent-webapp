@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { translations } from '@/lib/translations'
+import {
+  badRequest,
+  parsePositiveInt,
+  serverError,
+  unauthorized,
+} from '@/lib/api-utils'
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     // Get language from query parameter (default to 'en')
@@ -325,10 +331,7 @@ export async function GET(request: NextRequest) {
     }, { status: 200 })
   } catch (error) {
     console.error('Get notifications error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -337,20 +340,20 @@ export async function DELETE(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const searchParams = request.nextUrl.searchParams
-    const notificationId = searchParams.get('id')
+    const notificationId = parsePositiveInt(searchParams.get('id'))
 
     if (!notificationId) {
-      return NextResponse.json({ error: 'Notification ID required' }, { status: 400 })
+      return badRequest('Notification ID required')
     }
 
     // Mark notification as deleted (don't actually delete it)
-    await prisma.notification.update({
+    const updated = await prisma.notification.updateMany({
       where: {
-        id: parseInt(notificationId),
+        id: notificationId,
         recipientId: user.id, // Ensure user can only delete their own notifications
       },
       data: {
@@ -358,13 +361,14 @@ export async function DELETE(request: NextRequest) {
       },
     })
 
+    if (updated.count === 0) {
+      return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
+    }
+
     return NextResponse.json({ message: 'Notification deleted' }, { status: 200 })
   } catch (error) {
     console.error('Delete notification error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -373,7 +377,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
@@ -395,13 +399,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ message: 'All notifications marked as viewed' }, { status: 200 })
     }
 
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+    return badRequest('Invalid request')
   } catch (error) {
     console.error('Mark notifications as viewed error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -410,27 +411,27 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
     const { recipientId, role, type, homeKey, userId, ownerKey } = body
 
-    if (!recipientId || !role || !type) {
-      return NextResponse.json(
-        { error: 'recipientId, role, and type are required' },
-        { status: 400 }
-      )
+    const parsedRecipientId = parsePositiveInt(recipientId)
+    const parsedUserId = userId ? parsePositiveInt(userId) : null
+
+    if (!parsedRecipientId || !role || !type) {
+      return badRequest('recipientId, role, and type are required')
     }
 
     // Create notification
     const notification = await prisma.notification.create({
       data: {
-        recipientId: parseInt(recipientId),
+        recipientId: parsedRecipientId,
         role: role,
         type: type,
         homeKey: homeKey || null,
-        userId: userId ? parseInt(userId) : null,
+        userId: parsedUserId,
         ownerKey: ownerKey || null,
       },
     })
@@ -438,9 +439,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ notification }, { status: 201 })
   } catch (error) {
     console.error('Create notification error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }

@@ -168,3 +168,50 @@ Business impact:
 2. Add request schema validation for route payloads (lightweight runtime checks or Zod).
 3. Add automated integration tests for booking create and reschedule conflict scenarios.
 
+## Phase 1 - Part 2 (Current Session)
+
+### 7) Notifications API validation and safer ownership checks
+
+Files:
+
+- `app/api/notifications/route.ts`
+
+What changed:
+
+- Reused shared API utility helpers for unauthorized/bad-request/server-error responses.
+- Added strict numeric parsing for `notificationId`, `recipientId`, and optional `userId`.
+- Switched delete behavior to `updateMany` plus explicit not-found response to avoid exceptions leaking behavior details.
+
+Why it matters:
+
+- Reduces invalid input edge cases and inconsistent error handling.
+- Improves authorization safety by ensuring IDs are validated before DB writes.
+
+Business impact:
+
+- Fewer support incidents caused by malformed requests.
+- More predictable frontend behavior for notification actions.
+
+### 8) Inquiries API validation and role guardrails
+
+Files:
+
+- `app/api/inquiries/route.ts`
+
+What changed:
+
+- Reused shared API utility helpers across GET/POST/DELETE.
+- Added strict parsing for `homeId` in request body/query.
+- Added explicit guardrail preventing owners from creating inquiries on their own listings.
+- Removed internal DB error details from public API responses.
+
+Why it matters:
+
+- Tightens API contract and reduces accidental misuse.
+- Prevents information disclosure through verbose error payloads.
+
+Business impact:
+
+- Cleaner behavior for users and owners.
+- Lower risk profile for externally callable endpoints.
+

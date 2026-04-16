@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  badRequest,
+  notFound,
+  parsePositiveInt,
+  serverError,
+  unauthorized,
+} from '@/lib/api-utils'
 
 // GET: Get all inquiries for the current user
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const inquiries = await prisma.inquiry.findMany({
@@ -41,10 +48,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ inquiryStatus, inquiryIds, finalizedHomes }, { status: 200 })
   } catch (error) {
     console.error('Get inquiries error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -53,24 +57,21 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
-    const { homeId } = body
+    const parsedHomeId = parsePositiveInt(body?.homeId)
 
-    if (!homeId) {
-      return NextResponse.json(
-        { error: 'Home ID is required' },
-        { status: 400 }
-      )
+    if (!parsedHomeId) {
+      return badRequest('Home ID is required')
     }
 
     // Check if inquiry already exists
     const existing = await prisma.inquiry.findFirst({
       where: {
         userId: user.id,
-        homeId: parseInt(homeId),
+        homeId: parsedHomeId,
       },
     })
 
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Get the home to find the owner
     const home = await prisma.home.findUnique({
-      where: { id: parseInt(homeId) },
+      where: { id: parsedHomeId },
       include: {
         owner: {
           select: {
@@ -95,13 +96,17 @@ export async function POST(request: NextRequest) {
     })
 
     if (!home) {
-      return NextResponse.json({ error: 'Home not found' }, { status: 404 })
+      return notFound('Home not found')
+    }
+
+    if (home.owner.id === user.id) {
+      return badRequest('Owners cannot create inquiries on their own properties')
     }
 
     const inquiry = await prisma.inquiry.create({
       data: {
         userId: user.id,
-        homeId: parseInt(homeId),
+        homeId: parsedHomeId,
       },
     })
 
@@ -132,19 +137,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    // Handle other Prisma errors
-    if (error?.code) {
-      return NextResponse.json(
-        { error: 'Database error', details: error.message },
-        { status: 500 }
-      )
-    }
-    
-    return NextResponse.json(
-      { error: 'Internal server error', details: error?.message || 'Unknown error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
@@ -153,22 +146,19 @@ export async function DELETE(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const searchParams = request.nextUrl.searchParams
-    const homeId = searchParams.get('homeId')
+    const homeId = parsePositiveInt(searchParams.get('homeId'))
 
     if (!homeId) {
-      return NextResponse.json(
-        { error: 'Home ID is required' },
-        { status: 400 }
-      )
+      return badRequest('Home ID is required')
     }
 
     // Get the home to find the owner and homeKey for notification deletion
     const home = await prisma.home.findUnique({
-      where: { id: parseInt(homeId) },
+      where: { id: homeId },
       select: {
         id: true,
         key: true,
@@ -177,17 +167,14 @@ export async function DELETE(request: NextRequest) {
     })
 
     if (!home) {
-      return NextResponse.json(
-        { error: 'Home not found' },
-        { status: 404 }
-      )
+      return notFound('Home not found')
     }
 
     // Delete the inquiry
     await prisma.inquiry.deleteMany({
       where: {
         userId: user.id,
-        homeId: parseInt(homeId),
+        homeId: homeId,
       },
     })
 
@@ -213,10 +200,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Inquiry removed' }, { status: 200 })
   } catch (error) {
     console.error('Delete inquiry error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return serverError()
   }
 }
 
