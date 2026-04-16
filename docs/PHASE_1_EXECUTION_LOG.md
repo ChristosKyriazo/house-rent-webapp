@@ -290,3 +290,46 @@ Recommendation:
 
 - treat `homes/promote` as a separate feature track and either complete its schema migration or keep it out of the hardening PR gate until stabilized.
 
+## Phase 2 Kickoff (Current Session)
+
+### A) Removed typecheck blocker by aligning promotions schema
+
+Files:
+
+- `prisma/schema.prisma`
+- `app/api/homes/promote/route.ts`
+
+What changed:
+
+- Added missing `Home` fields back to Prisma schema:
+  - `promotedUntil`
+  - `premiumPromotedUntil`
+- Regenerated Prisma client.
+- Hardened promotions route with shared API helpers and strict days parsing (`7` or `30` only).
+
+Outcome:
+
+- Repository typecheck is now green again.
+- Promotions endpoint follows the same validation/error patterns as other hardened routes.
+
+### B) Phase 2 test baseline introduced
+
+Files:
+
+- `vitest.config.ts`
+- `tests/api/bookings.post.test.ts`
+- `tests/api/availability.patch.test.ts`
+- `package.json`
+
+What changed:
+
+- Added Vitest-based API test runner (`test`, `test:integration` scripts).
+- Added two integration-style route tests for core risk paths:
+  - booking creation rejects invalid time ranges pre-transaction
+  - availability patch rejects cross-home updates
+
+Outcome:
+
+- `npm run test:integration` passes.
+- Hardening work now has executable checks beyond lint/typecheck.
+
