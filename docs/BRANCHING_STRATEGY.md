@@ -1,61 +1,79 @@
-# Branching Strategy and Promotion Workflow
+# Branching Strategy Playbook
 
-This project uses a staged promotion model so changes are reversible and production stays stable.
+This is the operational guide for humans working on this repository.
 
-## Branch Purposes
+If you follow this file exactly, you can:
 
-- `main`: production-ready code only. Every commit should be deployable.
-- `dev`: integration branch for approved feature work and hardening work.
-- `hardening/*`: production-readiness workstreams (security, testing, refactors, reliability).
-- `feature/*`: scoped product changes (new UI, small API additions, UX improvements).
-- `hotfix/*`: urgent production fixes branched from `main` and merged back into both `main` and `dev`.
-- `backup/*`: point-in-time safety branches before major transitions.
+- make changes safely
+- avoid breaking production
+- recover quickly if something goes wrong
 
-## Current Safety Snapshot
+## Core Idea in Simple Words
 
-- Backup branch: `backup/pre-production-20260415`
-- Snapshot tag: `pre-production-snapshot-20260415`
-- Local source archive: `../webapp-source-backup-20260415.tar.gz`
+Think of branches like roads:
 
-Use this snapshot to recover quickly if hardening work causes regressions.
+- `main` is the public highway (stable, production-ready)
+- `dev` is the testing road (where finished work comes together)
+- `feature/*` and `hardening/*` are private side roads (where work is created)
 
-## Daily Development Flow
+Work is always born on a side road, tested on `dev`, and only then promoted to `main`.
 
-1. Start from latest `dev`:
+## Branch Roles
 
-   ```bash
-   git checkout dev
-   git pull origin dev
-   ```
+- `main`: stable production line, always deployable
+- `dev`: integration line for reviewed changes
+- `feature/*`: normal product work (new user-facing behavior)
+- `hardening/*`: reliability/security/testing/refactor work
+- `hotfix/*`: urgent production bug fix from `main`
+- `backup/*`: safety snapshot branches before big transitions
 
-2. Create a scoped working branch:
+## One Rule You Must Never Break
 
-   ```bash
-   # for product work
-   git checkout -b feature/<short-name>
+Never work directly on `main`.
 
-   # for production-readiness work
-   git checkout -b hardening/<short-name>
-   ```
+## Daily Workflow (Step-by-Step)
 
-3. Implement in small commits:
+### Step 1: Update local `dev`
 
-   ```bash
-   git add -A
-   git commit -m "type: short description"
-   ```
+```bash
+git checkout dev
+git pull origin dev
+```
 
-4. Push and open PR into `dev`:
+### Step 2: Create your work branch
 
-   ```bash
-   git push -u origin <branch-name>
-   ```
+```bash
+# product work
+git checkout -b feature/<short-topic>
 
-5. Merge to `dev` only after checks pass (`lint`, `typecheck`, tests when present).
+# production hardening work
+git checkout -b hardening/<short-topic>
+```
 
-## Promotion from `dev` to `main`
+### Step 3: Make small commits
 
-Promote only when a release candidate is stable.
+```bash
+git add -A
+git commit -m "type(scope): short message"
+```
+
+### Step 4: Push your branch
+
+```bash
+git push -u origin <branch-name>
+```
+
+### Step 5: Open PR to `dev`
+
+Merge only when checks pass:
+
+- lint
+- typecheck
+- tests (unit/integration/e2e where applicable)
+
+## Promotion to Production (`dev` -> `main`)
+
+Use this only when a release candidate is ready.
 
 ```bash
 git checkout dev
@@ -69,62 +87,78 @@ git push origin main
 git checkout dev
 ```
 
-If `--ff-only` fails, create a PR from `dev` to `main` and merge with review.
+If `--ff-only` fails:
 
-## Hotfix Workflow (Production Incident)
+1. open PR from `dev` to `main`
+2. resolve conflicts with review
+3. merge with checks
 
-1. Branch from `main`:
+## Hotfix Process (Production Incident)
 
-   ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b hotfix/<issue-name>
-   ```
+### Step 1: branch from `main`
 
-2. Fix, test, push, PR to `main`.
-3. After merge to `main`, sync fix back to `dev`:
+```bash
+git checkout main
+git pull origin main
+git checkout -b hotfix/<issue-name>
+```
 
-   ```bash
-   git checkout dev
-   git pull origin dev
-   git merge main
-   git push origin dev
-   ```
+### Step 2: fix + test + PR to `main`
 
-## Rollback and Recovery
+### Step 3: sync back to `dev`
 
-- Quick rollback to snapshot:
+```bash
+git checkout dev
+git pull origin dev
+git merge main
+git push origin dev
+```
 
-  ```bash
-  git checkout backup/pre-production-20260415
-  ```
+## Rollback Process
 
-- Restore `dev` to snapshot state (non-destructive if branch is behind):
+### Fast rollback to backup snapshot
 
-  ```bash
-  git checkout dev
-  git merge --ff-only backup/pre-production-20260415
-  ```
+```bash
+git checkout backup/pre-production-20260415
+```
 
-- Recover exact code from tag:
+### Restore `dev` to snapshot state
 
-  ```bash
-  git checkout -b restore/preprod pre-production-snapshot-20260415
-  ```
+```bash
+git checkout dev
+git merge --ff-only backup/pre-production-20260415
+```
 
-## Guardrails for Production-Readiness Phase
+### Restore from tag
 
-- Keep `main` protected (no direct commits).
-- Treat `dev` as integration, not a long-lived personal branch.
-- Prefer branches that do one concern only (security, validation, booking logic, tests, observability).
-- Keep PRs small and reversible.
-- Do not mix unrelated refactors with feature additions.
+```bash
+git checkout -b restore/preprod pre-production-snapshot-20260415
+```
 
-## Suggested Naming Conventions
+## Practical Team Rules
+
+- Keep PRs focused on one concern.
+- Do not mix feature work and hardening work in one PR.
+- Prefer small and reversible commits.
+- Never bypass checks on `main`.
+- If unsure, stop and ask before merging to `main`.
+
+## Naming Examples
 
 - `feature/owner-notes-card`
 - `feature/inquiry-status-filter`
 - `hardening/api-input-validation`
 - `hardening/booking-overlap-invariants`
 - `hotfix/booking-timezone-regression`
+
+## Quick Start for New Team Members
+
+If this is your first day:
+
+1. checkout `dev`
+2. pull latest
+3. create your own `feature/*` branch
+4. commit small
+5. PR into `dev`
+6. never touch `main` directly
 

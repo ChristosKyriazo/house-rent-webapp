@@ -150,7 +150,12 @@ Point `DATABASE_URL` at your production database if you move off SQLite; keep se
 Use tags or release notes on your host if you deploy from `main`.
 
 For full branch roles, promotion steps, rollback, and hotfix handling, see `docs/BRANCHING_STRATEGY.md`.
-For production-hardening progress and stakeholder-oriented technical notes, see `docs/PHASE_1_EXECUTION_LOG.md`.
+For production-hardening guidance and stakeholder-oriented planning, use:
+- `docs/PRODUCTION_READINESS_PLAN.md`
+- `docs/BRANCHING_STRATEGY.md`
+- `docs/BUSINESS_USER_EXPERIENCE_GUIDE.md`
+- `docs/TECHNICAL_SYSTEM_AND_RISK_GUIDE.md`
+- `docs/PRODUCTION_EXECUTION_BIBLE.md`
 
 ---
 

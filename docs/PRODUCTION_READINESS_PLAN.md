@@ -2,6 +2,13 @@
 
 This plan hardens the current codebase without a rewrite.
 
+Companion documents:
+
+- `docs/BRANCHING_STRATEGY.md` (human branch workflow)
+- `docs/BUSINESS_USER_EXPERIENCE_GUIDE.md` (business/user journey view)
+- `docs/TECHNICAL_SYSTEM_AND_RISK_GUIDE.md` (full technical map + risk register)
+- `docs/PRODUCTION_EXECUTION_BIBLE.md` (strict execution playbook to beta)
+
 ## Scope Rule
 
 - 80% hardening work, 20% essential feature work.
