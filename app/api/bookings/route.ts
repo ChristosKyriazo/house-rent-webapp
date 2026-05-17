@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findBookingConflicts } from '@/lib/booking-conflicts'
-import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized } from '@/lib/api-utils'
+import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized, validateBody } from '@/lib/api-utils'
+import { createBookingSchema } from '@/lib/schemas'
 
 // GET /api/bookings - Get all bookings for the current user
 export async function GET(request: NextRequest) {
@@ -274,12 +275,11 @@ export async function POST(request: NextRequest) {
       return unauthorized()
     }
 
-    const body = await request.json()
-    const { ownerId, inquiryId, availabilityId, title, description, startTime, endTime, location } = body
+    const rawBody = await request.json()
+    const { data: body, error: validationError } = validateBody(createBookingSchema, rawBody)
+    if (validationError) return validationError
 
-    if (!title || !startTime || !endTime) {
-      return badRequest('Missing required fields')
-    }
+    const { ownerId, inquiryId, availabilityId, title, description, startTime, endTime, location } = body
 
     // If availabilityId is provided, get ownerId and homeKey from the availability
     let finalOwnerId = ownerId
@@ -346,11 +346,8 @@ export async function POST(request: NextRequest) {
       return badRequest('Owner ID is required')
     }
 
-    const rawInq = body.inquiryId
-    let finalInquiryId: number | null =
-      rawInq !== undefined && rawInq !== null && rawInq !== '' && Number.isFinite(Number(rawInq))
-        ? parseInt(String(rawInq), 10)
-        : null
+    // inquiryId is already validated by Zod as number | null | undefined
+    let finalInquiryId: number | null = body.inquiryId ?? null
 
     if (finalInquiryId === null && parsedAvailabilityId) {
       const av = await prisma.availability.findUnique({

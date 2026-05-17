@@ -1,0 +1,53 @@
+# Production Readiness Roadmap
+
+## Phase 1 — Security & Correctness
+**Goal:** Harden the API surface and automate quality gates before any traffic hits.
+
+- [x] Security headers (CSP, X-Frame-Options, CORS, HSTS) in `next.config.ts`
+- [x] Zod validation schemas for all API routes (`lib/schemas/`)
+- [x] Rate limiting middleware for external API calls (OpenAI, Google Maps)
+- [x] GitHub Actions CI workflow: lint → typecheck → test on every PR
+- [ ] Audit all authorization checks (owner/user/resource-level) across API routes
+- [ ] Encrypt Cal.com tokens at rest in the database
+- [ ] Document and pin Node.js version (`.nvmrc` + `engines` in package.json)
+- [x] Fix Vitest config to exclude `node_modules` tests (all 5 tests now pass cleanly)
+
+## Phase 2 — Observability & Operations
+**Goal:** Make production failures visible and recoverable within minutes.
+
+- [ ] Structured logging (pino) with request IDs on every API route
+- [ ] Error monitoring (Sentry) wired up with environment config
+- [ ] Health check endpoints (`/api/healthz`, `/api/readyz`)
+- [ ] Dockerfile + docker-compose for local/staging parity
+- [ ] CI/CD pipeline: GitHub Actions → deploy on merge to `main`
+- [ ] Deployment runbook documenting rollback procedure
+- [ ] Migrate from SQLite to PostgreSQL for production
+- [ ] Multi-environment config (`.env.local`, `.env.staging`, `.env.production`)
+- [ ] Add missing `.env.example` keys: `CALCOM_API_KEY`, `SENTRY_DSN`, `LOG_LEVEL`
+
+## Phase 3 — Test Coverage & Performance
+**Goal:** Catch regressions automatically and keep response times acceptable under load.
+
+- [ ] Increase Vitest coverage to ≥60% on critical paths (auth, bookings, inquiries)
+- [ ] E2E Playwright tests for full user journeys (signup → list → inquire → book → rate)
+- [ ] Coverage threshold enforced in CI (fail build below threshold)
+- [ ] Cache Google Maps geocoding results (Redis or in-memory LRU)
+- [ ] Cache OpenAI-generated descriptions (store result, skip re-generation)
+- [ ] Add retry + timeout handling for all external API calls
+- [ ] Image optimization config in `next.config.ts`
+- [ ] Fix booking creation race condition (DB-level lock or serializable transaction)
+- [ ] Load test booking endpoint at 2–3× expected peak concurrent requests
+
+## Phase 4 — Maintainability (Ongoing)
+**Goal:** Keep the codebase clean and safe to change as it grows.
+
+- [ ] Add Prettier + ESLint integration for consistent formatting
+- [ ] Reduce `any` usage to zero (currently 126 usages in API routes)
+- [ ] Migrate `lib/translations.ts` (1058 lines) to `next-intl` or `i18next`
+- [ ] Split `lib/ai-search-helpers.ts` (810 lines) into sub-modules
+- [ ] Add error boundary components for UI crash isolation
+- [ ] Add loading/skeleton components to eliminate layout shift
+- [ ] Add `eslint-plugin-security` to catch hardcoded secrets and unsafe patterns
+- [ ] Add `jsx-a11y` ESLint plugin to enforce accessibility rules
+- [ ] Feature flags (`FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS`) for safe rollouts
+- [ ] Monthly dependency audit (`npm audit`) and update cycle

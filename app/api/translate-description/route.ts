@@ -1,25 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { translateDescription } from '@/lib/description-translator'
+import { getCurrentUser } from '@/lib/auth'
+import { checkTranslationLimit } from '@/lib/rate-limit'
+import { validateBody } from '@/lib/api-utils'
+import { translateDescriptionSchema } from '@/lib/schemas'
 import OpenAI from 'openai'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { description, targetLanguage } = body
-
-    if (!description) {
-      return NextResponse.json(
-        { error: 'Description is required' },
-        { status: 400 }
-      )
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!targetLanguage || (targetLanguage !== 'el' && targetLanguage !== 'en')) {
-      return NextResponse.json(
-        { error: 'Invalid target language' },
-        { status: 400 }
-      )
+    if (!checkTranslationLimit(user.id)) {
+      return NextResponse.json({ error: 'Too many requests. Please wait before translating again.' }, { status: 429 })
     }
+
+    const rawBody = await request.json()
+    const { data: body, error: validationError } = validateBody(translateDescriptionSchema, rawBody)
+    if (validationError) return validationError
+
+    const { description, targetLanguage = 'el' } = body
 
     const openai = process.env.OPENAI_API_KEY ? new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,

@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
 import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { checkAiSearchLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
@@ -51,6 +52,13 @@ export async function POST(request: NextRequest) {
       if (user) {
         userId = user.id
         appUserOccupation = user.occupation ?? null
+
+        if (!checkAiSearchLimit(user.id)) {
+          return NextResponse.json(
+            { error: 'Too many AI search requests. Please wait before searching again.' },
+            { status: 429 }
+          )
+        }
       }
     } catch (error) {
       // User not logged in, continue without userId
