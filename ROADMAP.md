@@ -7,8 +7,8 @@
 - [x] Zod validation schemas for all API routes (`lib/schemas/`)
 - [x] Rate limiting middleware for external API calls (OpenAI, Google Maps)
 - [x] GitHub Actions CI workflow: lint → typecheck → test on every PR
-- [ ] Audit all authorization checks (owner/user/resource-level) across API routes
-- [ ] Encrypt Cal.com tokens at rest in the database
+- [x] Audit all authorization checks (owner/user/resource-level) across API routes
+- [x] Encrypt Cal.com tokens at rest in the database
 - [ ] Document and pin Node.js version (`.nvmrc` + `engines` in package.json)
 - [x] Fix Vitest config to exclude `node_modules` tests (all 5 tests now pass cleanly)
 
