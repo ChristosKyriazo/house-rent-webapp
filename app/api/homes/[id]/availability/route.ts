@@ -191,7 +191,7 @@ export async function PATCH(
       return notFound('Home not found')
     }
 
-    if (home.ownerId !== user.id && user.role !== 'broker') {
+    if (home.ownerId !== user.id) {
       return forbidden('Only the owner can update availability')
     }
 
@@ -248,8 +248,7 @@ export async function POST(
       return notFound('Home not found')
     }
 
-    // Verify user is the owner
-    if (home.ownerId !== user.id && user.role !== 'broker') {
+    if (home.ownerId !== user.id) {
       return NextResponse.json(
         { error: 'Only the owner can set availability' },
         { status: 403 }

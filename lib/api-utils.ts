@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 
 export function badRequest(error: string) {
   return NextResponse.json({ error }, { status: 400 })
@@ -31,4 +32,22 @@ export function parseValidDate(value: unknown): Date | null {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
   return date
+}
+
+/**
+ * Validate a parsed request body against a Zod schema.
+ * Returns { data } on success or a 400 NextResponse on failure.
+ */
+export function validateBody<T>(
+  schema: z.ZodSchema<T>,
+  body: unknown
+): { data: T; error?: never } | { data?: never; error: NextResponse } {
+  const result = schema.safeParse(body)
+  if (!result.success) {
+    const messages = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`)
+    return {
+      error: NextResponse.json({ error: 'Validation failed', details: messages }, { status: 400 }),
+    }
+  }
+  return { data: result.data }
 }

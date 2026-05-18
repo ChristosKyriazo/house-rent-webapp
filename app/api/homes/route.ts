@@ -5,6 +5,9 @@ import { calculatePropertyDistances } from '@/lib/google-maps'
 import { removeGreekAccents, resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue } from '@/lib/translations'
+import { validateBody } from '@/lib/api-utils'
+import { createHomeSchema } from '@/lib/schemas'
+import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 
 // GET /api/homes - list all homes with optional filters
@@ -424,7 +427,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
+    const rawBody = await request.json()
+    const { data: body, error: validationError } = validateBody(createHomeSchema, rawBody)
+    if (validationError) return validationError
+
+    const resolveParking = (p: boolean | 'true' | 'false' | null | undefined): boolean | null => {
+      if (p === null || p === undefined) return null
+      if (typeof p === 'boolean') return p
+      return p === 'true'
+    }
+    const resolveYear = (v: number | '' | null | undefined): number | null => {
+      if (v === null || v === undefined || v === '') return null
+      return Number(v)
+    }
+    const resolveEnergyClass = (v: string | undefined): string | null => {
+      if (!v) return null
+      return toEnglishValue(v.trim())?.toUpperCase() ?? v.trim().toUpperCase()
+    }
+
     const {
       title,
       description,
@@ -448,14 +468,6 @@ export async function POST(request: NextRequest) {
       energyClass,
       useAIDescription,
     } = body
-
-    // Minimal validation
-    if (!title || !city || !country || !pricePerMonth || !sizeSqMeters) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
 
     // Parse availableFrom date - handle both date strings and empty values
     let availableFromDate: Date
@@ -505,6 +517,10 @@ export async function POST(request: NextRequest) {
     }
 
     let distanceDetails: any = null
+
+    if (!checkMapsLimit(user.id)) {
+      return NextResponse.json({ error: 'Too many requests. Please wait before creating another listing.' }, { status: 429 })
+    }
 
     try {
       console.log('Calculating distances for new property:', { street, area: englishArea, city: englishCity, country: englishCountry })
@@ -577,6 +593,10 @@ export async function POST(request: NextRequest) {
     let finalDescriptionGreek: string | null = null
     
     if (useAIDescription) {
+      if (!checkAiDescriptionLimit(user.id)) {
+        return NextResponse.json({ error: 'Too many AI description requests. Please wait before trying again.' }, { status: 429 })
+      }
+
       const openai = process.env.OPENAI_API_KEY ? new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
       }) : null
@@ -592,14 +612,12 @@ export async function POST(request: NextRequest) {
         bathrooms: Number(bathrooms || 0),
         floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
         sizeSqMeters: sizeSqMeters ? Number(sizeSqMeters) : null,
-        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
-        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+        yearBuilt: resolveYear(yearBuilt),
+        yearRenovated: resolveYear(yearRenovated),
         heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
         heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
-        parking: parking === undefined || parking === null 
-          ? null 
-          : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
-        energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
+        parking: resolveParking(parking),
+        energyClass: resolveEnergyClass(energyClass),
         closestMetro: distances.closestMetro,
         closestBus: distances.closestBus,
         closestSchool: distances.closestSchool,
@@ -653,10 +671,10 @@ export async function POST(request: NextRequest) {
                 ? null 
                 : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
               sizeSqMeters: Number(sizeSqMeters),
-        yearBuilt: yearBuilt && yearBuilt !== '' ? Number(yearBuilt) : null,
-        yearRenovated: yearRenovated && yearRenovated !== '' ? Number(yearRenovated) : null,
+        yearBuilt: resolveYear(yearBuilt),
+        yearRenovated: resolveYear(yearRenovated),
         availableFrom: availableFromDate,
-              photos: photos || null,
+              photos: (photos as string | null | undefined) || null,
               // Distance values from Google Maps API
               closestMetro: distances.closestMetro,
               closestBus: distances.closestBus,

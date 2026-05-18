@@ -9,7 +9,6 @@ import {
   unauthorized,
 } from '@/lib/api-utils'
 import {
-  createNotification,
   deleteNotificationForUser,
   markAllNotificationsAsViewed,
   NotificationServiceError,
@@ -388,40 +387,6 @@ export async function PATCH(request: NextRequest) {
     return badRequest('Invalid request')
   } catch (error) {
     console.error('Mark notifications as viewed error:', error)
-    return serverError()
-  }
-}
-
-// POST: Create a notification (called when inquiries are created/approved/dismissed)
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return unauthorized()
-    }
-
-    const body = await request.json()
-    const { recipientId, role, type, homeKey, userId, ownerKey } = body
-
-    const parsedRecipientId = parsePositiveInt(recipientId)
-    const parsedUserId = userId ? parsePositiveInt(userId) : null
-
-    if (!parsedRecipientId || !role || !type) {
-      return badRequest('recipientId, role, and type are required')
-    }
-
-    const notification = await createNotification({
-      recipientId: parsedRecipientId,
-      role,
-      type,
-      homeKey: homeKey || null,
-      userId: parsedUserId,
-      ownerKey: ownerKey || null,
-    })
-
-    return NextResponse.json({ notification }, { status: 201 })
-  } catch (error) {
-    console.error('Create notification error:', error)
     return serverError()
   }
 }

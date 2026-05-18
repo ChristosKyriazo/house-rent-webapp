@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
+import { validateBody } from '@/lib/api-utils'
+import { setRoleSchema } from '@/lib/schemas'
 
 // POST /api/auth/set-role - Set user role after signup
 export async function POST(request: NextRequest) {
@@ -14,17 +16,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
-    const { role } = body
+    const rawBody = await request.json()
+    const { data: body, error: validationError } = validateBody(setRoleSchema, rawBody)
+    if (validationError) return validationError
 
-    // Validate role
-    const validRoles = ['user', 'owner', 'both', 'broker']
-    if (!role || !validRoles.includes(role)) {
-      return NextResponse.json(
-        { error: 'Invalid role' },
-        { status: 400 }
-      )
-    }
+    const { role } = body
 
     // Find user by clerkUserId
     let user = await prisma.user.findUnique({

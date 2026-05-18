@@ -26,13 +26,9 @@ export async function GET(
       return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    // Check if user is the owner or broker
-    const userRole = (user.role || 'user').toLowerCase()
-    const isOwner = user.id === home.ownerId || userRole === 'broker' || userRole === 'both'
-
-    if (!isOwner) {
+    if (user.id !== home.ownerId) {
       return NextResponse.json(
-        { error: 'Only owners and brokers can view bookings for this home' },
+        { error: 'Only the owner can view bookings for this home' },
         { status: 403 }
       )
     }

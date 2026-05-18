@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { badRequest, forbidden, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { badRequest, forbidden, parsePositiveInt, serverError, unauthorized, validateBody } from '@/lib/api-utils'
+import { createRatingSchema } from '@/lib/schemas'
 
 // GET: Get ratings for current user or a specific user by userId query param
 export async function GET(request: NextRequest) {
@@ -43,21 +44,12 @@ export async function POST(request: NextRequest) {
       return unauthorized()
     }
 
-    const body = await request.json()
-    const { ratedUserId, type, score, comment } = body
-    const parsedRatedUserId = parsePositiveInt(ratedUserId)
+    const rawBody = await request.json()
+    const { data: body, error: validationError } = validateBody(createRatingSchema, rawBody)
+    if (validationError) return validationError
 
-    if (!parsedRatedUserId || !type || score === undefined) {
-      return badRequest('ratedUserId, type, and score are required')
-    }
-
-    if (score < 1 || score > 5) {
-      return badRequest('Score must be between 1 and 5')
-    }
-
-    if (type !== 'owner' && type !== 'renter') {
-      return badRequest('Type must be "owner" or "renter"')
-    }
+    // ratedUserId is already validated by Zod as a positive integer
+    const { ratedUserId: parsedRatedUserId, type, score, comment } = body
 
     // Verify that there's a relationship between these users
     // For owner/broker rating renter: check if there's a booking that has passed (startTime < now)
