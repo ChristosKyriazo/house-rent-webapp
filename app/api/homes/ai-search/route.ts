@@ -622,9 +622,35 @@ export async function POST(request: NextRequest) {
     const matchMap = new Map<number, number>()
     
     if (shouldForce100) {
-      // All properties get 100% if only hard filters
+      // Score by intrinsic home quality so identical-filter results still have different percentages
+      const energyBonus: Record<string, number> = { 'A+': 22, A: 18, B: 13, C: 9, D: 5, E: 2, F: 1, G: 0 }
       homes.forEach(home => {
-        matchMap.set(home.id, 100)
+        let score = 55 // base
+        // Energy class (0-22 pts)
+        score += energyBonus[(home as any).energyClass || ''] ?? 4
+        // Recency — take the best of yearBuilt / yearRenovated (0-15 pts)
+        const yr = Math.max((home as any).yearBuilt || 0, (home as any).yearRenovated || 0)
+        if (yr >= 2020) score += 15
+        else if (yr >= 2015) score += 12
+        else if (yr >= 2010) score += 9
+        else if (yr >= 2000) score += 6
+        else if (yr >= 1990) score += 3
+        else if (yr > 0) score += 1
+        // Price efficiency — closer to budget midpoint = better (0-8 pts)
+        const maxP = extractedFilters.maxPrice as number | undefined
+        const minP = extractedFilters.minPrice as number | undefined
+        if (maxP && (home as any).pricePerMonth) {
+          const ratio = (home as any).pricePerMonth / maxP
+          if (ratio < 0.55) score += 8
+          else if (ratio < 0.70) score += 6
+          else if (ratio < 0.82) score += 4
+          else if (ratio < 0.92) score += 2
+        } else if (minP && maxP && (home as any).pricePerMonth) {
+          const mid = (minP + maxP) / 2
+          const dist = Math.abs((home as any).pricePerMonth - mid) / (maxP - minP)
+          score += Math.max(0, Math.round((1 - dist) * 6))
+        }
+        matchMap.set(home.id, Math.min(100, score))
       })
     } else {
       // Calculate scores programmatically

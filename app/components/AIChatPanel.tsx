@@ -1,11 +1,14 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
-  homesCount?: number
+}
+
+export interface AIChatPanelHandle {
+  resume: () => void
 }
 
 interface AIChatPanelProps {
@@ -13,60 +16,71 @@ interface AIChatPanelProps {
   excludeInquired: boolean
   excludeApproved: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onResultsFound: (homes: any[]) => void
+  onResultsFound: (homes: any[], isPreview: boolean) => void
   onBack: () => void
   language: string
 }
 
-const MAX_TURNS = 3
+const MAX_TOTAL_PROMPTS = 9
+const FIRST_SEARCH_TURN = 3
 
-export default function AIChatPanel({
-  searchType,
-  excludeInquired,
-  excludeApproved,
-  onResultsFound,
-  onBack,
-  language,
-}: AIChatPanelProps) {
+const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIChatPanel(
+  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language },
+  ref
+) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [conversationKey, setConversationKey] = useState<string | null>(null)
-  const [turn, setTurn] = useState(0)
-  const [done, setDone] = useState(false)
+  const [promptCount, setPromptCount] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [searchCount, setSearchCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const isEl = language === 'el'
+  const remaining = MAX_TOTAL_PROMPTS - promptCount
+  const hardStop = promptCount >= MAX_TOTAL_PROMPTS
+
+  useImperativeHandle(ref, () => ({
+    resume: () => {
+      if (!hardStop) {
+        setPaused(false)
+        setTimeout(() => inputRef.current?.focus(), 80)
+      }
+    },
+  }))
 
   const t = {
     headline: isEl ? 'Πώς μπορώ να σας βοηθήσω να βρείτε το σπίτι σας;' : "Let's find your perfect home.",
     subtitle: isEl
-      ? 'Πείτε μου τι ψάχνετε — τοποθεσία, προϋπολογισμό, χαρακτηριστικά — και θα σας βρω τα καλύτερα ακίνητα.'
-      : 'Tell me what you\'re looking for — location, budget, features — and I\'ll find the best matches for you.',
+      ? 'Θα σας κάνω 3 ερωτήσεις για να καταλάβω ακριβώς τι ψάχνετε — και μετά αναζητώ!'
+      : "I'll ask you 3 questions to understand exactly what you need — then I'll search for you.",
     placeholder: isEl ? 'Γράψτε το μήνυμά σας...' : 'Type your message...',
     send: isEl ? 'Αποστολή' : 'Send',
     back: isEl ? 'Πίσω' : 'Back',
     startOver: isEl ? 'Νέα αναζήτηση' : 'Start over',
-    searching: isEl ? 'Αναζήτηση ακινήτων...' : 'Searching properties...',
+    remaining: (n: number) => isEl ? `${n} ερωτήσεις ακόμα` : `${n} prompts left`,
+    refineBtn: isEl ? 'Δεν σας αρέσουν τα αποτελέσματα; Συνεχίστε τη συνομιλία' : "Not happy with the results? Continue refining",
+    hardStopMsg: isEl ? 'Έχετε φτάσει το όριο συνομιλίας. Δείτε τα παρακάτω αποτελέσματα.' : 'Conversation limit reached. See the results below.',
+    searching: isEl ? 'Αναζήτηση...' : 'Searching...',
     foundPrefix: isEl ? 'Βρήκα' : 'Found',
-    foundSuffix: isEl ? 'ακίνητα για εσάς.' : 'properties for you.',
+    foundSuffix: isEl ? 'ακίνητα για εσάς ↓' : 'properties for you ↓',
     noResults: isEl ? 'Δεν βρήκα ακίνητα που να ταιριάζουν. Δοκιμάστε να αλλάξετε κάποια κριτήρια.' : 'No matching properties found. Try adjusting your criteria.',
-    turnIndicator: (n: number) => isEl ? `Ερώτηση ${n} / ${MAX_TURNS}` : `Question ${n} / ${MAX_TURNS}`,
-    limitReached: isEl ? 'Κάνω αναζήτηση με αυτά που συζητήσαμε...' : 'Running a search based on our conversation...',
+    limitReached: isEl ? 'Κάνω αναζήτηση με αυτά που συζητήσαμε...' : 'Searching with everything we discussed…',
     errorMsg: isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Please try again.',
     exampleRent: isEl
-      ? 'Παράδειγμα: "Ψάχνω 2άρι στην Αθήνα, κοντά σε σχολεία, γύρω στα 900€"'
-      : 'e.g. "Looking for a 2-bed in Athens near schools, around €900/mo"',
+      ? 'π.χ. "2άρι στην Αθήνα, γύρω στα 900€, κοντά σε σχολεία"'
+      : 'e.g. "2-bed in Athens, around €900/mo, near schools"',
     exampleBuy: isEl
-      ? 'Παράδειγμα: "Θέλω διαμέρισμα 3 υπνοδωματίων στη Θεσσαλονίκη, έως 200.000€"'
-      : 'e.g. "Want a 3-bed apartment in Thessaloniki, budget up to €200k"',
+      ? 'π.χ. "3άρι στη Θεσσαλονίκη, έως 200.000€, με θέα θάλασσα"'
+      : 'e.g. "3-bed in Thessaloniki, up to €200k, sea view"',
   }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, paused])
 
   const runSearch = async (filters: object) => {
     const res = await fetch('/api/homes/ai-search', {
@@ -86,64 +100,79 @@ export default function AIChatPanel({
 
   const handleSend = async () => {
     const msg = input.trim()
-    if (!msg || loading || done) return
+    if (!msg || loading || paused || hardStop) return
 
     setInput('')
     setError(null)
-    const newTurn = turn + 1
-    setTurn(newTurn)
+    const newCount = promptCount + 1
+    setPromptCount(newCount)
 
-    setMessages((prev) => [...prev, { role: 'user', content: msg }])
+    setMessages(prev => [...prev, { role: 'user', content: msg }])
     setLoading(true)
 
     try {
-      // Step 1: chat turn — AI decides search or ask
       const chatRes = await fetch('/api/homes/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: msg,
-          conversationKey,
-          type: searchType,
-        }),
+        body: JSON.stringify({ message: msg, conversationKey, type: searchType }),
       })
       const chatData = await chatRes.json()
       if (!chatRes.ok) throw new Error(chatData.error || 'Chat error')
-
       setConversationKey(chatData.conversationKey)
 
-      const shouldSearch = chatData.action === 'search' || newTurn >= MAX_TURNS
+      const isRefinement = searchCount > 0
+      const shouldSearch =
+        chatData.action === 'search' ||
+        newCount >= FIRST_SEARCH_TURN ||
+        isRefinement
 
       if (shouldSearch) {
-        // Step 2: run actual property search
-        const forcedMsg = newTurn >= MAX_TURNS && chatData.action !== 'search' ? t.limitReached : chatData.assistantMessage
-        setMessages((prev) => [...prev, { role: 'assistant', content: forcedMsg }])
-        setLoading(true)
+        const aiMsg = newCount >= FIRST_SEARCH_TURN && chatData.action !== 'search'
+          ? t.limitReached
+          : chatData.assistantMessage
+        setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
 
         const homes = await runSearch(chatData.filters)
+        const newSearchCount = searchCount + 1
+        setSearchCount(newSearchCount)
 
         const resultMsg = homes.length > 0
           ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}`
           : t.noResults
 
-        setMessages((prev) => [
-          ...prev.slice(0, -1),
-          { role: 'assistant', content: forcedMsg, homesCount: homes.length },
-          { role: 'assistant', content: resultMsg },
-        ])
-        onResultsFound(homes)
-        setDone(true)
+        setMessages(prev => [...prev, { role: 'assistant', content: resultMsg }])
+
+        const isLastSearch = newCount >= MAX_TOTAL_PROMPTS
+        onResultsFound(homes, !isLastSearch)
+        setPaused(true)
       } else {
-        // Show follow-up question
         const aiMsg = chatData.followUpQuestion || chatData.assistantMessage
-        setMessages((prev) => [...prev, { role: 'assistant', content: aiMsg }])
+        setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
       }
-    } catch (err) {
+    } catch {
       setError(t.errorMsg)
     } finally {
       setLoading(false)
-      setTimeout(() => inputRef.current?.focus(), 50)
+      if (!paused) setTimeout(() => inputRef.current?.focus(), 50)
     }
+  }
+
+  const handleResume = () => {
+    if (hardStop) return
+    setPaused(false)
+    setTimeout(() => inputRef.current?.focus(), 80)
+  }
+
+  const handleReset = () => {
+    setMessages([])
+    setInput('')
+    setConversationKey(null)
+    setPromptCount(0)
+    setPaused(false)
+    setSearchCount(0)
+    setError(null)
+    onResultsFound([], false)
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -153,37 +182,40 @@ export default function AIChatPanel({
     }
   }
 
-  const handleReset = () => {
-    setMessages([])
-    setInput('')
-    setConversationKey(null)
-    setTurn(0)
-    setDone(false)
-    setError(null)
-    onResultsFound([])
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
   const isEmpty = messages.length === 0
 
   return (
     <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl shadow-xl border border-[var(--border-subtle)] mb-6 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[var(--border-subtle)]">
+      <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[var(--border-subtle)]">
         <button
           onClick={onBack}
           className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
         >
           ← {t.back}
         </button>
-        {!isEmpty && (
-          <button
-            onClick={handleReset}
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
-          >
-            ↺ {t.startOver}
-          </button>
-        )}
+
+        <div className="flex items-center gap-3">
+          {/* Remaining prompts counter */}
+          {promptCount > 0 && !hardStop && (
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+              remaining <= 2
+                ? 'border-orange-400/40 bg-orange-400/10 text-orange-400'
+                : 'border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+            }`}>
+              {t.remaining(remaining)}
+            </span>
+          )}
+
+          {!isEmpty && (
+            <button
+              onClick={handleReset}
+              className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+            >
+              ↺ {t.startOver}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Welcome state */}
@@ -193,7 +225,7 @@ export default function AIChatPanel({
             🏡
           </div>
           <h2 className="mb-2 text-2xl font-bold text-[var(--text)]">{t.headline}</h2>
-          <p className="mb-6 text-sm text-[var(--text-muted)] max-w-md mx-auto">{t.subtitle}</p>
+          <p className="mb-5 text-sm text-[var(--text-muted)] max-w-md mx-auto">{t.subtitle}</p>
           <p className="text-xs text-[var(--text-muted)]/60 italic">
             {searchType === 'buy' ? t.exampleBuy : t.exampleRent}
           </p>
@@ -202,7 +234,7 @@ export default function AIChatPanel({
 
       {/* Chat messages */}
       {!isEmpty && (
-        <div className="px-6 py-4 space-y-4 max-h-80 overflow-y-auto">
+        <div className="px-6 py-4 space-y-4 max-h-96 overflow-y-auto">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {m.role === 'assistant' && (
@@ -218,21 +250,17 @@ export default function AIChatPanel({
                 }`}
               >
                 {m.content}
-                {m.homesCount !== undefined && m.homesCount > 0 && (
-                  <div className="mt-1 text-xs opacity-70">↓ {isEl ? 'Δείτε παρακάτω' : 'See results below'}</div>
-                )}
               </div>
             </div>
           ))}
 
-          {/* Loading bubble */}
           {loading && (
             <div className="flex justify-start">
               <div className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-base mt-1">
                 🏡
               </div>
               <div className="rounded-2xl rounded-tl-sm bg-[var(--ink-soft)] border border-[var(--border-subtle)] px-4 py-3">
-                <div className="flex gap-1 items-center">
+                <div className="flex gap-1 items-center h-4">
                   <span className="h-2 w-2 rounded-full bg-[var(--accent)]/60 animate-bounce [animation-delay:0ms]" />
                   <span className="h-2 w-2 rounded-full bg-[var(--accent)]/60 animate-bounce [animation-delay:150ms]" />
                   <span className="h-2 w-2 rounded-full bg-[var(--accent)]/60 animate-bounce [animation-delay:300ms]" />
@@ -245,34 +273,35 @@ export default function AIChatPanel({
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div className="mx-6 mb-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-500">
           {error}
         </div>
       )}
 
-      {/* Input area */}
+      {/* Input / paused / hard-stop footer */}
       <div className="px-6 pb-6 pt-3">
-        {!done ? (
+        {hardStop ? (
+          <p className="text-center text-sm text-[var(--text-muted)] py-2">{t.hardStopMsg}</p>
+        ) : paused ? (
+          <button
+            onClick={handleResume}
+            className="w-full rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/5 py-3 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all"
+          >
+            💬 {t.refineBtn} ({remaining} {isEl ? 'ακόμα' : 'left'})
+          </button>
+        ) : (
           <div className="flex gap-3 items-end">
-            <div className="flex-1 relative">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={2}
-                placeholder={t.placeholder}
-                disabled={loading}
-                className="w-full resize-none rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
-              />
-              {turn > 0 && !done && (
-                <div className="absolute bottom-2 right-3 text-[10px] text-[var(--text-muted)]/50">
-                  {t.turnIndicator(turn)}
-                </div>
-              )}
-            </div>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              placeholder={t.placeholder}
+              disabled={loading}
+              className="flex-1 resize-none rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+            />
             <button
               onClick={handleSend}
               disabled={loading || !input.trim()}
@@ -281,15 +310,10 @@ export default function AIChatPanel({
               {loading ? '...' : t.send}
             </button>
           </div>
-        ) : (
-          <button
-            onClick={handleReset}
-            className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)] py-3 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-all"
-          >
-            ↺ {t.startOver}
-          </button>
         )}
       </div>
     </div>
   )
-}
+})
+
+export default AIChatPanel
