@@ -10,6 +10,7 @@ import { greekUppercaseNoAnnotations } from '@/lib/utils'
 import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
+import AIChatPanel from '@/app/components/AIChatPanel'
 
 interface Home {
   id: number
@@ -966,108 +967,34 @@ function HomesPageInner() {
           </div>
         )}
 
-        {/* AI Search Form */}
-        {/* AI Search Input - Show when not active OR when "Use AI for another search" is clicked */}
-        {searchType && filterType === 'ai' && (showFilters || (!isAISearchActive && homes.length > 0)) && (
-          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[var(--text)]">{getTranslation(language, 'tellUsWhatYouNeed')}</h2>
-              <button
-                onClick={() => {
-                  setFilterType(null)
-                  setIsAISearchActive(false)
-                  setAiQuery('')
-                  setHomes([])
-                  setShowFilters(true)
-                  // Clear sessionStorage when going back to start
-                  sessionStorage.removeItem('homesSearchResults')
-                  sessionStorage.removeItem('homesSearchFilters')
-                  sessionStorage.removeItem('homesSearchType')
-                  sessionStorage.removeItem('homesFilterType')
-                  sessionStorage.removeItem('homesAiQuery')
-                }}
-                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
-              >
-                ← {getTranslation(language, 'back')}
-              </button>
-            </div>
-            <p className="text-[var(--text-muted)] mb-4">
-              {getTranslation(language, 'aiSearchDescription')}
-            </p>
-            <textarea
-              value={aiQuery}
-              onChange={(e) => setAiQuery(e.target.value)}
-              className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50 mb-4 resize-none"
-              rows={6}
-              placeholder={
-                searchType === 'buy'
-                  ? language === 'el'
-                    ? 'Παράδειγμα: Ψάχνω διαμέρισμα 2 υπνοδωματίων στην Αθήνα, κοντά σε σχολεία. Ο προϋπολογισμός αγοράς είναι περίπου 150000–180000€...'
-                    : 'Example: I want a 2-bedroom apartment in Athens near schools and parks. My purchase budget is around €150,000–180,000...'
-                  : language === 'el'
-                    ? 'Παράδειγμα: Χρειάζομαι ένα διαμέρισμα 2 υπνοδωματίων στην Αθήνα για την οικογένειά μου. Θέλουμε να είμαστε κοντά σε σχολεία και πάρκα. Ο προϋπολογισμός είναι περίπου 800-1000€ το μήνα...'
-                    : 'Example: I need a 2-bedroom apartment in Athens for my family. We want to be close to schools and parks. Budget is around 800-1000€ per month...'
-              }
-            />
-            
-            {/* Exclude Filters (checkboxes) */}
-            <div className="space-y-3 mb-4">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={excludeInquired}
-                  onChange={(e) => setExcludeInquired(e.target.checked)}
-                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                />
-                <span className="text-sm font-medium text-[var(--text)]">
-                  {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
-                </span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={excludeApproved}
-                  onChange={(e) => setExcludeApproved(e.target.checked)}
-                  className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                />
-                <span className="text-sm font-medium text-[var(--text)]">
-                  {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
-                </span>
-              </label>
-            </div>
-            
-            <button
-              onClick={handleAISearch}
-              disabled={loading || !aiQuery.trim()}
-              className="btn-primary w-full px-6 py-3 sm:w-auto disabled:opacity-50"
-            >
-              {loading ? getTranslation(language, 'searchingWithAi') : getTranslation(language, 'aiSearch')}
-            </button>
-          </div>
-        )}
-
-        {/* Back Button and "Use AI for another search" Button - Show when AI search is active */}
-        {searchType && filterType === 'ai' && isAISearchActive && (
-          <div className="mb-6 flex items-center gap-4">
-            <button
-              onClick={() => {
-                setFilterType(null)
-                setIsAISearchActive(false)
-                setAiQuery('')
-                setHomes([])
-                setShowFilters(true)
-              }}
-              className="px-6 py-3 bg-[var(--ink-soft)] border border-[var(--border-subtle)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] hover:border-[var(--accent)] transition-all font-semibold"
-            >
-              ← {getTranslation(language, 'back')}
-            </button>
-            <button
-              onClick={handleNewAISearch}
-              className="btn-primary px-6 py-3"
-            >
-              {getTranslation(language, 'useAIForAnotherSearch')}
-            </button>
-          </div>
+        {/* AI Chat Search */}
+        {searchType && filterType === 'ai' && (
+          <AIChatPanel
+            searchType={searchType}
+            excludeInquired={excludeInquired}
+            excludeApproved={excludeApproved}
+            language={language}
+            onResultsFound={(results) => {
+              setHomes(results)
+              setIsAISearchActive(true)
+              setShowFilters(false)
+              sessionStorage.setItem('homesSearchResults', JSON.stringify(results))
+              sessionStorage.setItem('homesSearchType', searchType)
+              sessionStorage.setItem('homesFilterType', 'ai')
+            }}
+            onBack={() => {
+              setFilterType(null)
+              setIsAISearchActive(false)
+              setAiQuery('')
+              setHomes([])
+              setShowFilters(true)
+              sessionStorage.removeItem('homesSearchResults')
+              sessionStorage.removeItem('homesSearchFilters')
+              sessionStorage.removeItem('homesSearchType')
+              sessionStorage.removeItem('homesFilterType')
+              sessionStorage.removeItem('homesAiQuery')
+            }}
+          />
         )}
 
         {/* Filters (manual only) + Order: same ordering for manual and AI once there are results */}

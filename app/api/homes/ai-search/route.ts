@@ -7,6 +7,7 @@ import { createLocationMaps, matchesLocation, getLocationVariations, calculateDi
 import { checkAiSearchLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
+import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -1223,13 +1224,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Semantic similarity boost using stored home embeddings
+    if (openai && process.env.OPENAI_API_KEY && userQuery && userQuery !== '[conversational]') {
+      try {
+        const queryEmbedding = await generateEmbedding(userQuery, openai)
+        for (const home of homes) {
+          const stored = (home as any).embedding
+          if (!Array.isArray(stored)) continue
+          const sim = cosineSimilarity(queryEmbedding, stored as number[])
+          // sim is 0-1; boost up to +8 points for very high similarity
+          const bonus = Math.round(sim * 8)
+          if (bonus > 0) {
+            const cur = matchMap.get(home.id) || 0
+            matchMap.set(home.id, Math.min(100, cur + bonus))
+          }
+        }
+      } catch {
+        // non-fatal — skip semantic boost if embedding fails
+      }
+    }
+
     // Attach match percentages and safety to homes and sort by match percentage (highest first)
     const homesWithMatches = homes.map(home => {
-      const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
       return {
         ...home,
+        embedding: undefined, // strip from response
         matchPercentage: matchMap.get(home.id) || 0,
-        safety: extractedFilters.Safety || null, // Include safety category in response
+        safety: extractedFilters.Safety || null,
       }
     }).sort((a, b) => b.matchPercentage - a.matchPercentage)
 

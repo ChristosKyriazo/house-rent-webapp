@@ -19,7 +19,9 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed:universities": "npx --yes tsx@4.19.2 scripts/seeds/seed-universities.ts",
-    "db:seed:areas": "npx --yes tsx@4.19.2 scripts/seeds/seed-areas.ts"
+    "db:seed:areas": "npx --yes tsx@4.19.2 scripts/seeds/seed-areas.ts",
+    "db:seed:demo": "npx --yes tsx@4.19.2 scripts/seeds/seed-demo-homes.ts",
+    "db:seed:embeddings": "npx --yes tsx@4.19.2 scripts/seeds/seed-embeddings.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.36.5",
@@ -33,6 +35,9 @@
     "react-dom": "19.2.3",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "import-in-the-middle": "3.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
