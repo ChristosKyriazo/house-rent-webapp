@@ -1,6 +1,4 @@
-import { prisma } from './prisma'
 import { FILTER_EXTRACTION_SYSTEM_PROMPT } from './ai-prompts'
-import { removeGreekAccents } from './utils'
 
 interface ExtractedFilters {
   city?: string
@@ -38,6 +36,9 @@ interface ExtractedFilters {
   confidence: number // 0-1, how confident we are in the extraction
 }
 
+type CachedFilterResult = ExtractedFilters & { filterExtractionPrompt?: string; filterExtractionResponse?: string }
+const filterCache = new Map<string, CachedFilterResult>()
+
 /**
  * Use AI to extract hard filters from user query
  * Returns JSON with filter values only, plus prompt/response for logging
@@ -46,32 +47,38 @@ interface ExtractedFilters {
 export async function extractFiltersWithAI(
   query: string,
   openai: any
-): Promise<ExtractedFilters & { filterExtractionPrompt?: string; filterExtractionResponse?: string }> {
-  const systemPrompt = FILTER_EXTRACTION_SYSTEM_PROMPT
+): Promise<CachedFilterResult> {
+  const cached = filterCache.get(query)
+  if (cached) return cached
 
+  const systemPrompt = FILTER_EXTRACTION_SYSTEM_PROMPT
   const fullPrompt = `System: ${systemPrompt}\n\nUser Query: ${query}`
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 15_000)
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: query },
       ],
       temperature: 0.1,
       response_format: { type: 'json_object' },
-    })
+    }, { signal: controller.signal })
 
     const responseContent = completion.choices[0]?.message?.content
-    
+
     if (responseContent) {
-      const parsed = JSON.parse(responseContent)
-      return {
-        ...parsed,
+      const result: CachedFilterResult = {
+        ...JSON.parse(responseContent),
         confidence: 0.9,
         filterExtractionPrompt: fullPrompt,
         filterExtractionResponse: responseContent,
       }
+      filterCache.set(query, result)
+      return result
     }
   } catch (error) {
     console.error('AI filter extraction error:', error)
@@ -80,9 +87,11 @@ export async function extractFiltersWithAI(
       filterExtractionPrompt: fullPrompt,
       filterExtractionResponse: error instanceof Error ? error.message : String(error),
     }
+  } finally {
+    clearTimeout(timeoutId)
   }
 
-  return { 
+  return {
     confidence: 0,
     filterExtractionPrompt: fullPrompt,
     filterExtractionResponse: 'No response from AI',

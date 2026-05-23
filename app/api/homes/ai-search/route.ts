@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { query, type, excludeInquired, excludeApproved } = body
-    userQuery = query || 'unknown'
+    const { query, type, excludeInquired, excludeApproved, preExtractedFilters } = body
+    userQuery = query || (preExtractedFilters ? '[conversational]' : 'unknown')
 
-    if (!query || !query.trim()) {
+    if (!preExtractedFilters && (!query || !query.trim())) {
       return NextResponse.json(
         { error: 'Search query is required' },
         { status: 400 }
@@ -66,29 +66,33 @@ export async function POST(request: NextRequest) {
       // User not logged in, continue without userId
     }
 
-    // Check if OpenAI is available
-    if (!openai) {
-      errorMessage = 'OpenAI package not installed'
-      return NextResponse.json(
-        { error: 'OpenAI package not installed. Please run: npm install openai' },
-        { status: 500 }
-      )
-    }
-
-    // Check if OpenAI API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      errorMessage = 'OpenAI API key not configured'
-      return NextResponse.json(
-        { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
-        { status: 500 }
-      )
-    }
-
-    // Step 1: Extract hard filters using AI only (rent vs buy price semantics match manual search)
+    // Step 1: Extract hard filters — skip if pre-extracted filters are provided (conversational mode)
     const listingMode = type === 'buy' || type === 'rent' ? type : undefined
-    const extractedFiltersResult: any = await extractFiltersHybrid(query, openai, {
-      listingMode,
-    })
+    let extractedFiltersResult: any
+
+    if (preExtractedFilters) {
+      extractedFiltersResult = { ...preExtractedFilters, confidence: preExtractedFilters.confidence ?? 0.9 }
+    } else {
+      // Check if OpenAI is available
+      if (!openai) {
+        errorMessage = 'OpenAI package not installed'
+        return NextResponse.json(
+          { error: 'OpenAI package not installed. Please run: npm install openai' },
+          { status: 500 }
+        )
+      }
+
+      // Check if OpenAI API key is configured
+      if (!process.env.OPENAI_API_KEY) {
+        errorMessage = 'OpenAI API key not configured'
+        return NextResponse.json(
+          { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
+          { status: 500 }
+        )
+      }
+
+      extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
+    }
     
     // Extract the filters (reasoning is extracted but not returned to client)
     let extractedFilters: any = {}

@@ -259,3 +259,18 @@ model Booking {
   @@index([availabilityId])
   @@map("bookings")
 }
+
+model SearchConversation {
+  id                 Int      @id @default(autoincrement())
+  key                String   @unique @default(cuid())
+  userId             Int?
+  messages           Json     @default("[]") // Array of {role, content} objects
+  accumulatedFilters Json     @default("{}") // Merged filters across all turns
+  listingMode        String?  // "rent" | "buy"
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("search_conversations")
+}
