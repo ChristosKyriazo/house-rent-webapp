@@ -10,8 +10,10 @@ import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { resolveAreaToEnglishCanonical, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
+import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -272,7 +274,7 @@ export async function POST(request: NextRequest) {
             closestUniversity: distanceResult.closestUniversity,
           }
         } catch (distError) {
-          console.error(`Error calculating distances for row ${rowNumber}:`, distError)
+          log.error({ err: distError, rowNumber }, 'Error calculating distances for row')
           // Continue without distances if calculation fails
         }
 
@@ -383,7 +385,7 @@ export async function POST(request: NextRequest) {
           key: home.key,
         })
       } catch (error: any) {
-        console.error(`Error processing row ${rowNumber}:`, error)
+        log.error({ err: error, rowNumber }, 'Error processing bulk upload row')
         errors.push(`Row ${rowNumber}: ${error.message || 'Unknown error'}`)
       }
     }
@@ -396,7 +398,7 @@ export async function POST(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error: any) {
-    console.error('Bulk upload error:', error)
+    log.error({ err: error }, 'Bulk upload error')
     return NextResponse.json(
       { error: error.message || 'Failed to process bulk upload' },
       { status: 500 }

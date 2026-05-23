@@ -9,6 +9,7 @@ import {
   serverError,
   unauthorized,
 } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 import {
   InquiryManagementError,
   manageInquiryApproval,
@@ -19,6 +20,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -74,7 +76,7 @@ export async function GET(
 
     return NextResponse.json({ inquiry }, { status: 200 })
   } catch (error) {
-    console.error('Get inquiry error:', error)
+    log.error({ err: error }, 'Get inquiry error')
     return serverError()
   }
 }
@@ -84,6 +86,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -118,7 +121,7 @@ export async function PATCH(
       if (error.status === 403) return forbidden(error.message)
       if (error.status === 404) return notFound(error.message)
     }
-    console.error('Manage inquiry error:', error)
+    log.error({ err: error }, 'Manage inquiry error')
     return serverError()
   }
 }

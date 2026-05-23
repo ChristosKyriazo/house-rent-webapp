@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error promoting home:', error)
+    log.error({ err: error }, 'Error promoting home')
     return serverError()
   }
 }

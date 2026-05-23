@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // PUT: Update an existing rating (for editing)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -64,7 +66,7 @@ export async function PUT(
 
     return NextResponse.json({ rating: updatedRating }, { status: 200 })
   } catch (error) {
-    console.error('Update rating error:', error)
+    log.error({ err: error }, 'Update rating error')
     return serverError()
   }
 }

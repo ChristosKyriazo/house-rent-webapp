@@ -3,9 +3,11 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import { validateBody } from '@/lib/api-utils'
 import { setRoleSchema } from '@/lib/schemas'
+import { requestLogger } from '@/lib/logger'
 
 // POST /api/auth/set-role - Set user role after signup
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const { userId } = await auth()
     
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
       try {
         cUser = await currentUser()
       } catch (clerkError: any) {
-        console.error('Error fetching Clerk user:', clerkError)
+        log.error({ err: clerkError }, 'Error fetching Clerk user')
         return NextResponse.json(
           { error: 'Failed to fetch user information' },
           { status: 500 }
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error('Set role error:', error)
+    log.error({ err: error }, 'Set role error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

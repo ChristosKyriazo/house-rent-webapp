@@ -6,6 +6,7 @@ import { removeGreekAccents } from '@/lib/utils'
 import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
 import { checkAiSearchLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
+import { requestLogger } from '@/lib/logger'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -14,6 +15,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   // Initialize logging variables
   let userId: number | null = null
   let filterExtractionPrompt: string | null = null
@@ -1252,7 +1254,7 @@ export async function POST(request: NextRequest) {
         error: errorMessage,
       },
     }).catch((logError) => {
-      console.error('Failed to log AI search to database:', logError)
+      log.error({ err: logError }, 'Failed to log AI search to database')
     })
 
     return NextResponse.json(
@@ -1263,7 +1265,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error('AI search error:', error)
+    log.error({ err: error }, 'AI search error')
     errorMessage = error instanceof Error ? error.message : String(error)
     
     // Log error to database
@@ -1288,7 +1290,7 @@ export async function POST(request: NextRequest) {
         error: errorMessage,
       },
     }).catch((logError) => {
-      console.error('Failed to log AI search error to database:', logError)
+      log.error({ err: logError }, 'Failed to log AI search error to database')
     })
 
     return NextResponse.json(

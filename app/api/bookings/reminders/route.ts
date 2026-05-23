@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requestLogger } from '@/lib/logger'
 
 /**
  * Booking Reminders API
@@ -8,7 +9,8 @@ import { prisma } from '@/lib/prisma'
  * 1. Send 24-hour reminders to users about their upcoming bookings
  * 2. Send 1-day reminders to owners about meetings the following day
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const now = new Date()
     const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
@@ -171,7 +173,7 @@ export async function POST(_request: NextRequest) {
       ownerReminders: ownerNotifications.length,
     }, { status: 200 })
   } catch (error) {
-    console.error('Error processing reminders:', error)
+    log.error({ err: error }, 'Error processing reminders')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

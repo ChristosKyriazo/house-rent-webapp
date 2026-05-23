@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all homes owned by the current user
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
           const parsed = JSON.parse(home.photos)
           photos = Array.isArray(parsed) ? parsed : []
         } catch (e) {
-          console.error('Error parsing photos:', e)
+          log.error({ err: e }, 'Error parsing photos')
           photos = []
         }
       }
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ homes: formattedHomes }, { status: 200 })
   } catch (error) {
-    console.error('Get my listings error:', error)
+    log.error({ err: error }, 'Get my listings error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get scheduled bookings for a specific home (for owners/brokers)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -96,7 +98,7 @@ export async function GET(
 
     return NextResponse.json({ bookings: transformedBookings }, { status: 200 })
   } catch (error) {
-    console.error('Error fetching bookings for home:', error)
+    log.error({ err: error }, 'Error fetching bookings for home')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

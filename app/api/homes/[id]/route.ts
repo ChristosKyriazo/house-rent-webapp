@@ -5,11 +5,13 @@ import { getUserRatings } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
 import { toEnglishValue } from '@/lib/translations'
 import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
+import { requestLogger } from '@/lib/logger'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const resolvedParams = await Promise.resolve(params)
     const homeId = resolvedParams.id
@@ -91,7 +93,7 @@ export async function GET(
       }
     }, { status: 200 })
   } catch (error) {
-    console.error('Get home error:', error)
+    log.error({ err: error }, 'Get home error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
@@ -105,6 +107,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -267,10 +270,7 @@ export async function PUT(
 
     // Only recalculate distances if address changed
     if (addressChanged) {
-      console.log('Address changed, recalculating distances:', {
-        old: { street: existingHome.street, area: existingHome.area, city: existingHome.city, country: existingHome.country },
-        new: { street: street?.trim() || null, area: area?.trim() || null, city: englishCity, country: englishCountry }
-      })
+      log.info({ old: { street: existingHome.street, area: existingHome.area, city: existingHome.city }, new: { street: street?.trim() || null, area: area?.trim() || null, city: englishCity } }, 'Address changed, recalculating distances')
 
       try {
         const distanceResult = await calculatePropertyDistances(
@@ -280,38 +280,7 @@ export async function PUT(
           englishCountry
         )
         
-        console.log('Distance recalculation completed:')
-        console.log('Property coordinates:', distanceResult.propertyCoordinates)
-        console.log('Distances (km):', {
-          closestMetro: distanceResult.closestMetro,
-          closestBus: distanceResult.closestBus,
-          closestSchool: distanceResult.closestSchool,
-          closestHospital: distanceResult.closestHospital,
-          closestPark: distanceResult.closestPark,
-          closestUniversity: distanceResult.closestUniversity,
-        })
-        console.log('\n📍 Location Details for Verification:')
-        if (distanceResult.propertyCoordinates) {
-          console.log(`Property: https://www.google.com/maps?q=${distanceResult.propertyCoordinates.lat},${distanceResult.propertyCoordinates.lng}`)
-        }
-        if (distanceResult.closestMetroLocation) {
-          console.log(`Metro (${distanceResult.closestMetroName || 'N/A'}): ${distanceResult.closestMetro}km - https://www.google.com/maps?q=${distanceResult.closestMetroLocation.lat},${distanceResult.closestMetroLocation.lng}`)
-        }
-        if (distanceResult.closestBusLocation) {
-          console.log(`Bus (${distanceResult.closestBusName || 'N/A'}): ${distanceResult.closestBus}km - https://www.google.com/maps?q=${distanceResult.closestBusLocation.lat},${distanceResult.closestBusLocation.lng}`)
-        }
-        if (distanceResult.closestSchoolLocation) {
-          console.log(`School (${distanceResult.closestSchoolName || 'N/A'}): ${distanceResult.closestSchool}km - https://www.google.com/maps?q=${distanceResult.closestSchoolLocation.lat},${distanceResult.closestSchoolLocation.lng}`)
-        }
-        if (distanceResult.closestHospitalLocation) {
-          console.log(`Hospital (${distanceResult.closestHospitalName || 'N/A'}): ${distanceResult.closestHospital}km - https://www.google.com/maps?q=${distanceResult.closestHospitalLocation.lat},${distanceResult.closestHospitalLocation.lng}`)
-        }
-        if (distanceResult.closestParkLocation) {
-          console.log(`Park (${distanceResult.closestParkName || 'N/A'}): ${distanceResult.closestPark}km - https://www.google.com/maps?q=${distanceResult.closestParkLocation.lat},${distanceResult.closestParkLocation.lng}`)
-        }
-        if (distanceResult.closestUniversityLocation) {
-          console.log(`University (${distanceResult.closestUniversityName || 'N/A'}): ${distanceResult.closestUniversity}km - https://www.google.com/maps?q=${distanceResult.closestUniversityLocation.lat},${distanceResult.closestUniversityLocation.lng}`)
-        }
+        log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, bus: distanceResult.closestBus, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
 
         // Update distance fields
         updateData.closestMetro = distanceResult.closestMetro
@@ -321,11 +290,10 @@ export async function PUT(
         updateData.closestPark = distanceResult.closestPark
         updateData.closestUniversity = distanceResult.closestUniversity
       } catch (error) {
-        console.error('Error recalculating distances (keeping existing values):', error)
-        // Don't update distance fields if API fails - keep existing values
+        log.error({ err: error }, 'Error recalculating distances, keeping existing values')
       }
     } else {
-      console.log('Address unchanged, skipping distance recalculation')
+      log.info('Address unchanged, skipping distance recalculation')
       // Keep existing distance values - don't include them in updateData
     }
 
@@ -339,7 +307,7 @@ export async function PUT(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Update home error:', error)
+    log.error({ err: error }, 'Update home error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
@@ -353,6 +321,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -410,7 +379,7 @@ export async function DELETE(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Delete home error:', error)
+    log.error({ err: error }, 'Delete home error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { getCurrentUser } from '@/lib/auth'
+import { requestLogger } from '@/lib/logger'
 
 // Increase body size limit for file uploads
 export const maxDuration = 60
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error('Upload error:', error)
+    log.error({ err: error }, 'Upload error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

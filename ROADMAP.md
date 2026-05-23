@@ -15,15 +15,15 @@
 ## Phase 2 — Observability & Operations
 **Goal:** Make production failures visible and recoverable within minutes.
 
-- [ ] Structured logging (pino) with request IDs on every API route
-- [ ] Error monitoring (Sentry) wired up with environment config
-- [ ] Health check endpoints (`/api/healthz`, `/api/readyz`)
-- [ ] Dockerfile + docker-compose for local/staging parity
-- [ ] CI/CD pipeline: GitHub Actions → deploy on merge to `main`
-- [ ] Deployment runbook documenting rollback procedure
-- [ ] Migrate from SQLite to PostgreSQL for production
-- [ ] Multi-environment config (`.env.local`, `.env.staging`, `.env.production`)
-- [ ] Add missing `.env.example` keys: `CALCOM_API_KEY`, `SENTRY_DSN`, `LOG_LEVEL`
+- [x] Structured logging (pino) with request IDs on every API route
+- [x] Error monitoring (Sentry) wired up with environment config
+- [x] Health check endpoints (`/api/healthz`, `/api/readyz`)
+- [x] Dockerfile + docker-compose for local/staging parity
+- [x] CI/CD pipeline: GitHub Actions → deploy on merge to `main`
+- [x] Deployment runbook documenting rollback procedure
+- [x] Migrate from SQLite to PostgreSQL for production
+- [x] Multi-environment config (`.env.staging.example`, `.env.production.example`)
+- [x] Add missing `.env.example` keys: `CALCOM_API_KEY`, `SENTRY_DSN`, `LOG_LEVEL`
 
 ## Phase 3 — Test Coverage & Performance
 **Goal:** Catch regressions automatically and keep response times acceptable under load.

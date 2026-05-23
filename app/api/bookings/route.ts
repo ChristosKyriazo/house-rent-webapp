@@ -4,9 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { findBookingConflicts } from '@/lib/booking-conflicts'
 import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized, validateBody } from '@/lib/api-utils'
 import { createBookingSchema } from '@/lib/schemas'
+import { requestLogger } from '@/lib/logger'
 
 // GET /api/bookings - Get all bookings for the current user
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -262,13 +264,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ bookings: transformedBookings }, { status: 200 })
   } catch (error) {
-    console.error('Error fetching bookings:', error)
+    log.error({ err: error }, 'Error fetching bookings')
     return serverError()
   }
 }
 
 // POST /api/bookings - Create a new booking
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -440,7 +443,7 @@ export async function POST(request: NextRequest) {
         })
       }
     } catch (error) {
-      console.error('Failed to create booking notification:', error)
+      log.error({ err: error }, 'Failed to create booking notification')
       // Don't fail the booking creation if notification fails
     }
 
@@ -459,7 +462,7 @@ export async function POST(request: NextRequest) {
         })
       }
     } catch (e) {
-      console.error('Failed to clear availability_set notifications:', e)
+      log.error({ err: e }, 'Failed to clear availability_set notifications')
     }
 
     return NextResponse.json({ booking }, { status: 201 })
@@ -470,7 +473,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === 'OWNER_CONFLICT') {
       return badRequest('The owner/broker already has an appointment at this time')
     }
-    console.error('Error creating booking:', error)
+    log.error({ err: error }, 'Error creating booking')
     return serverError()
   }
 }

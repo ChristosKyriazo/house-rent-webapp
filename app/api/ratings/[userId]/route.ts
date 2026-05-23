@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { badRequest, parsePositiveInt, serverError } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all individual ratings for a specific user by type
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> | { userId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const resolvedParams = await Promise.resolve(params)
     const userId = parsePositiveInt(resolvedParams.userId)
@@ -44,7 +46,7 @@ export async function GET(
 
     return NextResponse.json({ ratings }, { status: 200 })
   } catch (error) {
-    console.error('Get user ratings error:', error)
+    log.error({ err: error }, 'Get user ratings error')
     return serverError()
   }
 }

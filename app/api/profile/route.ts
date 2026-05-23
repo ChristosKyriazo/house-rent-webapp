@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { clerkClient } from '@clerk/nextjs/server'
+import { requestLogger } from '@/lib/logger'
 
 // GET /api/profile - get current user's profile or a specific user by userId query param
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const searchParams = request.nextUrl.searchParams
     const userIdParam = searchParams.get('userId')
@@ -69,13 +71,14 @@ export async function GET(request: NextRequest) {
       }
     }, { status: 200 })
   } catch (error) {
-    console.error('Get profile error:', error)
+    log.error({ err: error }, 'Get profile error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // PATCH /api/profile - update current user's profile
 export async function PATCH(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
 
@@ -141,7 +144,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ message: 'Profile updated', user: updatedUser }, { status: 200 })
   } catch (error) {
-    console.error('Update profile error:', error)
+    log.error({ err: error }, 'Update profile error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -151,6 +154,7 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE /api/profile - delete current user's account
 export async function DELETE(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
 
@@ -174,14 +178,14 @@ export async function DELETE(request: NextRequest) {
         const clerk = await clerkClient()
         await clerk.users.deleteUser(clerkUserId)
       } catch (clerkError) {
-        console.error('Error deleting user from Clerk:', clerkError)
+        log.error({ err: clerkError }, 'Error deleting user from Clerk')
         // Continue even if Clerk deletion fails - database is already deleted
       }
     }
 
     return NextResponse.json({ message: 'Account deleted successfully' }, { status: 200 })
   } catch (error) {
-    console.error('Delete account error:', error)
+    log.error({ err: error }, 'Delete account error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

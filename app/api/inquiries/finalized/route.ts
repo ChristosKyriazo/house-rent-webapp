@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all finalized inquiries for the current user (for rating purposes)
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -152,7 +154,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ finalizedInquiries: formattedInquiries }, { status: 200 })
   } catch (error) {
-    console.error('Get finalized inquiries error:', error)
+    log.error({ err: error }, 'Get finalized inquiries error')
     return serverError()
   }
 }
