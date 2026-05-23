@@ -10,7 +10,7 @@ import { greekUppercaseNoAnnotations } from '@/lib/utils'
 import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
-import AIChatPanel, { type AIChatPanelHandle } from '@/app/components/AIChatPanel'
+import AIChatPanel from '@/app/components/AIChatPanel'
 
 interface Home {
   id: number
@@ -93,10 +93,8 @@ function HomesPageInner() {
   const [showOrderDropdown, setShowOrderDropdown] = useState(false)
   const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
-  const [aiPreviewMode, setAiPreviewMode] = useState(false)
   const isInitialized = useRef(false)
   const homesRef = useRef(homes)
-  const aiChatRef = useRef<AIChatPanelHandle>(null)
   
   // Keep homes ref in sync
   useEffect(() => {
@@ -972,14 +970,12 @@ function HomesPageInner() {
         {/* AI Chat Search */}
         {searchType && filterType === 'ai' && (
           <AIChatPanel
-            ref={aiChatRef}
             searchType={searchType}
             excludeInquired={excludeInquired}
             excludeApproved={excludeApproved}
             language={language}
-            onResultsFound={(results, isPreview) => {
+            onResultsFound={(results) => {
               setHomes(results)
-              setAiPreviewMode(isPreview)
               setIsAISearchActive(true)
               setShowFilters(false)
               sessionStorage.setItem('homesSearchResults', JSON.stringify(results))
@@ -991,7 +987,6 @@ function HomesPageInner() {
               setIsAISearchActive(false)
               setAiQuery('')
               setHomes([])
-              setAiPreviewMode(false)
               setShowFilters(true)
               sessionStorage.removeItem('homesSearchResults')
               sessionStorage.removeItem('homesSearchFilters')
@@ -1132,30 +1127,7 @@ function HomesPageInner() {
             </p>
           </div>
         ) : homes.length > 0 ? (
-          <div className="relative">
-            {/* AI preview overlay — shown when conversation is still ongoing */}
-            {aiPreviewMode && filterType === 'ai' && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-start pt-24 rounded-3xl bg-[var(--ink-soft)]/60 backdrop-blur-[3px]">
-                <div className="bg-[var(--surface)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl px-8 py-6 text-center max-w-sm mx-4">
-                  <div className="text-2xl mb-3">🏡</div>
-                  <p className="font-semibold text-[var(--text)] mb-1">
-                    {language === 'el' ? 'Πρώτα αποτελέσματα' : 'First results in'}
-                  </p>
-                  <p className="text-sm text-[var(--text-muted)] mb-4">
-                    {language === 'el'
-                      ? 'Δεν βρήκατε αυτό που ψάχνατε; Συνεχίστε τη συνομιλία για πιο στοχευμένα αποτελέσματα.'
-                      : "Not quite what you're looking for? Continue the conversation to refine your results."}
-                  </p>
-                  <button
-                    onClick={() => aiChatRef.current?.resume()}
-                    className="btn-primary w-full px-6 py-3 text-sm font-semibold"
-                  >
-                    💬 {language === 'el' ? 'Συνέχεια συνομιλίας' : 'Continue conversation'}
-                  </button>
-                </div>
-              </div>
-            )}
-          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all ${aiPreviewMode && filterType === 'ai' ? 'opacity-30 pointer-events-none select-none blur-[1px]' : ''}`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...homes].sort((a, b) => {
               if (!sortOrder) return 0
               if (sortOrder === 'price-asc') {
@@ -1443,7 +1415,6 @@ function HomesPageInner() {
                 </div>
               )
             })}
-          </div>
           </div>
         ) : null}
       </div>

@@ -1,14 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
-}
-
-export interface AIChatPanelHandle {
-  resume: () => void
 }
 
 interface AIChatPanelProps {
@@ -16,7 +12,7 @@ interface AIChatPanelProps {
   excludeInquired: boolean
   excludeApproved: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onResultsFound: (homes: any[], isPreview: boolean) => void
+  onResultsFound: (homes: any[]) => void
   onBack: () => void
   language: string
 }
@@ -24,9 +20,8 @@ interface AIChatPanelProps {
 const MAX_TOTAL_PROMPTS = 9
 const FIRST_SEARCH_TURN = 3
 
-const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIChatPanel(
-  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language },
-  ref
+function AIChatPanel(
+  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language }: AIChatPanelProps
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -42,15 +37,6 @@ const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIC
   const isEl = language === 'el'
   const remaining = MAX_TOTAL_PROMPTS - promptCount
   const hardStop = promptCount >= MAX_TOTAL_PROMPTS
-
-  useImperativeHandle(ref, () => ({
-    resume: () => {
-      if (!hardStop) {
-        setPaused(false)
-        setTimeout(() => inputRef.current?.focus(), 80)
-      }
-    },
-  }))
 
   const t = {
     headline: isEl ? 'Πώς μπορώ να σας βοηθήσω να βρείτε το σπίτι σας;' : "Let's find your perfect home.",
@@ -79,7 +65,7 @@ const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIC
   }
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages, loading, paused])
 
   const runSearch = async (filters: object) => {
@@ -142,8 +128,7 @@ const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIC
 
         setMessages(prev => [...prev, { role: 'assistant', content: resultMsg }])
 
-        const isLastSearch = newCount >= MAX_TOTAL_PROMPTS
-        onResultsFound(homes, !isLastSearch)
+        onResultsFound(homes)
         setPaused(true)
       } else {
         const aiMsg = chatData.followUpQuestion || chatData.assistantMessage
@@ -171,7 +156,7 @@ const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIC
     setPaused(false)
     setSearchCount(0)
     setError(null)
-    onResultsFound([], false)
+    onResultsFound([])
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -314,6 +299,6 @@ const AIChatPanel = forwardRef<AIChatPanelHandle, AIChatPanelProps>(function AIC
       </div>
     </div>
   )
-})
+}
 
 export default AIChatPanel
