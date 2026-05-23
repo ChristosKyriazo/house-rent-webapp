@@ -1,15 +1,16 @@
 # House Rent Webapp
 
-A Next.js (App Router) application for browsing and managing rental listings. The stack includes **Prisma** with **SQLite** for local development, **Clerk** for authentication, and optional **OpenAI** / **Google Maps** integrations for AI-assisted search and location features.
+A Next.js (App Router) application for browsing and managing rental listings. The stack includes **Prisma** with **PostgreSQL** (via Docker locally), **Clerk** for authentication, **Sentry** for error monitoring, **pino** for structured logging, and optional **OpenAI** / **Google Maps** integrations for AI-assisted search and location features.
 
-**Default git branch:** `dev` — day-to-day work happens here; `main` tracks the stable line.
+**Default git branch:** `dev` — day-to-day work happens here; `main` triggers the automated deploy pipeline.
 
 ---
 
 ## Prerequisites
 
-- **Node.js** (LTS recommended) and **npm**
-- A **Clerk** account and application ([Clerk Dashboard](https://dashboard.clerk.com)) — required for sign-in and protected routes
+- **Node.js 20** (LTS) and **npm**
+- **Docker Desktop** — runs the local PostgreSQL database ([docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/))
+- A **Clerk** account and application ([dashboard.clerk.com](https://dashboard.clerk.com)) — required for sign-in and protected routes
 
 ---
 
@@ -28,49 +29,56 @@ cd webapp
 npm install
 ```
 
-### 3. Environment variables
+### 3. Start the database
+
+```bash
+docker compose up db -d
+```
+
+This starts PostgreSQL on port 5432. The container is healthy when `docker compose ps` shows `(healthy)`.
+
+### 4. Environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and never commit it.
+Edit `.env` — never commit it. Required variables:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `DATABASE_URL` | Yes | SQLite for local dev: `file:./dev.db` (→ `prisma/dev.db`; avoid `file:./prisma/dev.db` or Prisma resolves to `prisma/prisma/dev.db`) |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key (browser) |
-| `CLERK_SECRET_KEY` | Yes | Clerk secret key (server) |
-| `OPENAI_API_KEY` | No | AI search, descriptions, translation, bulk-upload helpers |
-| `GOOGLE_MAPS_API_KEY` | No | Maps / geocoding features in `lib/google-maps.ts` |
+| `DATABASE_URL` | Yes | PostgreSQL: `postgresql://postgres:postgres@localhost:5432/house_rent` |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key (browser) — from [dashboard.clerk.com](https://dashboard.clerk.com) |
+| `CLERK_SECRET_KEY` | Yes | Clerk secret key (server) — same Clerk app |
+| `CALCOM_TOKEN_ENCRYPTION_KEY` | Yes | 32-byte hex key for Cal.com OAuth tokens. Generate with: `openssl rand -hex 32` |
+| `SENTRY_DSN` | Recommended | Sentry DSN for server-side error tracking |
+| `NEXT_PUBLIC_SENTRY_DSN` | Recommended | Same DSN value — used by the browser Sentry SDK |
+| `LOG_LEVEL` | No | `debug` / `info` / `warn` / `error` (default: `info`) |
+| `OPENAI_API_KEY` | No | AI descriptions, translation, and natural-language search |
+| `GOOGLE_MAPS_API_KEY` | No | Geocoding and nearby-places distance calculation |
 
-Create keys in the Clerk dashboard and paste them into `.env`. Without Clerk keys, auth and Clerk-backed flows will not work.
-
-### 4. Database: generate client and apply migrations
-
-```bash
-npm run db:generate
-npm run db:migrate
-```
-
-This creates/updates the local SQLite database under `prisma/` (path depends on `DATABASE_URL`) and applies Prisma migrations.
-
-### 5. Optional: seed reference data
+### 5. Apply database migrations
 
 ```bash
-npm run db:seed:universities   # Athens universities
-npm run db:seed:nea-smirni     # Nea Smirni area data
+npx prisma migrate dev
 ```
 
-Raw SQL helpers live under `scripts/sql/` for manual or one-off use; TypeScript seeds live under `scripts/seeds/`.
+This creates all tables in the PostgreSQL database and generates the Prisma client.
 
-### 6. Start the development server
+### 6. Optional: seed reference data
+
+```bash
+npm run db:seed:universities   # Greek universities
+npm run db:seed:areas          # All 83 areas (Athens, Thessaloniki, Volos, Ioannina, Serres, Komotini, Chania, Iraklio, Patra)
+```
+
+### 7. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Use Clerk’s sign-in/sign-up pages (`/login`, `/signup`) to authenticate. The app syncs users to the Prisma `User` model via `clerkUserId` (see `lib/auth.ts`).
+Open [http://localhost:3000](http://localhost:3000). Sign in via `/login`. The app syncs Clerk users into the Prisma `User` model via `lib/auth.ts`.
 
 ---
 
@@ -78,16 +86,38 @@ Open [http://localhost:3000](http://localhost:3000). Use Clerk’s sign-in/sign-
 
 | Script | Purpose |
 |--------|---------|
-| `dev` | Next.js dev server (`next dev`) |
+| `dev` | Next.js dev server |
 | `build` | Production build |
 | `start` | Run production server after `build` |
 | `lint` / `lint:fix` | ESLint |
 | `typecheck` | `tsc --noEmit` |
+| `test` | Vitest unit tests |
+| `test:e2e` | Playwright end-to-end tests (requires dev server running) |
 | `db:generate` | `prisma generate` |
 | `db:migrate` | `prisma migrate dev` |
-| `db:studio` | Prisma Studio (inspect DB) |
-| `db:seed:universities` | Seed universities (`scripts/seeds/`) |
-| `db:seed:nea-smirni` | Seed Nea Smirni (`scripts/seeds/`) |
+| `db:studio` | Prisma Studio — visual DB browser |
+| `db:seed:universities` | Seed Greek universities |
+| `db:seed:areas` | Seed all 83 areas across Greece |
+
+---
+
+## Testing
+
+```bash
+npm test                   # unit tests (vitest) — 101 tests, no database needed
+npm run test:e2e           # E2E smoke tests (Playwright) — requires dev server + DB
+```
+
+Coverage is enforced at ≥60% on statements, branches, and lines. Running `npm test -- --coverage` prints the full report.
+
+---
+
+## Health endpoints
+
+| Endpoint | Expected | Purpose |
+|----------|----------|---------|
+| `GET /api/healthz` | `{"status":"ok"}` | Liveness — is the process up? |
+| `GET /api/readyz` | `{"status":"ok","db":"connected"}` | Readiness — is the DB reachable? |
 
 ---
 
@@ -98,7 +128,11 @@ npm run build
 npm run start
 ```
 
-Point `DATABASE_URL` at your production database if you move off SQLite; keep secrets in the host’s environment (Vercel, Docker, etc.), not in the repo.
+For full containerised local/staging parity:
+
+```bash
+docker compose up         # starts both db + app
+```
 
 ---
 
@@ -106,62 +140,45 @@ Point `DATABASE_URL` at your production database if you move off SQLite; keep se
 
 | Path | Purpose |
 |------|---------|
-| `app/` | App Router routes: `app/page.tsx`, features under `app/homes/`, `app/profile/`, … |
-| `app/api/` | Route handlers only |
+| `app/` | App Router pages and layouts |
+| `app/api/` | API route handlers |
 | `app/components/` | Shared React components |
-| `app/contexts/` | React context providers |
-| `app/hooks/` | Shared hooks |
-| `lib/` | Server/shared helpers (Prisma, auth, translations, AI, maps) |
-| `proxy.ts` | Clerk auth (`clerkMiddleware`) for protected routes and API (Next.js 16 convention; replaces `middleware.ts`) |
-| `prisma/` | `schema.prisma` and migrations |
-| `scripts/sql/` | Raw SQL snippets (manual / one-off) |
-| `scripts/seeds/` | Prisma seed scripts (`tsx`) |
-| `scripts/tools/` | Small Node utilities (e.g. CUID generation) |
+| `lib/` | Server/shared helpers (Prisma, auth, logger, AI, maps) |
+| `proxy.ts` | Clerk auth middleware (Next.js 16 convention, replaces `middleware.ts`) |
+| `prisma/` | `schema.prisma` and migration history |
+| `tests/` | Vitest unit tests (`tests/api/`, `tests/lib/`, `tests/services/`) and Playwright E2E (`tests/e2e/`) |
+| `scripts/seeds/` | Prisma seed scripts |
+| `scripts/sql/` | Raw SQL snippets for manual use |
+| `.github/workflows/` | CI (`ci.yml`) and deploy (`deploy.yml`) pipelines |
 
 ---
 
 ## Git workflow
 
-1. **Work on `dev`** (default for new changes):
-
+1. **Work on `dev`:**
    ```bash
-   git checkout dev
-   git pull origin dev
+   git checkout dev && git pull origin dev
    ```
-
 2. **Commit and push:**
-
    ```bash
-   git add -A
-   git commit -m "Describe your change"
+   git commit -m "Your change"
    git push origin dev
    ```
-
-3. **Promote to `main`** when ready (merge or fast-forward from `dev`):
-
+3. **Promote to `main`** (triggers the deploy pipeline):
    ```bash
-   git checkout main
-   git pull origin main
-   git merge dev
-   git push origin main
-   git checkout dev
+   git checkout main && git merge dev && git push origin main
    ```
 
-Use tags or release notes on your host if you deploy from `main`.
-
-For full branch roles, promotion steps, rollback, and hotfix handling, see `docs/BRANCHING_STRATEGY.md`.
-For production-hardening guidance and stakeholder-oriented planning, use:
-- `docs/PRODUCTION_READINESS_PLAN.md`
-- `docs/BRANCHING_STRATEGY.md`
-- `docs/BUSINESS_USER_EXPERIENCE_GUIDE.md`
-- `docs/TECHNICAL_SYSTEM_AND_RISK_GUIDE.md`
-- `docs/PRODUCTION_EXECUTION_BIBLE.md`
+See `docs/BRANCHING_STRATEGY.md` for full branch roles, hotfix handling, and rollback steps.
 
 ---
 
 ## Troubleshooting
 
-- **Prisma client / schema errors:** Run `npm run db:generate`, then `npm run db:migrate`.
-- **Port 3000 in use:** `npx next dev -p 3001`
-- **Clerk / auth issues:** Verify `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` match the same Clerk application and environment (e.g. development vs production).
-- **Database locked (SQLite):** Close Prisma Studio and other processes using the same `.db` file; see `scripts/tools/unlock-database.js` if you use it in your workflow.
+| Problem | Fix |
+|---------|-----|
+| `prisma migrate dev` fails with URL error | Check `DATABASE_URL` starts with `postgresql://` |
+| Docker port 5432 already in use | Stop other Postgres processes or change the port in `docker-compose.yml` |
+| App boots but auth fails instantly | Verify Clerk keys match your Clerk application and environment (dev vs prod) |
+| Port 3000 in use | `npx next dev -p 3001` |
+| Sentry not receiving events | Check `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are both set |

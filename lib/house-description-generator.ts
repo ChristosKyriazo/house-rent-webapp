@@ -1,4 +1,12 @@
 import OpenAI from 'openai'
+import { createHash } from 'crypto'
+
+// Server-side in-memory cache: prevents duplicate OpenAI calls for identical house data
+const descriptionCache = new Map<string, { description: string | null; descriptionGreek: string | null }>()
+
+function cacheKey(data: object): string {
+  return createHash('sha256').update(JSON.stringify(data)).digest('hex')
+}
 
 /**
  * Generate house descriptions in both English and Greek using AI
@@ -40,6 +48,10 @@ export async function generateHouseDescriptions(
     console.warn('OpenAI not available, skipping description generation')
     return { description: null, descriptionGreek: null }
   }
+
+  const key = cacheKey(houseData)
+  const hit = descriptionCache.get(key)
+  if (hit) return hit
 
   try {
     // Build context about the property
@@ -204,10 +216,12 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
       }
     }
 
-    return {
+    const result = {
       description: finalEnglishDescription,
       descriptionGreek: finalGreekDescription,
     }
+    descriptionCache.set(key, result)
+    return result
   } catch (error) {
     console.error('Error generating house descriptions:', error)
     return { description: null, descriptionGreek: null }

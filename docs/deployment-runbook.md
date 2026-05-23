@@ -85,6 +85,7 @@ Required repository secrets (`Settings → Secrets and variables → Actions`):
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN (client-side, same value) |
 | `SENTRY_ORG` | Sentry organisation slug |
 | `SENTRY_PROJECT` | Sentry project slug |
+| `LOG_LEVEL` | Log verbosity (`debug` / `info` / `warn` / `error`) |
 
 ---
 

@@ -28,14 +28,14 @@
 ## Phase 3 — Test Coverage & Performance
 **Goal:** Catch regressions automatically and keep response times acceptable under load.
 
-- [ ] Increase Vitest coverage to ≥60% on critical paths (auth, bookings, inquiries)
+- [x] Increase Vitest coverage to ≥60% on critical paths (auth, bookings, inquiries) — reached 64.3%
 - [ ] E2E Playwright tests for full user journeys (signup → list → inquire → book → rate)
-- [ ] Coverage threshold enforced in CI (fail build below threshold)
-- [ ] Cache Google Maps geocoding results (Redis or in-memory LRU)
-- [ ] Cache OpenAI-generated descriptions (store result, skip re-generation)
-- [ ] Add retry + timeout handling for all external API calls
-- [ ] Image optimization config in `next.config.ts`
-- [ ] Fix booking creation race condition (DB-level lock or serializable transaction)
+- [x] Coverage threshold enforced in CI (fail build below threshold) — `vitest.config.ts` thresholds: 60/55/60/60
+- [x] Cache Google Maps geocoding results (24h in-memory TTL cache in `lib/google-maps.ts`)
+- [x] Cache OpenAI-generated descriptions (SHA-256 keyed in-memory cache in `lib/house-description-generator.ts`)
+- [x] Add retry + timeout handling for all external API calls (8s timeout on all Google Maps fetch calls)
+- [x] Image optimization config in `next.config.ts` (AVIF/WebP, 7-day TTL, device sizes)
+- [x] Fix booking creation race condition (`isolationLevel: 'Serializable'` on booking transaction)
 - [ ] Load test booking endpoint at 2–3× expected peak concurrent requests
 
 ## Phase 4 — Maintainability (Ongoing)

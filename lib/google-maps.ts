@@ -7,6 +7,20 @@
 
 import { prisma } from '@/lib/prisma'
 
+// In-memory geocoding cache: address string → coordinates (TTL 24 h)
+const geocodeCache = new Map<string, { coords: Coordinates | null; expiresAt: number }>()
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(id)
+  }
+}
+
 interface Coordinates {
   lat: number
   lng: number
@@ -59,19 +73,24 @@ async function geocodeAddress(
   const addressParts = [street, area, city, country].filter(Boolean)
   const address = addressParts.join(', ')
 
+  const cached = geocodeCache.get(address)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.coords
+  }
+
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url)
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
       const location = data.results[0].geometry.location
-      return {
-        lat: location.lat,
-        lng: location.lng,
-      }
+      const coords = { lat: location.lat, lng: location.lng }
+      geocodeCache.set(address, { coords, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
+      return coords
     } else {
       console.error('Geocoding failed:', data.status, data.error_message)
+      geocodeCache.set(address, { coords: null, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
       return null
     }
   } catch (error) {
@@ -194,7 +213,7 @@ async function findClosestPlace(
     // Build Places API Nearby Search URL (default 5km radius, can be overridden)
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=${radius}&type=${placeType}&key=${apiKey}`
 
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url)
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -309,7 +328,7 @@ async function findClosestUniversity(
     // Make 1 Places API Nearby Search call for universities (20km radius)
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=20000&type=university&key=${apiKey}`
     
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url)
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {

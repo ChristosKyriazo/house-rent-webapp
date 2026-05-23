@@ -421,6 +421,8 @@ export async function POST(request: NextRequest) {
           },
         },
       })
+    }, {
+      isolationLevel: 'Serializable',
     })
 
     // Create notification for owner/broker about the new booking
