@@ -1354,6 +1354,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Semantic similarity boost using stored home embeddings
+    if (openai && process.env.OPENAI_API_KEY && userQuery && userQuery !== '[conversational]') {
+      try {
+        const queryEmbedding = await generateEmbedding(userQuery, openai)
+        for (const home of homes) {
+          const stored = (home as any).embedding
+          if (!Array.isArray(stored)) continue
+          const sim = cosineSimilarity(queryEmbedding, stored as number[])
+          // sim is 0-1; boost up to +8 points for very high similarity
+          const bonus = Math.round(sim * 8)
+          if (bonus > 0) {
+            const cur = matchMap.get(home.id) || 0
+            matchMap.set(home.id, Math.min(100, cur + bonus))
+          }
+        }
+      } catch {
+        // non-fatal — skip semantic boost if embedding fails
+      }
+    }
+
     // Attach match percentages and safety to homes and sort by match percentage (highest first)
     // Disqualified homes (0%) sort to the bottom
     const homesWithMatches = homes.map(home => {
