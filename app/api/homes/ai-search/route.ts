@@ -3,17 +3,36 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
 import { checkAiSearchLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
+import { requestLogger } from '@/lib/logger'
+import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null
 
+// --- Semantic query caches (server-instance scoped) ---
+
+/** Reuse embedding vectors for identical query strings to avoid duplicate OpenAI calls */
+const embeddingTextCache = new Map<string, number[]>()
+
+interface CachedSearchResult {
+  embedding: number[]
+  type: string | undefined
+  result: { homes: unknown[]; message: string }
+  ts: number
+}
+const searchResultCache: CachedSearchResult[] = []
+const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const SEARCH_CACHE_MAX_ENTRIES = 100
+const SEARCH_CACHE_SIM_THRESHOLD = 0.90
+
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   // Initialize logging variables
   let userId: number | null = null
   let filterExtractionPrompt: string | null = null
@@ -35,10 +54,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { query, type, excludeInquired, excludeApproved } = body
-    userQuery = query || 'unknown'
+    const { query, type, excludeInquired, excludeApproved, preExtractedFilters } = body
+    userQuery = query || (preExtractedFilters ? '[conversational]' : 'unknown')
 
-    if (!query || !query.trim()) {
+    if (!preExtractedFilters && (!query || !query.trim())) {
       return NextResponse.json(
         { error: 'Search query is required' },
         { status: 400 }
@@ -64,29 +83,72 @@ export async function POST(request: NextRequest) {
       // User not logged in, continue without userId
     }
 
-    // Check if OpenAI is available
-    if (!openai) {
-      errorMessage = 'OpenAI package not installed'
-      return NextResponse.json(
-        { error: 'OpenAI package not installed. Please run: npm install openai' },
-        { status: 500 }
-      )
+    // --- Semantic cache: generate embedding early, check for similar recent queries ---
+    let queryEmbedding: number[] | null = null
+    if (openai && process.env.OPENAI_API_KEY && query && query.trim() && !preExtractedFilters) {
+      try {
+        const normalizedQuery = query.trim()
+        // Reuse embedding for the exact same query text
+        queryEmbedding = embeddingTextCache.get(normalizedQuery) ?? null
+        if (!queryEmbedding) {
+          queryEmbedding = await generateEmbedding(normalizedQuery, openai)
+          if (embeddingTextCache.size >= 500) embeddingTextCache.clear()
+          embeddingTextCache.set(normalizedQuery, queryEmbedding)
+        }
+
+        // Only check cache when results aren't user-specific (no exclusion filters)
+        if (!excludeInquired && !excludeApproved) {
+          const now = Date.now()
+          // Evict stale entries
+          let i = searchResultCache.length
+          while (i--) {
+            if (now - searchResultCache[i].ts > SEARCH_CACHE_TTL_MS) searchResultCache.splice(i, 1)
+          }
+          // Find most similar cached query
+          let bestSim = 0
+          let bestEntry: CachedSearchResult | null = null
+          for (const entry of searchResultCache) {
+            if (entry.type !== (type || undefined)) continue
+            const sim = cosineSimilarity(queryEmbedding, entry.embedding)
+            if (sim > bestSim) { bestSim = sim; bestEntry = entry }
+          }
+          if (bestEntry && bestSim >= SEARCH_CACHE_SIM_THRESHOLD) {
+            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from semantic cache')
+            return NextResponse.json(bestEntry.result, { status: 200 })
+          }
+        }
+      } catch {
+        // non-fatal — proceed without caching
+      }
     }
 
-    // Check if OpenAI API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      errorMessage = 'OpenAI API key not configured'
-      return NextResponse.json(
-        { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
-        { status: 500 }
-      )
-    }
-
-    // Step 1: Extract hard filters using AI only (rent vs buy price semantics match manual search)
+    // Step 1: Extract hard filters — skip if pre-extracted filters are provided (conversational mode)
     const listingMode = type === 'buy' || type === 'rent' ? type : undefined
-    const extractedFiltersResult: any = await extractFiltersHybrid(query, openai, {
-      listingMode,
-    })
+    let extractedFiltersResult: any
+
+    if (preExtractedFilters) {
+      extractedFiltersResult = { ...preExtractedFilters, confidence: preExtractedFilters.confidence ?? 0.9 }
+    } else {
+      // Check if OpenAI is available
+      if (!openai) {
+        errorMessage = 'OpenAI package not installed'
+        return NextResponse.json(
+          { error: 'OpenAI package not installed. Please run: npm install openai' },
+          { status: 500 }
+        )
+      }
+
+      // Check if OpenAI API key is configured
+      if (!process.env.OPENAI_API_KEY) {
+        errorMessage = 'OpenAI API key not configured'
+        return NextResponse.json(
+          { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
+          { status: 500 }
+        )
+      }
+
+      extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
+    }
     
     // Extract the filters (reasoning is extracted but not returned to client)
     let extractedFilters: any = {}
@@ -615,9 +677,35 @@ export async function POST(request: NextRequest) {
     const matchMap = new Map<number, number>()
     
     if (shouldForce100) {
-      // All properties get 100% if only hard filters
+      // Score by intrinsic home quality so identical-filter results still have different percentages
+      const energyBonus: Record<string, number> = { 'A+': 22, A: 18, B: 13, C: 9, D: 5, E: 2, F: 1, G: 0 }
       homes.forEach(home => {
-        matchMap.set(home.id, 100)
+        let score = 55 // base
+        // Energy class (0-22 pts)
+        score += energyBonus[(home as any).energyClass || ''] ?? 4
+        // Recency — take the best of yearBuilt / yearRenovated (0-15 pts)
+        const yr = Math.max((home as any).yearBuilt || 0, (home as any).yearRenovated || 0)
+        if (yr >= 2020) score += 15
+        else if (yr >= 2015) score += 12
+        else if (yr >= 2010) score += 9
+        else if (yr >= 2000) score += 6
+        else if (yr >= 1990) score += 3
+        else if (yr > 0) score += 1
+        // Price efficiency — closer to budget midpoint = better (0-8 pts)
+        const maxP = extractedFilters.maxPrice as number | undefined
+        const minP = extractedFilters.minPrice as number | undefined
+        if (maxP && (home as any).pricePerMonth) {
+          const ratio = (home as any).pricePerMonth / maxP
+          if (ratio < 0.55) score += 8
+          else if (ratio < 0.70) score += 6
+          else if (ratio < 0.82) score += 4
+          else if (ratio < 0.92) score += 2
+        } else if (minP && maxP && (home as any).pricePerMonth) {
+          const mid = (minP + maxP) / 2
+          const dist = Math.abs((home as any).pricePerMonth - mid) / (maxP - minP)
+          score += Math.max(0, Math.round((1 - dist) * 6))
+        }
+        matchMap.set(home.id, Math.min(100, score))
       })
     } else {
       // Calculate scores programmatically
@@ -899,12 +987,11 @@ export async function POST(request: NextRequest) {
       homes.forEach((home) => {
         const rawScore = rawScores.get(home.id) || 50
         
-        // Scale to 0-100
-        let scaledScore = scoreRange > 0 
-          ? ((rawScore - minScore) / scoreRange) * 100
-          : 100 // All same score, set to 100
-        
-        // Ensure score is between 0-100
+        // Map to 30-95% range: avoids extreme 0%/100% spread when scores are close
+        let scaledScore = scoreRange > 0
+          ? 30 + ((rawScore - minScore) / scoreRange) * 65
+          : 70 // All same score → neutral 70%
+
         scaledScore = Math.max(0, Math.min(100, scaledScore))
         
         // No 99% cap - allow 100% if the scaled score reaches it
@@ -1019,9 +1106,11 @@ export async function POST(request: NextRequest) {
     
     // Distance, safety, and vibe matching are now handled in the programmatic calculation above
 
-    // Post-process: Apply description bonus
+    // Post-process: Apply description bonus + disqualifier detection
     // Analyze descriptions to match user query features (e.g., "new stove", "backyard", "big balcony")
     // This bonus is applied after all other scores are calculated
+    /** homeId → incompatibility reason when description explicitly prohibits what user wants */
+    const disqualifierMap = new Map<number, string>()
     if (!shouldForce100) {
       // Calculate description bonus for each home
       const descriptionScores: number[] = []
@@ -1050,12 +1139,19 @@ export async function POST(request: NextRequest) {
           home.yearBuilt,
           home.yearRenovated
         )
-        
+
+        // Check for hard incompatibilities (e.g. user wants pets, listing says no pets)
+        const disqualifier = calculateDisqualifiers(query, home.description)
+        if (disqualifier) {
+          disqualifierMap.set(home.id, disqualifier)
+          matchMap.set(home.id, 0)
+        }
+
         // Store extracted keywords from first home (they're the same for all)
         if (extractedKeywords.length === 0) {
           extractedKeywords = result.extractedKeywords
         }
-        
+
         descriptionScores.push(result.bonus)
         descriptionBonusMap.set(home.id, result.bonus)
         descriptionPenaltyMap.set(home.id, result.penalty)
@@ -1092,19 +1188,20 @@ export async function POST(request: NextRequest) {
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
       
-      // Apply bonuses and penalties
+      // Apply bonuses and penalties (skip disqualified homes — their score is locked at 0)
       homes.forEach(home => {
+        if (disqualifierMap.has(home.id)) return
         const bonus = descriptionBonusMap.get(home.id) || 0
         const penalty = descriptionPenaltyMap.get(home.id) || 0
         const currentScore = matchMap.get(home.id) || 0
-        
+
         let finalScore = currentScore
-        
+
         // Apply penalty first (for negative mentions)
         if (penalty < 0) {
           finalScore = Math.max(0, finalScore + penalty) // penalty is already negative
         }
-        
+
         // Apply bonus
         if (bonus > 0) {
           finalScore = Math.min(100, finalScore + bonus)
@@ -1114,7 +1211,7 @@ export async function POST(request: NextRequest) {
           const relativePenalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
           finalScore = Math.max(0, finalScore - relativePenalty)
         }
-        
+
         matchMap.set(home.id, finalScore)
       })
       
@@ -1160,6 +1257,17 @@ export async function POST(request: NextRequest) {
         console.log('==========================================\n')
       }
       
+      // Apply photo tag bonus — visual features confirmed in photos that match user query
+      // Skip disqualified homes to keep their score locked at 0
+      homes.forEach(home => {
+        if (disqualifierMap.has(home.id)) return
+        const photoBonus = calculatePhotoBonus(userQuery, (home as any).photoTags)
+        if (photoBonus > 0) {
+          const cur = matchMap.get(home.id) || 0
+          matchMap.set(home.id, Math.min(100, cur + photoBonus))
+        }
+      })
+
       // Calculate average description score for logging
       if (descriptionScores.length > 0) {
         avgDescriptionPhotoScore = descriptionScores.reduce((sum, score) => sum + score, 0) / descriptionScores.length
@@ -1208,27 +1316,70 @@ export async function POST(request: NextRequest) {
       // If shouldForce100 but only country filter, return nothing
       if (onlyCountryFilter) {
         return NextResponse.json(
-          { 
+          {
             homes: [],
             message: 'No homes found matching your criteria'
           },
           { status: 200 }
         )
       }
+
+      // Even in force-100 path, still detect hard incompatibilities in descriptions
+      if (query) {
+        for (const home of homes) {
+          const disqualifier = calculateDisqualifiers(query, home.description)
+          if (disqualifier) {
+            disqualifierMap.set(home.id, disqualifier)
+            matchMap.set(home.id, 0)
+          }
+        }
+      }
+    }
+
+    // Semantic similarity boost using stored home embeddings
+    // Reuse the queryEmbedding already generated at the top of this handler
+    // Skip disqualified homes so we don't accidentally lift them above 0%
+    if (queryEmbedding) {
+      for (const home of homes) {
+        if (disqualifierMap.has(home.id)) continue
+        const stored = (home as any).embedding
+        if (!Array.isArray(stored)) continue
+        const sim = cosineSimilarity(queryEmbedding, stored as number[])
+        // sim is 0-1; boost up to +8 points for very high similarity
+        const bonus = Math.round(sim * 8)
+        if (bonus > 0) {
+          const cur = matchMap.get(home.id) || 0
+          matchMap.set(home.id, Math.min(100, cur + bonus))
+        }
+      }
     }
 
     // Attach match percentages and safety to homes and sort by match percentage (highest first)
+    // Disqualified homes (0%) sort to the bottom
     const homesWithMatches = homes.map(home => {
-      const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
+      const incompatibilityReason = disqualifierMap.get(home.id) ?? undefined
       return {
         ...home,
-        matchPercentage: matchMap.get(home.id) || 0,
-        safety: extractedFilters.Safety || null, // Include safety category in response
+        embedding: undefined, // strip from response
+        matchPercentage: matchMap.get(home.id) ?? 0,
+        incompatibilityReason,
+        safety: extractedFilters.Safety || null,
       }
     }).sort((a, b) => b.matchPercentage - a.matchPercentage)
 
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length
+
+    // Store in semantic cache for future similar queries
+    if (queryEmbedding && !excludeInquired && !excludeApproved) {
+      if (searchResultCache.length >= SEARCH_CACHE_MAX_ENTRIES) searchResultCache.shift()
+      searchResultCache.push({
+        embedding: queryEmbedding,
+        type: type || undefined,
+        result: { homes: homesWithMatches, message: 'AI search completed' },
+        ts: Date.now(),
+      })
+    }
 
     // Log to database (async, don't wait for it)
     prisma.aISearchLog.create({
@@ -1252,7 +1403,7 @@ export async function POST(request: NextRequest) {
         error: errorMessage,
       },
     }).catch((logError) => {
-      console.error('Failed to log AI search to database:', logError)
+      log.error({ err: logError }, 'Failed to log AI search to database')
     })
 
     return NextResponse.json(
@@ -1263,7 +1414,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error('AI search error:', error)
+    log.error({ err: error }, 'AI search error')
     errorMessage = error instanceof Error ? error.message : String(error)
     
     // Log error to database
@@ -1288,7 +1439,7 @@ export async function POST(request: NextRequest) {
         error: errorMessage,
       },
     }).catch((logError) => {
-      console.error('Failed to log AI search error to database:', logError)
+      log.error({ err: logError }, 'Failed to log AI search error to database')
     })
 
     return NextResponse.json(

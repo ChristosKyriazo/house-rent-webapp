@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 import {
   InquiryFinalizationError,
   initiateFinalization,
@@ -12,6 +13,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -37,7 +39,7 @@ export async function POST(
       if (error.status === 403) return forbidden(error.message)
       if (error.status === 404) return notFound(error.message)
     }
-    console.error('Finalize inquiry error:', error)
+    log.error({ err: error }, 'Finalize inquiry error')
     return serverError()
   }
 }
@@ -47,6 +49,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -75,7 +78,7 @@ export async function PATCH(
       if (error.status === 403) return forbidden(error.message)
       if (error.status === 404) return notFound(error.message)
     }
-    console.error('Manage finalization error:', error)
+    log.error({ err: error }, 'Manage finalization error')
     return serverError()
   }
 }

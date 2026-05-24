@@ -46,10 +46,13 @@ export default function NewHomePage() {
   const [bulkUploadLoading, setBulkUploadLoading] = useState(false)
   const [bulkUploadError, setBulkUploadError] = useState('')
   const [bulkUploadSuccess, setBulkUploadSuccess] = useState('')
-  const [parsedHouses, setParsedHouses] = useState<Array<{ title: string; city: string; country: string; rowIndex: number }>>([])
+  const [parsedHouses, setParsedHouses] = useState<Array<{ title: string; city: string; country: string; area: string | null; rowIndex: number }>>([])
   const [excelFile, setExcelFile] = useState<File | null>(null)
   const [housePhotos, setHousePhotos] = useState<{ [key: number]: File[] }>({})
   const [excelInputKey, setExcelInputKey] = useState(0)
+  const [areaValidating, setAreaValidating] = useState(false)
+  const [unknownAreas, setUnknownAreas] = useState<Array<{ rowIndex: number; rowNumber: number; areaInput: string; suggestion: string | null }>>([])
+  const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'rejected'>>({})
   const [homeCount, setHomeCount] = useState<number>(0)
   const [useAIDescription, setUseAIDescription] = useState(false)
   const [useAIDescriptionBulk, setUseAIDescriptionBulk] = useState(false)
@@ -840,6 +843,8 @@ export default function NewHomePage() {
                   setExcelFile(null)
                   setHousePhotos({})
                   setExcelInputKey(prev => prev + 1)
+                  setUnknownAreas([])
+                  setAreaDecisions({})
                 }}
                 className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
               >
@@ -881,46 +886,78 @@ export default function NewHomePage() {
                   <label className="block text-sm font-medium text-[var(--text)] mb-2">
                     {language === 'el' ? 'Αρχείο Excel' : 'Excel File'} *
                   </label>
-                  <input
-                    key={excelInputKey}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
+                  <label className="flex items-center gap-3 w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl cursor-pointer hover:border-[var(--accent)] transition-colors">
+                    <span className="shrink-0 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)]">
+                      {language === 'el' ? 'Επιλογή Αρχείου' : 'Choose File'}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)] truncate">
+                      {excelFile ? excelFile.name : (language === 'el' ? 'Δεν έχει επιλεχθεί αρχείο' : 'No file chosen')}
+                    </span>
+                    <input
+                      key={excelInputKey}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
 
-                      setBulkUploadError('')
-                      setExcelFile(file)
+                        setBulkUploadError('')
+                        setExcelFile(file)
 
-                      try {
-                        const arrayBuffer = await file.arrayBuffer()
-                        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-                        const sheetName = workbook.SheetNames[0]
-                        const worksheet = workbook.Sheets[sheetName]
-                        const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+                        try {
+                          const arrayBuffer = await file.arrayBuffer()
+                          const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+                          const sheetName = workbook.SheetNames[0]
+                          const worksheet = workbook.Sheets[sheetName]
+                          const data = XLSX.utils.sheet_to_json(worksheet) as any[]
 
-                        if (data.length === 0) {
-                          setBulkUploadError(language === 'el' ? 'Το αρχείο Excel είναι άδειο' : 'Excel file is empty')
+                          if (data.length === 0) {
+                            setBulkUploadError(language === 'el' ? 'Το αρχείο Excel είναι άδειο' : 'Excel file is empty')
+                            setExcelFile(null)
+                            return
+                          }
+
+                          // Parse houses from Excel
+                          const houses = data.map((row, index) => ({
+                            title: row['Title'] ? String(row['Title']).trim() : `House ${index + 1}`,
+                            city: row['City'] ? String(row['City']).trim() : '',
+                            country: row['Country'] ? String(row['Country']).trim() : '',
+                            area: row['Area'] ? String(row['Area']).trim() : null,
+                            rowIndex: index,
+                          }))
+
+                          setParsedHouses(houses)
+                          setUnknownAreas([])
+                          setAreaDecisions({})
+
+                          // Validate areas against DB
+                          setAreaValidating(true)
+                          try {
+                            const validateFormData = new FormData()
+                            validateFormData.append('excelFile', file)
+                            const validateRes = await fetch('/api/homes/bulk-validate', {
+                              method: 'POST',
+                              body: validateFormData,
+                            })
+                            if (validateRes.ok) {
+                              const validateData = await validateRes.json()
+                              if (validateData.unknownAreas?.length > 0) {
+                                setUnknownAreas(validateData.unknownAreas)
+                              }
+                            }
+                          } catch {
+                            // Validation call failed — proceed anyway; backend will store as-is
+                          } finally {
+                            setAreaValidating(false)
+                          }
+                        } catch (err) {
+                          setBulkUploadError(language === 'el' ? 'Σφάλμα ανάγνωσης αρχείου Excel' : 'Error reading Excel file')
                           setExcelFile(null)
-                          return
                         }
-
-                        // Parse houses from Excel
-                        const houses = data.map((row, index) => ({
-                          title: row['Title'] ? String(row['Title']).trim() : `House ${index + 1}`,
-                          city: row['City'] ? String(row['City']).trim() : '',
-                          country: row['Country'] ? String(row['Country']).trim() : '',
-                          rowIndex: index,
-                        }))
-
-                        setParsedHouses(houses)
-                      } catch (err) {
-                        setBulkUploadError(language === 'el' ? 'Σφάλμα ανάγνωσης αρχείου Excel' : 'Error reading Excel file')
-                        setExcelFile(null)
-                      }
-                    }}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--btn-primary-bg)] file:text-[var(--btn-primary-fg)] hover:file:bg-[var(--btn-primary-hover-bg)]"
-                  />
+                      }}
+                    />
+                  </label>
                 </div>
               ) : (
                 // Step 2: Show photo upload sections for each house
@@ -937,11 +974,51 @@ export default function NewHomePage() {
                       return
                     }
 
+                    // Block upload if any area was rejected
+                    const rejectedAreas = unknownAreas.filter(ua => areaDecisions[ua.rowIndex] === 'rejected')
+                    if (rejectedAreas.length > 0) {
+                      setBulkUploadError(
+                        language === 'el'
+                          ? `Παρακαλώ διορθώστε τις περιοχές στο Excel και ανεβάστε ξανά: ${rejectedAreas.map(ua => `"${ua.areaInput}" (γραμμή ${ua.rowNumber})`).join(', ')}`
+                          : `Please fix the area names in your Excel and re-upload: ${rejectedAreas.map(ua => `"${ua.areaInput}" (row ${ua.rowNumber})`).join(', ')}`
+                      )
+                      setBulkUploadLoading(false)
+                      return
+                    }
+
+                    // Block upload if any unknown area still unresolved
+                    const unresolvedAreas = unknownAreas.filter(ua => !areaDecisions[ua.rowIndex])
+                    if (unresolvedAreas.length > 0) {
+                      setBulkUploadError(
+                        language === 'el'
+                          ? `Παρακαλώ επιβεβαιώστε τις άγνωστες περιοχές πριν ανεβάσετε`
+                          : `Please confirm or reject all unknown areas before uploading`
+                      )
+                      setBulkUploadLoading(false)
+                      return
+                    }
+
                     try {
                       const uploadFormData = new FormData()
                       uploadFormData.append('excelFile', excelFile)
                       uploadFormData.append('useAIDescription', useAIDescriptionBulk ? 'true' : 'false')
-                      
+
+                      // Include areas confirmed by owner (to be added to DB)
+                      const confirmedNewAreas = unknownAreas
+                        .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed')
+                        .map(ua => {
+                          const house = parsedHouses.find(h => h.rowIndex === ua.rowIndex)
+                          return {
+                            rowIndex: ua.rowIndex,
+                            area: ua.areaInput,
+                            city: house?.city || undefined,
+                            country: house?.country || undefined,
+                          }
+                        })
+                      if (confirmedNewAreas.length > 0) {
+                        uploadFormData.append('confirmedNewAreas', JSON.stringify(confirmedNewAreas))
+                      }
+
                       // Append photos for each house with index prefix
                       Object.keys(housePhotos).forEach((rowIndexStr) => {
                         const rowIndex = parseInt(rowIndexStr)
@@ -1012,15 +1089,21 @@ export default function NewHomePage() {
                   </div>
                   <div className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 mb-4">
                     <p className="text-[var(--text)] font-semibold mb-2">
-                      {language === 'el' 
+                      {language === 'el'
                         ? `Βρέθηκαν ${parsedHouses.length} ακίνητα στο αρχείο Excel`
                         : `Found ${parsedHouses.length} properties in Excel file`}
                     </p>
-                    <p className="text-[var(--text-muted)] text-sm">
-                      {language === 'el' 
-                        ? 'Ανεβάστε φωτογραφίες για κάθε ακίνητο (προαιρετικό)'
-                        : 'Upload photos for each property (optional)'}
-                    </p>
+                    {areaValidating ? (
+                      <p className="text-[var(--text-muted)] text-sm">
+                        {language === 'el' ? 'Έλεγχος περιοχών...' : 'Checking areas...'}
+                      </p>
+                    ) : (
+                      <p className="text-[var(--text-muted)] text-sm">
+                        {language === 'el'
+                          ? 'Ανεβάστε φωτογραφίες για κάθε ακίνητο (προαιρετικό)'
+                          : 'Upload photos for each property (optional)'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-4 max-h-[400px] overflow-y-auto">
@@ -1031,31 +1114,96 @@ export default function NewHomePage() {
                             {house.title || `House ${index + 1}`}
                           </h3>
                           <p className="text-[var(--text-muted)] text-sm">
-                            {house.city && house.country ? `${house.city}, ${house.country}` : ''}
+                            {[house.city, house.area, house.country].filter(Boolean).join(', ')}
                           </p>
                         </div>
+
+                        {/* Area validation warning */}
+                        {(() => {
+                          const ua = unknownAreas.find(u => u.rowIndex === house.rowIndex)
+                          if (!ua) return null
+                          const decision = areaDecisions[house.rowIndex]
+                          if (decision === 'confirmed') {
+                            return (
+                              <div className="mb-3 px-3 py-2 bg-green-50/80 border border-green-200 rounded-xl text-sm text-green-700">
+                                {language === 'el'
+                                  ? `✓ Η περιοχή "${ua.areaInput}" θα προστεθεί στη βάση δεδομένων`
+                                  : `✓ Area "${ua.areaInput}" will be added to the database`}
+                              </div>
+                            )
+                          }
+                          if (decision === 'rejected') {
+                            return (
+                              <div className="mb-3 px-3 py-2 bg-red-50/80 border border-red-200 rounded-xl text-sm text-red-700">
+                                {language === 'el'
+                                  ? `✗ Παρακαλώ διορθώστε την περιοχή "${ua.areaInput}" στο Excel και ανεβάστε ξανά`
+                                  : `✗ Please correct the area "${ua.areaInput}" in your Excel and re-upload`}
+                              </div>
+                            )
+                          }
+                          return (
+                            <div className="mb-3 px-3 py-3 bg-yellow-50/80 border border-yellow-200 rounded-xl text-sm">
+                              <p className="text-yellow-800 font-medium mb-1">
+                                {ua.suggestion
+                                  ? (language === 'el'
+                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε. Εννοείτε "${ua.suggestion}";`
+                                    : `⚠ Area "${ua.areaInput}" not found. Did you mean "${ua.suggestion}"?`)
+                                  : (language === 'el'
+                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε στη βάση δεδομένων`
+                                    : `⚠ Area "${ua.areaInput}" was not found in the database`)}
+                              </p>
+                              <p className="text-yellow-700 mb-2">
+                                {language === 'el'
+                                  ? 'Είστε σίγουροι ότι αυτή είναι η σωστή περιοχή;'
+                                  : 'Are you sure this is the correct area name?'}
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
+                                  className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                  {language === 'el' ? 'Ναι, είναι σωστό' : "Yes, it's correct"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
+                                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                  {language === 'el' ? 'Όχι, θα το διορθώσω' : "No, I'll fix it"}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })()}
+
                         <div>
-                          <label className="block text-sm font-medium text-[var(--text)] mb-2">
+                          <p className="block text-sm font-medium text-[var(--text)] mb-2">
                             {language === 'el' ? 'Φωτογραφίες' : 'Photos'} ({language === 'el' ? 'Προαιρετικό' : 'Optional'})
+                          </p>
+                          <label className="flex items-center gap-3 w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl cursor-pointer hover:border-[var(--accent)] transition-colors">
+                            <span className="shrink-0 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)]">
+                              {language === 'el' ? 'Επιλογή Φωτογραφιών' : 'Choose Photos'}
+                            </span>
+                            <span className="text-sm text-[var(--text-muted)] truncate">
+                              {housePhotos[house.rowIndex]?.length
+                                ? `${housePhotos[house.rowIndex].length} ${language === 'el' ? 'φωτογραφία(ες) επιλέχθηκε(αν)' : 'photo(s) selected'}`
+                                : (language === 'el' ? 'Δεν έχουν επιλεχθεί φωτογραφίες' : 'No photos chosen')}
+                            </span>
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || [])
+                                setHousePhotos((prev) => ({
+                                  ...prev,
+                                  [house.rowIndex]: files,
+                                }))
+                              }}
+                            />
                           </label>
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => {
-                              const files = Array.from(e.target.files || [])
-                              setHousePhotos((prev) => ({
-                                ...prev,
-                                [house.rowIndex]: files,
-                              }))
-                            }}
-                            className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--btn-primary-bg)] file:text-[var(--btn-primary-fg)] hover:file:bg-[var(--btn-primary-hover-bg)]"
-                          />
-                          {housePhotos[house.rowIndex] && housePhotos[house.rowIndex].length > 0 && (
-                            <p className="text-[var(--text)]/50 text-xs mt-1">
-                              {housePhotos[house.rowIndex].length} {language === 'el' ? 'φωτογραφία(ες) επιλέχθηκε(αν)' : 'photo(s) selected'}
-                            </p>
-                          )}
                         </div>
                       </div>
                     ))}
@@ -1072,6 +1220,8 @@ export default function NewHomePage() {
                         setExcelFile(null)
                         setHousePhotos({})
                         setExcelInputKey(prev => prev + 1)
+                        setUnknownAreas([])
+                        setAreaDecisions({})
                       }}
                       className="min-w-[8rem] px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm border border-[var(--border-subtle)]"
                     >
@@ -1079,12 +1229,19 @@ export default function NewHomePage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={bulkUploadLoading}
-                      className="min-w-[8rem] px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={
+                        bulkUploadLoading ||
+                        areaValidating ||
+                        unknownAreas.some(ua => !areaDecisions[ua.rowIndex]) ||
+                        unknownAreas.some(ua => areaDecisions[ua.rowIndex] === 'rejected')
+                      }
+                      className="min-w-[8rem] px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-colors font-semibold text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {bulkUploadLoading 
+                      {bulkUploadLoading
                         ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
-                        : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
+                        : areaValidating
+                          ? (language === 'el' ? 'Έλεγχος...' : 'Checking...')
+                          : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
                     </button>
                   </div>
                 </form>

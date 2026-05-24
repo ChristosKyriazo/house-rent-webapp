@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "users" ADD COLUMN "age" INTEGER;
-ALTER TABLE "users" ADD COLUMN "rating" REAL DEFAULT 0;

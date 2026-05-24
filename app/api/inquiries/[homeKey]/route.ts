@@ -3,12 +3,14 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getUserRatings } from '@/lib/ratings'
 import { forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all inquiries for a specific home (only for the owner)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ homeKey: string }> | { homeKey: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -109,7 +111,7 @@ export async function GET(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Get home inquiries error:', error)
+    log.error({ err: error }, 'Get home inquiries error')
     return serverError()
   }
 }

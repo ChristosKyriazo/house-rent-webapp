@@ -30,9 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (commit .env.example only)
+# env files (commit *.example files only, never real secrets)
 .env*
 !.env.example
+!.env.staging.example
+!.env.production.example
 
 # database
 *.db
@@ -52,3 +54,6 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# user-uploaded files (stored on server, not in repo)
+/public/uploads/

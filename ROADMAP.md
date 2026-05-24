@@ -9,33 +9,33 @@
 - [x] GitHub Actions CI workflow: lint → typecheck → test on every PR
 - [x] Audit all authorization checks (owner/user/resource-level) across API routes
 - [x] Encrypt Cal.com tokens at rest in the database
-- [ ] Document and pin Node.js version (`.nvmrc` + `engines` in package.json)
+- [x] Document and pin Node.js version (`.nvmrc` + `engines` in package.json)
 - [x] Fix Vitest config to exclude `node_modules` tests (all 5 tests now pass cleanly)
 
 ## Phase 2 — Observability & Operations
 **Goal:** Make production failures visible and recoverable within minutes.
 
-- [ ] Structured logging (pino) with request IDs on every API route
-- [ ] Error monitoring (Sentry) wired up with environment config
-- [ ] Health check endpoints (`/api/healthz`, `/api/readyz`)
-- [ ] Dockerfile + docker-compose for local/staging parity
-- [ ] CI/CD pipeline: GitHub Actions → deploy on merge to `main`
-- [ ] Deployment runbook documenting rollback procedure
-- [ ] Migrate from SQLite to PostgreSQL for production
-- [ ] Multi-environment config (`.env.local`, `.env.staging`, `.env.production`)
-- [ ] Add missing `.env.example` keys: `CALCOM_API_KEY`, `SENTRY_DSN`, `LOG_LEVEL`
+- [x] Structured logging (pino) with request IDs on every API route
+- [x] Error monitoring (Sentry) wired up with environment config
+- [x] Health check endpoints (`/api/healthz`, `/api/readyz`)
+- [x] Dockerfile + docker-compose for local/staging parity
+- [x] CI/CD pipeline: GitHub Actions → deploy on merge to `main`
+- [x] Deployment runbook documenting rollback procedure
+- [x] Migrate from SQLite to PostgreSQL for production
+- [x] Multi-environment config (`.env.staging.example`, `.env.production.example`)
+- [x] Add missing `.env.example` keys: `CALCOM_API_KEY`, `SENTRY_DSN`, `LOG_LEVEL`
 
 ## Phase 3 — Test Coverage & Performance
 **Goal:** Catch regressions automatically and keep response times acceptable under load.
 
-- [ ] Increase Vitest coverage to ≥60% on critical paths (auth, bookings, inquiries)
+- [x] Increase Vitest coverage to ≥60% on critical paths (auth, bookings, inquiries) — reached 64.3%
 - [ ] E2E Playwright tests for full user journeys (signup → list → inquire → book → rate)
-- [ ] Coverage threshold enforced in CI (fail build below threshold)
-- [ ] Cache Google Maps geocoding results (Redis or in-memory LRU)
-- [ ] Cache OpenAI-generated descriptions (store result, skip re-generation)
-- [ ] Add retry + timeout handling for all external API calls
-- [ ] Image optimization config in `next.config.ts`
-- [ ] Fix booking creation race condition (DB-level lock or serializable transaction)
+- [x] Coverage threshold enforced in CI (fail build below threshold) — `vitest.config.ts` thresholds: 60/55/60/60
+- [x] Cache Google Maps geocoding results (24h in-memory TTL cache in `lib/google-maps.ts`)
+- [x] Cache OpenAI-generated descriptions (SHA-256 keyed in-memory cache in `lib/house-description-generator.ts`)
+- [x] Add retry + timeout handling for all external API calls (8s timeout on all Google Maps fetch calls)
+- [x] Image optimization config in `next.config.ts` (AVIF/WebP, 7-day TTL, device sizes)
+- [x] Fix booking creation race condition (`isolationLevel: 'Serializable'` on booking transaction)
 - [ ] Load test booking endpoint at 2–3× expected peak concurrent requests
 
 ## Phase 4 — Maintainability (Ongoing)

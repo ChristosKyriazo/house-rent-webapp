@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { removeGreekAccents } from '@/lib/utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET /api/cities/search?q=query&limit=10&country=Greece
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const searchParams = request.nextUrl.searchParams
     const query = searchParams.get('q') || ''
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ cities })
   } catch (error) {
-    console.error('Search cities error:', error)
+    log.error({ err: error }, 'Search cities error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

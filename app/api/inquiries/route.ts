@@ -8,9 +8,11 @@ import {
   serverError,
   unauthorized,
 } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all inquiries for the current user
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -47,13 +49,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ inquiryStatus, inquiryIds, finalizedHomes }, { status: 200 })
   } catch (error) {
-    console.error('Get inquiries error:', error)
+    log.error({ err: error }, 'Get inquiries error')
     return serverError()
   }
 }
 
 // POST: Create an inquiry
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -122,13 +125,13 @@ export async function POST(request: NextRequest) {
         },
       })
     } catch (error) {
-      console.error('Failed to create notification:', error)
+      log.error({ err: error }, 'Failed to create notification')
       // Don't fail the inquiry creation if notification fails
     }
 
     return NextResponse.json({ inquiry }, { status: 201 })
   } catch (error: any) {
-    console.error('Create inquiry error:', error)
+    log.error({ err: error }, 'Create inquiry error')
     
     // Handle Prisma unique constraint violation
     if (error?.code === 'P2002') {
@@ -143,6 +146,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE: Remove an inquiry
 export async function DELETE(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -193,13 +197,13 @@ export async function DELETE(request: NextRequest) {
         },
       })
     } catch (error) {
-      console.error('Failed to delete inquiry notification:', error)
+      log.error({ err: error }, 'Failed to delete inquiry notification')
       // Don't fail the inquiry deletion if notification deletion fails
     }
 
     return NextResponse.json({ message: 'Inquiry removed' }, { status: 200 })
   } catch (error) {
-    console.error('Delete inquiry error:', error)
+    log.error({ err: error }, 'Delete inquiry error')
     return serverError()
   }
 }

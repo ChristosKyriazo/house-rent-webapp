@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requestLogger } from '@/lib/logger'
 
 // GET /api/areas - get all areas (for translation purposes)
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const areas = await prisma.area.findMany({
       orderBy: {
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ areas })
   } catch (error) {
-    console.error('Get areas error:', error)
+    log.error({ err: error }, 'Get areas error')
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

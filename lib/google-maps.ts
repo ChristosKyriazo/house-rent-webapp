@@ -7,6 +7,20 @@
 
 import { prisma } from '@/lib/prisma'
 
+// In-memory geocoding cache: address string → coordinates (TTL 24 h)
+const geocodeCache = new Map<string, { coords: Coordinates | null; expiresAt: number }>()
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(id)
+  }
+}
+
 interface Coordinates {
   lat: number
   lng: number
@@ -41,7 +55,42 @@ interface DistanceResult {
 }
 
 /**
- * Geocode an address to get coordinates
+ * Single geocoding attempt for a pre-built address string.
+ * Returns null on ZERO_RESULTS or any error.
+ */
+async function attemptGeocode(address: string, apiKey: string): Promise<Coordinates | null> {
+  const cached = geocodeCache.get(address)
+  if (cached && cached.expiresAt > Date.now()) return cached.coords
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+    console.log(`[Google Maps] Geocoding: "${address}"`)
+    const response = await fetchWithTimeout(url)
+    const data = await response.json()
+    console.log(`[Google Maps] Geocode response: status=${data.status}${data.error_message ? ` | error=${data.error_message}` : ''}`)
+
+    if (data.status === 'OK' && data.results && data.results.length > 0) {
+      const location = data.results[0].geometry.location
+      const coords = { lat: location.lat, lng: location.lng }
+      geocodeCache.set(address, { coords, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
+      return coords
+    }
+
+    console.warn('[Google Maps] Geocoding returned no results:', data.status, data.error_message ?? '')
+    geocodeCache.set(address, { coords: null, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
+    return null
+  } catch (error) {
+    console.error('[Google Maps] Geocoding API error:', error)
+    return null
+  }
+}
+
+/**
+ * Geocode an address to get coordinates.
+ * Falls back to progressively simpler address forms if the full address fails:
+ *   1. street + area + city + country
+ *   2. street + city + country  (drops area — sometimes causes ZERO_RESULTS)
+ *   3. city + country           (last resort, at least returns city-centre coords)
  */
 async function geocodeAddress(
   street: string | null,
@@ -55,29 +104,27 @@ async function geocodeAddress(
     return null
   }
 
-  // Build address string
-  const addressParts = [street, area, city, country].filter(Boolean)
-  const address = addressParts.join(', ')
+  // Attempt 1: full address
+  const fullAddress = [street, area, city, country].filter(Boolean).join(', ')
+  const coords1 = await attemptGeocode(fullAddress, apiKey)
+  if (coords1) return coords1
 
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
-    const response = await fetch(url)
-    const data = await response.json()
-
-    if (data.status === 'OK' && data.results && data.results.length > 0) {
-      const location = data.results[0].geometry.location
-      return {
-        lat: location.lat,
-        lng: location.lng,
-      }
-    } else {
-      console.error('Geocoding failed:', data.status, data.error_message)
-      return null
-    }
-  } catch (error) {
-    console.error('Geocoding API error:', error)
-    return null
+  // Attempt 2: drop area (area can confuse geocoder if not in Google's index)
+  if (area) {
+    const noAreaAddress = [street, city, country].filter(Boolean).join(', ')
+    console.warn(`[Google Maps] Retrying without area: "${noAreaAddress}"`)
+    const coords2 = await attemptGeocode(noAreaAddress, apiKey)
+    if (coords2) return coords2
   }
+
+  // Attempt 3: city + country only (coarse but better than null)
+  const cityOnlyAddress = [city, country].filter(Boolean).join(', ')
+  console.warn(`[Google Maps] Retrying with city only: "${cityOnlyAddress}"`)
+  const coords3 = await attemptGeocode(cityOnlyAddress, apiKey)
+  if (coords3) return coords3
+
+  console.error('[Google Maps] All geocoding attempts failed for:', fullAddress)
+  return null
 }
 
 /**
@@ -97,9 +144,9 @@ function isValidPlaceType(place: any, requiredType: string): boolean {
       // Must be subway_station, not bus_station or transit_station
       return primaryType === 'subway_station'
     
-    case 'bus_station':
-      // Must be bus_station, not subway_station
-      return primaryType === 'bus_station'
+    case 'bus_stop':
+      // Accept individual bus stops (OASA in Athens) and bus stations (KTEL terminals)
+      return primaryType === 'bus_stop' || primaryType === 'bus_station' || primaryType === 'transit_station'
     
     case 'school':
     case 'primary_school':
@@ -194,7 +241,7 @@ async function findClosestPlace(
     // Build Places API Nearby Search URL (default 5km radius, can be overridden)
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=${radius}&type=${placeType}&key=${apiKey}`
 
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url)
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -309,7 +356,7 @@ async function findClosestUniversity(
     // Make 1 Places API Nearby Search call for universities (20km radius)
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coordinates.lat},${coordinates.lng}&radius=20000&type=university&key=${apiKey}`
     
-    const response = await fetch(url)
+    const response = await fetchWithTimeout(url)
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -493,7 +540,7 @@ export async function calculatePropertyDistances(
     universityResult,
   ] = await Promise.all([
     findClosestPlace(propertyCoordinates, 'subway_station'), // Metro station (only subway_station)
-    findClosestPlace(propertyCoordinates, 'bus_station'), // Bus station (only bus_station)
+    findClosestPlace(propertyCoordinates, 'bus_stop'), // Bus stop (OASA city stops + KTEL terminals)
     findClosestPlace(propertyCoordinates, 'school'), // School (primary/secondary/high school)
     findClosestPlace(propertyCoordinates, 'hospital'), // Hospital (only hospital, NOT clinic/pharmacy)
     findClosestPlace(propertyCoordinates, 'park'), // Park (only actual parks, NOT stores/gardens)

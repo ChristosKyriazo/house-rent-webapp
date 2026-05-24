@@ -3,12 +3,14 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findBookingConflicts } from '@/lib/booking-conflicts'
 import { badRequest, forbidden, notFound, parsePositiveInt, parseValidDate, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // PATCH /api/bookings/[id] - Reschedule a booking (only for users, only if >24 hours away)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -205,16 +207,17 @@ export async function PATCH(
     if (error instanceof Error && error.message === 'OWNER_CONFLICT') {
       return badRequest('The owner/broker already has an appointment at this time')
     }
-    console.error('Error rescheduling booking:', error)
+    log.error({ err: error }, 'Error rescheduling booking')
     return serverError()
   }
 }
 
 // DELETE /api/bookings/[id] - Cancel a booking (only if meeting hasn't started)
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -322,7 +325,7 @@ export async function DELETE(
 
     return NextResponse.json({ booking: transformedBooking }, { status: 200 })
   } catch (error) {
-    console.error('Error cancelling booking:', error)
+    log.error({ err: error }, 'Error cancelling booking')
     return serverError()
   }
 }

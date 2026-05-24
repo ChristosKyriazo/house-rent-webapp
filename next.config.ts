@@ -1,5 +1,6 @@
 import path from "path";
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const securityHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "on" },
@@ -28,8 +29,16 @@ const securityHeaders = [
 
 /** Pin app root so Turbopack does not pick a parent lockfile (e.g. ~/package-lock.json). */
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: path.resolve(__dirname),
+  output: "standalone",
+  images: {
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
+    remotePatterns: [
+      { protocol: "https", hostname: "**.clerk.com" },
+      { protocol: "https", hostname: "img.clerk.com" },
+    ],
   },
   async headers() {
     return [
@@ -41,4 +50,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  widenClientFileUpload: true,
+  sourcemaps: { disable: true },
+  disableLogger: true,
+});

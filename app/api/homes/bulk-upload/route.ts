@@ -5,13 +5,16 @@ import { calculatePropertyDistances } from '@/lib/google-maps'
 import { findBestMatch, matchParkingValue, getUniqueFieldValues } from '@/lib/value-matcher'
 import { toEnglishValue } from '@/lib/translations'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
+import { analyzePhotosForTags } from '@/lib/photo-vision'
 import OpenAI from 'openai'
 import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { resolveAreaToEnglishCanonical, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
+import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -76,6 +79,26 @@ export async function POST(request: NextRequest) {
       getUniqueFieldValues(prisma, 'heatingAgent'),
       getUniqueFieldValues(prisma, 'energyClass'),
     ])
+
+    // Add owner-confirmed new areas to DB before processing
+    const confirmedNewAreasRaw = formData.get('confirmedNewAreas')
+    if (confirmedNewAreasRaw) {
+      const confirmedNewAreas: Array<{ rowIndex: number; area: string; city?: string; country?: string }> =
+        JSON.parse(confirmedNewAreasRaw as string)
+      for (const ca of confirmedNewAreas) {
+        if (!ca.area) continue
+        const existing = await prisma.area.findFirst({ where: { name: ca.area } })
+        if (!existing) {
+          await prisma.area.create({
+            data: {
+              name: ca.area,
+              city: ca.city || null,
+              country: ca.country || null,
+            },
+          })
+        }
+      }
+    }
 
     // Get all areas with name translations for area field conversion
     const allAreas = await prisma.area.findMany({
@@ -272,7 +295,7 @@ export async function POST(request: NextRequest) {
             closestUniversity: distanceResult.closestUniversity,
           }
         } catch (distError) {
-          console.error(`Error calculating distances for row ${rowNumber}:`, distError)
+          log.error({ err: distError, rowNumber }, 'Error calculating distances for row')
           // Continue without distances if calculation fails
         }
 
@@ -285,6 +308,14 @@ export async function POST(request: NextRequest) {
           // Continue with home creation even if photo upload fails
         }
         const photosJson = housePhotos.length > 0 ? JSON.stringify(housePhotos) : null
+
+        // Analyze photos for visual feature tags
+        const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+        let photoTagsList: string[] = []
+        if (housePhotos.length > 0 && openai) {
+          photoTagsList = await analyzePhotosForTags(housePhotos, openai)
+        }
+        const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
 
         // Get area safety and vibe if area is provided
         let areaSafety: number | null = null
@@ -300,15 +331,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Generate descriptions using AI only if useAIDescription is checked and description is empty
+        // Generate descriptions using AI when useAIDescription is checked.
+        // The Description column in Excel is treated as owner notes/rules woven into the AI output.
         let finalDescription = description
         let finalDescriptionGreek: string | null = null
-        
-        if (useAIDescription && (!finalDescription || finalDescription.trim() === '')) {
-          const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-          }) : null
 
+        if (useAIDescription) {
           const aiDescriptions = await generateHouseDescriptions({
             title,
             city,
@@ -335,9 +363,11 @@ export async function POST(request: NextRequest) {
             areaSafety,
             areaVibe,
             availableFrom: availableFrom ? availableFrom.toISOString().split('T')[0] : null,
+            ownerNotes: description || null,
+            photoFeatures: photoTagsList.length > 0 ? photoTagsList : null,
           }, openai)
 
-          if (aiDescriptions) {
+          if (aiDescriptions?.description) {
             finalDescription = aiDescriptions.description
             finalDescriptionGreek = aiDescriptions.descriptionGreek
           }
@@ -366,6 +396,7 @@ export async function POST(request: NextRequest) {
             yearRenovated,
             availableFrom,
             photos: photosJson,
+            photoTags: photoTagsJson,
             energyClass,
             closestMetro: distances.closestMetro,
             closestBus: distances.closestBus,
@@ -383,7 +414,7 @@ export async function POST(request: NextRequest) {
           key: home.key,
         })
       } catch (error: any) {
-        console.error(`Error processing row ${rowNumber}:`, error)
+        log.error({ err: error, rowNumber }, 'Error processing bulk upload row')
         errors.push(`Row ${rowNumber}: ${error.message || 'Unknown error'}`)
       }
     }
@@ -396,7 +427,7 @@ export async function POST(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error: any) {
-    console.error('Bulk upload error:', error)
+    log.error({ err: error }, 'Bulk upload error')
     return NextResponse.json(
       { error: error.message || 'Failed to process bulk upload' },
       { status: 500 }

@@ -13,35 +13,25 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>('el')
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    // Load language from localStorage on mount
-    const savedLanguage = localStorage.getItem('language') as Language | null
-    if (savedLanguage === 'el' || savedLanguage === 'en') {
-      setLanguageState(savedLanguage)
-    }
-    setMounted(true)
+    const saved = localStorage.getItem('language') as Language | null
+    if (saved === 'el' || saved === 'en') setLanguageState(saved)
   }, [])
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang)
-    if (mounted) {
-      localStorage.setItem('language', lang)
-    }
+    localStorage.setItem('language', lang)
   }
 
   const toggleLanguage = () => {
     setLanguageState((currentLang) => {
       const newLang = currentLang === 'el' ? 'en' : 'el'
-      if (mounted) {
-        localStorage.setItem('language', newLang)
-      }
+      localStorage.setItem('language', newLang)
       return newLang
     })
   }
 
-  // Always provide context, but use default during SSR
   return (
     <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage }}>
       {children}
@@ -56,4 +46,3 @@ export function useLanguage() {
   }
   return context
 }
-

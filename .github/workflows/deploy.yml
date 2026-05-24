@@ -1,0 +1,68 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Build · Push · Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+            CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Deploy step ─────────────────────────────────────────────────────────
+      # Replace this step with your hosting provider's deploy action.
+      # Examples:
+      #   Fly.io:   flyctl deploy --image ghcr.io/...
+      #   Railway:  railway up
+      #   AWS ECS:  aws ecs update-service ...
+      - name: Deploy to production
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.version }}
+        run: |
+          echo "Deploy image ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          echo "Configure this step for your hosting provider."
+          # Example Fly.io:
+          # flyctl deploy --image ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG} --remote-only

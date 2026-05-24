@@ -3,9 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, parsePositiveInt, serverError, unauthorized, validateBody } from '@/lib/api-utils'
 import { createRatingSchema } from '@/lib/schemas'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get ratings for current user or a specific user by userId query param
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const searchParams = request.nextUrl.searchParams
     const userIdParam = searchParams.get('userId')
@@ -31,13 +33,14 @@ export async function GET(request: NextRequest) {
     const ratings = await getUserRatings(targetUserId)
     return NextResponse.json({ ratings }, { status: 200 })
   } catch (error) {
-    console.error('Get ratings error:', error)
+    log.error({ err: error }, 'Get ratings error')
     return serverError()
   }
 }
 
 // POST: Create or update a rating
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -128,7 +131,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ rating }, { status: 200 })
   } catch (error) {
-    console.error('Create rating error:', error)
+    log.error({ err: error }, 'Create rating error')
     return serverError()
   }
 }

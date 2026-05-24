@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 import {
   InquiryManagementError,
   rejectInquiryAfterMeeting,
@@ -8,9 +9,10 @@ import {
 
 // POST: Reject inquiry (owner/broker only, after scheduled meeting)
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ homeKey: string; inquiryId: string }> | { homeKey: string; inquiryId: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -36,7 +38,7 @@ export async function POST(
       if (error.status === 403) return forbidden(error.message)
       if (error.status === 404) return notFound(error.message)
     }
-    console.error('Reject inquiry error:', error)
+    log.error({ err: error }, 'Reject inquiry error')
     return serverError()
   }
 }

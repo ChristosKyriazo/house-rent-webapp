@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get all approved inquiries
 // For owners: shows all inquiries they approved with user info
 // For users: shows all inquiries they made that were approved with owner/contact info
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -457,7 +459,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ approvedInquiries, totalCount: approvedInquiries.length }, { status: 200 })
     }
   } catch (error) {
-    console.error('Get approved inquiries error:', error)
+    log.error({ err: error }, 'Get approved inquiries error')
     return serverError()
   }
 }

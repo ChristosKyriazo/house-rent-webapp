@@ -181,8 +181,7 @@ export function calculateDistanceScore(
   category: string | null | undefined
 ): number {
   if (distance === null || distance === undefined) {
-    // Penalize missing distance data
-    return -5
+    return 0 // Unknown distance: neutral, not penalized
   }
   
   if (!category || category === 'Not important' || category === 'Not mentioned') {
@@ -452,8 +451,7 @@ export function calculateSafetyScore(
   category: string | null | undefined
 ): number {
   if (safety === null || safety === undefined) {
-    // Penalize missing safety data
-    return -5
+    return 0 // Unknown safety: neutral, not penalized
   }
   
   if (!category || category === 'Not important' || category === 'Not mentioned') {
@@ -752,6 +750,79 @@ export function calculateDescriptionBonus(
   }
 }
 
+/**
+ * Checks whether a home description explicitly prohibits something the user query requests.
+ * Returns a short human-readable reason (e.g. "No pets allowed") or null if no conflict.
+ * Only fires on hard rule language ("no pets", "not allowed", etc.) — not vague mentions.
+ */
+export function calculateDisqualifiers(
+  userQuery: string,
+  homeDescription: string | null
+): string | null {
+  if (!homeDescription || !userQuery) return null
+
+  const qLower = userQuery.toLowerCase()
+  const dLower = homeDescription.toLowerCase()
+  const dNorm = removeGreekAccents(dLower)
+
+  const RULES: Array<{
+    queryPatterns: RegExp[]
+    descPatterns: RegExp[]
+    reason: string
+  }> = [
+    {
+      queryPatterns: [/\bpets?\b/, /\bdogs?\b/, /\bcats?\b/, /\banimals?\b/, /κατοικίδ/],
+      descPatterns: [
+        /no pets?\b/, /pets?\s+(not\s+|are\s+)?(allowed|permitted|accepted)/,
+        /no animals?\b/, /animals?\s+(not\s+|are\s+)?(allowed|permitted|accepted)/,
+        /απαγορεύ[α-ω]+\s+κατοικίδ/, /κατοικίδ[α-ω]*\s+απαγορεύ/,
+        /δεν\s+επιτρέπ[α-ω]+\s+κατοικίδ/, /κατοικίδ[α-ω]*\s+δεν\s+επιτρέπ/,
+      ],
+      reason: 'No pets allowed',
+    },
+    {
+      queryPatterns: [/\bsmok(ing|e|ers?)\b/, /κάπνισμα/, /καπνιστ/],
+      descPatterns: [
+        /no smoking\b/, /smoking\s+(not\s+|is\s+)?(allowed|permitted)/, /smoke[\s-]?free/,
+        /απαγορεύ[α-ω]+\s+κάπνισμα/, /κάπνισμα\s+απαγορεύ/,
+      ],
+      reason: 'No smoking allowed',
+    },
+    {
+      queryPatterns: [/\bfurnish(ed|ing)?\b/, /\bfurniture\b/, /επιπλωμέν/, /έπιπλα/],
+      descPatterns: [
+        /\bunfurnished\b/, /\bnot?\s+furnished\b/, /without\s+furniture/, /no\s+furniture/,
+        /ακαλλίστιστ/, /χωρίς\s+έπιπλα/, /δεν\s+(είναι\s+)?επιπλωμέν/,
+      ],
+      reason: 'Property is unfurnished',
+    },
+    {
+      queryPatterns: [/\b(children|kids?)\b/, /παιδ(ιά|ί)\b/],
+      descPatterns: [
+        /no\s+(children|kids)\b/, /(children|kids)\s+(not\s+|are\s+)?(allowed|permitted)/,
+        /δεν\s+επιτρέπ[α-ω]+\s+παιδ/, /παιδ[α-ω]*\s+δεν\s+επιτρέπ/,
+        /απαγορεύ[α-ω]+\s+παιδ/,
+      ],
+      reason: 'No children allowed',
+    },
+    {
+      queryPatterns: [/\bstudents?\b/, /φοιτητ/],
+      descPatterns: [
+        /no\s+students?\b/, /students?\s+(not\s+|are\s+)?(allowed|permitted)/,
+        /δεν\s+επιτρέπ[α-ω]+\s+φοιτητ/, /φοιτητ[α-ω]*\s+δεν\s+επιτρέπ/,
+      ],
+      reason: 'No students allowed',
+    },
+  ]
+
+  for (const rule of RULES) {
+    if (!rule.queryPatterns.some(p => p.test(qLower))) continue
+    if (rule.descPatterns.some(p => p.test(dLower) || p.test(dNorm))) return rule.reason
+  }
+
+  return null
+}
+
 /** True if profile/query indicates the searcher is a student (English + Greek). */
 export function inferStudentContext(
   query: string,
@@ -806,5 +877,69 @@ export function applyStudentTransitBoost<T extends Record<string, unknown>>(filt
   out.Bus = lift(out.Bus)
   out.University = lift(out.University)
   return out as T
+}
+
+/**
+ * Calculates a bonus score (0-12 pts) based on whether visual photo tags match user query features.
+ * Uses the same keyword extraction as calculateDescriptionBonus but checks stored tags instead of text.
+ */
+export function calculatePhotoBonus(
+  userQuery: string,
+  photoTagsRaw: string | null | undefined
+): number {
+  if (!userQuery || !photoTagsRaw) return 0
+
+  let tags: string[]
+  try {
+    const parsed = JSON.parse(photoTagsRaw)
+    tags = Array.isArray(parsed) ? parsed.map(t => String(t).toLowerCase()) : []
+  } catch {
+    return 0
+  }
+  if (tags.length === 0) return 0
+
+  // Import synonym map to expand query terms to tag equivalents
+  // We do a dynamic require here to avoid a circular dep; same pattern as rest of module
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PHOTO_TAG_SYNONYMS } = require('./photo-vision') as { PHOTO_TAG_SYNONYMS: Record<string, string[]> }
+
+  const queryLower = userQuery.toLowerCase()
+
+  // Extract meaningful words/phrases from query (reuse same stop word list as calculateDescriptionBonus)
+  const stopWords = new Set([
+    'i', 'want', 'need', 'looking', 'for', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+    'θελω', 'θέλω', 'χρειάζομαι', 'ψάχνω', 'για', 'το', 'τη', 'τον', 'τα', 'της', 'των', 'με', 'σε', 'από', 'προς', 'και', 'ή', 'αλλά',
+  ])
+  const queryWords = queryLower
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w))
+
+  const matchedTags = new Set<string>()
+
+  // 1. Direct tag substring check (query word appears inside a tag or vice versa)
+  for (const word of queryWords) {
+    for (const tag of tags) {
+      if (tag.includes(word) || word.includes(tag)) {
+        matchedTags.add(tag)
+      }
+    }
+  }
+
+  // 2. Synonym expansion: check known query phrases against synonym map
+  for (const [phrase, expandedTags] of Object.entries(PHOTO_TAG_SYNONYMS)) {
+    if (queryLower.includes(phrase)) {
+      for (const et of expandedTags) {
+        if (tags.includes(et)) {
+          matchedTags.add(et)
+        }
+      }
+    }
+  }
+
+  if (matchedTags.size === 0) return 0
+
+  // Score: 6 pts for first match + 3 per additional, max 12
+  return Math.min(12, 6 + (matchedTags.size - 1) * 3)
 }
 

@@ -8,6 +8,7 @@ import {
   serverError,
   unauthorized,
 } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 import {
   deleteNotificationForUser,
   markAllNotificationsAsViewed,
@@ -16,6 +17,7 @@ import {
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -335,13 +337,14 @@ export async function GET(request: NextRequest) {
       unviewedCount: unviewedCount
     }, { status: 200 })
   } catch (error) {
-    console.error('Get notifications error:', error)
+    log.error({ err: error }, 'Get notifications error')
     return serverError()
   }
 }
 
 // DELETE: Mark a notification as deleted
 export async function DELETE(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -362,13 +365,14 @@ export async function DELETE(request: NextRequest) {
     if (error instanceof NotificationServiceError && error.status === 404) {
       return NextResponse.json({ error: error.message }, { status: 404 })
     }
-    console.error('Delete notification error:', error)
+    log.error({ err: error }, 'Delete notification error')
     return serverError()
   }
 }
 
 // PATCH: Mark notifications as viewed
 export async function PATCH(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -386,7 +390,7 @@ export async function PATCH(request: NextRequest) {
 
     return badRequest('Invalid request')
   } catch (error) {
-    console.error('Mark notifications as viewed error:', error)
+    log.error({ err: error }, 'Mark notifications as viewed error')
     return serverError()
   }
 }

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
+import { requestLogger } from '@/lib/logger'
 
 // GET: Get availability for a home
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -44,7 +46,7 @@ export async function GET(
       },
     })
     
-    console.log(`Found ${availabilities.length} availability slots for home ${home.id}`)
+    log.info({ homeId: home.id, count: availabilities.length }, 'Found availability slots')
 
     // Get ALL scheduled bookings that conflict with this home's availability
     // This includes:
@@ -109,7 +111,7 @@ export async function GET(
     })
     const allBookings = Array.from(allBookingsMap.values())
     
-    console.log(`Found ${allBookings.length} scheduled bookings (home: ${homeBookings.length}, user: ${userBookings.length}, owner: ${ownerBookings.length})`)
+    log.info({ total: allBookings.length, home: homeBookings.length, user: userBookings.length, owner: ownerBookings.length }, 'Found scheduled bookings')
 
     // Attach all bookings to each availability for frontend checking
     // We include bookings that overlap with the availability's date/time range
@@ -156,7 +158,7 @@ export async function GET(
     // The frontend will check bookings to determine which specific time slots are booked
     return NextResponse.json({ availabilities: availabilitiesWithBookings }, { status: 200 })
   } catch (error) {
-    console.error('Error fetching availability:', error)
+    log.error({ err: error }, 'Error fetching availability')
     return serverError()
   }
 }
@@ -166,6 +168,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -212,7 +215,7 @@ export async function PATCH(
 
     return NextResponse.json({ availability }, { status: 200 })
   } catch (error) {
-    console.error('Error updating availability:', error)
+    log.error({ err: error }, 'Error updating availability')
     return serverError()
   }
 }
@@ -222,6 +225,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -315,7 +319,7 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    console.error('Error creating availability:', error)
+    log.error({ err: error }, 'Error creating availability')
     return serverError()
   }
 }

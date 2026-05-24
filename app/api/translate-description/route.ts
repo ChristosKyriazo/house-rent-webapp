@@ -5,8 +5,10 @@ import { checkTranslationLimit } from '@/lib/rate-limit'
 import { validateBody } from '@/lib/api-utils'
 import { translateDescriptionSchema } from '@/lib/schemas'
 import OpenAI from 'openai'
+import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
       translated: translated || description,
     })
   } catch (error: any) {
-    console.error('Error in translate-description API:', error)
+    log.error({ err: error }, 'Error in translate-description API')
     return NextResponse.json(
       { error: error.message || 'Failed to translate description' },
       { status: 500 }

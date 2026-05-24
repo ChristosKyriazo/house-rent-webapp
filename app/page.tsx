@@ -150,7 +150,7 @@ export default function Home() {
             )}
 
             {mode === 'searchOnly' && (
-              <Link href="/homes" className="btn-primary min-w-[200px] px-8 py-3.5 text-base">
+              <Link href="/homes/search" className="btn-primary min-w-[200px] px-8 py-3.5 text-base">
                 {getTranslation(language, 'searchProperties')}
               </Link>
             )}
@@ -160,7 +160,7 @@ export default function Home() {
                 <Link href="/homes/new" className="btn-primary min-w-[200px] px-8 py-3.5 text-base">
                   {getTranslation(language, 'publishProperty')}
                 </Link>
-                <Link href="/homes" className="btn-secondary min-w-[200px] px-8 py-3.5 text-base">
+                <Link href="/homes/search" className="btn-secondary min-w-[200px] px-8 py-3.5 text-base">
                   {getTranslation(language, 'searchProperties')}
                 </Link>
               </div>

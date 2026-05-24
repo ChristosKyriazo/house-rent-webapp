@@ -8,10 +8,13 @@ import { toEnglishValue } from '@/lib/translations'
 import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
+import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
 import OpenAI from 'openai'
+import { requestLogger } from '@/lib/logger'
 
 // GET /api/homes - list all homes with optional filters
 export async function GET(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const searchParams = request.nextUrl.searchParams
     
@@ -398,7 +401,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ homes }, { status: 200 })
   } catch (error) {
-    console.error('List homes error:', error)
+    log.error({ err: error }, 'List homes error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
@@ -409,6 +412,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/homes - create a new home listing for the logged-in user
 export async function POST(request: NextRequest) {
+  const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -523,7 +527,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      console.log('Calculating distances for new property:', { street, area: englishArea, city: englishCity, country: englishCountry })
+      log.info({ street, area: englishArea, city: englishCity, country: englishCountry }, 'Calculating distances for new property')
       const distanceResult = await calculatePropertyDistances(
         street?.trim() || null,
         englishArea,
@@ -544,33 +548,9 @@ export async function POST(request: NextRequest) {
       // Store full details for logging/verification
       distanceDetails = distanceResult
       
-      console.log('Distance calculation completed:')
-      console.log('Property coordinates:', distanceResult.propertyCoordinates)
-      console.log('Distances (km):', distances)
-      console.log('\n📍 Location Details for Verification:')
-      if (distanceResult.propertyCoordinates) {
-        console.log(`Property: https://www.google.com/maps?q=${distanceResult.propertyCoordinates.lat},${distanceResult.propertyCoordinates.lng}`)
-      }
-      if (distanceResult.closestMetroLocation) {
-        console.log(`Metro (${distanceResult.closestMetroName || 'N/A'}): ${distanceResult.closestMetro}km - https://www.google.com/maps?q=${distanceResult.closestMetroLocation.lat},${distanceResult.closestMetroLocation.lng}`)
-      }
-      if (distanceResult.closestBusLocation) {
-        console.log(`Bus (${distanceResult.closestBusName || 'N/A'}): ${distanceResult.closestBus}km - https://www.google.com/maps?q=${distanceResult.closestBusLocation.lat},${distanceResult.closestBusLocation.lng}`)
-      }
-      if (distanceResult.closestSchoolLocation) {
-        console.log(`School (${distanceResult.closestSchoolName || 'N/A'}): ${distanceResult.closestSchool}km - https://www.google.com/maps?q=${distanceResult.closestSchoolLocation.lat},${distanceResult.closestSchoolLocation.lng}`)
-      }
-      if (distanceResult.closestHospitalLocation) {
-        console.log(`Hospital (${distanceResult.closestHospitalName || 'N/A'}): ${distanceResult.closestHospital}km - https://www.google.com/maps?q=${distanceResult.closestHospitalLocation.lat},${distanceResult.closestHospitalLocation.lng}`)
-      }
-      if (distanceResult.closestParkLocation) {
-        console.log(`Park (${distanceResult.closestParkName || 'N/A'}): ${distanceResult.closestPark}km - https://www.google.com/maps?q=${distanceResult.closestParkLocation.lat},${distanceResult.closestParkLocation.lng}`)
-      }
-      if (distanceResult.closestUniversityLocation) {
-        console.log(`University (${distanceResult.closestUniversityName || 'N/A'}): ${distanceResult.closestUniversity}km - https://www.google.com/maps?q=${distanceResult.closestUniversityLocation.lat},${distanceResult.closestUniversityLocation.lng}`)
-      }
+      log.info({ coordinates: distanceResult.propertyCoordinates, distances }, 'Distance calculation completed')
     } catch (error) {
-      console.error('Error calculating distances (continuing with null values):', error)
+      log.error({ err: error }, 'Error calculating distances (continuing with null values)')
       // Continue with null distances if API fails - don't block home creation
     }
 
@@ -588,18 +568,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Analyze photos for visual feature tags (always when photos provided)
+    const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+    let photoTagsList: string[] = []
+    if (photos && openai) {
+      const photoPaths = parsePhotoTags(photos as string)
+      if (photoPaths.length > 0) {
+        photoTagsList = await analyzePhotosForTags(photoPaths, openai)
+      }
+    }
+    const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
+
     // Generate descriptions using AI only if useAIDescription is explicitly checked
     let finalDescription = description?.trim() || null
     let finalDescriptionGreek: string | null = null
-    
+
     if (useAIDescription) {
       if (!checkAiDescriptionLimit(user.id)) {
         return NextResponse.json({ error: 'Too many AI description requests. Please wait before trying again.' }, { status: 429 })
       }
-
-      const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      }) : null
 
       const aiDescriptions = await generateHouseDescriptions({
         title,
@@ -627,6 +614,8 @@ export async function POST(request: NextRequest) {
         areaSafety,
         areaVibe,
         availableFrom: availableFrom || null,
+        ownerNotes: description?.trim() || null,
+        photoFeatures: photoTagsList.length > 0 ? photoTagsList : null,
       }, openai)
 
       if (aiDescriptions) {
@@ -675,6 +664,7 @@ export async function POST(request: NextRequest) {
         yearRenovated: resolveYear(yearRenovated),
         availableFrom: availableFromDate,
               photos: (photos as string | null | undefined) || null,
+              photoTags: photoTagsJson,
               // Distance values from Google Maps API
               closestMetro: distances.closestMetro,
               closestBus: distances.closestBus,
@@ -694,7 +684,7 @@ export async function POST(request: NextRequest) {
           
           if (isLockError && attempt < maxRetries) {
             const waitTime = delay * Math.pow(2, attempt - 1) // Exponential backoff
-            console.warn(`Database lock detected, retrying in ${waitTime}ms (attempt ${attempt}/${maxRetries})...`)
+            log.warn({ attempt, maxRetries, waitTime }, 'Database lock detected, retrying')
             await new Promise(resolve => setTimeout(resolve, waitTime))
             continue
           }
@@ -711,10 +701,8 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error: any) {
-    console.error('Create home error:', error)
+    log.error({ err: error }, 'Create home error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    const errorDetails = error instanceof Error ? error.stack : String(error)
-    console.error('Error details:', errorDetails)
     
     // Check for database lock/timeout errors
     const isLockError = error?.code === 'SQLITE_BUSY' || 

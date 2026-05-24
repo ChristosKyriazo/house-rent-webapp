@@ -1,4 +1,12 @@
 import OpenAI from 'openai'
+import { createHash } from 'crypto'
+
+// Server-side in-memory cache: prevents duplicate OpenAI calls for identical house data
+const descriptionCache = new Map<string, { description: string | null; descriptionGreek: string | null }>()
+
+function cacheKey(data: object): string {
+  return createHash('sha256').update(JSON.stringify(data)).digest('hex')
+}
 
 /**
  * Generate house descriptions in both English and Greek using AI
@@ -33,6 +41,8 @@ export async function generateHouseDescriptions(
     availableFrom: string | null
     /** Short landlord notes (rules, tenant preferences, pets, etc.) to weave into both descriptions */
     ownerNotes?: string | null
+    /** Visual features confirmed visible in photos — AI should naturally mention them */
+    photoFeatures?: string[] | null
   },
   openai: OpenAI | null
 ): Promise<{ description: string | null; descriptionGreek: string | null }> {
@@ -40,6 +50,10 @@ export async function generateHouseDescriptions(
     console.warn('OpenAI not available, skipping description generation')
     return { description: null, descriptionGreek: null }
   }
+
+  const key = cacheKey(houseData)
+  const hit = descriptionCache.get(key)
+  if (hit) return hit
 
   try {
     // Build context about the property
@@ -157,15 +171,16 @@ Requirements for BOTH descriptions:
 - CRITICAL: Each description MUST be about 180–220 words and complete - do not cut off mid-sentence. Make sure both descriptions end naturally.
 ${houseData.ownerNotes?.trim() ? `
 RULES LANGUAGE (mandatory when LANDLORD RULES are provided above):
-- State each rule in **direct, assertive, honest** wording. Renters must understand what is allowed and what is not.
-- Do NOT soften rules into vague positives. FORBIDDEN examples: "ideal for families", "perfect for students", "great for pet lovers" when the owner meant exclusivity or a ban — that misleads.
-- REQUIRED style examples (adapt to the actual rules): "This property is available only to families." / "Letting is restricted to students." / "Pets are not permitted." / "Smoking is not allowed on the premises." / "The landlord requires…"
-- If the owner wrote "only X" or "no Y", reflect **exclusivity or prohibition** explicitly in both languages (English + Greek with equivalent legal/ everyday clarity).
-- You may use a short dedicated paragraph for tenancy rules if that keeps them clearest; you may also weave rules into the text, but they must read as **requirements**, not optional perks.
-- Greek: same assertive clarity (e.g. μόνο για οικογένειες, δεν επιτρέπονται κατοικίδια, αποκλειστικά για φοιτητές — as appropriate to the notes).
-` : ''}
-
-Write in a warm, inviting but subtle tone for the property itself${houseData.ownerNotes?.trim() ? '; for the rules section, prioritize clarity and honesty over sales language' : ''}. Vary your writing style to make each description unique and engaging. Do not include the price in either description.`
+- CRITICAL: Only state rules that are EXPLICITLY written in the LANDLORD RULES section. Do NOT invent, infer, or add any rule not literally present there — not even common rules like "no smoking", "no pets", "families only" unless the owner actually wrote them.
+- State each rule in direct, assertive wording so renters understand what is required.
+- Do NOT soften rules into vague positives (e.g. do not turn "no pets" into "ideal for pet-free households").
+- If the owner wrote "only X" or "no Y", reflect that exclusivity or prohibition clearly in both languages.
+- You may dedicate a short paragraph to rules or weave them into the text, but they must read as requirements, not suggestions.
+- Greek: same assertive clarity.
+` : `
+CRITICAL: No owner rules or restrictions have been provided for this listing. Do NOT include any rules, prohibitions, requirements, or restrictions of any kind (no smoking, no pets, families only, etc.). Write a purely descriptive listing only.
+`}
+Write in a warm, inviting but subtle tone. Vary your writing style to make each description unique and engaging. Do not include the price in either description.`
         },
         {
           role: 'user',
@@ -175,12 +190,13 @@ Type: For ${listingTypeText} at ${priceText}
 Details: ${propertyDetails}
 ${houseData.availableFrom ? `Available from: ${houseData.availableFrom}` : ''}
 ${proximityInfo.length > 0 ? `Nearby amenities: ${proximityInfo.join(', ')}` : ''}
-${areaInfo.length > 0 ? `Area information: ${areaInfo.join(', ')}` : ''}${notesBlock}
+${areaInfo.length > 0 ? `Area information: ${areaInfo.join(', ')}` : ''}
+${houseData.photoFeatures && houseData.photoFeatures.length > 0 ? `Confirmed visible in photos (MUST mention naturally): ${houseData.photoFeatures.join(', ')}` : ''}${notesBlock}
 
-Return JSON only with "description" and "descriptionGreek". Both must be complete, natural, multi-paragraph text. ${houseData.availableFrom ? `If available from date is provided, mention it naturally in both descriptions.` : ''}${houseData.ownerNotes?.trim() ? ' The LANDLORD RULES above must appear in both languages as clear, assertive tenancy rules (who may rent, what is forbidden), not as soft marketing.' : ''} Do not mention hospitals, specific distances, or numbers except for house qualities.`,
+Return JSON only with "description" and "descriptionGreek". Both must be complete, natural, multi-paragraph text. ${houseData.availableFrom ? `If available from date is provided, mention it naturally in both descriptions.` : ''}${houseData.ownerNotes?.trim() ? ' The LANDLORD RULES above must appear verbatim in spirit in both languages — only those rules, nothing added.' : ' Do NOT include any rules or restrictions — this listing has none.'} Do not mention hospitals, specific distances, or numbers except for house qualities.`,
         },
       ],
-      temperature: 0.85,
+      temperature: 0.7,
       max_tokens: 4096,
     })
 
@@ -204,10 +220,12 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
       }
     }
 
-    return {
+    const result = {
       description: finalEnglishDescription,
       descriptionGreek: finalGreekDescription,
     }
+    descriptionCache.set(key, result)
+    return result
   } catch (error) {
     console.error('Error generating house descriptions:', error)
     return { description: null, descriptionGreek: null }

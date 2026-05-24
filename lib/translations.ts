@@ -923,7 +923,7 @@ export type TranslationKey = keyof typeof translations.el
 
 export function getTranslation(language: Language, key: TranslationKey): string {
   const dict = translations[language] as Record<string, string>
-  const fallback = translations.el as Record<string, string>
+  const fallback = translations.en as Record<string, string>
   return dict[key as string] ?? fallback[key as string] ?? String(key)
 }
 
@@ -992,45 +992,56 @@ export function reverseTranslateValue(translatedValue: string | null | undefined
  * Convert a value to English (reverse translate from Greek to English key)
  * This ensures values are stored in English in the database
  */
+// Levenshtein similarity for fuzzy Greek matching inside this module
+function _levenshteinSimilarity(a: string, b: string): number {
+  const la = a.length, lb = b.length
+  if (la === 0) return lb === 0 ? 1 : 0
+  if (lb === 0) return 0
+  const row = Array.from({ length: lb + 1 }, (_, i) => i)
+  for (let i = 1; i <= la; i++) {
+    let prev = row[0]
+    row[0] = i
+    for (let j = 1; j <= lb; j++) {
+      const tmp = row[j]
+      row[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, row[j], row[j - 1])
+      prev = tmp
+    }
+  }
+  return 1 - row[lb] / Math.max(la, lb)
+}
+
 export function toEnglishValue(value: string | null | undefined): string | null {
   if (!value || value.trim() === '') return null
-  
+
   const trimmed = value.trim()
-  
-  // First check if it's already an English key (exists in English translations)
-  if (translations.en[trimmed as keyof typeof translations.en]) {
-    return trimmed
-  }
-  
-  // Check if it's a Greek translation - find the English key
+  const lower = trimmed.toLowerCase()
+
+  // 1. Already an English key
+  if (translations.en[trimmed as keyof typeof translations.en]) return trimmed
+
+  // 2. Exact case-insensitive Greek match
   for (const [key, greekValue] of Object.entries(translations.el)) {
-    // Case-insensitive comparison
-    if (greekValue.toLowerCase() === trimmed.toLowerCase() || 
-        greekValue === trimmed) {
-      // Return the key (which is the English value)
-      return key
-    }
+    if ((greekValue as string).toLowerCase() === lower) return key
   }
-  
-  // Try case-insensitive match for common values
-  const lowerValue = trimmed.toLowerCase()
-  const capitalizedValue = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
-  
-  // Check lowercase version
+
+  // 3. Fuzzy match against Greek translation values (handles misspellings like πετρελειο→πετρέλαιο)
+  let bestKey: string | null = null
+  let bestScore = 0
   for (const [key, greekValue] of Object.entries(translations.el)) {
-    if (greekValue.toLowerCase() === lowerValue) {
-      return key
-    }
+    const score = _levenshteinSimilarity(lower, (greekValue as string).toLowerCase())
+    if (score > bestScore) { bestScore = score; bestKey = key }
   }
-  
-  // Check capitalized version
-  for (const [key, greekValue] of Object.entries(translations.el)) {
-    if (greekValue.toLowerCase() === capitalizedValue.toLowerCase()) {
-      return key
-    }
+  if (bestScore >= 0.75) return bestKey
+
+  // 4. Fuzzy match against English translation values (handles misspelled English)
+  bestKey = null; bestScore = 0
+  for (const [key, enValue] of Object.entries(translations.en)) {
+    const score = _levenshteinSimilarity(lower, (enValue as string).toLowerCase())
+    if (score > bestScore) { bestScore = score; bestKey = key }
   }
-  
-  // If not found in translations, return as-is (might be a new value or already in English)
+  if (bestScore >= 0.75) return bestKey
+
+  // 5. Return as-is if nothing matched
   return trimmed
 }
 
