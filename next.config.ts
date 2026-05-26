@@ -30,6 +30,7 @@ const securityHeaders = [
 /** Pin app root so Turbopack does not pick a parent lockfile (e.g. ~/package-lock.json). */
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["pino", "pino-pretty"],
   images: {
     formats: ["image/avif", "image/webp"],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
