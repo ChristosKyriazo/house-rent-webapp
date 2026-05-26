@@ -1,0 +1,30 @@
+# Replace YOUR_DOMAIN with the actual domain or IP of the server.
+# Caddy automatically obtains and renews a TLS certificate via Let's Encrypt.
+# For a bare IP (no domain), use: http:// and remove the TLS block.
+
+YOUR_DOMAIN {
+    reverse_proxy app:3000
+
+    # Strict security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        # Remove server fingerprinting
+        -Server
+    }
+
+    # Compress responses
+    encode gzip
+
+    # Access log
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 7
+        }
+    }
+}

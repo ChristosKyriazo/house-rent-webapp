@@ -1,0 +1,68 @@
+# Production / staging compose file.
+# The server pulls a pre-built image from GHCR — no source code or build tools needed.
+# Usage:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-house_rent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # NO port binding — only reachable inside the Docker network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+
+  app:
+    image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyria zo/house-rent-webapp:latest
+    restart: unless-stopped
+    expose:
+      - "3000"            # internal only — Caddy proxies here, no direct public access
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env              # chmod 600 on the server; never committed to git
+    volumes:
+      - uploads_data:/app/public/uploads
+    command: >
+      sh -c "npx prisma migrate deploy && node server.js"
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"     # HTTP/3 / QUIC
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # stores TLS certificates — must be a named volume
+      - caddy_config:/config
+    networks:
+      - internal
+    depends_on:
+      - app
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

@@ -2,19 +2,22 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  deploy:
-    name: Build · Push · Deploy
+  build-push:
+    name: Build & push image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+      full_image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +36,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha,prefix=sha-
-            type=raw,value=latest
+            type=raw,value=${{ github.ref_name }}-latest
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,17 +55,46 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── Deploy step ─────────────────────────────────────────────────────────
-      # Replace this step with your hosting provider's deploy action.
-      # Examples:
-      #   Fly.io:   flyctl deploy --image ghcr.io/...
-      #   Railway:  railway up
-      #   AWS ECS:  aws ecs update-service ...
-      - name: Deploy to production
-        env:
-          IMAGE_TAG: ${{ steps.meta.outputs.version }}
-        run: |
-          echo "Deploy image ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
-          echo "Configure this step for your hosting provider."
-          # Example Fly.io:
-          # flyctl deploy --image ghcr.io/${{ env.IMAGE_NAME }}:${IMAGE_TAG} --remote-only
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    needs: build-push
+    # Deploy main → production server, dev → staging server
+    # Add SERVER_HOST_STAGING / SERVER_HOST_PROD secrets in GitHub repo settings
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ github.ref_name == 'main' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/house-rent
+
+            # Pull the new image
+            echo "${{ secrets.GITHUB_TOKEN }}" | \
+              docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose -f docker-compose.prod.yml pull app
+
+            # Update APP_IMAGE in .env so compose knows which tag to use
+            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${{ needs.build-push.outputs.full_image }}|" .env
+
+            # Rolling restart: only recreate the app container, leave DB and Caddy running
+            docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
+
+            # Wait for the health endpoint
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:3000/api/healthz > /dev/null; then
+                echo "App is healthy"
+                exit 0
+              fi
+              echo "Waiting for app... ($i/30)"
+              sleep 3
+            done
+            echo "App failed to become healthy — rolling back"
+            docker compose -f docker-compose.prod.yml up -d --no-deps app \
+              --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(cat .previous_image_tag)
+            exit 1
