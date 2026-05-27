@@ -192,9 +192,12 @@ export default function NotificationBell() {
   const handleNotificationClick = async (notification: Notification) => {
     setIsOpen(false)
 
-    // Finalize: open modal; still remove from dropdown so the bell matches “already seen”
+    // Finalize: open modal WITHOUT deleting the notification yet.
+    // Deleting it here would set deleted=true on the DB record, which breaks the
+    // waitingForFinalization check in the approved-inquiry API and causes the
+    // finalization buttons to disappear from the home page after a refresh.
+    // The notification is removed in handleFinalizeApprove / handleFinalizeDismiss instead.
     if (notification.type === 'finalize') {
-      await removeFromBell(notification)
       setFinalizeNotification(notification)
       return
     }
@@ -267,11 +270,8 @@ export default function NotificationBell() {
 
   const handleFinalizeApprove = async () => {
     if (finalizeNotification) {
-      // Idempotent: already soft-deleted when the bell row was clicked
       try {
-        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
-          method: 'DELETE',
-        })
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, { method: 'DELETE' })
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
@@ -283,9 +283,7 @@ export default function NotificationBell() {
   const handleFinalizeDismiss = async () => {
     if (finalizeNotification) {
       try {
-        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
-          method: 'DELETE',
-        })
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, { method: 'DELETE' })
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
@@ -331,6 +329,7 @@ export default function NotificationBell() {
 
   // Always render the notification bell - don't hide it
   return (
+    <>
     <div className="relative pointer-events-auto" ref={notificationRef} style={{ isolation: 'isolate' }}>
       <button
         ref={buttonRef}
@@ -444,16 +443,6 @@ export default function NotificationBell() {
           document.body
         )}
 
-      {/* Finalize Notification Modal */}
-      {finalizeNotification && (
-        <FinalizeNotificationModal
-          notification={finalizeNotification}
-          onClose={handleFinalizeClose}
-          onApprove={handleFinalizeApprove}
-          onDismiss={handleFinalizeDismiss}
-        />
-      )}
-
       <style jsx global>{`
         @keyframes fadeIn {
           from {
@@ -470,6 +459,21 @@ export default function NotificationBell() {
         }
       `}</style>
     </div>
+
+    {/* Finalize modal rendered via portal at body level so it is fully
+        centred and unaffected by the bell's isolation/stacking context */}
+    {finalizeNotification &&
+      typeof document !== 'undefined' &&
+      createPortal(
+        <FinalizeNotificationModal
+          notification={finalizeNotification}
+          onClose={handleFinalizeClose}
+          onApprove={handleFinalizeApprove}
+          onDismiss={handleFinalizeDismiss}
+        />,
+        document.body
+      )}
+    </>
   )
 }
 

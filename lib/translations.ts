@@ -992,6 +992,11 @@ export function reverseTranslateValue(translatedValue: string | null | undefined
  * Convert a value to English (reverse translate from Greek to English key)
  * This ensures values are stored in English in the database
  */
+// Strip Greek (and other) accent/diacritic marks so that e.g. "πετρελεο" matches "πετρέλαιο"
+function _stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 // Levenshtein similarity for fuzzy Greek matching inside this module
 function _levenshteinSimilarity(a: string, b: string): number {
   const la = a.length, lb = b.length
@@ -1024,11 +1029,13 @@ export function toEnglishValue(value: string | null | undefined): string | null 
     if ((greekValue as string).toLowerCase() === lower) return key
   }
 
-  // 3. Fuzzy match against Greek translation values (handles misspellings like πετρελειο→πετρέλαιο)
+  // 3. Fuzzy match against Greek translation values (handles misspellings like πετρελεο→πετρέλαιο)
+  // Compare with accents stripped so unaccented input still matches
+  const lowerStripped = _stripAccents(lower)
   let bestKey: string | null = null
   let bestScore = 0
   for (const [key, greekValue] of Object.entries(translations.el)) {
-    const score = _levenshteinSimilarity(lower, (greekValue as string).toLowerCase())
+    const score = _levenshteinSimilarity(lowerStripped, _stripAccents((greekValue as string).toLowerCase()))
     if (score > bestScore) { bestScore = score; bestKey = key }
   }
   if (bestScore >= 0.75) return bestKey
