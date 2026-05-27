@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
     console.log('================================================\n')
 
     // Step 2: Build database query with extracted filters
-    let where: any = {}
+    const where: any = {}
 
     // Match /api/homes: exclude finalized listings from browse
     where.finalized = false
@@ -547,7 +547,7 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          let excludeHomeIds: number[] = []
+          const excludeHomeIds: number[] = []
 
           if (excludeInquired) {
             // Exclude homes where user has inquired (not dismissed, not finalized)

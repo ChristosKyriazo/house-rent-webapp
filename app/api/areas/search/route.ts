@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch all areas (or filtered areas) and filter in JavaScript for case-insensitive matching
     // This is necessary because SQLite's contains is case-sensitive and doesn't handle Greek well
-    let allAreas = await prisma.area.findMany({
+    const allAreas = await prisma.area.findMany({
       where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
       select: {
         id: true,

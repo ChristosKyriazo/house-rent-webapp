@@ -375,7 +375,7 @@ export function calculateVibeScore(
   }
 
   // Find matching vibes with priorities
-  let matchedVibes = vibeMapping[preferenceLower] || []
+  const matchedVibes = vibeMapping[preferenceLower] || []
   
   if (matchedVibes.length === 0) {
     // If no direct mapping, try fuzzy matching against distinct vibes

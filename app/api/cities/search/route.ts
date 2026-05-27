@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all areas (or filtered by country)
-    let allAreas = await prisma.area.findMany({
+    const allAreas = await prisma.area.findMany({
       where: countryFilter ? { AND: [countryFilter] } : undefined,
       select: {
         city: true,

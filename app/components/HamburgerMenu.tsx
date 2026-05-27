@@ -149,7 +149,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   // Build menu items based on display role
   // When user has "both" role but has selected a specific role via switch,
   // show menu items for that selected role only
-  let menuItems = allMenuItems
+  const menuItems = allMenuItems
     .filter(item => item.roles.includes(normalizedRole))
     .map(item => ({
       ...item,
