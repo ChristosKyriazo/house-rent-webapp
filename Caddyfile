@@ -2,7 +2,8 @@
 # Caddy automatically obtains and renews a TLS certificate via Let's Encrypt.
 # For a bare IP (no domain), use: http:// and remove the TLS block.
 
-YOUR_DOMAIN {
+dev.fwlia.com {
+    tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
     reverse_proxy app:3000
 
     # Strict security headers

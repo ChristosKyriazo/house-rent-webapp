@@ -37,7 +37,7 @@ services:
     volumes:
       - uploads_data:/app/public/uploads
     command: >
-      sh -c "npx --yes prisma@5 migrate deploy && node server.js"
+      sh -c "node node_modules/prisma/build/index.js migrate deploy && node server.js"
     networks:
       - internal
 
@@ -50,6 +50,7 @@ services:
       - "443:443/udp"     # HTTP/3 / QUIC
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
       - caddy_data:/data          # stores TLS certificates — must be a named volume
       - caddy_config:/config
     networks:
