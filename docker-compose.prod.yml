@@ -37,7 +37,7 @@ services:
     volumes:
       - uploads_data:/app/public/uploads
     command: >
-      sh -c "npx prisma migrate deploy && node server.js"
+      sh -c "node node_modules/prisma/build/index.js migrate deploy && node server.js"
     networks:
       - internal
 
