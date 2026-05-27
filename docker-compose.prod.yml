@@ -51,6 +51,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/etc/caddy/certs:ro
+      - uploads_data:/srv/uploads:ro
       - caddy_data:/data          # stores TLS certificates — must be a named volume
       - caddy_config:/config
     networks:

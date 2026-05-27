@@ -4,7 +4,17 @@
 
 dev.fwlia.com {
     tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
-    reverse_proxy app:3000
+
+    # Serve uploaded files directly from volume
+    handle /uploads/* {
+        root * /srv
+        file_server
+    }
+
+    # Everything else goes to Next.js
+    handle {
+        reverse_proxy app:3000
+    }
 
     # Strict security headers
     header {
