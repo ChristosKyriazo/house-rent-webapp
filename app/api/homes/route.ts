@@ -9,6 +9,7 @@ import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
+import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 
@@ -695,6 +696,15 @@ export async function POST(request: NextRequest) {
     }
 
     const home = await createHomeWithRetry()
+
+    // Generate embedding asynchronously — does not block the response
+    if (openai) {
+      generateEmbedding(buildHomeText(home), openai)
+        .then((embedding) =>
+          prisma.home.update({ where: { id: home.id }, data: { embedding } })
+        )
+        .catch((err) => log.error({ err }, 'Failed to generate embedding'))
+    }
 
     return NextResponse.json(
       { message: 'Home created', home },

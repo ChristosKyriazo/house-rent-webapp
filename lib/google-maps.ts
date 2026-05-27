@@ -151,8 +151,8 @@ function isValidPlaceType(place: any, requiredType: string): boolean {
     case 'school':
     case 'primary_school':
     case 'secondary_school':
-      // Must be primary_school or secondary_school, NOT preschool or university
-      return (primaryType === 'primary_school' || primaryType === 'secondary_school') &&
+      // Accept school, primary_school, or secondary_school as primary type
+      return (primaryType === 'school' || primaryType === 'primary_school' || primaryType === 'secondary_school') &&
              !placeTypes.includes('preschool') &&
              !placeTypes.includes('university')
     

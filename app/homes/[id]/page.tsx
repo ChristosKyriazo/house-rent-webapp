@@ -806,25 +806,21 @@ export default function HomeDetailPage() {
                 {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
               </p>
                   {home.area && (() => {
-                    // Find area by matching name or nameGreek (case-insensitive, trim whitespace)
                     const homeAreaNormalized = home.area?.trim().toLowerCase()
                     let areaData = areas.find(a => {
                       const nameMatch = a.name?.trim().toLowerCase() === homeAreaNormalized
                       const nameGreekMatch = a.nameGreek?.trim().toLowerCase() === homeAreaNormalized
                       return nameMatch || nameGreekMatch
                     })
-                    
-                    // If exact match not found, try partial match
                     if (!areaData) {
                       areaData = areas.find(a => {
-                        const nameMatch = a.name?.trim().toLowerCase().includes(homeAreaNormalized) || 
+                        const nameMatch = a.name?.trim().toLowerCase().includes(homeAreaNormalized) ||
                                          homeAreaNormalized.includes(a.name?.trim().toLowerCase() || '')
-                        const nameGreekMatch = a.nameGreek?.trim().toLowerCase().includes(homeAreaNormalized) || 
+                        const nameGreekMatch = a.nameGreek?.trim().toLowerCase().includes(homeAreaNormalized) ||
                                               homeAreaNormalized.includes(a.nameGreek?.trim().toLowerCase() || '')
                         return nameMatch || nameGreekMatch
                       })
                     }
-                    
                     return (
                       <div className="mt-2 flex flex-col gap-1">
                         <p className="flex items-center gap-1">
@@ -832,19 +828,19 @@ export default function HomeDetailPage() {
                             {getTranslation(language, 'cityArea')}: <strong>{getAreaName(home.area, areas, language)}</strong>
                           </span>
                         </p>
-                        {areaData && (
-                          <>
+                        {areaData && (areaData.vibe || areaData.safety != null) && (
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
                             {areaData.vibe && (
-                              <p className="flex items-center gap-1 text-[var(--text)]">
-                                {getTranslation(language, 'vibe')}: <strong>{translateValue(language, areaData.vibe)}</strong>
-                              </p>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+                                {translateValue(language, areaData.vibe)}
+                              </span>
                             )}
                             {areaData.safety != null && (
-                              <p className="flex items-center gap-1 text-[var(--text)]">
-                                {getTranslation(language, 'safety')}: <strong>{areaData.safety.toFixed(1)}/10</strong>
-                              </p>
+                              <span className="text-sm text-[var(--text-muted)]">
+                                🛡 {areaData.safety.toFixed(1)}/10
+                              </span>
                             )}
-                          </>
+                          </div>
                         )}
                       </div>
                     )

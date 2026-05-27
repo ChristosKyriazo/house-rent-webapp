@@ -54,6 +54,10 @@ export default function NewHomePage() {
   const [unknownAreas, setUnknownAreas] = useState<Array<{ rowIndex: number; rowNumber: number; areaInput: string; suggestion: string | null }>>([])
   const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'rejected'>>({})
   const [homeCount, setHomeCount] = useState<number>(0)
+  const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [useAIDescription, setUseAIDescription] = useState(false)
   const [useAIDescriptionBulk, setUseAIDescriptionBulk] = useState(false)
 
@@ -149,6 +153,26 @@ export default function NewHomePage() {
     } finally {
       setSearchingAreas(false)
     }
+  }
+
+  const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
+
+  const searchCities = async (query: string) => {
+    if (query.length < 1) { setCitySuggestions([]); return }
+    try {
+      const params = new URLSearchParams({ q: query, limit: '10' })
+      if (formData.country) params.append('country', formData.country)
+      const res = await fetch(`/api/cities/search?${params.toString()}`)
+      if (res.ok) setCitySuggestions((await res.json()).cities || [])
+    } catch { /* ignore */ }
+  }
+
+  const searchCountries = async (query: string) => {
+    if (query.length < 1) { setCountrySuggestions([]); return }
+    try {
+      const res = await fetch(`/api/countries/search?q=${encodeURIComponent(query)}&limit=10`)
+      if (res.ok) setCountrySuggestions((await res.json()).countries || [])
+    } catch { /* ignore */ }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -513,27 +537,86 @@ export default function NewHomePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              {/* City autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   required
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, city: q })
+                    if (q.length > 0) { setShowCityDropdown(true); searchCities(q) }
+                    else { setShowCityDropdown(false); setCitySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.city.length > 0) { setShowCityDropdown(true); searchCities(formData.city) } }}
+                  onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCity')}
                 />
+                {showCityDropdown && citySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {citySuggestions.map((city, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          const displayCity = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
+                          const displayCountry = (isGreekInput(formData.city) || language === 'el') && city.countryGreek ? city.countryGreek : city.country
+                          setFormData(prev => ({
+                            ...prev,
+                            city: displayCity,
+                            country: prev.country || displayCountry,
+                          }))
+                          setShowCityDropdown(false)
+                          setCitySuggestions([])
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                      >
+                        <div className="font-medium">{(isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              {/* Country autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   required
                   value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, country: q })
+                    if (q.length > 0) { setShowCountryDropdown(true); searchCountries(q) }
+                    else { setShowCountryDropdown(false); setCountrySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.country.length > 0) { setShowCountryDropdown(true); searchCountries(formData.country) } }}
+                  onBlur={() => setTimeout(() => setShowCountryDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCountry')}
                 />
+                {showCountryDropdown && countrySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((country, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
+                          setFormData(prev => ({ ...prev, country: display }))
+                          setShowCountryDropdown(false)
+                          setCountrySuggestions([])
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                      >
+                        <div className="font-medium">{(isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -617,8 +700,7 @@ export default function NewHomePage() {
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          // Store English name in formData, but display translated name
-                          const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          const displayName = isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
@@ -635,7 +717,7 @@ export default function NewHomePage() {
                         }}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                        <div className="font-medium">{isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name}</div>
                         {(area.city || area.country) && (
                           <div className="text-sm text-[var(--text-muted)]">
                             {[area.city, area.country].filter(Boolean).join(', ')}
@@ -1003,14 +1085,16 @@ export default function NewHomePage() {
                       uploadFormData.append('excelFile', excelFile)
                       uploadFormData.append('useAIDescription', useAIDescriptionBulk ? 'true' : 'false')
 
-                      // Include areas confirmed by owner (to be added to DB)
+                      // Include areas confirmed by owner.
+                      // When a suggestion exists, use the suggestion (already in DB, no new entry needed).
+                      // When no suggestion, use the original input (will be added as a new area).
                       const confirmedNewAreas = unknownAreas
                         .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed')
                         .map(ua => {
                           const house = parsedHouses.find(h => h.rowIndex === ua.rowIndex)
                           return {
                             rowIndex: ua.rowIndex,
-                            area: ua.areaInput,
+                            area: ua.suggestion ?? ua.areaInput,
                             city: house?.city || undefined,
                             country: house?.country || undefined,
                           }
@@ -1124,11 +1208,16 @@ export default function NewHomePage() {
                           if (!ua) return null
                           const decision = areaDecisions[house.rowIndex]
                           if (decision === 'confirmed') {
+                            const resolvedName = ua.suggestion ?? ua.areaInput
                             return (
                               <div className="mb-3 px-3 py-2 bg-green-50/80 border border-green-200 rounded-xl text-sm text-green-700">
-                                {language === 'el'
-                                  ? `✓ Η περιοχή "${ua.areaInput}" θα προστεθεί στη βάση δεδομένων`
-                                  : `✓ Area "${ua.areaInput}" will be added to the database`}
+                                {ua.suggestion
+                                  ? (language === 'el'
+                                    ? `✓ Θα χρησιμοποιηθεί η περιοχή "${resolvedName}"`
+                                    : `✓ Will use area "${resolvedName}"`)
+                                  : (language === 'el'
+                                    ? `✓ Η νέα περιοχή "${resolvedName}" θα προστεθεί στη βάση δεδομένων`
+                                    : `✓ New area "${resolvedName}" will be added to the database`)}
                               </div>
                             )
                           }
@@ -1149,13 +1238,8 @@ export default function NewHomePage() {
                                     ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε. Εννοείτε "${ua.suggestion}";`
                                     : `⚠ Area "${ua.areaInput}" not found. Did you mean "${ua.suggestion}"?`)
                                   : (language === 'el'
-                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε στη βάση δεδομένων`
-                                    : `⚠ Area "${ua.areaInput}" was not found in the database`)}
-                              </p>
-                              <p className="text-yellow-700 mb-2">
-                                {language === 'el'
-                                  ? 'Είστε σίγουροι ότι αυτή είναι η σωστή περιοχή;'
-                                  : 'Are you sure this is the correct area name?'}
+                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν υπάρχει στη βάση δεδομένων`
+                                    : `⚠ Area "${ua.areaInput}" does not exist in the database`)}
                               </p>
                               <div className="flex gap-2">
                                 <button
@@ -1163,14 +1247,16 @@ export default function NewHomePage() {
                                   onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
                                   className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
-                                  {language === 'el' ? 'Ναι, είναι σωστό' : "Yes, it's correct"}
+                                  {ua.suggestion
+                                    ? (language === 'el' ? `Χρήση "${ua.suggestion}"` : `Use "${ua.suggestion}"`)
+                                    : (language === 'el' ? `Προσθήκη "${ua.areaInput}"` : `Add "${ua.areaInput}"`)}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
                                   className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
-                                  {language === 'el' ? 'Όχι, θα το διορθώσω' : "No, I'll fix it"}
+                                  {language === 'el' ? 'Θα το διορθώσω' : "I'll fix it"}
                                 </button>
                               </div>
                             </div>

@@ -12,6 +12,8 @@ import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
 
+const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
+
 interface Home {
   id: number
   key: string
@@ -391,14 +393,14 @@ function HomesPageInner() {
   // Handle city selection - filter country and area dropdowns
   const handleCitySelect = (city: { city: string; cityGreek: string | null; country: string; countryGreek: string | null }) => {
     setManualFilters({ ...manualFilters, city: city.city })
-    setCitySearchQuery(language === 'el' && city.cityGreek ? city.cityGreek : city.city)
+    setCitySearchQuery(isGreekInput(citySearchQuery) && city.cityGreek ? city.cityGreek : city.city)
     setShowCityDropdown(false)
     setCitySuggestions([])
-    
+
     // Auto-set country if not already set
     if (!manualFilters.country) {
       setManualFilters(prev => ({ ...prev, country: city.country }))
-      setCountrySearchQuery(language === 'el' && city.countryGreek ? city.countryGreek : city.country)
+      setCountrySearchQuery(isGreekInput(citySearchQuery) && city.countryGreek ? city.countryGreek : city.country)
     }
     
     // Clear area selection if it doesn't match the new city
@@ -411,7 +413,7 @@ function HomesPageInner() {
   // Handle country selection - filter city and area dropdowns
   const handleCountrySelect = (country: { country: string; countryGreek: string | null }) => {
     setManualFilters({ ...manualFilters, country: country.country })
-    setCountrySearchQuery(language === 'el' && country.countryGreek ? country.countryGreek : country.country)
+    setCountrySearchQuery(isGreekInput(countrySearchQuery) && country.countryGreek ? country.countryGreek : country.country)
     setShowCountryDropdown(false)
     setCountrySuggestions([])
     
@@ -439,11 +441,11 @@ function HomesPageInner() {
     // Auto-set city and country if not already set
     if (area.city && !manualFilters.city) {
       setManualFilters(prev => ({ ...prev, city: area.city! }))
-      setCitySearchQuery(language === 'el' && area.cityGreek ? area.cityGreek : area.city)
+      setCitySearchQuery(isGreekInput(areaSearchQuery) && area.cityGreek ? area.cityGreek : area.city)
     }
     if (area.country && !manualFilters.country) {
       setManualFilters(prev => ({ ...prev, country: area.country! }))
-      setCountrySearchQuery(language === 'el' && area.countryGreek ? area.countryGreek : area.country)
+      setCountrySearchQuery(isGreekInput(areaSearchQuery) && area.countryGreek ? area.countryGreek : area.country)
     }
   }
 
@@ -683,7 +685,7 @@ function HomesPageInner() {
                         onClick={() => handleCitySelect(city)}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && city.cityGreek ? city.cityGreek : city.city}</div>
+                        <div className="font-medium">{isGreekInput(citySearchQuery) && city.cityGreek ? city.cityGreek : city.city}</div>
                       </button>
                     ))}
                   </div>
@@ -729,7 +731,7 @@ function HomesPageInner() {
                         onClick={() => handleCountrySelect(country)}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && country.countryGreek ? country.countryGreek : country.country}</div>
+                        <div className="font-medium">{isGreekInput(countrySearchQuery) && country.countryGreek ? country.countryGreek : country.country}</div>
                       </button>
                     ))}
                   </div>
@@ -800,7 +802,7 @@ function HomesPageInner() {
                             onClick={() => handleAreaSelect(area)}
                             className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                           >
-                            <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                            <div className="font-medium">{isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name}</div>
                           </button>
                         ))}
                       </div>

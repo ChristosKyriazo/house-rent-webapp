@@ -6,6 +6,7 @@ import { findBestMatch, matchParkingValue, getUniqueFieldValues } from '@/lib/va
 import { toEnglishValue } from '@/lib/translations'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { analyzePhotosForTags } from '@/lib/photo-vision'
+import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
 import OpenAI from 'openai'
 import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
@@ -80,13 +81,16 @@ export async function POST(request: NextRequest) {
       getUniqueFieldValues(prisma, 'energyClass'),
     ])
 
-    // Add owner-confirmed new areas to DB before processing
+    // Add owner-confirmed new areas to DB before processing, and build row-level area overrides.
+    // confirmedNewAreas.area is the resolved name (suggestion if one existed, original if truly new).
+    const rowAreaOverrides = new Map<number, string>()
     const confirmedNewAreasRaw = formData.get('confirmedNewAreas')
     if (confirmedNewAreasRaw) {
       const confirmedNewAreas: Array<{ rowIndex: number; area: string; city?: string; country?: string }> =
         JSON.parse(confirmedNewAreasRaw as string)
       for (const ca of confirmedNewAreas) {
         if (!ca.area) continue
+        rowAreaOverrides.set(ca.rowIndex, ca.area)
         const existing = await prisma.area.findFirst({ where: { name: ca.area } })
         if (!existing) {
           await prisma.area.create({
@@ -182,8 +186,10 @@ export async function POST(request: NextRequest) {
         const countryInput = String(row['Country']).trim()
         const country = resolveCountryToEnglishCanonical(countryInput, allAreas)
         
-        // Convert area to English
-        const areaInput = row['Area'] ? String(row['Area']).trim() : null
+        // Convert area to English; use owner-confirmed override when present
+        const areaInput = rowAreaOverrides.has(i)
+          ? rowAreaOverrides.get(i)!
+          : (row['Area'] ? String(row['Area']).trim() : null)
         const area = resolveAreaToEnglishCanonical(areaInput, allAreas)
         
         // Listing type - convert to English (rent or sale)
@@ -407,6 +413,15 @@ export async function POST(request: NextRequest) {
             ownerId: user.id,
           },
         })
+
+        // Generate embedding asynchronously — does not block processing the next row
+        if (openai) {
+          generateEmbedding(buildHomeText(home), openai)
+            .then((embedding) =>
+              prisma.home.update({ where: { id: home.id }, data: { embedding } })
+            )
+            .catch((err) => log.error({ err, homeId: home.id }, 'Failed to generate embedding'))
+        }
 
         results.push({
           row: rowNumber,

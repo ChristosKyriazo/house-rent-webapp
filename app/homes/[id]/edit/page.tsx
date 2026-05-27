@@ -77,6 +77,10 @@ export default function EditHomePage() {
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
 
   // Check user role and ownership on mount
   useEffect(() => {
@@ -227,6 +231,26 @@ export default function EditHomePage() {
       setAreaSuggestions([])
       setShowAreaDropdown(false)
     }
+  }
+
+  const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
+
+  const searchCities = async (query: string) => {
+    if (query.length < 1) { setCitySuggestions([]); return }
+    try {
+      const params = new URLSearchParams({ q: query, limit: '10' })
+      if (formData.country) params.append('country', formData.country)
+      const res = await fetch(`/api/cities/search?${params.toString()}`)
+      if (res.ok) setCitySuggestions((await res.json()).cities || [])
+    } catch { /* ignore */ }
+  }
+
+  const searchCountries = async (query: string) => {
+    if (query.length < 1) { setCountrySuggestions([]); return }
+    try {
+      const res = await fetch(`/api/countries/search?q=${encodeURIComponent(query)}&limit=10`)
+      if (res.ok) setCountrySuggestions((await res.json()).countries || [])
+    } catch { /* ignore */ }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -597,27 +621,86 @@ export default function EditHomePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              {/* City autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   required
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, city: q })
+                    if (q.length > 0) { setShowCityDropdown(true); searchCities(q) }
+                    else { setShowCityDropdown(false); setCitySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.city.length > 0) { setShowCityDropdown(true); searchCities(formData.city) } }}
+                  onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCity')}
                 />
+                {showCityDropdown && citySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {citySuggestions.map((city, i) => {
+                      const display = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const displayCountry = (isGreekInput(formData.city) || language === 'el') && city.countryGreek ? city.countryGreek : city.country
+                            setFormData(prev => ({ ...prev, city: display, country: prev.country || displayCountry }))
+                            setShowCityDropdown(false)
+                            setCitySuggestions([])
+                          }}
+                          className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        >
+                          <div className="font-medium">{display}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <div>
+              {/* Country autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   required
                   value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, country: q })
+                    if (q.length > 0) { setShowCountryDropdown(true); searchCountries(q) }
+                    else { setShowCountryDropdown(false); setCountrySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.country.length > 0) { setShowCountryDropdown(true); searchCountries(formData.country) } }}
+                  onBlur={() => setTimeout(() => setShowCountryDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCountry')}
                 />
+                {showCountryDropdown && countrySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((country, i) => {
+                      const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, country: display }))
+                            setShowCountryDropdown(false)
+                            setCountrySuggestions([])
+                          }}
+                          className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        >
+                          <div className="font-medium">{display}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -691,8 +774,7 @@ export default function EditHomePage() {
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          // Store English name in formData, but display translated name
-                          const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          const displayName = (isGreekInput(areaSearchQuery) || language === 'el') && area.nameGreek ? area.nameGreek : area.name
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
@@ -708,7 +790,7 @@ export default function EditHomePage() {
                         }}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                        <div className="font-medium">{(isGreekInput(areaSearchQuery) || language === 'el') && area.nameGreek ? area.nameGreek : area.name}</div>
                         {(area.city || area.country) && (
                           <div className="text-sm text-[var(--text-muted)]">
                             {[area.city, area.country].filter(Boolean).join(', ')}
