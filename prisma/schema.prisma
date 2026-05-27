@@ -31,6 +31,7 @@ model User {
   notifications   Notification[] @relation
   bookingsAsUser  Booking[]      @relation("UserBookings")
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
+  bulkUploadJobs  BulkUploadJob[]
 
   @@map("users")
 }
@@ -261,6 +262,25 @@ model Booking {
   @@index([status])
   @@index([availabilityId])
   @@map("bookings")
+}
+
+model BulkUploadJob {
+  id        String   @id @default(cuid())
+  userId    Int
+  status    String   @default("pending") // pending | processing | completed | failed
+  progress  Int      @default(0)
+  total     Int      @default(0)
+  filePath  String   @default("")
+  options   Json     @default("{}")      // { useAIDescription, confirmedNewAreas, photosByIndex }
+  results   Json?                        // array of { row, title, key }
+  errors    Json?                        // array of error strings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("bulk_upload_jobs")
 }
 
 model SearchConversation {

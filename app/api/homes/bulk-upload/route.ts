@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { calculatePropertyDistances } from '@/lib/google-maps'
-import { findBestMatch, matchParkingValue, getUniqueFieldValues } from '@/lib/value-matcher'
-import { toEnglishValue } from '@/lib/translations'
-import { generateHouseDescriptions } from '@/lib/house-description-generator'
-import { analyzePhotosForTags } from '@/lib/photo-vision'
-import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
-import OpenAI from 'openai'
+import { processBulkUploadJob } from '@/lib/bulk-upload-processor'
 import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { resolveAreaToEnglishCanonical, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
 import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
@@ -19,19 +12,12 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Check if user has owner/broker role
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return NextResponse.json(
-        { error: 'Only owners and brokers can upload listings' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Only owners and brokers can upload listings' }, { status: 403 })
     }
 
     const formData = await request.formData()
@@ -39,415 +25,85 @@ export async function POST(request: NextRequest) {
     const useAIDescription = formData.get('useAIDescription') === 'true'
 
     if (!excelFile) {
-      return NextResponse.json(
-        { error: 'Excel file is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Excel file is required' }, { status: 400 })
     }
 
-    // Read Excel file to get row count and check limits
+    // Parse Excel just enough to validate and get row count
     const arrayBuffer = await excelFile.arrayBuffer()
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
     const data = XLSX.utils.sheet_to_json(worksheet) as any[]
-    const newHomesCount = data.length
 
     if (data.length === 0) {
-      return NextResponse.json(
-        { error: 'Excel file is empty' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Excel file is empty' }, { status: 400 })
     }
 
-    // Parse photos by house index (photos_0, photos_1, etc.)
-    const photosByHouseIndex: { [key: number]: File[] } = {}
+    // Create the job record first so we get its ID for the directory name
+    const job = await prisma.bulkUploadJob.create({
+      data: {
+        userId: user.id,
+        status: 'pending',
+        total: data.length,
+      },
+    })
+
+    // Save Excel file into a per-job directory
+    const jobDir = join(process.cwd(), 'public', 'uploads', 'jobs', job.id)
+    await mkdir(jobDir, { recursive: true })
+    const excelPath = join(jobDir, 'data.xlsx')
+    await writeFile(excelPath, Buffer.from(arrayBuffer))
+
+    // Save photos to their final location immediately; record paths by row index
+    const photosByIndex: Record<string, string[]> = {}
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith('photos_')) {
-        const index = parseInt(key.replace('photos_', ''))
-        if (!isNaN(index)) {
-          if (!photosByHouseIndex[index]) {
-            photosByHouseIndex[index] = []
-          }
-          photosByHouseIndex[index].push(value as File)
-        }
+      if (!key.startsWith('photos_')) continue
+      const index = parseInt(key.replace('photos_', ''))
+      if (isNaN(index)) continue
+
+      const photoFile = value as File
+      if (photoFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: `Photo ${photoFile.name} for house ${index + 1} exceeds 5MB limit` },
+          { status: 400 }
+        )
       }
+
+      const bytes = await photoFile.arrayBuffer()
+      const timestamp = Date.now()
+      const randomSuffix = Math.random().toString(36).substring(7)
+      const filename = `${timestamp}-${randomSuffix}-${photoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+      const uploadsDir = join(process.cwd(), 'public', 'uploads')
+      await mkdir(uploadsDir, { recursive: true })
+      await writeFile(join(uploadsDir, filename), Buffer.from(bytes))
+
+      const indexKey = String(index)
+      if (!photosByIndex[indexKey]) photosByIndex[indexKey] = []
+      photosByIndex[indexKey].push(`/uploads/${filename}`)
     }
 
-    // Get unique values from database for matching
-    const [uniqueHeatingCategories, uniqueHeatingAgents, uniqueEnergyClasses] = await Promise.all([
-      getUniqueFieldValues(prisma, 'heatingCategory'),
-      getUniqueFieldValues(prisma, 'heatingAgent'),
-      getUniqueFieldValues(prisma, 'energyClass'),
-    ])
-
-    // Add owner-confirmed new areas to DB before processing, and build row-level area overrides.
-    // confirmedNewAreas.area is the resolved name (suggestion if one existed, original if truly new).
-    const rowAreaOverrides = new Map<number, string>()
     const confirmedNewAreasRaw = formData.get('confirmedNewAreas')
-    if (confirmedNewAreasRaw) {
-      const confirmedNewAreas: Array<{ rowIndex: number; area: string; city?: string; country?: string }> =
-        JSON.parse(confirmedNewAreasRaw as string)
-      for (const ca of confirmedNewAreas) {
-        if (!ca.area) continue
-        rowAreaOverrides.set(ca.rowIndex, ca.area)
-        const existing = await prisma.area.findFirst({ where: { name: ca.area } })
-        if (!existing) {
-          await prisma.area.create({
-            data: {
-              name: ca.area,
-              city: ca.city || null,
-              country: ca.country || null,
-            },
-          })
-        }
-      }
-    }
+    const confirmedNewAreas = confirmedNewAreasRaw ? JSON.parse(confirmedNewAreasRaw as string) : []
 
-    // Get all areas with name translations for area field conversion
-    const allAreas = await prisma.area.findMany({
-      select: {
-        name: true,
-        nameGreek: true,
-        city: true,
-        cityGreek: true,
-        country: true,
-        countryGreek: true,
-      }
+    // Persist the job options and file path, then kick off background processing
+    await prisma.bulkUploadJob.update({
+      where: { id: job.id },
+      data: {
+        filePath: excelPath,
+        options: { useAIDescription, confirmedNewAreas, photosByIndex },
+      },
     })
 
-    // Define valid values (fallback if DB is empty)
-    const validHeatingCategories = uniqueHeatingCategories.length > 0 
-      ? uniqueHeatingCategories 
-      : ['central', 'autonomous']
-    const validHeatingAgents = uniqueHeatingAgents.length > 0 
-      ? uniqueHeatingAgents 
-      : ['oil', 'natural gas', 'electricity', 'other']
-    const validEnergyClasses = uniqueEnergyClasses.length > 0 
-      ? uniqueEnergyClasses 
-      : ['A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G']
+    // Fire-and-forget: Node.js keeps running after the response is sent
+    processBulkUploadJob(job.id).catch((err) =>
+      log.error({ err, jobId: job.id }, 'Background bulk upload job crashed')
+    )
 
-    // Helper function to upload photos for a specific house
-    const uploadPhotosForHouse = async (houseIndex: number): Promise<string[]> => {
-      const photos: string[] = []
-      const housePhotos = photosByHouseIndex[houseIndex] || []
-      
-      for (const photoFile of housePhotos) {
-        if (photoFile.size > 5 * 1024 * 1024) {
-          throw new Error(`Photo ${photoFile.name} for house ${houseIndex + 1} exceeds 5MB limit`)
-        }
-
-        const bytes = await photoFile.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-        const timestamp = Date.now()
-        const randomSuffix = Math.random().toString(36).substring(7)
-        const filename = `${timestamp}-${randomSuffix}-${photoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-        const uploadsDir = join(process.cwd(), 'public', 'uploads')
-        
-        try {
-          await mkdir(uploadsDir, { recursive: true })
-        } catch (err: any) {
-          if (err.code !== 'EEXIST') throw err
-        }
-
-        const filepath = join(uploadsDir, filename)
-        await writeFile(filepath, buffer)
-        photos.push(`/uploads/${filename}`)
-      }
-      
-      return photos
-    }
-
-    // Process each row and create homes
-    const results = []
-    const errors = []
-
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i]
-      const rowNumber = i + 2 // +2 because Excel rows start at 1 and we have a header
-
-      try {
-        // Validate required fields
-        if (!row['Title'] || !row['City'] || !row['Country'] || !row['Price Per Month'] || !row['Size (sq meters)']) {
-          errors.push(`Row ${rowNumber}: Missing required fields (Title, City, Country, Price Per Month, Size)`)
-          continue
-        }
-
-        // Parse data
-        // Title and description are kept as-is (can be in any language)
-        const title = String(row['Title']).trim()
-        const description = row['Description'] ? String(row['Description']).trim() : null
-        const street = row['Street'] ? String(row['Street']).trim() : null
-        
-        // Convert city, country, and area to English
-        const cityInput = String(row['City']).trim()
-        const city = resolveCityToEnglishCanonical(cityInput, allAreas)
-        
-        const countryInput = String(row['Country']).trim()
-        const country = resolveCountryToEnglishCanonical(countryInput, allAreas)
-        
-        // Convert area to English; use owner-confirmed override when present
-        const areaInput = rowAreaOverrides.has(i)
-          ? rowAreaOverrides.get(i)!
-          : (row['Area'] ? String(row['Area']).trim() : null)
-        const area = resolveAreaToEnglishCanonical(areaInput, allAreas)
-        
-        // Listing type - convert to English (rent or sale)
-        const listingTypeInput = row['Listing Type'] ? String(row['Listing Type']).trim().toLowerCase() : 'rent'
-        let listingType = 'rent'
-        if (listingTypeInput === 'sale' || listingTypeInput === 'sell' || 
-            listingTypeInput === 'πώληση' || listingTypeInput === 'πωληση' ||
-            listingTypeInput.includes('sale') || listingTypeInput.includes('sell')) {
-          listingType = 'sale'
-        } else if (listingTypeInput === 'rent' || listingTypeInput === 'rental' ||
-                   listingTypeInput === 'ενοικίαση' || listingTypeInput === 'ενοικιαση' ||
-                   listingTypeInput.includes('rent')) {
-          listingType = 'rent'
-        }
-        const pricePerMonth = Number(row['Price Per Month'])
-        const bedrooms = Number(row['Bedrooms'] || 0)
-        const bathrooms = Number(row['Bathrooms'] || 0)
-        // Allow 0 and negative numbers for ground floor and basement
-        const floorInput = row['Floor']
-        const floor = floorInput !== null && floorInput !== undefined && String(floorInput).trim() !== '' ? Number(floorInput) : null
-        
-        // Match heating category with fuzzy matching and convert to English
-        const heatingCategoryInput = row['Heating Category'] ? String(row['Heating Category']).trim() : null
-        let heatingCategory: string | null = null
-        if (heatingCategoryInput) {
-          // First convert to English (handles Greek translations)
-          const englishValue = toEnglishValue(heatingCategoryInput)
-          // Then match with existing DB values
-          heatingCategory = findBestMatch(englishValue, validHeatingCategories) || englishValue
-        }
-        
-        // Match heating agent with fuzzy matching and convert to English
-        const heatingAgentInput = row['Heating Agent'] ? String(row['Heating Agent']).trim() : null
-        let heatingAgent: string | null = null
-        if (heatingAgentInput) {
-          // First convert to English (handles Greek translations)
-          const englishValue = toEnglishValue(heatingAgentInput)
-          // Then match with existing DB values
-          heatingAgent = findBestMatch(englishValue, validHeatingAgents) || englishValue
-        }
-        
-        // Match parking value (handles 1, yes, ναι, 0, no, όχι, etc.)
-        const parkingInput = row['Parking'] ? String(row['Parking']).trim() : null
-        const parking = matchParkingValue(parkingInput)
-        
-        const sizeSqMeters = Number(row['Size (sq meters)'])
-        const yearBuilt = row['Year Built'] && row['Year Built'] !== '' ? Number(row['Year Built']) : null
-        const yearRenovated = row['Year Renovated'] && row['Year Renovated'] !== '' ? Number(row['Year Renovated']) : null
-        const availableFrom = row['Available From'] 
-          ? new Date(String(row['Available From']))
-          : new Date()
-        
-        // Match energy class with fuzzy matching (normalize to uppercase for comparison)
-        const energyClassInput = row['Energy Class'] ? String(row['Energy Class']).trim() : null
-        let energyClass: string | null = null
-        if (energyClassInput) {
-          // Create a map for case-insensitive matching but preserve original case
-          const energyClassMap = new Map<string, string>()
-          validEnergyClasses.forEach(val => {
-            energyClassMap.set(val.toUpperCase(), val)
-          })
-          
-          const matched = findBestMatch(energyClassInput.toUpperCase(), Array.from(energyClassMap.keys()))
-          energyClass = matched ? energyClassMap.get(matched) || energyClassInput.toUpperCase() : energyClassInput.toUpperCase()
-        }
-
-        // Validate data types
-        if (isNaN(pricePerMonth) || isNaN(bedrooms) || isNaN(bathrooms) || isNaN(sizeSqMeters)) {
-          errors.push(`Row ${rowNumber}: Invalid numeric values`)
-          continue
-        }
-
-        if (isNaN(availableFrom.getTime())) {
-          errors.push(`Row ${rowNumber}: Invalid date format for Available From`)
-          continue
-        }
-
-        // Calculate distances using Google Maps API
-        let distances: {
-          closestMetro: number | null
-          closestBus: number | null
-          closestSchool: number | null
-          closestHospital: number | null
-          closestPark: number | null
-          closestUniversity: number | null
-        } = {
-          closestMetro: null,
-          closestBus: null,
-          closestSchool: null,
-          closestHospital: null,
-          closestPark: null,
-          closestUniversity: null,
-        }
-
-        try {
-          const distanceResult = await calculatePropertyDistances(
-            street,
-            area, // area is already converted to English above
-            city, // city is already converted to English above
-            country // country is already converted to English above
-          )
-          
-          distances = {
-            closestMetro: distanceResult.closestMetro,
-            closestBus: distanceResult.closestBus,
-            closestSchool: distanceResult.closestSchool,
-            closestHospital: distanceResult.closestHospital,
-            closestPark: distanceResult.closestPark,
-            closestUniversity: distanceResult.closestUniversity,
-          }
-        } catch (distError) {
-          log.error({ err: distError, rowNumber }, 'Error calculating distances for row')
-          // Continue without distances if calculation fails
-        }
-
-        // Upload photos for this specific house
-        let housePhotos: string[] = []
-        try {
-          housePhotos = await uploadPhotosForHouse(i)
-        } catch (photoError: any) {
-          errors.push(`Row ${rowNumber}: ${photoError.message}`)
-          // Continue with home creation even if photo upload fails
-        }
-        const photosJson = housePhotos.length > 0 ? JSON.stringify(housePhotos) : null
-
-        // Analyze photos for visual feature tags
-        const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
-        let photoTagsList: string[] = []
-        if (housePhotos.length > 0 && openai) {
-          photoTagsList = await analyzePhotosForTags(housePhotos, openai)
-        }
-        const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
-
-        // Get area safety and vibe if area is provided
-        let areaSafety: number | null = null
-        let areaVibe: string | null = null
-        if (area) {
-          const areaData = await prisma.area.findFirst({
-            where: { name: area },
-            select: { safety: true, vibe: true }
-          })
-          if (areaData) {
-            areaSafety = areaData.safety
-            areaVibe = areaData.vibe
-          }
-        }
-
-        // Generate descriptions using AI when useAIDescription is checked.
-        // The Description column in Excel is treated as owner notes/rules woven into the AI output.
-        let finalDescription = description
-        let finalDescriptionGreek: string | null = null
-
-        if (useAIDescription) {
-          const aiDescriptions = await generateHouseDescriptions({
-            title,
-            city,
-            country,
-            area,
-            listingType: listingType === 'sale' ? 'sale' : 'rent',
-            pricePerMonth,
-            bedrooms,
-            bathrooms,
-            floor,
-            sizeSqMeters,
-            yearBuilt,
-            yearRenovated,
-            heatingCategory,
-            heatingAgent,
-            parking,
-            energyClass,
-            closestMetro: distances.closestMetro,
-            closestBus: distances.closestBus,
-            closestSchool: distances.closestSchool,
-            closestHospital: distances.closestHospital,
-            closestPark: distances.closestPark,
-            closestUniversity: distances.closestUniversity,
-            areaSafety,
-            areaVibe,
-            availableFrom: availableFrom ? availableFrom.toISOString().split('T')[0] : null,
-            ownerNotes: description || null,
-            photoFeatures: photoTagsList.length > 0 ? photoTagsList : null,
-          }, openai)
-
-          if (aiDescriptions?.description) {
-            finalDescription = aiDescriptions.description
-            finalDescriptionGreek = aiDescriptions.descriptionGreek
-          }
-        }
-
-        // Create home
-        const home = await prisma.home.create({
-          data: {
-            title,
-            description: finalDescription,
-            descriptionGreek: finalDescriptionGreek,
-            street,
-            city,
-            country,
-            area,
-            listingType: listingType === 'sale' ? 'sale' : 'rent',
-            pricePerMonth,
-            bedrooms,
-            bathrooms,
-            floor,
-            heatingCategory,
-            heatingAgent,
-            parking,
-            sizeSqMeters,
-            yearBuilt,
-            yearRenovated,
-            availableFrom,
-            photos: photosJson,
-            photoTags: photoTagsJson,
-            energyClass,
-            closestMetro: distances.closestMetro,
-            closestBus: distances.closestBus,
-            closestSchool: distances.closestSchool,
-            closestHospital: distances.closestHospital,
-            closestPark: distances.closestPark,
-            closestUniversity: distances.closestUniversity,
-            ownerId: user.id,
-          },
-        })
-
-        // Generate embedding asynchronously — does not block processing the next row
-        if (openai) {
-          generateEmbedding(buildHomeText(home), openai)
-            .then((embedding) =>
-              prisma.home.update({ where: { id: home.id }, data: { embedding } })
-            )
-            .catch((err) => log.error({ err, homeId: home.id }, 'Failed to generate embedding'))
-        }
-
-        results.push({
-          row: rowNumber,
-          title,
-          key: home.key,
-        })
-      } catch (error: any) {
-        log.error({ err: error, rowNumber }, 'Error processing bulk upload row')
-        errors.push(`Row ${rowNumber}: ${error.message || 'Unknown error'}`)
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      created: results.length,
-      errorCount: errors.length,
-      results,
-      errors: errors.length > 0 ? errors : undefined,
-    })
+    return NextResponse.json({ jobId: job.id })
   } catch (error: any) {
     log.error({ err: error }, 'Bulk upload error')
     return NextResponse.json(
-      { error: error.message || 'Failed to process bulk upload' },
+      { error: error.message || 'Failed to start bulk upload' },
       { status: 500 }
     )
   }
 }
-
-

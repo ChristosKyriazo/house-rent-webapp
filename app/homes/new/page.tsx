@@ -60,6 +60,9 @@ export default function NewHomePage() {
   const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [useAIDescription, setUseAIDescription] = useState(false)
   const [useAIDescriptionBulk, setUseAIDescriptionBulk] = useState(false)
+  const [bulkJobId, setBulkJobId] = useState<string | null>(null)
+  const [bulkJobProgress, setBulkJobProgress] = useState(0)
+  const [bulkJobTotal, setBulkJobTotal] = useState(0)
 
   // Check user role on mount
   useEffect(() => {
@@ -91,6 +94,52 @@ export default function NewHomePage() {
         router.push('/login')
       })
   }, [router])
+
+  // Poll job status while a bulk upload is processing
+  useEffect(() => {
+    if (!bulkJobId) return
+
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs/${bulkJobId}/status`)
+        if (!res.ok) return
+        const status = await res.json()
+
+        setBulkJobProgress(status.progress)
+        setBulkJobTotal(status.total)
+
+        if (status.status === 'completed') {
+          clearInterval(poll)
+          setBulkJobId(null)
+          setBulkUploadLoading(false)
+          const created = (status.results as any[])?.length || 0
+          if (status.errors?.length > 0) {
+            setBulkUploadError(
+              language === 'el'
+                ? `Δημιουργήθηκαν ${created} ακίνητα. Σφάλματα: ${(status.errors as string[]).join(', ')}`
+                : `Created ${created} homes. Errors: ${(status.errors as string[]).join(', ')}`
+            )
+          } else {
+            setBulkUploadSuccess(
+              language === 'el'
+                ? `Επιτυχής δημιουργία ${created} ακινήτων!`
+                : `Successfully created ${created} homes!`
+            )
+          }
+          setTimeout(() => router.push('/homes/my-listings'), 2000)
+        } else if (status.status === 'failed') {
+          clearInterval(poll)
+          setBulkJobId(null)
+          setBulkUploadLoading(false)
+          setBulkUploadError(
+            language === 'el' ? 'Σφάλμα κατά την επεξεργασία' : 'Processing failed. Please try again.'
+          )
+        }
+      } catch { /* ignore transient network errors during polling */ }
+    }, 2000)
+
+    return () => clearInterval(poll)
+  }, [bulkJobId, language, router])
 
   // Fetch all areas on mount for similarity matching
   useEffect(() => {
@@ -1125,29 +1174,14 @@ export default function NewHomePage() {
                         return
                       }
 
-                      if (data.errors && data.errors.length > 0) {
-                        setBulkUploadError(
-                          language === 'el'
-                            ? `Δημιουργήθηκαν ${data.created} ακίνητα. Σφάλματα: ${data.errors.join(', ')}`
-                            : `Created ${data.created} homes. Errors: ${data.errors.join(', ')}`
-                        )
-                      } else {
-                        setBulkUploadSuccess(
-                          language === 'el'
-                            ? `Επιτυχής δημιουργία ${data.created} ακινήτων!`
-                            : `Successfully created ${data.created} homes!`
-                        )
-                      }
-
-                      // Redirect to my listings after 2 seconds
-                      setTimeout(() => {
-                        router.push('/homes/my-listings')
-                      }, 2000)
+                      // Job created — polling useEffect takes over from here
+                      setBulkJobId(data.jobId)
+                      setBulkJobProgress(0)
+                      setBulkJobTotal(parsedHouses.length)
                     } catch (err) {
                       setBulkUploadError(
                         language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'
                       )
-                    } finally {
                       setBulkUploadLoading(false)
                     }
                   }}
@@ -1295,6 +1329,22 @@ export default function NewHomePage() {
                     ))}
                   </div>
 
+                  {bulkJobId && (
+                    <div className="pt-2 pb-1">
+                      <p className="text-sm text-[var(--text-muted)] mb-2">
+                        {language === 'el'
+                          ? `Επεξεργασία ${bulkJobProgress} από ${bulkJobTotal} ακίνητα...`
+                          : `Processing ${bulkJobProgress} of ${bulkJobTotal} homes...`}
+                      </p>
+                      <div className="w-full bg-[var(--border-subtle)] rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-[var(--accent)] h-2 rounded-full transition-all duration-500"
+                          style={{ width: bulkJobTotal > 0 ? `${Math.round((bulkJobProgress / bulkJobTotal) * 100)}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap justify-end gap-4 pt-4">
                     <button
                       type="button"
@@ -1308,6 +1358,7 @@ export default function NewHomePage() {
                         setExcelInputKey(prev => prev + 1)
                         setUnknownAreas([])
                         setAreaDecisions({})
+                        setBulkJobId(null)
                       }}
                       className="min-w-[8rem] px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm border border-[var(--border-subtle)]"
                     >
@@ -1317,17 +1368,20 @@ export default function NewHomePage() {
                       type="submit"
                       disabled={
                         bulkUploadLoading ||
+                        !!bulkJobId ||
                         areaValidating ||
                         unknownAreas.some(ua => !areaDecisions[ua.rowIndex]) ||
                         unknownAreas.some(ua => areaDecisions[ua.rowIndex] === 'rejected')
                       }
                       className="min-w-[8rem] px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-colors font-semibold text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {bulkUploadLoading
-                        ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
-                        : areaValidating
-                          ? (language === 'el' ? 'Έλεγχος...' : 'Checking...')
-                          : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
+                      {bulkJobId
+                        ? (language === 'el' ? 'Επεξεργασία...' : 'Processing...')
+                        : bulkUploadLoading
+                          ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
+                          : areaValidating
+                            ? (language === 'el' ? 'Έλεγχος...' : 'Checking...')
+                            : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
                     </button>
                   </div>
                 </form>
