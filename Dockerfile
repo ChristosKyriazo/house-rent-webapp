@@ -16,11 +16,16 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build — supply placeholder env vars so Next.js can resolve at build time
+# Build — only NEXT_PUBLIC_* vars are embedded in the client bundle and must be
+# real values at build time. All other secrets are injected at runtime via .env.
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
+ARG NEXT_PUBLIC_SENTRY_DSN=
+# Clerk needs a key with valid format during build-time module init; the placeholder
+# is never used at runtime — docker-compose.prod.yml injects the real value via .env.
 ARG CLERK_SECRET_KEY=sk_test_placeholder
-ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/house_rent
+# DATABASE_URL is NOT needed at build time: prisma generate uses the schema file,
+# not an actual DB connection. It is intentionally absent here.
 RUN npm run build
 
 # ── runner: minimal production image ────────────────────────────────────────
