@@ -1027,13 +1027,23 @@ export default function NewHomePage() {
                     <input
                       key={excelInputKey}
                       type="file"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.numbers"
                       className="hidden"
                       onChange={async (e) => {
                         const file = e.target.files?.[0]
                         if (!file) return
 
                         setBulkUploadError('')
+
+                        if (file.name.toLowerCase().endsWith('.numbers')) {
+                          setBulkUploadError(
+                            language === 'el'
+                              ? 'Τα αρχεία Apple Numbers δεν υποστηρίζονται άμεσα. Στο Numbers επιλέξτε Αρχείο → Εξαγωγή ως → Excel (.xlsx) και ανεβάστε το αρχείο Excel.'
+                              : 'Apple Numbers files cannot be uploaded directly. In Numbers, choose File → Export To → Excel (.xlsx), then upload the exported file.'
+                          )
+                          return
+                        }
+
                         setExcelFile(file)
 
                         try {

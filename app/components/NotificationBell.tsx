@@ -216,8 +216,17 @@ export default function NotificationBell() {
       return
     }
 
-    if (notification.type === 'dismissed' || notification.type === 'rejected') {
+    if (notification.type === 'dismissed') {
       router.push('/homes/my-inquiries')
+      return
+    }
+
+    if (notification.type === 'rejected') {
+      if (displayRole === 'owner' || (actualRole === 'both' && selectedRole === 'owner')) {
+        router.push(notification.homeKey ? `/homes/inquiries/${notification.homeKey}` : '/homes/my-listings')
+      } else {
+        router.push('/homes/my-inquiries')
+      }
       return
     }
 

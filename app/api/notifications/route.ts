@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     // Get user information for owner notifications (inquiry type) and finalize notifications
     const userIds = notifications
-      .filter(n => (n.type === 'inquiry' || n.type === 'finalize') && n.userId)
+      .filter(n => (n.type === 'inquiry' || n.type === 'finalize' || n.type === 'rejected') && n.userId)
       .map(n => n.userId!)
       .filter((id, index, self) => self.indexOf(id) === index) // Unique IDs
 
@@ -153,8 +153,13 @@ export async function GET(request: NextRequest) {
         // For users: show their inquiry was dismissed
         message = t.notificationDismissed.replace('{propertyTitle}', propertyTitle)
       } else if (notif.type === 'rejected') {
-        // For users: show their offer was rejected
-        message = t.notificationRejected.replace('{propertyTitle}', propertyTitle)
+        if (notif.role === 'owner') {
+          const rejUser = notif.userId ? userMap.get(notif.userId) : null
+          const userName = rejUser?.name || rejUser?.email.split('@')[0] || t.aUser
+          message = t.notificationRejectedOwner.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
+        } else {
+          message = t.notificationRejected.replace('{propertyTitle}', propertyTitle)
+        }
       } else if (notif.type === 'finalize') {
         // For finalize: show who wants to finalize
         if (notif.inquiryId) {

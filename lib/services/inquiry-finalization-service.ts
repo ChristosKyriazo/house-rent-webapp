@@ -147,14 +147,15 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
     where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
     data: { deleted: true },
   })
+  // Notify the owner that the user rejected finalization so they can proceed with other inquiries
   await prisma.notification.create({
     data: {
-      recipientId: inquiry.user.id,
-      role: 'user',
+      recipientId: inquiry.home.ownerId,
+      role: 'owner',
       type: 'rejected',
       homeKey: inquiry.home.key,
       ownerKey: inquiry.home.owner.key,
-      userId: inquiry.userId,
+      userId: inquiry.user.id,
     },
   })
   return { message: 'Finalization dismissed', dismissed: true }

@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Excel file is required' }, { status: 400 })
     }
 
+    if (excelFile.name.toLowerCase().endsWith('.numbers')) {
+      return NextResponse.json(
+        { error: 'Apple Numbers files cannot be uploaded directly. In Numbers, choose File → Export To → Excel (.xlsx), then upload the exported file.' },
+        { status: 400 }
+      )
+    }
+
     // Parse Excel just enough to validate and get row count
     const arrayBuffer = await excelFile.arrayBuffer()
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })

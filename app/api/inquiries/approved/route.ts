@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
         where: {
           homeId: { in: homeIds },
           approved: true,
-          finalized: false, // Exclude finalized inquiries
+          finalized: false,
+          dismissed: false,
         },
         select: {
           id: true,
@@ -255,6 +256,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           approved: true,
           finalized: false,
+          dismissed: false,
         },
         select: {
           id: true,
@@ -278,6 +280,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           approved: true,
           finalized: false,
+          dismissed: false,
           homeId: { in: Array.from(validHomeIds) },
         },
         include: {
