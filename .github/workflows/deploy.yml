@@ -87,14 +87,13 @@ jobs:
 
             # Wait for the health endpoint
             for i in $(seq 1 30); do
-              if curl -sf http://localhost:3000/api/healthz > /dev/null; then
+              if docker compose -f docker-compose.prod.yml exec -T app \
+                   curl -sf http://localhost:3000/api/healthz > /dev/null 2>&1; then
                 echo "App is healthy"
                 exit 0
               fi
               echo "Waiting for app... ($i/30)"
               sleep 3
             done
-            echo "App failed to become healthy — rolling back"
-            docker compose -f docker-compose.prod.yml up -d --no-deps app \
-              --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(cat .previous_image_tag)
+            echo "App failed to become healthy"
             exit 1
