@@ -50,7 +50,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # NOTE: DATABASE_URL and CLERK_SECRET_KEY are deliberately NOT build args.
@@ -110,12 +109,11 @@ jobs:
 
             # ── Clerk auth ────────────────────────────────────────────────────
             CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
-            CLERK_JWT_KEY=${{ secrets.CLERK_JWT_KEY }}
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
-            # ── Observability ─────────────────────────────────────────────────
+            # ── Observability (optional — leave blank if no Sentry account) ───
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
 
             # ── Third-party APIs ──────────────────────────────────────────────
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
