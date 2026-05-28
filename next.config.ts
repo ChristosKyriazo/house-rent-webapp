@@ -16,12 +16,14 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://challenges.cloudflare.com",
+      // clerk.accounts.dev  = development instances
+      // clerk.com / *.clerk.com = production instances (Frontend API lives on a subdomain)
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://api.openai.com https://maps.googleapis.com wss:",
-      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev",
+      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://api.openai.com https://maps.googleapis.com wss:",
+      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com",
       "worker-src 'self' blob:",
     ].join("; "),
   },

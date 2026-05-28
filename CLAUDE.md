@@ -48,7 +48,7 @@ Migrations run **automatically on container startup** via the production compose
 
 ## Deploy flow
 
-- Push to **`dev`** → builds Docker image → deploys to **staging** (dev.fwlia.com)
+- Push to **`dev`** → builds Docker image → deploys to **staging** (dev.kaparro.com)
 - Push to **`main`** → deploys to **production**
 - Never push directly to `main` — it triggers the production pipeline immediately.
 - The deploy only restarts the app container; DB and Caddy keep running.

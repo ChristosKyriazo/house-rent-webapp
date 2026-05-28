@@ -65,6 +65,17 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
 
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync Caddyfile to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ github.ref_name == 'main' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: Caddyfile
+          target: /opt/house-rent/
+
       - name: Write .env and deploy
         uses: appleboy/ssh-action@v1
         with:
@@ -124,6 +135,12 @@ jobs:
 
             # ── Rolling restart (app only — DB and Caddy keep running) ────────
             docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
+
+            # ── Reload Caddy if Caddyfile changed ─────────────────────────────
+            # caddy reload validates the new config first — a bad Caddyfile will NOT
+            # take down the running server; it will keep serving the old config.
+            docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
+              --config /etc/caddy/Caddyfile --adapter caddyfile || true
 
             # ── Health check ──────────────────────────────────────────────────
             for i in $(seq 1 30); do

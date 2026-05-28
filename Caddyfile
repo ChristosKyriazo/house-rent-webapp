@@ -1,8 +1,5 @@
-# Replace YOUR_DOMAIN with the actual domain or IP of the server.
-# Caddy automatically obtains and renews a TLS certificate via Let's Encrypt.
-# For a bare IP (no domain), use: http:// and remove the TLS block.
-
-dev.fwlia.com {
+# Staging — dev.kaparro.com
+dev.kaparro.com {
     tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
 
     # Serve uploaded files directly from volume
@@ -24,14 +21,48 @@ dev.fwlia.com {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        # Remove server fingerprinting
         -Server
     }
 
-    # Compress responses
     encode gzip
 
-    # Access log
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 7
+        }
+    }
+}
+
+# Production — kaparro.com
+kaparro.com, www.kaparro.com {
+    tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
+
+    # Redirect www → apex
+    @www host www.kaparro.com
+    redir @www https://kaparro.com{uri} permanent
+
+    handle /uploads/* {
+        root * /srv
+        file_server
+    }
+
+    handle {
+        reverse_proxy app:3000
+    }
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    encode gzip
+
     log {
         output file /var/log/caddy/access.log {
             roll_size 10mb
