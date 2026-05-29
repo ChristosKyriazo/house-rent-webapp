@@ -137,7 +137,7 @@ export default function UserInquiriesPage() {
             {homes.map((home) => (
               <Link
                 key={home.id}
-                href={`/homes/${home.key}`}
+                href={`/homes/${home.key}?from=my-inquiries`}
                 className="block bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 transition-all group"
               >
                 {/* Photo */}

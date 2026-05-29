@@ -300,7 +300,7 @@ export default function CalendarPage() {
                             <p>👤 {getTranslation(language, 'with')}: {booking.owner.name || booking.owner.email}</p>
                             {booking.home && (
                               <Link
-                                href={`/homes/${booking.home.key}`}
+                                href={`/homes/${booking.home.key}?from=calendar`}
                                 className="text-[var(--text)] hover:text-[var(--accent)] underline"
                               >
                                 🏠 {booking.home.title}

@@ -114,7 +114,15 @@ export default function ApprovedInquiriesPage() {
               const showScheduled = appointment !== null || serverSaysScheduled
               return (
                 <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
-                  <h2 className="text-2xl font-bold text-[var(--text)]">{inq.home.title}</h2>
+                  <div className="flex items-start justify-between gap-4">
+                    <h2 className="text-2xl font-bold text-[var(--text)]">{inq.home.title}</h2>
+                    <Link
+                      href={`/homes/${inq.home.key}?from=approved`}
+                      className="shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
+                    >
+                      {getTranslation(language, 'viewProperty') || 'View Property'}
+                    </Link>
+                  </div>
                   <p className="text-[var(--text-muted)] text-sm mt-1">
                     {inq.home.street ? `${inq.home.street}, ` : ''}
                     {getCityName(inq.home.city, areas, language)}, {getCountryName(inq.home.country, areas, language)}

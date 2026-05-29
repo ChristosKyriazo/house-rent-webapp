@@ -658,6 +658,16 @@ input[data-input-otp],
   display: block !important;
   width: 100% !important;
   height: 100% !important;
+  caret-color: white !important;
+  color: white !important;
+}
+
+/* OTP visual slots — digit numbers and fake blinking caret both white.
+   The fake caret rendered by input-otp uses `background-color: currentColor`,
+   so setting color: white here makes both the typed digits AND the cursor white. */
+.cl-otpCodeFieldInputSlot,
+.cl-otpCodeFieldInputSlot span {
+  color: white !important;
 }
 
 /* Remove any box-shadows that might create depth illusion */

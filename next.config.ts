@@ -26,6 +26,8 @@ const securityHeaders = [
       "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com wss:",
       "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com",
       "worker-src 'self' blob:",
+      // Allow Google Maps trusted-types policy alongside Clerk's policy
+      "trusted-types 'allow-duplicates' goog#html default",
     ].join("; "),
   },
 ];

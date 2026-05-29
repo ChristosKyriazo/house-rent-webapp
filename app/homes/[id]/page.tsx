@@ -120,13 +120,17 @@ export default function HomeDetailPage() {
   const fromMyListings = fromParam === 'my-listings'
   const fromApproved = fromParam === 'approved'
   const fromInquiries = fromParam === 'inquiries'
-  
+  const fromCalendar = fromParam === 'calendar'
+  const fromMyInquiries = fromParam === 'my-inquiries'
+
   // Get filter type from sessionStorage to preserve it in return link
   const getReturnUrl = () => {
     if (fromMyListings) return '/homes/my-listings'
     if (fromApproved) return '/homes/approved'
     if (fromInquiries) return '/homes/inquiries'
-    
+    if (fromCalendar) return '/homes/calendar'
+    if (fromMyInquiries) return '/homes/my-inquiries'
+
     // Check if we have stored filter type in sessionStorage
     try {
       const storedFilterType = sessionStorage.getItem('homesFilterType')
@@ -136,7 +140,7 @@ export default function HomeDetailPage() {
     } catch (error) {
       // Ignore sessionStorage errors
     }
-    
+
     return '/homes'
   }
 
@@ -144,6 +148,8 @@ export default function HomeDetailPage() {
     if (fromMyListings) return getTranslation(language, 'returnToListings') || 'Return to Listings'
     if (fromApproved) return getTranslation(language, 'returnToApproved') || 'Return to Approved Listings'
     if (fromInquiries) return getTranslation(language, 'returnToInquiries') || 'Return to Inquiries'
+    if (fromCalendar) return getTranslation(language, 'returnToCalendar') || 'Return to Calendar'
+    if (fromMyInquiries) return getTranslation(language, 'returnToMyInquiries') || 'Return to My Inquiries'
     return getTranslation(language, 'returnToSearch') || 'Return to Search'
   }
 

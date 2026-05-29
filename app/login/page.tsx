@@ -20,7 +20,7 @@ export default function LoginPage() {
       </div>
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:py-16">
         <div className="animate-fade-up w-full max-w-md">
-          <SignIn routing="hash" signUpUrl="/signup" afterSignInUrl="/" />
+          <SignIn routing="hash" signUpUrl="/signup" fallbackRedirectUrl="/" />
         </div>
       </div>
     </div>
