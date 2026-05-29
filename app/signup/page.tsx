@@ -138,7 +138,7 @@ export default function SignupPage() {
         </div>
       </div>
       <div className="animate-fade-up w-full max-w-md">
-        <SignUp routing="hash" signInUrl="/login" fallbackRedirectUrl="/" forceRedirectUrl="/" />
+        <SignUp routing="hash" signInUrl="/login" fallbackRedirectUrl="/profile/set-role" forceRedirectUrl="/profile/set-role" />
       </div>
     </div>
   )
