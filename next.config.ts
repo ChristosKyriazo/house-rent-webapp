@@ -18,12 +18,13 @@ const securityHeaders = [
       "default-src 'self'",
       // clerk.accounts.dev  = development instances
       // clerk.com / *.clerk.com = production instances (Frontend API lives on a subdomain)
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com",
+      // *.kaparro.com = Clerk production serves clerk.js from clerk.<your-domain>
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com wss:",
-      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com",
+      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com wss:",
+      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com",
       "worker-src 'self' blob:",
     ].join("; "),
   },
