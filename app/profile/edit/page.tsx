@@ -5,13 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue, translateRole } from '@/lib/translations'
-import { useClerk } from '@clerk/nextjs'
-
-
 export default function EditProfilePage() {
   const router = useRouter()
   const { language } = useLanguage()
-  const { signOut } = useClerk()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -109,8 +105,9 @@ export default function EditProfilePage() {
         return
       }
 
-      // Account deleted successfully, sign out and redirect
-      await signOut({ redirectUrl: '/login' })
+      // Clerk user is already deleted server-side, so signOut would fail.
+      // Force a hard redirect to /login — Clerk will see no valid session.
+      window.location.href = '/login'
     } catch (err) {
       console.error('Error deleting account:', err)
       setError(getTranslation(language, 'somethingWentWrong'))

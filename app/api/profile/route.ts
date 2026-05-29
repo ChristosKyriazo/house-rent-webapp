@@ -167,21 +167,17 @@ export async function DELETE(request: NextRequest) {
 
     const clerkUserId = user.clerkUserId
 
-    // Delete the user from database (cascade deletes will handle related records)
+    // Delete from Clerk FIRST — if this fails we abort before touching the DB,
+    // so the user's account stays intact and they see a real error.
+    if (clerkUserId) {
+      const clerk = await clerkClient()
+      await clerk.users.deleteUser(clerkUserId)
+    }
+
+    // Clerk deletion succeeded — now remove the DB record (cascades handle related rows)
     await prisma.user.delete({
       where: { id: user.id },
     })
-
-    // Delete the user from Clerk
-    if (clerkUserId) {
-      try {
-        const clerk = await clerkClient()
-        await clerk.users.deleteUser(clerkUserId)
-      } catch (clerkError) {
-        log.error({ err: clerkError }, 'Error deleting user from Clerk')
-        // Continue even if Clerk deletion fails - database is already deleted
-      }
-    }
 
     return NextResponse.json({ message: 'Account deleted successfully' }, { status: 200 })
   } catch (error) {
