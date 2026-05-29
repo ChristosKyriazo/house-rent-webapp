@@ -22,8 +22,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "House Rent Webapp",
-  description: "Find your perfect rental or list your property",
+  title: "Kaparro",
+  description: "Find your ideal home — rent or buy with Kaparro",
 };
 
 export default function RootLayout({
