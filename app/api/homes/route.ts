@@ -10,6 +10,7 @@ import { createHomeSchema } from '@/lib/schemas'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import { processEmbeddingQueue } from '@/lib/bulk-upload-processor'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 
@@ -234,7 +235,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         owner: {
-          select: { id: true, email: true, name: true },
+          select: { id: true, email: true, name: true, createdAt: true },
         },
       },
     })
@@ -400,7 +401,24 @@ export async function GET(request: NextRequest) {
       homes = homes.filter(home => !excludeHomeIds.includes(home.id))
     }
 
-    return NextResponse.json({ homes }, { status: 200 })
+    // Pagination — default 50, max 200
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200)
+    const skip = Math.max(parseInt(searchParams.get('skip') || '0', 10), 0)
+    const total = homes.length
+    const paginatedHomes = homes.slice(skip, skip + limit)
+
+    // Log search for analytics (fire-and-forget)
+    const searchLogUser = await getCurrentUser().catch(() => null)
+    prisma.searchLog.create({
+      data: {
+        userId: searchLogUser?.id ?? null,
+        queryType: 'browse',
+        filters: Object.fromEntries(searchParams.entries()),
+        resultCount: total,
+      },
+    }).catch(() => {})
+
+    return NextResponse.json({ homes: paginatedHomes, total, hasMore: skip + limit < total }, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'List homes error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -697,13 +715,16 @@ export async function POST(request: NextRequest) {
 
     const home = await createHomeWithRetry()
 
-    // Generate embedding asynchronously — does not block the response
+    // Enqueue embedding for reliable generation with retries
+    await prisma.embeddingQueue.upsert({
+      where: { homeId: home.id },
+      create: { homeId: home.id, status: 'pending' },
+      update: { status: 'pending', failCount: 0, lastError: null },
+    })
     if (openai) {
-      generateEmbedding(buildHomeText(home), openai)
-        .then((embedding) =>
-          prisma.home.update({ where: { id: home.id }, data: { embedding } })
-        )
-        .catch((err) => log.error({ err }, 'Failed to generate embedding'))
+      processEmbeddingQueue(home.id, openai, prisma).catch((err) =>
+        log.error({ err }, 'Background embedding failed')
+      )
     }
 
     return NextResponse.json(

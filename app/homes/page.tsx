@@ -39,6 +39,7 @@ interface Home {
   owner: {
     email: string
     name: string | null
+    createdAt?: string
   }
 }
 
@@ -1123,11 +1124,46 @@ function HomesPageInner() {
         )}
 
         {/* Homes Grid */}
-        {homes.length === 0 && filterType ? (
+        {loading && filterType ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-[var(--surface)] rounded-3xl overflow-hidden border border-[var(--border-subtle)] animate-pulse">
+                <div className="h-48 bg-[var(--ink-soft)]" />
+                <div className="p-6 space-y-3">
+                  <div className="h-5 bg-[var(--ink-soft)] rounded-xl w-3/4" />
+                  <div className="h-4 bg-[var(--ink-soft)] rounded-xl w-1/2" />
+                  <div className="h-4 bg-[var(--ink-soft)] rounded-xl w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : homes.length === 0 && filterType ? (
           <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
-            <p className="text-xl text-[var(--text-muted)]">
+            <div className="text-5xl mb-4">🔍</div>
+            <p className="text-xl font-semibold text-[var(--text)] mb-2">
               {filterType === 'manual' ? getTranslation(language, 'noPropertiesFound') : getTranslation(language, 'noPropertiesFoundAi')}
             </p>
+            <p className="text-[var(--text-muted)] mb-6 max-w-sm mx-auto">
+              {filterType === 'manual'
+                ? language === 'el' ? 'Δοκιμάστε να διευρύνετε την αναζήτηση, να αλλάξετε πόλη ή να καταργήσετε κάποια φίλτρα.' : 'Try broadening your search, changing the city, or removing some filters.'
+                : language === 'el' ? 'Δοκιμάστε να περιγράψετε αυτό που ψάχνετε με διαφορετικό τρόπο.' : 'Try describing what you\'re looking for differently.'}
+            </p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {excludeInquired && (
+                <button
+                  onClick={() => { setExcludeInquired(false) }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--ink-soft)] transition-all"
+                >
+                  {language === 'el' ? '✕ Εμφάνιση αιτήσεων μου' : '✕ Show my inquiries'}
+                </button>
+              )}
+              <button
+                onClick={() => { setSearchType(null); setFilterType(null); setHomes([]) }}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
+              >
+                {language === 'el' ? 'Νέα αναζήτηση' : 'Start new search'}
+              </button>
+            </div>
           </div>
         ) : homes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1304,13 +1340,20 @@ function HomesPageInner() {
                       <div className={`pt-4 border-t ${
                         status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
-                        <p className={`text-xs ${
-                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.owner.name || home.owner.email}</span>
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className={`text-xs ${
+                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
+                          }`}>
+                            {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
+                              status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
+                            }`}>{home.owner.name || home.owner.email}</span>
+                          </p>
+                          {home.owner.createdAt && (
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {language === 'el' ? 'Μέλος από' : 'Since'} {new Date(home.owner.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { month: 'short', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1405,13 +1448,20 @@ function HomesPageInner() {
                       <div className={`pt-4 border-t ${
                         status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
                       }`}>
-                        <p className={`text-xs ${
-                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.owner.name || home.owner.email}</span>
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className={`text-xs ${
+                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
+                          }`}>
+                            {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
+                              status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
+                            }`}>{home.owner.name || home.owner.email}</span>
+                          </p>
+                          {home.owner.createdAt && (
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {language === 'el' ? 'Μέλος από' : 'Since'} {new Date(home.owner.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { month: 'short', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   )}

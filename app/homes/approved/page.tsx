@@ -140,39 +140,61 @@ export default function ApprovedInquiriesPage() {
                     </div>
                   )}
 
-                  {showScheduled ? (
+                  {/* Next step banner */}
+                  {inq.status === 'awaiting_finalization' ? (
+                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
+                      <span className="text-xl">⚡</span>
+                      <div>
+                        <p className="text-sm font-semibold text-yellow-300">{language === 'el' ? 'Επόμενο βήμα: Οριστικοποίηση' : 'Next step: Finalize the deal'}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Ένα αίτημα οριστικοποίησης εκκρεμεί.' : 'A finalization request is pending.'}</p>
+                      </div>
+                    </div>
+                  ) : inq.status === 'pre_finalization' ? (
+                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-blue-500/15 border border-blue-500/40">
+                      <span className="text-xl">🤝</span>
+                      <div>
+                        <p className="text-sm font-semibold text-blue-300">{language === 'el' ? 'Επόμενο βήμα: Αποστολή προσφοράς' : 'Next step: Send a finalization offer'}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Η επίσκεψη ολοκληρώθηκε. Μπορείτε τώρα να οριστικοποιήσετε.' : 'The viewing is done. You can now finalize the deal.'}</p>
+                      </div>
+                    </div>
+                  ) : showScheduled ? (
                     <div className="mt-4 text-green-300 text-sm bg-green-600/20 border border-green-500/50 rounded-xl p-3 space-y-1">
                       {appointment ? (
                         <>
-                          {appointment.status === 'completed' || inq.status === 'pre_finalization'
+                          {appointment.status === 'completed' || (inq.status as string) === 'pre_finalization'
                             ? `${getTranslation(language, 'completed')}: `
                             : `${getTranslation(language, 'scheduled')}: `}
                           {new Date(appointment.startTime).toLocaleString(language === 'el' ? 'el-GR' : 'en-US')}
                         </>
                       ) : (
                         <>
-                          <p>
-                            {inq.status === 'pre_finalization'
-                              ? getTranslation(language, 'completed')
-                              : getTranslation(language, 'scheduled')}
-                          </p>
-                          <Link
-                            href="/homes/calendar"
-                            className="inline-block text-[var(--text)] underline font-medium hover:text-white"
-                          >
+                          <p>{(inq.status as string) === 'pre_finalization' ? getTranslation(language, 'completed') : getTranslation(language, 'scheduled')}</p>
+                          <Link href="/homes/calendar" className="inline-block text-[var(--text)] underline font-medium hover:text-white">
                             {getTranslation(language, 'scheduledBookings')}
                           </Link>
                         </>
                       )}
                     </div>
-                  ) : (
-                    !isOwner && (
-                      <div className="mt-4">
-                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="inline-block px-5 py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
-                          {getTranslation(language, 'viewAvailableSlots')}
+                  ) : isOwner && inq.status === 'approved' ? (
+                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <span className="text-xl">📅</span>
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Ορίστε διαθεσιμότητα' : 'Next step: Set your availability'}</p>
+                        <Link href={`/homes/${inq.home.key}/set-availability`} className="text-xs text-[var(--accent)] underline mt-0.5 inline-block">
+                          {language === 'el' ? 'Ορισμός χρόνων επίσκεψης →' : 'Add viewing slots →'}
                         </Link>
                       </div>
-                    )
+                    </div>
+                  ) : !isOwner && (
+                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <span className="text-xl">🏠</span>
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Book a viewing'}</p>
+                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="text-xs text-[var(--accent)] underline mt-0.5 inline-block">
+                          {language === 'el' ? 'Επιλογή ώρας →' : 'Choose a time slot →'}
+                        </Link>
+                      </div>
+                    </div>
                   )}
                 </div>
               )

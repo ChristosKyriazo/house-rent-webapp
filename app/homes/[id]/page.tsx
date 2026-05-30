@@ -155,10 +155,19 @@ export default function HomeDetailPage() {
     return getTranslation(language, 'returnToSearch') || 'Return to Search'
   }
 
-  const fetchHomeData = async () => {
+  const fetchHomeData = async (signal?: AbortSignal) => {
     try {
-      // Fetch current user profile
-      const profileResponse = await fetch('/api/profile')
+      const homeId = params.id as string
+      const fetchOpts = (extra?: RequestInit) => ({ signal, ...extra })
+
+      // Fetch profile + home in parallel — eliminates waterfall
+      const [profileResponse, homeResponse] = await Promise.all([
+        fetch('/api/profile', fetchOpts()),
+        fetch(`/api/homes/${homeId}`, fetchOpts({ cache: 'no-store' })),
+      ])
+
+      if (signal?.aborted) return
+
       let profileData = null
       if (profileResponse.ok) {
         profileData = await profileResponse.json()
@@ -167,113 +176,96 @@ export default function HomeDetailPage() {
           setUserRole(profileData.user.role || 'user')
         }
       }
-      
-      // Fetch home details
-      const homeId = params.id as string
-      const response = await fetch(`/api/homes/${homeId}`, { cache: 'no-store' })
-      
-      if (!response.ok) {
-        router.push('/homes')
-        return
-      }
-      
-      const data = await response.json()
-      if (!data.home) {
-        router.push('/homes')
-        return
-      }
-      
+
+      if (!homeResponse.ok) { router.push('/homes'); return }
+      const data = await homeResponse.json()
+      if (!data.home) { router.push('/homes'); return }
       setHome(data.home)
       setHasBookableAvailability(false)
       setHasScheduledViewingAppointment(false)
 
       // Check if user has an inquiry for this home and its status
       if (profileData && profileData.user) {
-        const inquiriesRes = await fetch('/api/inquiries')
+        // Fetch inquiries + notifications in parallel
+        const [inquiriesRes, notificationsRes] = await Promise.all([
+          fetch('/api/inquiries', fetchOpts()),
+          fetch('/api/notifications', fetchOpts()),
+        ])
+
+        if (signal?.aborted) return
+
+        let currentInquiryId: number | null = null
         if (inquiriesRes.ok) {
           const inquiriesData = await inquiriesRes.json()
           if (inquiriesData.inquiryStatus) {
             const status = inquiriesData.inquiryStatus[data.home.id] || null
             setInquiryStatus(status)
-            
-            // Get inquiry ID if exists
-            const currentInquiryId = inquiriesData.inquiryIds && inquiriesData.inquiryIds[data.home.id] ? inquiriesData.inquiryIds[data.home.id] : null
-            if (currentInquiryId) {
-              setInquiryId(currentInquiryId)
-            }
-            
-            // Check if finalized
-            if (inquiriesData.finalizedHomes && inquiriesData.finalizedHomes[data.home.id]) {
-              setIsFinalized(true)
-            }
-            
-            // Check for pending finalization notification (use the inquiryId we just got)
-            if (currentInquiryId) {
-              const notificationsRes = await fetch('/api/notifications')
-              if (notificationsRes.ok) {
-                const notificationsData = await notificationsRes.json()
-                const pendingFinalize = notificationsData.notifications?.find(
-                  (n: any) => n.type === 'finalize' && n.inquiryId === currentInquiryId && !n.viewed
-                )
-                if (pendingFinalize) {
-                  setPendingFinalization(true)
-                }
-              }
-              
-              // Also check approved inquiries API for users to get waitingForFinalization status
-              if (profileData.user.role === 'user' || (profileData.user.role === 'both' && displayRole === 'user')) {
-                const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=user`)
-                if (approvedInquiriesRes.ok) {
-                  const approvedData = await approvedInquiriesRes.json()
-                  const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => inq.id === currentInquiryId)
-                  if (approvedInquiry && approvedInquiry.waitingForFinalization) {
-                    setPendingFinalization(true)
-                  }
-                }
-              }
-            }
+            currentInquiryId = inquiriesData.inquiryIds?.[data.home.id] ?? null
+            if (currentInquiryId) setInquiryId(currentInquiryId)
+            if (inquiriesData.finalizedHomes?.[data.home.id]) setIsFinalized(true)
+            if (status === 'dismissed') { router.push('/homes'); return }
+          }
+        }
 
-            const isRenterViewing = data.home.owner.id !== profileData.user.id
-            if (
-              inquiriesData.inquiryStatus &&
-              status === 'approved' &&
-              currentInquiryId &&
-              isRenterViewing
-            ) {
-              const [avRes, bookingsRes] = await Promise.all([
-                fetch(`/api/homes/${data.home.key}/availability`),
-                fetch(`/api/bookings?inquiryId=${currentInquiryId}`),
-              ])
+        if (notificationsRes.ok && currentInquiryId) {
+          const notificationsData = await notificationsRes.json()
+          const pendingFinalize = notificationsData.notifications?.find(
+            (n: { type: string; inquiryId: number | null; viewed: boolean }) =>
+              n.type === 'finalize' && n.inquiryId === currentInquiryId && !n.viewed
+          )
+          if (pendingFinalize) setPendingFinalization(true)
+        }
 
-              if (bookingsRes.ok) {
-                const bookingsData = await bookingsRes.json()
-                const hasScheduled = (bookingsData.bookings || []).some(
-                  (b: { status?: string }) => (b.status || '').toLowerCase() === 'scheduled'
-                )
-                setHasScheduledViewingAppointment(hasScheduled)
-              }
+        if (currentInquiryId) {
+          // Fetch approved inquiries for users in parallel with availability check
+          const isRenterViewing = data.home.owner.id !== profileData.user.id
+          const isUser = profileData.user.role === 'user' || (profileData.user.role === 'both' && displayRole === 'user')
+          const inquiryStatus = isRenterViewing ? 'approved' : null
 
-              if (avRes.ok) {
-                const avData = await avRes.json()
-                const avs = avData.availabilities || []
-                const today = new Date()
-                today.setHours(0, 0, 0, 0)
-                const has = avs.some((a: { date: string; inquiryId: number | null }) => {
-                  const d = new Date(a.date)
-                  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-                  if (day < today) return false
-                  return a.inquiryId == null || a.inquiryId === currentInquiryId
-                })
-                setHasBookableAvailability(has)
-              }
-            }
-            
-            // If inquiry is dismissed, redirect to search page
-            if (status === 'dismissed') {
-              router.push('/homes')
-              return
+          const parallelFetches: Promise<Response>[] = []
+          if (isUser) parallelFetches.push(fetch(`/api/inquiries/approved?role=user`, fetchOpts()))
+          if (isRenterViewing && inquiryStatus === 'approved') {
+            parallelFetches.push(
+              fetch(`/api/homes/${data.home.key}/availability`, fetchOpts()),
+              fetch(`/api/bookings?inquiryId=${currentInquiryId}`, fetchOpts()),
+            )
+          }
+
+          const parallelResults = await Promise.all(parallelFetches)
+          if (signal?.aborted) return
+
+          let idx = 0
+          if (isUser) {
+            const approvedRes = parallelResults[idx++]
+            if (approvedRes?.ok) {
+              const approvedData = await approvedRes.json()
+              const approvedInquiry = approvedData.approvedInquiries?.find((inq: { id: number; waitingForFinalization?: boolean }) => inq.id === currentInquiryId)
+              if (approvedInquiry?.waitingForFinalization) setPendingFinalization(true)
             }
           }
+
+          if (isRenterViewing && inquiryStatus === 'approved') {
+            const avRes = parallelResults[idx++]
+            const bookingsRes = parallelResults[idx++]
+            if (bookingsRes?.ok) {
+              const bookingsData = await bookingsRes.json()
+              setHasScheduledViewingAppointment(
+                (bookingsData.bookings || []).some((b: { status?: string }) => (b.status || '').toLowerCase() === 'scheduled')
+              )
+            }
+            if (avRes?.ok) {
+              const avData = await avRes.json()
+              const today = new Date(); today.setHours(0, 0, 0, 0)
+              setHasBookableAvailability(
+                (avData.availabilities || []).some((a: { date: string; inquiryId: number | null }) => {
+                  const d = new Date(a.date)
+                  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                  return day >= today && (a.inquiryId == null || a.inquiryId === currentInquiryId)
+                })
+              )
+            }
+          }
+
         }
         
         // For owners: check if they have approved inquiries for this home
@@ -316,9 +308,10 @@ export default function HomeDetailPage() {
   }
 
   useEffect(() => {
-    if (params.id) {
-      fetchHomeData()
-    }
+    if (!params.id) return
+    const controller = new AbortController()
+    fetchHomeData(controller.signal)
+    return () => controller.abort()
   }, [params.id, router])
 
   // Check for pending finalization when inquiryId changes
@@ -386,7 +379,7 @@ export default function HomeDetailPage() {
       if (response.ok) {
         setIsFinalized(true)
         setPendingFinalization(false)
-        window.location.reload()
+        router.refresh()
       } else {
         const data = await response.json()
         setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })

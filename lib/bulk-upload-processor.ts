@@ -249,10 +249,16 @@ export async function processBulkUploadJob(jobId: string) {
           },
         })
 
+        // Enqueue embedding via EmbeddingQueue for reliable, retried generation
+        await prisma.embeddingQueue.upsert({
+          where: { homeId: home.id },
+          create: { homeId: home.id, status: 'pending' },
+          update: { status: 'pending', failCount: 0, lastError: null },
+        })
         if (openai) {
-          generateEmbedding(buildHomeText(home), openai)
-            .then((embedding) => prisma.home.update({ where: { id: home.id }, data: { embedding } }))
-            .catch((err) => log.error({ err, homeId: home.id }, 'Failed to generate embedding'))
+          processEmbeddingQueue(home.id, openai, prisma).catch((err) =>
+            log.error({ err, homeId: home.id }, 'Background embedding failed')
+          )
         }
 
         results.push({ row: rowNumber, title, key: home.key })
@@ -288,5 +294,36 @@ export async function processBulkUploadJob(jobId: string) {
       where: { id: jobId },
       data: { status: 'failed', errors: [err.message || 'Job failed'] as any },
     }).catch(() => {})
+  }
+}
+
+// Exported for reuse in the homes API route
+export async function processEmbeddingQueue(
+  homeId: number,
+  openai: OpenAI,
+  db: typeof prisma
+): Promise<void> {
+  const MAX_RETRIES = 3
+  try {
+    await db.embeddingQueue.update({ where: { homeId }, data: { status: 'processing' } })
+    const home = await db.home.findUnique({ where: { id: homeId } })
+    if (!home) {
+      await db.embeddingQueue.update({ where: { homeId }, data: { status: 'failed', lastError: 'Home not found' } })
+      return
+    }
+    const embedding = await generateEmbedding(buildHomeText(home), openai)
+    await db.home.update({ where: { id: homeId }, data: { embedding } })
+    await db.embeddingQueue.update({ where: { homeId }, data: { status: 'completed' } })
+  } catch (err: any) {
+    const current = await db.embeddingQueue.findUnique({ where: { homeId } })
+    const failCount = (current?.failCount ?? 0) + 1
+    await db.embeddingQueue.update({
+      where: { homeId },
+      data: {
+        status: failCount >= MAX_RETRIES ? 'failed' : 'pending',
+        failCount,
+        lastError: err.message || 'Unknown error',
+      },
+    })
   }
 }

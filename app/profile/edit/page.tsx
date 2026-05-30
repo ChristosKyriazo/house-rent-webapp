@@ -264,19 +264,22 @@ export default function EditProfilePage() {
 
           {/* Delete Account Confirmation Modal */}
           {showDeleteConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)}>
+              <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="text-center mb-6">
                   <div className="text-6xl mb-4">⚠️</div>
                   <h2 className="text-2xl font-bold text-red-400 mb-4">
                     {getTranslation(language, 'deleteAccount')}
                   </h2>
-                  <p className="text-red-300 font-semibold text-lg mb-2">
+                  <p className="text-red-300 font-semibold text-lg mb-4">
                     {getTranslation(language, 'deleteAccountConfirm')}
                   </p>
-                  <p className="text-[var(--text-muted)] text-sm">
-                    {getTranslation(language, 'deleteAccountDescription')}
-                  </p>
+                  <ul className="text-left text-sm text-[var(--text-muted)] space-y-2 mb-4 bg-red-500/10 rounded-xl p-4 border border-red-500/20">
+                    <li>❌ {language === 'el' ? 'Όλες οι καταχωρήσεις σας θα αποκρυφτούν' : 'All your listings will be hidden'}</li>
+                    <li>❌ {language === 'el' ? 'Ενεργές αιτήσεις θα ακυρωθούν' : 'Active inquiries will be cancelled'}</li>
+                    <li>❌ {language === 'el' ? 'Τα ραντεβού σας θα διαγραφούν' : 'Your bookings will be deleted'}</li>
+                    <li>❌ {language === 'el' ? 'Αυτή η ενέργεια δεν αναιρείται' : 'This action cannot be undone'}</li>
+                  </ul>
                 </div>
                 <div className="flex gap-4">
                   <button

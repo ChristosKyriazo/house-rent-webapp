@@ -79,6 +79,7 @@ model Home {
   owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   inquiries         Inquiry[]
   availabilities    Availability[]
+  embeddingQueue    EmbeddingQueue?
 
   @@index([finalized])
 
@@ -264,6 +265,45 @@ model Booking {
   @@index([status])
   @@index([availabilityId])
   @@map("bookings")
+}
+
+model EmbeddingQueue {
+  id        Int      @id @default(autoincrement())
+  homeId    Int      @unique
+  status    String   @default("pending") // pending | processing | completed | failed
+  failCount Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("embedding_queue")
+}
+
+model SearchLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  queryType   String   // "browse" | "ai_search" | "filter_search"
+  filters     Json?
+  resultCount Int
+  executionMs Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([queryType, createdAt])
+  @@map("search_logs")
+}
+
+model ListingView {
+  id       Int      @id @default(autoincrement())
+  userId   Int?
+  homeId   Int
+  viewedAt DateTime @default(now())
+
+  @@index([homeId, viewedAt])
+  @@index([userId])
+  @@map("listing_views")
 }
 
 model BulkUploadJob {

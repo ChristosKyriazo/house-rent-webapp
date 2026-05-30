@@ -38,17 +38,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (displayRole === 'owner') {
-      // Owner view: Get all approved inquiries for homes owned by the user
-      const ownerHomes = await prisma.home.findMany({
-        where: { ownerId: user.id },
-        select: { id: true },
-      })
-
-      const homeIds = ownerHomes.map(home => home.id)
-
+      // Owner view — single query via nested relation (eliminates the prior N+1)
       const inquiries = await prisma.inquiry.findMany({
         where: {
-          homeId: { in: homeIds },
+          home: { ownerId: user.id },
           approved: true,
           finalized: false,
           dismissed: false,
@@ -107,6 +100,8 @@ export async function GET(request: NextRequest) {
         },
       })
       const pendingFinalizationInquiryIds = new Set(pendingFinalizations.map(n => n.inquiryId).filter((id): id is number => id !== null))
+
+      const homeIds = inquiries.map(inq => inq.home.id)
 
       // Get all bookings for these inquiries, including inquiryId=null rows tied via availability.homeId + renter
       const bookings = await prisma.booking.findMany({
