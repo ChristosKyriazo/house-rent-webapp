@@ -5,12 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
-import { findMostSimilarArea, getAreaName } from '@/lib/area-utils'
+import { findMostSimilarArea, getAreaName, getHomeTitle } from '@/lib/area-utils'
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   street: string | null
   city: string
@@ -994,8 +995,8 @@ export default function EditHomePage() {
 
       {/* Delete Listing Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="text-6xl mb-4">⚠️</div>
               <h2 className="text-2xl font-bold text-red-400 mb-4">
@@ -1006,7 +1007,7 @@ export default function EditHomePage() {
               </p>
               {home && (
                 <p className="text-[var(--text-muted)] text-sm">
-                  {getTranslation(language, 'listingDetails')}: <strong>{home.title}</strong>
+                  {getTranslation(language, 'listingDetails')}: <strong>{getHomeTitle(language, home)}</strong>
                 </p>
               )}
             </div>

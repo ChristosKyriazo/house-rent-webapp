@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
@@ -36,7 +37,9 @@ interface Booking {
   home?: {
     key: string
     title: string
+    titleGreek?: string | null
     street?: string
+    streetGreek?: string | null
     city?: string
     country?: string
   }
@@ -303,7 +306,7 @@ export default function CalendarPage() {
                                 href={`/homes/${booking.home.key}?from=calendar`}
                                 className="text-[var(--text)] hover:text-[var(--accent)] underline"
                               >
-                                🏠 {booking.home.title}
+                                🏠 {getHomeTitle(language, booking.home)}
                               </Link>
                             )}
                           </div>

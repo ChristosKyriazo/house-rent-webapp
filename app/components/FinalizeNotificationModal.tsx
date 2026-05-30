@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
 
 interface FinalizeNotification {
@@ -147,8 +148,8 @@ export default function FinalizeNotificationModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -188,10 +189,10 @@ export default function FinalizeNotificationModal({
                     {getTranslation(language, 'propertyInformation')}
                   </h3>
                   <div className="space-y-2 text-[var(--text-muted)]">
-                    <p><span className="font-semibold">{getTranslation(language, 'title')}:</span> {home.title}</p>
-                    {home.street && (
+                    <p><span className="font-semibold">{getTranslation(language, 'title')}:</span> {getHomeTitle(language, home)}</p>
+                    {getHomeStreet(language, home) && (
                       <p>
-                        <span className="font-semibold">{getTranslation(language, 'street')}:</span> {home.street}
+                        <span className="font-semibold">{getTranslation(language, 'street')}:</span> {getHomeStreet(language, home)}
                       </p>
                     )}
                     <p>

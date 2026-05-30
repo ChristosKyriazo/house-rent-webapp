@@ -38,6 +38,7 @@ export default function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'confirm-dialog-title' : undefined}
+      onClick={onCancel}
     >
       <div
         className="bg-[var(--ink-soft)] rounded-3xl p-8 max-w-md w-full border border-[var(--border-subtle)] shadow-2xl animate-scaleIn"

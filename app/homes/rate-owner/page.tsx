@@ -7,7 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 
 interface FinalizedInquiry {
   id: number
@@ -16,7 +16,9 @@ interface FinalizedInquiry {
     id: number
     key: string
     title: string
+    titleGreek?: string | null
     street: string | null
+    streetGreek?: string | null
     city: string
     country: string
   }
@@ -188,10 +190,10 @@ export default function RateOwnerPage() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <h3 className="text-2xl font-bold text-[var(--text)] mb-2">
-                          {inquiry.home.title}
+                          {getHomeTitle(language, inquiry.home)}
                         </h3>
                         <p className="text-[var(--text-muted)] mb-3">
-                          📍 {inquiry.home.street && `${inquiry.home.street}, `}
+                          📍 {getHomeStreet(language, inquiry.home) && `${getHomeStreet(language, inquiry.home)}, `}
                           {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
                         </p>
                         <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)]">
@@ -241,8 +243,8 @@ export default function RateOwnerPage() {
 
         {/* Rating Modal */}
         {selectedInquiry && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full p-6">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setSelectedInquiry(null); setComment(''); setRating(5) }}>
+            <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-[var(--text)]">
                   {getTranslation(language, 'rateOwner')}
@@ -262,7 +264,7 @@ export default function RateOwnerPage() {
               <div className="space-y-6">
                 <div>
                   <p className="text-[var(--text)] mb-2">
-                    {getTranslation(language, 'property')}: {selectedInquiry.home.title}
+                    {getTranslation(language, 'property')}: {getHomeTitle(language, selectedInquiry.home)}
                   </p>
                   <p className="text-[var(--text-muted)] mb-4">
                     {getTranslation(language, 'owner')}: {selectedInquiry.otherUser.name || selectedInquiry.otherUser.email.split('@')[0]}

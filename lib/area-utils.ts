@@ -124,6 +124,27 @@ export function getCityName(
 }
 
 /**
+ * Get home title based on language
+ */
+export function getHomeTitle(
+  language: 'el' | 'en',
+  home: { title: string; titleGreek?: string | null }
+): string {
+  return language === 'el' && home.titleGreek ? home.titleGreek : home.title
+}
+
+/**
+ * Get home street based on language
+ */
+export function getHomeStreet(
+  language: 'el' | 'en',
+  home: { street?: string | null; streetGreek?: string | null }
+): string | null {
+  if (language === 'el' && home.streetGreek) return home.streetGreek
+  return home.street ?? null
+}
+
+/**
  * Get country name based on language
  * Looks up the country in the areas table to find Greek translation
  */

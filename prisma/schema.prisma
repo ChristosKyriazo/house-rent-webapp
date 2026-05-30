@@ -40,9 +40,11 @@ model Home {
   id                Int      @id @default(autoincrement())
   key               String   @unique @default(cuid())
   title             String
+  titleGreek        String?
   description       String?
   descriptionGreek  String?
   street            String?
+  streetGreek       String?
   city              String
   country           String
   area              String?  // City area (e.g., "Nea Smirni")

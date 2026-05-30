@@ -7,7 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { greekUppercaseNoAnnotations } from '@/lib/utils'
-import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
@@ -18,6 +18,7 @@ interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   descriptionGreek: string | null
   city: string
@@ -1235,7 +1236,7 @@ function HomesPageInner() {
                         <div className="flex items-start justify-between mb-2">
                           <h2 className={`text-2xl font-bold flex-1 ${
                             status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.title}</h2>
+                          }`}>{getHomeTitle(language, home)}</h2>
                           <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
                             home.listingType === 'rent'
                               ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
@@ -1321,7 +1322,7 @@ function HomesPageInner() {
                         <div className="flex items-start justify-between mb-2">
                           <h2 className={`text-2xl font-bold flex-1 ${
                             status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.title}</h2>
+                          }`}>{getHomeTitle(language, home)}</h2>
                           <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
                             home.listingType === 'rent'
                               ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'

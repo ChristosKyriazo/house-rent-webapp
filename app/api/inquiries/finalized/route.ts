@@ -49,7 +49,9 @@ export async function GET(request: NextRequest) {
               id: true,
               key: true,
               title: true,
+              titleGreek: true,
               street: true,
+              streetGreek: true,
               city: true,
               country: true,
               owner: {
@@ -88,7 +90,9 @@ export async function GET(request: NextRequest) {
               id: true,
               key: true,
               title: true,
+              titleGreek: true,
               street: true,
+              streetGreek: true,
               city: true,
               country: true,
               owner: {

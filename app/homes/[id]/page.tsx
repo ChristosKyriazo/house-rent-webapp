@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { useTranslatedDescription } from '@/app/hooks/useTranslatedDescription'
 import StarRating from '@/app/components/StarRating'
 import NotificationPopup from '@/app/components/NotificationPopup'
@@ -16,9 +16,11 @@ interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   descriptionGreek: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
   area: string | null
@@ -786,7 +788,7 @@ export default function HomeDetailPage() {
         <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-6">
               <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
-              <h1 className="text-4xl font-bold text-[var(--text)]">{home.title}</h1>
+              <h1 className="text-4xl font-bold text-[var(--text)]">{getHomeTitle(language, home)}</h1>
                 
                 {/* Listing Type Badge - Outside owner box, top right */}
               <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
@@ -802,10 +804,10 @@ export default function HomeDetailPage() {
               <div className="flex items-start gap-4 mb-4">
                 {/* Location Info - Left side */}
                 <div className="flex-1 text-[var(--text-muted)] flex flex-col gap-1 text-lg">
-              {home.street && (
+              {getHomeStreet(language, home) && (
                 <p className="flex items-center gap-1">
                   <span>📍</span>
-                  {home.street}
+                  {getHomeStreet(language, home)}
                 </p>
               )}
               <p className="flex items-center gap-1">

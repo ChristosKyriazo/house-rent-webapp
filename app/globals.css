@@ -658,16 +658,6 @@ input[data-input-otp],
   display: block !important;
   width: 100% !important;
   height: 100% !important;
-  caret-color: #e9d4c4 !important;
-  color: #e9d4c4 !important;
-}
-
-/* OTP visual slots — digit numbers and fake blinking caret in beige so they're
-   visible on the dark background. The fake caret uses `background-color: currentColor`
-   so it inherits the same colour as the text. */
-.cl-otpCodeFieldInputSlot,
-.cl-otpCodeFieldInputSlot span {
-  color: #e9d4c4 !important;
 }
 
 /* Remove any box-shadows that might create depth illusion */

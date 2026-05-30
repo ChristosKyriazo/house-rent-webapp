@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
-import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getAreaName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   descriptionGreek: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
   area: string | null
@@ -150,7 +152,7 @@ export default function MyListingsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-2xl font-bold text-[var(--text)]">{home.title}</h3>
+                        <h3 className="text-2xl font-bold text-[var(--text)]">{getHomeTitle(language, home)}</h3>
                         <span className={`px-3 py-1 rounded-xl text-xs font-semibold ${
                           home.listingType === 'rent' 
                             ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]' 
@@ -161,7 +163,7 @@ export default function MyListingsPage() {
                       </div>
                       <p className="text-[var(--text-muted)] flex items-center gap-1 mb-2">
                         <span>📍</span>
-                        {home.street && <span>{home.street}, </span>}
+                        {getHomeStreet(language, home) && <span>{getHomeStreet(language, home)}, </span>}
                         {home.area && <span>{getAreaName(home.area, areas, language)}, </span>}
                         {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                       </p>

@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle } from '@/lib/area-utils'
 import {
   parseAppointmentThresholdMinutes,
   parseContactInfo,
@@ -45,6 +46,7 @@ export default function BookPage() {
     id: number
     key: string
     title: string
+    titleGreek?: string | null
     street?: string | null
     city: string
     country: string
@@ -425,7 +427,7 @@ export default function BookPage() {
               href={`/homes/${home.key}`}
               className="mt-4 block rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm transition-colors hover:border-[var(--accent)]/40 hover:bg-[var(--ink-soft)]"
             >
-              <p className="font-display text-xl font-semibold text-[var(--text)]">{home.title}</p>
+              <p className="font-display text-xl font-semibold text-[var(--text)]">{getHomeTitle(language, home)}</p>
               {addressLine ? (
                 <p className="mt-2 text-sm text-[var(--text-muted)]">
                   <span className="font-medium text-[var(--text)]/90">

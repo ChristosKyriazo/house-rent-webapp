@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
-import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 
 interface ApprovedInquiry {
   id: number
-  home: { key: string; title: string; street: string | null; city: string; country: string; area: string | null }
+  home: { key: string; title: string; titleGreek?: string | null; street: string | null; streetGreek?: string | null; city: string; country: string; area: string | null }
   user?: { name: string | null; email: string }
   owner?: { name: string | null; email: string }
   contactInfo: { phone?: string; timeFrame?: string; appointmentThresholdMinutes?: number } | null
@@ -115,7 +115,7 @@ export default function ApprovedInquiriesPage() {
               return (
                 <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
                   <div className="flex items-start justify-between gap-4">
-                    <h2 className="text-2xl font-bold text-[var(--text)]">{inq.home.title}</h2>
+                    <h2 className="text-2xl font-bold text-[var(--text)]">{getHomeTitle(language, inq.home)}</h2>
                     <Link
                       href={`/homes/${inq.home.key}?from=approved`}
                       className="shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
@@ -124,7 +124,7 @@ export default function ApprovedInquiriesPage() {
                     </Link>
                   </div>
                   <p className="text-[var(--text-muted)] text-sm mt-1">
-                    {inq.home.street ? `${inq.home.street}, ` : ''}
+                    {getHomeStreet(language, inq.home) ? `${getHomeStreet(language, inq.home)}, ` : ''}
                     {getCityName(inq.home.city, areas, language)}, {getCountryName(inq.home.country, areas, language)}
                     {inq.home.area ? ` • ${getAreaName(inq.home.area, areas, language)}` : ''}
                   </p>

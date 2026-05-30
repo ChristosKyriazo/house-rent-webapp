@@ -182,7 +182,9 @@ export async function PATCH(
                 select: {
                   key: true,
                   title: true,
+                  titleGreek: true,
                   street: true,
+                  streetGreek: true,
                   city: true,
                   country: true,
                 },

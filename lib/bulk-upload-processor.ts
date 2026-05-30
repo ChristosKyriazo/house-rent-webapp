@@ -5,6 +5,7 @@ import { toEnglishValue } from '@/lib/translations'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { analyzePhotosForTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
 import OpenAI from 'openai'
 import * as XLSX from 'xlsx'
 import { readFile, rm } from 'fs/promises'
@@ -75,9 +76,33 @@ export async function processBulkUploadJob(jobId: string) {
           continue
         }
 
-        const title = String(row['Title']).trim()
-        const description = row['Description'] ? String(row['Description']).trim() : null
-        const street = row['Street'] ? String(row['Street']).trim() : null
+        const rawTitle = String(row['Title']).trim()
+        const rawDescription = row['Description'] ? String(row['Description']).trim() : null
+        const rawStreet = row['Street'] ? String(row['Street']).trim() : null
+
+        let title = rawTitle
+        let titleGreek: string | null = null
+        let street = rawStreet
+        let streetGreek: string | null = null
+        let description = rawDescription
+        let descriptionGreek: string | null = null
+
+        if (openai) {
+          try {
+            const normalized = await normalizeBulkTextFields(
+              { title: rawTitle, street: rawStreet, description: rawDescription },
+              openai
+            )
+            title = normalized.titleEn
+            titleGreek = normalized.titleEl
+            street = normalized.streetEn
+            streetGreek = normalized.streetEl
+            description = normalized.descriptionEn
+            descriptionGreek = normalized.descriptionEl
+          } catch (err) {
+            log.error({ err, rowNumber }, 'Error normalizing text fields, using raw values')
+          }
+        }
 
         const city = resolveCityToEnglishCanonical(String(row['City']).trim(), allAreas)
         const country = resolveCountryToEnglishCanonical(String(row['Country']).trim(), allAreas)
@@ -180,7 +205,7 @@ export async function processBulkUploadJob(jobId: string) {
         }
 
         let finalDescription = description
-        let finalDescriptionGreek: string | null = null
+        let finalDescriptionGreek: string | null = descriptionGreek
         if (options.useAIDescription) {
           const aiDescriptions = await generateHouseDescriptions({
             title, city, country, area,
@@ -195,7 +220,7 @@ export async function processBulkUploadJob(jobId: string) {
             closestUniversity: distances.closestUniversity,
             areaSafety, areaVibe,
             availableFrom: availableFrom ? availableFrom.toISOString().split('T')[0] : null,
-            ownerNotes: description || null,
+            ownerNotes: rawDescription || null,
             photoFeatures: photoTagsList.length > 0 ? photoTagsList : null,
           }, openai)
 
@@ -207,8 +232,8 @@ export async function processBulkUploadJob(jobId: string) {
 
         const home = await prisma.home.create({
           data: {
-            title, description: finalDescription, descriptionGreek: finalDescriptionGreek,
-            street, city, country, area,
+            title, titleGreek, description: finalDescription, descriptionGreek: finalDescriptionGreek,
+            street, streetGreek, city, country, area,
             listingType: listingType === 'sale' ? 'sale' : 'rent',
             pricePerMonth, bedrooms, bathrooms, floor,
             heatingCategory, heatingAgent, parking, sizeSqMeters,

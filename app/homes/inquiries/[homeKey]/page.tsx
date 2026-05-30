@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 
 interface Inquiry {
   id: number
@@ -27,7 +27,9 @@ interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
 }
@@ -171,11 +173,11 @@ export default function HomeInquiriesPage() {
             className="block group"
           >
             <h1 className="text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
-              {home.title}
+              {getHomeTitle(language, home)}
             </h1>
           </Link>
           <p className="text-[var(--text-muted)]">
-            {home.street && `${home.street}, `}
+            {getHomeStreet(language, home) && `${getHomeStreet(language, home)}, `}
             {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
           </p>
         </div>

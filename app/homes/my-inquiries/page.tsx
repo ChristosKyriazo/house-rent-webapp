@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
   area: string | null
@@ -145,7 +147,7 @@ export default function UserInquiriesPage() {
                   <div className="relative h-48 w-full overflow-hidden">
                     <img
                       src={home.photos[0]}
-                      alt={home.title}
+                      alt={getHomeTitle(language, home)}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     />
                   </div>
@@ -158,10 +160,10 @@ export default function UserInquiriesPage() {
                 {/* Content */}
                 <div className="p-6">
                   <h2 className="text-xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
-                    {home.title}
+                    {getHomeTitle(language, home)}
                   </h2>
                   <p className="text-[var(--text-muted)] text-sm mb-3">
-                    📍 {home.street && `${home.street}, `}
+                    📍 {getHomeStreet(language, home) && `${getHomeStreet(language, home)}, `}
                     {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     {home.area && ` • ${getAreaName(home.area, areas, language)}`}
                   </p>

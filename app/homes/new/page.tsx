@@ -959,8 +959,8 @@ export default function NewHomePage() {
 
       {/* Bulk Upload Modal */}
       {showBulkUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => { setShowBulkUploadModal(false); setBulkUploadError(''); setBulkUploadSuccess(''); setParsedHouses([]); setExcelFile(null); setHousePhotos({}); setExcelInputKey(prev => prev + 1); setUnknownAreas([]); setAreaDecisions({}) }}>
+          <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-[var(--text)]">
                 {language === 'el' ? 'Δημοσίευση από Αρχείο Excel' : 'Publish from Excel File'}
