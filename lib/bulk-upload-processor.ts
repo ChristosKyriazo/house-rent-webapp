@@ -313,6 +313,12 @@ export async function processEmbeddingQueue(
     }
     const embedding = await generateEmbedding(buildHomeText(home), openai)
     await db.home.update({ where: { id: homeId }, data: { embedding } })
+    // Also write to the native vector column if pgvector is available
+    await db.$executeRawUnsafe(
+      `UPDATE homes SET "embeddingVec" = $1::vector WHERE id = $2`,
+      `[${embedding.join(',')}]`,
+      homeId
+    ).catch(() => {}) // silently skip if extension not yet installed
     await db.embeddingQueue.update({ where: { homeId }, data: { status: 'completed' } })
   } catch (err: any) {
     const current = await db.embeddingQueue.findUnique({ where: { homeId } })

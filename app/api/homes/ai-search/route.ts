@@ -8,6 +8,7 @@ import { checkAiSearchLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
+import { redisGet, redisSet } from '@/lib/redis'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -98,13 +99,20 @@ export async function POST(request: NextRequest) {
 
         // Only check cache when results aren't user-specific (no exclusion filters)
         if (!excludeInquired && !excludeApproved) {
+          // Try Redis cache first (shared across instances, survives restarts)
+          const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`
+          const redisHit = await redisGet<{ homes: unknown[]; message: string }>(redisCacheKey)
+          if (redisHit) {
+            log.info('Serving AI search from Redis cache')
+            return NextResponse.json(redisHit, { status: 200 })
+          }
+
+          // Fall back to in-memory semantic cache
           const now = Date.now()
-          // Evict stale entries
           let i = searchResultCache.length
           while (i--) {
             if (now - searchResultCache[i].ts > SEARCH_CACHE_TTL_MS) searchResultCache.splice(i, 1)
           }
-          // Find most similar cached query
           let bestSim = 0
           let bestEntry: CachedSearchResult | null = null
           for (const entry of searchResultCache) {
@@ -113,7 +121,7 @@ export async function POST(request: NextRequest) {
             if (sim > bestSim) { bestSim = sim; bestEntry = entry }
           }
           if (bestEntry && bestSim >= SEARCH_CACHE_SIM_THRESHOLD) {
-            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from semantic cache')
+            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from in-memory cache')
             return NextResponse.json(bestEntry.result, { status: 200 })
           }
         }
@@ -1336,41 +1344,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Semantic similarity boost using stored home embeddings
-    // Reuse the queryEmbedding already generated at the top of this handler
-    // Skip disqualified homes so we don't accidentally lift them above 0%
-    if (queryEmbedding) {
-      for (const home of homes) {
-        if (disqualifierMap.has(home.id)) continue
-        const stored = (home as any).embedding
-        if (!Array.isArray(stored)) continue
-        const sim = cosineSimilarity(queryEmbedding, stored as number[])
-        // sim is 0-1; boost up to +8 points for very high similarity
-        const bonus = Math.round(sim * 8)
-        if (bonus > 0) {
-          const cur = matchMap.get(home.id) || 0
-          matchMap.set(home.id, Math.min(100, cur + bonus))
-        }
-      }
-    }
+    // Semantic similarity boost — pgvector if available, JS cosine as fallback
+    if (queryEmbedding && homes.length > 0) {
+      const homeIds = homes.filter(h => !disqualifierMap.has(h.id)).map(h => h.id)
+      let pgvectorUsed = false
 
-    // Semantic similarity boost using stored home embeddings
-    if (openai && process.env.OPENAI_API_KEY && userQuery && userQuery !== '[conversational]') {
-      try {
-        const queryEmbedding = await generateEmbedding(userQuery, openai)
-        for (const home of homes) {
-          const stored = (home as any).embedding
-          if (!Array.isArray(stored)) continue
-          const sim = cosineSimilarity(queryEmbedding, stored as number[])
-          // sim is 0-1; boost up to +8 points for very high similarity
-          const bonus = Math.round(sim * 8)
-          if (bonus > 0) {
-            const cur = matchMap.get(home.id) || 0
-            matchMap.set(home.id, Math.min(100, cur + bonus))
+      if (homeIds.length > 0) {
+        try {
+          // Attempt pgvector cosine similarity in-database (fast, no memory overhead)
+          const vectorStr = `[${queryEmbedding.join(',')}]`
+          const pgResults = await prisma.$queryRawUnsafe<Array<{ id: number; sim: number }>>(
+            `SELECT id, 1 - ("embeddingVec" <=> $1::vector) AS sim
+             FROM homes
+             WHERE id = ANY($2::int[]) AND "embeddingVec" IS NOT NULL`,
+            vectorStr,
+            homeIds
+          )
+          if (pgResults.length > 0) {
+            pgvectorUsed = true
+            for (const { id, sim } of pgResults) {
+              const bonus = Math.round(sim * 8)
+              if (bonus > 0) matchMap.set(id, Math.min(100, (matchMap.get(id) || 0) + bonus))
+            }
+          }
+        } catch {
+          // pgvector not yet available — fall through to JS cosine
+        }
+
+        if (!pgvectorUsed) {
+          // JS cosine fallback (loads embeddings from JSON column)
+          for (const home of homes) {
+            if (disqualifierMap.has(home.id)) continue
+            const stored = (home as any).embedding
+            if (!Array.isArray(stored)) continue
+            const sim = cosineSimilarity(queryEmbedding, stored as number[])
+            const bonus = Math.round(sim * 8)
+            if (bonus > 0) matchMap.set(home.id, Math.min(100, (matchMap.get(home.id) || 0) + bonus))
           }
         }
-      } catch {
-        // non-fatal — skip semantic boost if embedding fails
       }
     }
 
@@ -1390,13 +1401,18 @@ export async function POST(request: NextRequest) {
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length
 
-    // Store in semantic cache for future similar queries
+    // Store in cache for future similar queries (Redis + in-memory)
     if (queryEmbedding && !excludeInquired && !excludeApproved) {
+      const cacheResult = { homes: homesWithMatches, message: 'AI search completed' }
+      // Redis (shared, persists across deploys)
+      const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`
+      redisSet(redisCacheKey, cacheResult, SEARCH_CACHE_TTL_MS / 1000).catch(() => {})
+      // In-memory fallback
       if (searchResultCache.length >= SEARCH_CACHE_MAX_ENTRIES) searchResultCache.shift()
       searchResultCache.push({
         embedding: queryEmbedding,
         type: type || undefined,
-        result: { homes: homesWithMatches, message: 'AI search completed' },
+        result: cacheResult,
         ts: Date.now(),
       })
     }

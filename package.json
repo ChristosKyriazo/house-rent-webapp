@@ -26,6 +26,7 @@
     "@clerk/nextjs": "^6.36.5",
     "@prisma/client": "^5.18.0",
     "@sentry/nextjs": "^10.53.1",
+    "ioredis": "^5.11.0",
     "next": "16.0.10",
     "openai": "^6.15.0",
     "pino": "^10.3.1",

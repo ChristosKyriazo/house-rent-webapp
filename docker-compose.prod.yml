@@ -6,7 +6,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -24,6 +24,19 @@ services:
     networks:
       - internal
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
   app:
     image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyria zo/house-rent-webapp:latest
     restart: unless-stopped
@@ -32,8 +45,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - .env              # chmod 600 on the server; never committed to git
+    environment:
+      REDIS_URL: redis://redis:6379
     volumes:
       - uploads_data:/app/public/uploads
     command: >
@@ -65,6 +82,7 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:
   uploads_data:
   caddy_data:
   caddy_config:
