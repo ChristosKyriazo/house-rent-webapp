@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ areas })
+    return NextResponse.json(
+      { areas },
+      { headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' } }
+    )
   } catch (error) {
     log.error({ err: error }, 'Get areas error')
     return NextResponse.json(

@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
 import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
-import { checkAiSearchLimit } from '@/lib/rate-limit'
+import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
@@ -29,7 +29,7 @@ interface CachedSearchResult {
 const searchResultCache: CachedSearchResult[] = []
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 const SEARCH_CACHE_MAX_ENTRIES = 100
-const SEARCH_CACHE_SIM_THRESHOLD = 0.90
+const SEARCH_CACHE_SIM_THRESHOLD = 0.78
 
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
@@ -92,8 +92,15 @@ export async function POST(request: NextRequest) {
         // Reuse embedding for the exact same query text
         queryEmbedding = embeddingTextCache.get(normalizedQuery) ?? null
         if (!queryEmbedding) {
+          if (userId && !checkEmbeddingLimit(userId)) {
+            return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
+          }
           queryEmbedding = await generateEmbedding(normalizedQuery, openai)
-          if (embeddingTextCache.size >= 500) embeddingTextCache.clear()
+          if (embeddingTextCache.size >= 200) {
+            // Evict oldest entry (Map preserves insertion order)
+            const firstKey = embeddingTextCache.keys().next().value
+            if (firstKey) embeddingTextCache.delete(firstKey)
+          }
           embeddingTextCache.set(normalizedQuery, queryEmbedding)
         }
 

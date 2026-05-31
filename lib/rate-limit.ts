@@ -60,3 +60,8 @@ export function checkTranslationLimit(userId: string | number): boolean {
 export function checkMapsLimit(userId: string | number): boolean {
   return checkRateLimit(`${userId}:maps`, 20, 60_000)
 }
+
+/** 15 embedding calls per user per minute */
+export function checkEmbeddingLimit(userId: string | number): boolean {
+  return checkRateLimit(`${userId}:embeddings`, 15, 60_000)
+}

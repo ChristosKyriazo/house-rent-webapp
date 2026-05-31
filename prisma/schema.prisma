@@ -72,7 +72,8 @@ model Home {
   parking           Boolean? // Whether parking is available (yes/no)
   energyClass       String?  // Energy class: "A+", "A", "B", "C", "D", "E", "F", "G"
   embedding         Json?    // text-embedding-3-small vector (1536 floats) for semantic search
-  photoTags         String?  // JSON array of visual feature tags extracted from photos by AI vision
+  photoTags         String?  // Legacy JSON string of visual feature tags (kept for compat)
+  photoTagsArray    String[] @default([])  // Native array with GIN index for fast tag queries
   ownerId           Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -198,6 +199,7 @@ model AISearchLog {
   homesCountAfterFilter  Int     // Number of homes after filtering
   finalHomesCount       Int     // Final number of homes returned
   descriptionPhotoScore  Float?  // Combined description and photo matching bonus score (0-5%)
+  clickedHomeId         Int?    // First home the user clicked after seeing results
   error                 String? // Error message if any
   createdAt             DateTime @default(now())
 

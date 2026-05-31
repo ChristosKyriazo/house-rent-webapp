@@ -418,7 +418,10 @@ export async function GET(request: NextRequest) {
       },
     }).catch(() => {})
 
-    return NextResponse.json({ homes: paginatedHomes, total, hasMore: skip + limit < total }, { status: 200 })
+    return NextResponse.json(
+      { homes: paginatedHomes, total, hasMore: skip + limit < total },
+      { status: 200, headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
+    )
   } catch (error) {
     log.error({ err: error }, 'List homes error')
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

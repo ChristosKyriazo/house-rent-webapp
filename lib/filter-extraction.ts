@@ -1,4 +1,5 @@
 import { FILTER_EXTRACTION_SYSTEM_PROMPT } from './ai-prompts'
+import { logAICall } from './ai-logger'
 
 interface ExtractedFilters {
   city?: string
@@ -49,7 +50,8 @@ export async function extractFiltersWithAI(
   query: string,
   openai: any
 ): Promise<CachedFilterResult> {
-  const now = Date.now()
+  const callStart = Date.now()
+  const now = callStart
   const cached = filterCache.get(query)
   if (cached && cached.confidence > 0.5 && (now - (cached.cachedAt ?? 0)) < FILTER_CACHE_TTL_MS) {
     return cached
@@ -63,8 +65,9 @@ export async function extractFiltersWithAI(
   const timeoutId = setTimeout(() => controller.abort(), 15_000)
 
   try {
+    const model = process.env.OPENAI_FILTER_MODEL || 'gpt-4o-mini'
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: query },
@@ -90,6 +93,14 @@ export async function extractFiltersWithAI(
         filterExtractionResponse: responseContent,
         cachedAt: Date.now(),
       }
+      logAICall({
+        task: 'filter_extraction',
+        model,
+        latencyMs: Date.now() - callStart,
+        success: true,
+        inputTokens: completion.usage?.prompt_tokens,
+        outputTokens: completion.usage?.completion_tokens,
+      })
       filterCache.set(query, result)
       return result
     }
