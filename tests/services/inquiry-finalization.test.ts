@@ -7,6 +7,7 @@ const { mockPrisma } = vi.hoisted(() => {
     booking: { findFirst: vi.fn() },
     notification: { create: vi.fn(), updateMany: vi.fn() },
     rating: { findFirst: vi.fn() },
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockPrisma)),
   } as any
   return { mockPrisma }
 })
