@@ -235,18 +235,6 @@ export async function POST(request: NextRequest) {
     hardFiltersJson = Object.keys(hardFilters).length > 0 ? JSON.stringify(hardFilters) : null
     softFiltersJson = Object.keys(softFilters).length > 0 ? JSON.stringify(softFilters) : null
 
-    // TEST LOG - DELETE AFTER: Show AI JSON response
-    console.log('\n========== AI FILTER EXTRACTION JSON ==========')
-    console.log('Hard Filters:', hardFiltersJson)
-    console.log('Soft Filters:', softFiltersJson)
-    console.log('Metro:', metroCategory)
-    console.log('Bus:', busCategory)
-    console.log('School:', schoolCategory)
-    console.log('Hospital:', hospitalCategory)
-    console.log('Park:', parkCategory)
-    console.log('University:', universityCategory)
-    console.log('================================================\n')
-
     // Step 2: Build database query with extracted filters
     const where: any = {}
 
@@ -733,20 +721,11 @@ export async function POST(request: NextRequest) {
         d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
       )
       
-      // TEST LOG - DELETE AFTER: Show calculation inputs
-      console.log('\n========== CALCULATION INPUTS ==========')
-      console.log('Student context (boost metro/bus/uni):', studentContext)
-      console.log('Vibe Preference:', vibePreference)
-      console.log('Safety Category:', safetyCategory)
-      console.log('Distances to Consider:', distancesToConsider.map(d => ({ field: d.name, category: d.category })))
-      console.log('========================================\n')
-
       // Calculate raw scores for each home
       const rawScores = new Map<number, number>()
       let minScore = Infinity
       let maxScore = -Infinity
       
-      // TEST LOG - DELETE AFTER: Track calculation details
       const calculationDetails: Array<{
         homeId: number
         homeTitle: string
@@ -973,7 +952,6 @@ export async function POST(request: NextRequest) {
         minScore = Math.min(minScore, rawScore)
         maxScore = Math.max(maxScore, rawScore)
         
-        // TEST LOG - DELETE AFTER: Store calculation details
         calculationDetails.push({
           homeId: home.id,
           homeTitle: home.title.substring(0, 50),
@@ -992,52 +970,14 @@ export async function POST(request: NextRequest) {
       // Scale all scores to 0-100 range
       const scoreRange = maxScore - minScore
       
-      // TEST LOG - DELETE AFTER: Show scaling info
-      console.log('\n========== SCALING INFO ==========')
-      console.log('Min Raw Score:', minScore)
-      console.log('Max Raw Score:', maxScore)
-      console.log('Score Range:', scoreRange)
-      console.log('==================================\n')
-      
       homes.forEach((home) => {
         const rawScore = rawScores.get(home.id) || 50
-        
-        // Map to 30-95% range: avoids extreme 0%/100% spread when scores are close
         let scaledScore = scoreRange > 0
           ? 30 + ((rawScore - minScore) / scoreRange) * 65
-          : 70 // All same score → neutral 70%
-
+          : 70
         scaledScore = Math.max(0, Math.min(100, scaledScore))
-        
-        // No 99% cap - allow 100% if the scaled score reaches it
-        // The scoring system is now granular enough to show differences naturally
-        
         matchMap.set(home.id, scaledScore)
-        
-        // TEST LOG - DELETE AFTER: Update calculation details with final score
-        const detail = calculationDetails.find(d => d.homeId === home.id)
-        if (detail) {
-          detail.finalScaledScore = scaledScore
-        }
       })
-      
-      // TEST LOG - DELETE AFTER: Show all calculation details
-      console.log('\n========== CALCULATION DETAILS FOR EACH HOME ==========')
-      calculationDetails.forEach(detail => {
-        console.log(`\nHome ID: ${detail.homeId} - ${detail.homeTitle}`)
-        console.log('  Distance Scores:')
-        detail.distanceScores.forEach(ds => {
-          console.log(`    ${ds.field}: ${ds.distance !== null ? ds.distance + 'km' : 'null'} → Score: ${ds.score}`)
-        })
-        console.log(`  Average Distance Score: ${detail.avgDistanceScore.toFixed(2)}`)
-        console.log(`  Safety: ${detail.safety !== null ? detail.safety : 'null'} → Safety Score: ${detail.safetyScore.toFixed(2)}`)
-        console.log(`  Parking: ${detail.parking !== null ? detail.parking : 'null'} → Parking Score: ${detail.parkingScore.toFixed(2)}`)
-        console.log(`  Property Vibes: [${detail.propertyVibes.join(', ')}]`)
-        console.log(`  Vibe Score: ${detail.vibeScore.toFixed(2)}`)
-        console.log(`  Raw Score: ${detail.rawScore.toFixed(2)}`)
-        console.log(`  Final Scaled Score: ${detail.finalScaledScore?.toFixed(2)}%`)
-      })
-      console.log('\n======================================================\n')
     }
 
     // Distance scoring is now handled in the programmatic calculation above
@@ -1139,14 +1079,6 @@ export async function POST(request: NextRequest) {
         penalty: number
       }> = []
       
-      // TEST LOG - DELETE AFTER: Show description matching info
-      console.log('\n========== DESCRIPTION MATCHING ==========')
-      console.log('User Query:', query)
-      console.log('Checking descriptions for matching features...\n')
-      
-      let extractedKeywords: string[] = []
-      const descriptionResults = new Map<number, { bonus: number; penalty: number; extractedKeywords: string[]; matchedKeywords: string[]; hasNewMention: boolean }>()
-      
       for (const home of homes) {
         const result = calculateDescriptionBonus(
           query,
@@ -1155,24 +1087,15 @@ export async function POST(request: NextRequest) {
           home.yearRenovated
         )
 
-        // Check for hard incompatibilities (e.g. user wants pets, listing says no pets)
         const disqualifier = calculateDisqualifiers(query, home.description)
         if (disqualifier) {
           disqualifierMap.set(home.id, disqualifier)
           matchMap.set(home.id, 0)
         }
 
-        // Store extracted keywords from first home (they're the same for all)
-        if (extractedKeywords.length === 0) {
-          extractedKeywords = result.extractedKeywords
-        }
-
         descriptionScores.push(result.bonus)
         descriptionBonusMap.set(home.id, result.bonus)
         descriptionPenaltyMap.set(home.id, result.penalty)
-        descriptionResults.set(home.id, result)
-        
-        // TEST LOG - DELETE AFTER: Store description details
         descriptionDetails.push({
           homeId: home.id,
           homeTitle: home.title.substring(0, 50),
@@ -1181,24 +1104,6 @@ export async function POST(request: NextRequest) {
           penalty: result.penalty,
         })
       }
-      
-      // TEST LOG - DELETE AFTER: Show description scores for each home
-      console.log('Extracted Keywords from Query:', extractedKeywords.length > 0 ? extractedKeywords.join(', ') : 'None found')
-      console.log('\nDescription Scores:')
-      descriptionDetails.forEach(detail => {
-        const result = descriptionResults.get(detail.homeId)!
-        console.log(`  Home ID: ${detail.homeId} - ${detail.homeTitle}`)
-        console.log(`    Description: ${detail.description || 'null'}`)
-        console.log(`    Matched Keywords: ${result.matchedKeywords.length > 0 ? result.matchedKeywords.join(', ') : 'None'}`)
-        console.log(`    Description Bonus: ${detail.bonus.toFixed(2)}%`)
-        if (detail.penalty < 0) {
-          console.log(`    Description Penalty: ${detail.penalty.toFixed(2)}%`)
-        }
-        if (result.hasNewMention) {
-          console.log(`    Year-based scoring: Built ${homes.find(h => h.id === detail.homeId)?.yearBuilt || 'N/A'}, Renovated ${homes.find(h => h.id === detail.homeId)?.yearRenovated || 'N/A'}`)
-        }
-      })
-      console.log('==========================================\n')
       
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
@@ -1212,65 +1117,19 @@ export async function POST(request: NextRequest) {
 
         let finalScore = currentScore
 
-        // Apply penalty first (for negative mentions)
+        // Apply explicit penalty (home description says it doesn't have what user wants)
         if (penalty < 0) {
-          finalScore = Math.max(0, finalScore + penalty) // penalty is already negative
+          finalScore = Math.max(0, finalScore + penalty)
         }
 
-        // Apply bonus
+        // Apply description bonus — no relative penalty on homes that simply don't mention it
         if (bonus > 0) {
           finalScore = Math.min(100, finalScore + bonus)
-        } else if (hasAnyDescriptionBonus && bonus === 0 && penalty === 0) {
-          // Penalize houses without bonus when others have it (only if no explicit penalty)
-          const maxBonus = Math.max(...descriptionScores)
-          const relativePenalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
-          finalScore = Math.max(0, finalScore - relativePenalty)
         }
 
         matchMap.set(home.id, finalScore)
       })
       
-      // If some homes have bonus and others don't, show in logs
-      if (hasAnyDescriptionBonus) {
-        
-        // TEST LOG - DELETE AFTER: Show description bonus application
-        console.log('\n========== DESCRIPTION BONUS APPLICATION ==========')
-        const maxBonus = Math.max(...descriptionScores)
-        console.log(`Max Description Bonus: ${maxBonus.toFixed(2)}%`)
-        console.log(`Homes with bonus: ${descriptionScores.filter(s => s > 0).length}`)
-        console.log(`Homes with penalty: ${Array.from(descriptionPenaltyMap.values()).filter(p => p < 0).length}`)
-        console.log(`Homes without bonus: ${descriptionScores.filter(s => s === 0).length}`)
-        homes.forEach(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          const penalty = descriptionPenaltyMap.get(home.id) || 0
-          const beforeScore = matchMap.get(home.id) || 0
-          const afterScore = matchMap.get(home.id) || 0
-          if (bonus > 0) {
-            console.log(`  Home ${home.id}: +${bonus.toFixed(2)}% bonus → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          } else if (penalty < 0) {
-            console.log(`  Home ${home.id}: ${penalty.toFixed(2)}% penalty (negative mention) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          } else if (hasAnyDescriptionBonus) {
-            const relativePenalty = Math.min(maxBonus * 0.5, 10)
-            console.log(`  Home ${home.id}: -${relativePenalty.toFixed(2)}% penalty (no match) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          }
-        })
-        console.log('==================================================\n')
-      } else {
-        // No homes have bonus, just apply scores as normal
-        homes.forEach(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          if (bonus > 0) {
-            const currentScore = matchMap.get(home.id) || 0
-            const finalScore = Math.min(100, currentScore + bonus)
-            matchMap.set(home.id, finalScore)
-          }
-        })
-        
-        // TEST LOG - DELETE AFTER: Show that no description matches found
-        console.log('\n========== DESCRIPTION MATCHING ==========')
-        console.log('No description matches found for any homes')
-        console.log('==========================================\n')
-      }
       
       // Apply photo tag bonus — visual features confirmed in photos that match user query
       // Skip disqualified homes to keep their score locked at 0
@@ -1280,6 +1139,17 @@ export async function POST(request: NextRequest) {
         if (photoBonus > 0) {
           const cur = matchMap.get(home.id) || 0
           matchMap.set(home.id, Math.min(100, cur + photoBonus))
+        }
+      })
+
+      // Recency bonus — new listings get a visibility boost to prevent cold-start invisibility
+      homes.forEach(home => {
+        if (disqualifierMap.has(home.id)) return
+        const ageMs = Date.now() - new Date((home as any).createdAt).getTime()
+        const ageDays = ageMs / (1000 * 60 * 60 * 24)
+        const recencyBonus = ageDays < 7 ? 15 : ageDays < 30 ? 8 : ageDays < 60 ? 3 : 0
+        if (recencyBonus > 0) {
+          matchMap.set(home.id, Math.min(100, (matchMap.get(home.id) || 0) + recencyBonus))
         }
       })
 

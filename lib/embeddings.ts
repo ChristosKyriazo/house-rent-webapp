@@ -30,14 +30,29 @@ export function buildHomeText(home: {
   bathrooms: number
   pricePerMonth: number
   sizeSqMeters?: number | null
+  parking?: boolean | null
+  energyClass?: string | null
+  heatingCategory?: string | null
+  heatingAgent?: string | null
+  yearBuilt?: number | null
+  yearRenovated?: number | null
 }): string {
   const parts = [
+    // Location + type — strongest semantic anchor
+    `${home.listingType === 'rent' ? 'rental' : 'for sale'} property in ${[home.area, home.city, home.country].filter(Boolean).join(', ')}`,
+    // Room counts as readable text (not raw numbers)
+    `${home.bedrooms}-bedroom ${home.bathrooms}-bathroom`,
+    home.sizeSqMeters ? `${home.sizeSqMeters} square meters` : null,
+    // Categorical signals — exactly what users describe semantically
+    home.parking ? 'parking available' : null,
+    home.heatingCategory ? `${home.heatingCategory} heating` : null,
+    home.heatingAgent ? `${home.heatingAgent} heating system` : null,
+    home.energyClass ? `energy class ${home.energyClass}` : null,
+    home.yearRenovated ? `renovated in ${home.yearRenovated}` : null,
+    home.yearBuilt ? (home.yearBuilt > 2010 ? `modern building built ${home.yearBuilt}` : `built ${home.yearBuilt}`) : null,
+    // Natural language last — adds semantic richness but shouldn't dominate
     home.title,
     home.description,
-    `${home.bedrooms} bedrooms, ${home.bathrooms} bathrooms`,
-    home.sizeSqMeters ? `${home.sizeSqMeters} sqm` : null,
-    `${home.listingType === 'rent' ? 'rent' : 'for sale'} in ${[home.area, home.city, home.country].filter(Boolean).join(', ')}`,
-    `price ${home.pricePerMonth}`,
   ]
   return parts.filter(Boolean).join('. ')
 }

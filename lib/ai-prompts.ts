@@ -40,6 +40,14 @@ RULES:
   * "near metro station" or "close to metro" or "metro access" → Metro: Essential (higher priority)
 - Park category: CRITICAL - If user mentions pet/dog/cat/animal/pets → Park: Essential (ALWAYS set to Essential when pets are mentioned). Also Essential if user explicitly wants park. Strong if mentions park would be nice but no pets mentioned. Unmentioned → "Not mentioned"
 - Safety category: Essential if user explicitly wants safe area OR mentions kids/children OR person in need OR elderly. Strong if mentions safety would be nice but not in explicit ways above. Not important if not mentioned. Unmentioned → "Not mentioned"
+- School category: Essential if user mentions kids/children/family with children. Strong if user mentions school would be nice. Unmentioned → "Not mentioned"
+- LIFESTYLE INFERENCE (strong signals — extract even without explicit keywords):
+  * "I have kids/children/toddler/baby/a family" → Safety: Essential, School: Essential, vibePreference: "family-friendly"
+  * "I have a dog/cat/pet/puppy/kitten" → Park: Essential (ALWAYS — overrides default)
+  * "I drive/I have a car/I commute by car" → parking: true (hard filter)
+  * "I'm a student/I study/I go to university" → University: Strong, Metro: Strong or Essential, vibePreference: "working-class"
+  * "I work from home/remote work/home office" → vibePreference: "quiet", Safety: Strong
+  * "I use public transport/I don't drive/no car" → Metro: Essential or Bus: Essential
 - Vibe preference: Extract 1-2 words describing the vibe/atmosphere the user wants based on location preferences. Location-based mappings:
   * "near the beach", "near beach", "by the sea", "waterfront", "coastal" → vibePreference: "waterfront"
   * "near the center", "city center", "downtown", "central", "with a lot of people", "busy area", "crowded" → vibePreference: "urban" or "central"
