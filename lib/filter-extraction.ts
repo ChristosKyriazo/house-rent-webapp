@@ -36,8 +36,9 @@ interface ExtractedFilters {
   confidence: number // 0-1, how confident we are in the extraction
 }
 
-type CachedFilterResult = ExtractedFilters & { filterExtractionPrompt?: string; filterExtractionResponse?: string }
+type CachedFilterResult = ExtractedFilters & { filterExtractionPrompt?: string; filterExtractionResponse?: string; cachedAt?: number }
 const filterCache = new Map<string, CachedFilterResult>()
+const FILTER_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Use AI to extract hard filters from user query
@@ -48,8 +49,12 @@ export async function extractFiltersWithAI(
   query: string,
   openai: any
 ): Promise<CachedFilterResult> {
+  const now = Date.now()
   const cached = filterCache.get(query)
-  if (cached) return cached
+  if (cached && cached.confidence > 0.5 && (now - (cached.cachedAt ?? 0)) < FILTER_CACHE_TTL_MS) {
+    return cached
+  }
+  if (cached) filterCache.delete(query)
 
   const systemPrompt = FILTER_EXTRACTION_SYSTEM_PROMPT
   const fullPrompt = `System: ${systemPrompt}\n\nUser Query: ${query}`
@@ -71,11 +76,19 @@ export async function extractFiltersWithAI(
     const responseContent = completion.choices[0]?.message?.content
 
     if (responseContent) {
+      let parsed: Record<string, unknown>
+      try {
+        parsed = JSON.parse(responseContent)
+      } catch {
+        console.error('AI filter extraction: invalid JSON response')
+        return { confidence: 0, filterExtractionPrompt: fullPrompt, filterExtractionResponse: responseContent }
+      }
       const result: CachedFilterResult = {
-        ...JSON.parse(responseContent),
+        ...(parsed as Partial<ExtractedFilters>),
         confidence: 0.9,
         filterExtractionPrompt: fullPrompt,
         filterExtractionResponse: responseContent,
+        cachedAt: Date.now(),
       }
       filterCache.set(query, result)
       return result

@@ -1,6 +1,12 @@
 import OpenAI from 'openai'
 import { createHash } from 'crypto'
 
+// Sanitize user-supplied input before embedding in prompts — strips control chars, truncates
+function escapePromptInput(input: string | null | undefined, maxLen = 500): string {
+  if (!input) return ''
+  return input.replace(/[\x00-\x1F\x7F-\x9F]/g, '').slice(0, maxLen).trim()
+}
+
 // Server-side in-memory cache: prevents duplicate OpenAI calls for identical house data
 const descriptionCache = new Map<string, { description: string | null; descriptionGreek: string | null }>()
 
@@ -123,18 +129,24 @@ export async function generateHouseDescriptions(
       ? `€${houseData.pricePerMonth.toLocaleString()}/month`
       : `€${houseData.pricePerMonth.toLocaleString()}`
 
-    const notesBlock = houseData.ownerNotes?.trim()
+    const safeNotes = escapePromptInput(houseData.ownerNotes, 800)
+    const safeTitle = escapePromptInput(houseData.title)
+
+    const notesBlock = safeNotes
       ? `
 
 LANDLORD RULES (BINDING — treat as factual requirements, not marketing angles):
 The owner specified the following. These are rules or eligibility criteria for this listing, NOT vague "lifestyle" suggestions.
-${houseData.ownerNotes.trim()}`
+${safeNotes}`
       : ''
 
     const model =
       process.env.OPENAI_HOUSE_DESCRIPTION_MODEL ||
       process.env.OPENAI_COMPATIBILITY_MODEL ||
       'gpt-4o-mini'
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25_000)
 
     // JSON output avoids fragile ENGLISH:/GREEK: parsing when models reorder or use markdown
     const completion = await openai.chat.completions.create({
@@ -184,7 +196,7 @@ Write in a warm, inviting but subtle tone. Vary your writing style to make each 
         },
         {
           role: 'user',
-          content: `Property: ${houseData.title}
+          content: `Property: ${safeTitle}
 Location: ${locationInfo}
 Type: For ${listingTypeText} at ${priceText}
 Details: ${propertyDetails}
@@ -198,7 +210,8 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
       ],
       temperature: 0.7,
       max_tokens: 4096,
-    })
+    }, { signal: controller.signal })
+    clearTimeout(timeoutId)
 
     const raw = completion.choices[0]?.message?.content?.trim() || ''
     let finalEnglishDescription: string | null = null
@@ -227,7 +240,11 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
     descriptionCache.set(key, result)
     return result
   } catch (error) {
-    console.error('Error generating house descriptions:', error)
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('House description generation timed out after 25s')
+    } else {
+      console.error('Error generating house descriptions:', error)
+    }
     return { description: null, descriptionGreek: null }
   }
 }

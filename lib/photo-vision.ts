@@ -64,10 +64,16 @@ export async function analyzePhotosForTags(
   const toAnalyze = photoPaths.slice(0, 3)
   const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
 
+  const MAX_IMAGE_BYTES = 1_024 * 1024 // 1 MB — larger images cost too much and gain little
+
   for (const photoPath of toAnalyze) {
     try {
       const absolutePath = join(process.cwd(), 'public', photoPath)
       const buffer = await readFile(absolutePath)
+      if (buffer.length > MAX_IMAGE_BYTES) {
+        console.warn(`Photo skipped (${Math.round(buffer.length / 1024)}KB > 1MB): ${photoPath}`)
+        continue
+      }
       const base64 = buffer.toString('base64')
       const ext = photoPath.split('.').pop()?.toLowerCase() || 'jpeg'
       const mime =
@@ -86,11 +92,8 @@ export async function analyzePhotosForTags(
 
   if (!imageContents.length) return []
 
-  const model =
-    process.env.OPENAI_VISION_MODEL ||
-    process.env.OPENAI_HOUSE_DESCRIPTION_MODEL ||
-    process.env.OPENAI_COMPATIBILITY_MODEL ||
-    'gpt-4o-mini'
+  // Vision requires gpt-4o or later — mini does not support image inputs
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o'
 
   try {
     const completion = await openai.chat.completions.create({
@@ -115,11 +118,18 @@ Return {"features": []} if nothing clearly applies. No explanations.`,
     })
 
     const raw = completion.choices[0]?.message?.content?.trim() || '{}'
-    const parsed = JSON.parse(raw) as Record<string, unknown>
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return []
+    }
 
     for (const val of Object.values(parsed)) {
       if (Array.isArray(val)) {
-        return (val as unknown[]).filter((t): t is string => typeof t === 'string')
+        return (val as unknown[])
+          .filter((t): t is string => typeof t === 'string')
+          .filter(t => KNOWN_FEATURES.includes(t.toLowerCase()))
       }
     }
     return []

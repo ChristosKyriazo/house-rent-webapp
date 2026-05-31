@@ -79,8 +79,12 @@ export async function processAIChatTurn(
     }
   }
 
-  const history: ChatMessage[] = conversation?.messages ?? []
+  const fullHistory: ChatMessage[] = conversation?.messages ?? []
   const accumulated: ConversationalFilters = conversation?.accumulatedFilters ?? {}
+
+  // Keep only the last 6 turns (12 messages) to cap token usage
+  const MAX_HISTORY_MESSAGES = 12
+  const history = fullHistory.slice(-MAX_HISTORY_MESSAGES)
 
   const modeHint =
     listingMode === 'buy'
@@ -117,7 +121,14 @@ export async function processAIChatTurn(
 
     const content = completion.choices[0]?.message?.content
     if (!content) throw new Error('Empty AI response')
-    aiResponse = JSON.parse(content) as ConversationalAIResponse
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(content)
+    } catch {
+      throw new Error('AI chat returned invalid JSON')
+    }
+    if (!parsed.action || !parsed.assistantMessage) throw new Error('AI chat response missing required fields')
+    aiResponse = parsed as unknown as ConversationalAIResponse
   } catch (error) {
     clearTimeout(timeoutId)
     throw error
@@ -127,7 +138,7 @@ export async function processAIChatTurn(
   const mergedFilters: ConversationalFilters = mergeFilters(accumulated, aiResponse.filters ?? {})
 
   const updatedHistory: ChatMessage[] = [
-    ...history,
+    ...fullHistory,
     { role: 'user', content: userMessage },
     { role: 'assistant', content: aiResponse.assistantMessage },
   ]
@@ -167,7 +178,16 @@ function mergeFilters(
   const merged = { ...accumulated }
   for (const [k, v] of Object.entries(incoming)) {
     const key = k as keyof ConversationalFilters
-    if (v !== undefined) {
+    if (v === undefined) continue
+    // Discard noise values — treat as "not set"
+    if (
+      v === null ||
+      v === 'Not mentioned' ||
+      v === '' ||
+      (Array.isArray(v) && v.length === 0)
+    ) {
+      delete (merged as Record<string, unknown>)[key]
+    } else {
       ;(merged as any)[key] = v
     }
   }
