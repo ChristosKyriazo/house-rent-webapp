@@ -31,6 +31,11 @@ export async function GET(request: NextRequest) {
                 owner: {
                   select: { id: true, email: true, name: true },
                 },
+                _count: {
+                  select: {
+                    inquiries: { where: { dismissed: false, finalized: false } },
+                  },
+                },
               },
             })
 
@@ -50,6 +55,7 @@ export async function GET(request: NextRequest) {
       return {
         ...home,
         photos: photos,
+        inquiryCount: home._count.inquiries,
         createdAt: home.createdAt.toISOString(),
         updatedAt: home.updatedAt.toISOString(),
         availableFrom: home.availableFrom.toISOString(),

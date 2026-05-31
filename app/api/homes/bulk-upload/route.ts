@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { requestLogger } from '@/lib/logger'
+import { detectImageType } from '@/lib/image-validation'
 
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
@@ -75,13 +76,22 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const bytes = await photoFile.arrayBuffer()
+      const photoBuffer = Buffer.from(await photoFile.arrayBuffer())
+      const detected = detectImageType(photoBuffer)
+      if (!detected) {
+        return NextResponse.json(
+          { error: `Photo ${photoFile.name} for house ${index + 1} is not a valid JPEG, PNG, or WebP image` },
+          { status: 400 }
+        )
+      }
+
       const timestamp = Date.now()
       const randomSuffix = Math.random().toString(36).substring(7)
-      const filename = `${timestamp}-${randomSuffix}-${photoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+      // Extension derived from magic bytes — never from client-supplied filename
+      const filename = `${timestamp}-${randomSuffix}.${detected.ext}`
       const uploadsDir = join(process.cwd(), 'public', 'uploads')
       await mkdir(uploadsDir, { recursive: true })
-      await writeFile(join(uploadsDir, filename), Buffer.from(bytes))
+      await writeFile(join(uploadsDir, filename), photoBuffer)
 
       const indexKey = String(index)
       if (!photosByIndex[indexKey]) photosByIndex[indexKey] = []

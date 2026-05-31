@@ -7,6 +7,7 @@ import { createLocationMaps, matchesLocation, getLocationVariations, calculateDi
 import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
+import { features } from '@/lib/features'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
 import { redisGet, redisSet } from '@/lib/redis'
 
@@ -17,8 +18,8 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 
 // --- Semantic query caches (server-instance scoped) ---
 
-/** Reuse embedding vectors for identical query strings to avoid duplicate OpenAI calls */
-const embeddingTextCache = new Map<string, number[]>()
+/** Reuse embedding vectors for identical query strings (LRU, max 200 entries) */
+const embeddingTextCache = new Map<string, { vec: number[]; ts: number }>()
 
 interface CachedSearchResult {
   embedding: number[]
@@ -34,6 +35,11 @@ const SEARCH_CACHE_SIM_THRESHOLD = 0.78
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
+
+  if (!features.aiSearch) {
+    return NextResponse.json({ error: 'AI search is currently disabled' }, { status: 503 })
+  }
+
   // Initialize logging variables
   let userId: number | null = null
   let filterExtractionPrompt: string | null = null
@@ -90,18 +96,26 @@ export async function POST(request: NextRequest) {
       try {
         const normalizedQuery = query.trim()
         // Reuse embedding for the exact same query text
-        queryEmbedding = embeddingTextCache.get(normalizedQuery) ?? null
+        const cached = embeddingTextCache.get(normalizedQuery)
+        if (cached) {
+          cached.ts = Date.now() // refresh LRU timestamp
+          queryEmbedding = cached.vec
+        }
         if (!queryEmbedding) {
           if (userId && !checkEmbeddingLimit(userId)) {
             return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
           }
           queryEmbedding = await generateEmbedding(normalizedQuery, openai)
           if (embeddingTextCache.size >= 200) {
-            // Evict oldest entry (Map preserves insertion order)
-            const firstKey = embeddingTextCache.keys().next().value
-            if (firstKey) embeddingTextCache.delete(firstKey)
+            // Evict least-recently-used entry
+            let lruKey: string | null = null
+            let lruTs = Infinity
+            for (const [k, v] of embeddingTextCache) {
+              if (v.ts < lruTs) { lruTs = v.ts; lruKey = k }
+            }
+            if (lruKey) embeddingTextCache.delete(lruKey)
           }
-          embeddingTextCache.set(normalizedQuery, queryEmbedding)
+          embeddingTextCache.set(normalizedQuery, { vec: queryEmbedding, ts: Date.now() })
         }
 
         // Only check cache when results aren't user-specific (no exclusion filters)

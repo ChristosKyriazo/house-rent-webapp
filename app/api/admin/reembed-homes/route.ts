@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import * as Sentry from '@sentry/nextjs'
 
 // POST /api/admin/reembed-homes
 // Re-generates embeddings for all homes using the improved buildHomeText().
@@ -9,6 +10,10 @@ import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization')
   if (!process.env.ADMIN_SECRET || auth !== `Bearer ${process.env.ADMIN_SECRET}`) {
+    Sentry.captureMessage('Admin auth failed: reembed-homes', {
+      level: 'warning',
+      extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
+    })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

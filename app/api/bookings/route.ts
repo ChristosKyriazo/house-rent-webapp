@@ -5,6 +5,7 @@ import { findBookingConflicts } from '@/lib/booking-conflicts'
 import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized, validateBody } from '@/lib/api-utils'
 import { createBookingSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
+import { features } from '@/lib/features'
 
 // GET /api/bookings - Get all bookings for the current user
 export async function GET(request: NextRequest) {
@@ -277,6 +278,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
+    if (!features.bookings) {
+      return NextResponse.json({ error: 'Bookings are currently disabled' }, { status: 503 })
+    }
+
     const user = await getCurrentUser()
     if (!user) {
       return unauthorized()

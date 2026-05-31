@@ -11,6 +11,7 @@ import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/ar
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
+import { SaveButton } from '@/app/components/SaveButton'
 
 const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
 
@@ -1197,13 +1198,13 @@ function HomesPageInner() {
               let bannerColor = ''
               let bannerText = ''
               if (hasInquiry) {
-                bannerColor = 'bg-orange-600 border-orange-800'
+                bannerColor = 'bg-[var(--status-warning-bg)] border-[var(--status-warning)]'
                 bannerText = getTranslation(language, 'inquiryMadeBanner')
               } else if (isApproved) {
-                bannerColor = 'bg-green-600 border-green-800'
+                bannerColor = 'bg-[var(--status-success-bg)] border-[var(--status-success)]'
                 bannerText = getTranslation(language, 'approvedBanner')
               } else if (isDismissed) {
-                bannerColor = 'bg-red-600 border-red-800'
+                bannerColor = 'bg-[var(--status-error-bg)] border-[var(--status-error)]'
                 bannerText = getTranslation(language, 'dismissedBanner')
               }
               
@@ -1211,23 +1212,29 @@ function HomesPageInner() {
               <div
                 key={home.id}
                   className={`relative bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
-                    status 
-                      ? 'border-[var(--border-subtle)] opacity-60' 
+                    status
+                      ? 'border-[var(--border-subtle)] opacity-60'
                       : 'border-[var(--border-subtle)] hover:border-[var(--accent)]/35'
                   }`}
+                  title={isDismissed ? (language === 'el' ? 'Απέρριψες αυτό το ακίνητο' : 'You dismissed this property') : undefined}
                 >
+                  {/* Save button - Top Left */}
+                  <div className="absolute left-4 top-4 z-20">
+                    <SaveButton homeKey={home.key} size="sm" />
+                  </div>
+
                   {/* AI Match Percentage Badge - Top Right */}
                   {home.matchPercentage !== undefined && (
                     <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
                       <div
                         className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
                           home.incompatibilityReason
-                            ? 'border-red-700 bg-red-600/95 text-white'
+                            ? 'border-[var(--status-error)] bg-[var(--status-error-bg)] text-[var(--status-error)]'
                             : home.matchPercentage >= 80
-                              ? 'border-green-600 bg-green-500/90 text-white'
+                              ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)]'
                               : home.matchPercentage >= 60
-                                ? 'border-yellow-600 bg-yellow-500/90 text-white'
-                                : 'border-orange-600 bg-orange-500/90 text-white'
+                                ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
+                                : 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
                         }`}
                         title={home.incompatibilityReason || undefined}
                       >

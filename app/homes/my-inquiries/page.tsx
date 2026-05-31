@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { SkeletonList } from '@/app/components/SkeletonCard'
 
 interface Home {
   id: number
@@ -102,8 +103,11 @@ export default function UserInquiriesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
-        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8 h-10 w-48 rounded-xl bg-[var(--ink-soft)] animate-pulse" />
+          <SkeletonList count={4} />
+        </div>
       </div>
     )
   }

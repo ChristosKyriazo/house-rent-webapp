@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import { getCityName, getCountryName, getAreaName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
+import { SkeletonList } from '@/app/components/SkeletonCard'
 
 interface Home {
   id: number
@@ -27,6 +28,7 @@ interface Home {
   sizeSqMeters: number | null
   finalized: boolean
   createdAt: string
+  inquiryCount?: number
 }
 
 export default function MyListingsPage() {
@@ -93,8 +95,11 @@ export default function MyListingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
-        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8 h-10 w-48 rounded-xl bg-[var(--ink-soft)] animate-pulse" />
+          <SkeletonList count={4} />
+        </div>
       </div>
     )
   }
@@ -151,15 +156,20 @@ export default function MyListingsPage() {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="text-2xl font-bold text-[var(--text)]">{getHomeTitle(language, home)}</h3>
                         <span className={`px-3 py-1 rounded-xl text-xs font-semibold ${
-                          home.listingType === 'rent' 
-                            ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]' 
+                          home.listingType === 'rent'
+                            ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
                             : 'bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--accent)]'
                         }`}>
                           {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'sell')}`}
                         </span>
+                        {!home.finalized && (home.inquiryCount ?? 0) > 0 && (
+                          <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[var(--status-info-bg)] text-[var(--status-info)] border border-[var(--status-info)]/30">
+                            {home.inquiryCount} {language === 'el' ? 'ενδιαφερόμενοι' : `inquir${home.inquiryCount === 1 ? 'y' : 'ies'}`}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[var(--text-muted)] flex items-center gap-1 mb-2">
                         <span>📍</span>

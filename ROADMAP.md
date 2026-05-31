@@ -41,13 +41,14 @@
 ## Phase 4 — Maintainability (Ongoing)
 **Goal:** Keep the codebase clean and safe to change as it grows.
 
-- [ ] Add Prettier + ESLint integration for consistent formatting
-- [ ] Reduce `any` usage to zero (currently 126 usages in API routes)
-- [ ] Migrate `lib/translations.ts` (1058 lines) to `next-intl` or `i18next`
-- [ ] Split `lib/ai-search-helpers.ts` (810 lines) into sub-modules
-- [ ] Add error boundary components for UI crash isolation
-- [ ] Add loading/skeleton components to eliminate layout shift
-- [ ] Add `eslint-plugin-security` to catch hardcoded secrets and unsafe patterns
+- [x] Magic-byte MIME validation on all file uploads (upload + bulk-upload routes)
+- [x] Sentry security event capture on admin auth failures
+- [x] Add Prettier + ESLint integration (`prettier`, `eslint-config-prettier`, `eslint-plugin-security`)
+- [x] Feature flags (`FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS`) — set to "false" to disable without redeploy
+- [x] Split `lib/ai-search-helpers.ts` into `lib/search/{location,scoring,description-scoring,student-context}.ts`
+- [x] Error boundary: `app/components/ErrorBoundary.tsx` (reusable); error pages now report to Sentry
+- [x] Skeleton loading: `SkeletonCard`/`SkeletonList` in `my-listings` and `my-inquiries`
+- [ ] Reduce `any` usage to zero (currently ~185 warnings in API routes)
+- [ ] Migrate `lib/translations.ts` (1123 lines) to `next-intl` or `i18next`
 - [ ] Add `jsx-a11y` ESLint plugin to enforce accessibility rules
-- [ ] Feature flags (`FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS`) for safe rollouts
 - [ ] Monthly dependency audit (`npm audit`) and update cycle

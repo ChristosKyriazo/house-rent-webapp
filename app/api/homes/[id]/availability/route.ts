@@ -34,11 +34,15 @@ export async function GET(
     const today = new Date()
     today.setHours(0, 0, 0, 0) // Set to start of today
     
+    const maxDate = new Date(today)
+    maxDate.setDate(today.getDate() + 365)
+
     const availabilities = await prisma.availability.findMany({
       where: {
         homeId: home.id,
         date: {
-          gte: today, // Only future dates (including today)
+          gte: today,
+          lte: maxDate,
         },
       },
       orderBy: {

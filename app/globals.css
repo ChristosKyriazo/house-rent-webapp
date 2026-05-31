@@ -32,10 +32,43 @@ html {
   --btn-secondary-fg: #f3ece4;
   --btn-secondary-border: rgba(233, 212, 196, 0.32);
   --dock-bg: rgba(22, 29, 42, 0.94);
+
+  /* Semantic status colors — aligned with the amber palette */
+  --status-success: #5db87a;
+  --status-success-bg: rgba(93, 184, 122, 0.15);
+  --status-warning: #d4a574;
+  --status-warning-bg: rgba(212, 165, 116, 0.15);
+  --status-error: #e06b6b;
+  --status-error-bg: rgba(224, 107, 107, 0.15);
+  --status-info: #6b9fb2;
+  --status-info-bg: rgba(107, 159, 178, 0.15);
+
+  /* Border hierarchy */
+  --border-subtle: rgba(227, 167, 95, 0.22);
+  --border-default: rgba(227, 167, 95, 0.35);
+  --border-strong: rgba(227, 167, 95, 0.50);
+
+  /* Surface opacity scale */
+  --surface-high: rgba(20, 26, 36, 0.98);
+  --surface-mid: rgba(20, 26, 36, 0.80);
+  --surface-low: rgba(20, 26, 36, 0.50);
+
+  /* Z-index scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 1000;
+  --z-modal: 1001;
+  --z-popover: 1100;
   /* Above page content: transforms/backdrops create stacking contexts that can paint over z-[9999] */
   --z-chrome: 30000;
   --z-menu-backdrop: 25000;
   --z-menu-panel: 25001;
+
+  /* Motion scale */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 700ms;
 }
 
 .font-display {
@@ -126,6 +159,63 @@ html {
 .btn-icon-dock:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Global focus ring — consistent keyboard navigation across all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Danger button — matches design system, not raw red-600 */
+.btn-danger {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.875rem;
+  padding: 0.625rem 1.75rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.25;
+  background-color: var(--status-error-bg);
+  color: var(--status-error);
+  border: 1px solid var(--status-error);
+  transition: background-color var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.btn-danger:hover {
+  background-color: rgba(224, 107, 107, 0.25);
+}
+.btn-danger:active {
+  transform: translateY(1px);
+}
+
+/* Reusable form input */
+.input-base {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--ink-soft);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+.input-base::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+.input-base:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(227, 167, 95, 0.2);
+}
+
+/* Disabled state */
+button:disabled,
+[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .ui-glass {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { processAIChatTurn } from '@/lib/services/ai-chat-service'
 import { requestLogger } from '@/lib/logger'
+import { features } from '@/lib/features'
 
 // POST /api/homes/ai-chat — conversational AI search
 // Body: { message: string, conversationKey?: string, type?: "rent"|"buy" }
@@ -11,6 +12,10 @@ export async function POST(request: NextRequest) {
   const log = requestLogger(request)
 
   try {
+    if (!features.aiSearch) {
+      return NextResponse.json({ error: 'AI search is currently disabled' }, { status: 503 })
+    }
+
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },

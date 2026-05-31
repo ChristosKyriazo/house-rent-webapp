@@ -32,6 +32,7 @@ model User {
   bookingsAsUser  Booking[]      @relation("UserBookings")
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
   bulkUploadJobs  BulkUploadJob[]
+  savedHomes      SavedHome[]
 
   @@map("users")
 }
@@ -81,8 +82,10 @@ model Home {
   inquiries         Inquiry[]
   availabilities    Availability[]
   embeddingQueue    EmbeddingQueue?
+  savedBy           SavedHome[]
 
   @@index([finalized])
+  @@index([finalized, city, listingType])
 
   @@index([city])
   @@index([ownerId])
@@ -132,6 +135,7 @@ model Inquiry {
   @@index([approved])
   @@index([dismissed])
   @@index([finalized])
+  @@index([userId, approved, finalized])
   @@map("inquiries")
 }
 
@@ -341,4 +345,17 @@ model SearchConversation {
   @@index([userId])
   @@index([createdAt])
   @@map("search_conversations")
+}
+model SavedHome {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  homeId    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, homeId])
+  @@index([userId])
+  @@index([homeId])
+  @@map("saved_homes")
 }

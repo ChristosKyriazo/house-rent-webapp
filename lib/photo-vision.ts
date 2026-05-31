@@ -92,8 +92,7 @@ export async function analyzePhotosForTags(
 
   if (!imageContents.length) return []
 
-  // Vision requires gpt-4o or later — mini does not support image inputs
-  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o'
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini'
 
   try {
     const completion = await openai.chat.completions.create({

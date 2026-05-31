@@ -74,42 +74,34 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
   }
 
   if (action === 'approve') {
-    await prisma.inquiry.update({
-      where: { id: inquiry.id },
-      data: { finalized: true, finalizedBy: userId },
-    })
-    await prisma.home.update({
-      where: { id: inquiry.home.id },
-      data: { finalized: true },
-    })
+    const [userRating, ownerRating] = await Promise.all([
+      prisma.rating.findFirst({
+        where: { raterId: inquiry.user.id, ratedUserId: inquiry.home.ownerId, type: 'owner' },
+      }),
+      prisma.rating.findFirst({
+        where: { raterId: inquiry.home.ownerId, ratedUserId: inquiry.user.id, type: 'renter' },
+      }),
+    ])
 
-    await prisma.notification.updateMany({
-      where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
-      data: { deleted: true },
-    })
-
-    try {
-      await prisma.notification.updateMany({
-        where: {
-          homeKey: inquiry.home.key,
-          type: 'approved',
-          recipientId: inquiry.user.id,
-          deleted: false,
-        },
+    await prisma.$transaction(async tx => {
+      await tx.inquiry.update({
+        where: { id: inquiry.id },
+        data: { finalized: true, finalizedBy: userId },
+      })
+      await tx.home.update({
+        where: { id: inquiry.home.id },
+        data: { finalized: true },
+      })
+      await tx.notification.updateMany({
+        where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
         data: { deleted: true },
       })
-
-      const [userRating, ownerRating] = await Promise.all([
-        prisma.rating.findFirst({
-          where: { raterId: inquiry.user.id, ratedUserId: inquiry.home.ownerId, type: 'owner' },
-        }),
-        prisma.rating.findFirst({
-          where: { raterId: inquiry.home.ownerId, ratedUserId: inquiry.user.id, type: 'renter' },
-        }),
-      ])
-
+      await tx.notification.updateMany({
+        where: { homeKey: inquiry.home.key, type: 'approved', recipientId: inquiry.user.id, deleted: false },
+        data: { deleted: true },
+      })
       if (!userRating) {
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             recipientId: inquiry.user.id,
             role: 'user',
@@ -120,9 +112,8 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
           },
         })
       }
-
       if (!ownerRating) {
-        await prisma.notification.create({
+        await tx.notification.create({
           data: {
             recipientId: inquiry.home.ownerId,
             role: 'owner',
@@ -133,30 +124,31 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
           },
         })
       }
-    } catch (error) {
-      console.error('Failed to create rating notifications:', error)
-    }
+    })
+
     return { message: 'Deal finalized', finalized: true }
   }
 
-  await prisma.inquiry.update({
-    where: { id: inquiry.id },
-    data: { dismissed: true },
+  await prisma.$transaction(async tx => {
+    await tx.inquiry.update({
+      where: { id: inquiry.id },
+      data: { dismissed: true },
+    })
+    await tx.notification.updateMany({
+      where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
+      data: { deleted: true },
+    })
+    await tx.notification.create({
+      data: {
+        recipientId: inquiry.home.ownerId,
+        role: 'owner',
+        type: 'rejected',
+        homeKey: inquiry.home.key,
+        ownerKey: inquiry.home.owner.key,
+        userId: inquiry.user.id,
+      },
+    })
   })
-  await prisma.notification.updateMany({
-    where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
-    data: { deleted: true },
-  })
-  // Notify the owner that the user rejected finalization so they can proceed with other inquiries
-  await prisma.notification.create({
-    data: {
-      recipientId: inquiry.home.ownerId,
-      role: 'owner',
-      type: 'rejected',
-      homeKey: inquiry.home.key,
-      ownerKey: inquiry.home.owner.key,
-      userId: inquiry.user.id,
-    },
-  })
+
   return { message: 'Finalization dismissed', dismissed: true }
 }

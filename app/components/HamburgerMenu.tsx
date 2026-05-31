@@ -15,7 +15,7 @@ interface HamburgerMenuProps {
 
 export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuProps) {
   const { language } = useLanguage()
-  const { selectedRole, actualRole } = useRole()
+  const { selectedRole, actualRole, setSelectedRole } = useRole()
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -140,9 +140,11 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
   // Inquiries item will be dynamically set based on selected role
   const allMenuItems = [
     { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both', 'broker'] },
+    { href: '/homes/dashboard', labelKey: 'dashboard', icon: '📊', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/search', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
+    { href: '/homes/saved', labelKey: 'savedProperties', icon: '♥', roles: ['user', 'both', 'owner', 'broker'] },
     { href: '/homes/calendar', labelKey: 'calendar', icon: '📅', roles: ['owner', 'user', 'both', 'broker'] },
   ]
 
@@ -253,7 +255,33 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
         }`}
       >
         <div className="flex h-full flex-col p-6 pt-20">
-          <h2 className="mb-8 text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
+          <h2 className="mb-4 text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
+
+          {/* Role switcher — only visible for users with "both" role */}
+          {actualRole === 'both' && (
+            <div className="mb-6 flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-1">
+              <button
+                onClick={() => { setSelectedRole('user'); closeMenu() }}
+                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-all ${
+                  selectedRole === 'user' || !selectedRole
+                    ? 'bg-[var(--accent)] text-[var(--ink)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                🔍 {language === 'el' ? 'Ενοικιαστής' : 'Renter'}
+              </button>
+              <button
+                onClick={() => { setSelectedRole('owner'); closeMenu() }}
+                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-all ${
+                  selectedRole === 'owner'
+                    ? 'bg-[var(--accent)] text-[var(--ink)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                🏠 {language === 'el' ? 'Ιδιοκτήτης' : 'Owner'}
+              </button>
+            </div>
+          )}
           <nav className="space-y-2 flex-1">
             {menuItems.map((item, index) => {
               // More precise active state matching

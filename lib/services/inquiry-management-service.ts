@@ -62,14 +62,11 @@ export async function manageInquiryApproval({
     }
     if (contactInfo) updateData.contactInfo = JSON.stringify(contactInfo)
 
-    await prisma.inquiry.update({
-      where: { id: inquiry.id },
-      data: updateData,
-    })
+    await prisma.$transaction(async tx => {
+      await tx.inquiry.update({ where: { id: inquiry.id }, data: updateData })
 
-    if (inquiryWithDetails) {
-      try {
-        await prisma.notification.create({
+      if (inquiryWithDetails) {
+        await tx.notification.create({
           data: {
             recipientId: inquiryWithDetails.user.id,
             role: 'user',
@@ -78,21 +75,11 @@ export async function manageInquiryApproval({
             ownerKey: inquiryWithDetails.home.owner.key,
           },
         })
-      } catch (error) {
-        console.error('Failed to create notification:', error)
-      }
-
-      try {
-        await prisma.notification.updateMany({
-          where: {
-            homeKey: inquiryWithDetails.home.key,
-            type: 'inquiry',
-            recipientId: actorId,
-            deleted: false,
-          },
+        await tx.notification.updateMany({
+          where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
           data: { deleted: true },
         })
-        await prisma.notification.updateMany({
+        await tx.notification.updateMany({
           where: {
             homeKey: inquiryWithDetails.home.key,
             type: 'inquiry',
@@ -101,31 +88,21 @@ export async function manageInquiryApproval({
           },
           data: { deleted: true },
         })
-      } catch (error) {
-        console.error('Failed to clear inquiry notifications:', error)
       }
-    }
+    })
 
     return { message: 'Inquiry approved', approved: true }
   }
 
-  await prisma.inquiry.update({
-    where: { id: inquiry.id },
-    data: { dismissed: true, approved: false },
-  })
+  await prisma.$transaction(async tx => {
+    await tx.inquiry.update({ where: { id: inquiry.id }, data: { dismissed: true, approved: false } })
 
-  if (inquiryWithDetails) {
-    try {
-      await prisma.notification.updateMany({
-        where: {
-          homeKey: inquiryWithDetails.home.key,
-          type: 'inquiry',
-          recipientId: actorId,
-          deleted: false,
-        },
+    if (inquiryWithDetails) {
+      await tx.notification.updateMany({
+        where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
         data: { deleted: true },
       })
-      await prisma.notification.create({
+      await tx.notification.create({
         data: {
           recipientId: inquiryWithDetails.user.id,
           role: 'user',
@@ -134,10 +111,8 @@ export async function manageInquiryApproval({
           ownerKey: inquiryWithDetails.home.owner.key,
         },
       })
-    } catch (error) {
-      console.error('Failed to process dismiss notifications:', error)
     }
-  }
+  })
 
   return { message: 'Inquiry dismissed' }
 }
@@ -168,20 +143,18 @@ export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: numb
   })
   if (!scheduledBooking) throw new InquiryManagementError('Can only reject after a scheduled meeting', 400)
 
-  await prisma.inquiry.update({
-    where: { id: inquiry.id },
-    data: { dismissed: true },
-  })
-
-  await prisma.notification.create({
-    data: {
-      recipientId: inquiry.user.id,
-      role: 'user',
-      type: 'rejected',
-      homeKey: inquiry.home.key,
-      userId: inquiry.userId,
-      ownerKey: inquiry.home.owner.key,
-      inquiryId: inquiry.id,
-    },
+  await prisma.$transaction(async tx => {
+    await tx.inquiry.update({ where: { id: inquiry.id }, data: { dismissed: true } })
+    await tx.notification.create({
+      data: {
+        recipientId: inquiry.user.id,
+        role: 'user',
+        type: 'rejected',
+        homeKey: inquiry.home.key,
+        userId: inquiry.userId,
+        ownerKey: inquiry.home.owner.key,
+        inquiryId: inquiry.id,
+      },
+    })
   })
 }

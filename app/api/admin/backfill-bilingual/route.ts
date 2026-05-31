@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
+import * as Sentry from '@sentry/nextjs'
 
 // POST /api/admin/backfill-bilingual
 // Backfills titleGreek, streetGreek, descriptionGreek for existing homes that are missing them.
@@ -9,6 +10,10 @@ import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
 export async function POST(request: NextRequest) {
   const auth = request.headers.get('authorization')
   if (!process.env.ADMIN_SECRET || auth !== `Bearer ${process.env.ADMIN_SECRET}`) {
+    Sentry.captureMessage('Admin auth failed: backfill-bilingual', {
+      level: 'warning',
+      extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
+    })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

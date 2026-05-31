@@ -50,6 +50,8 @@ function AIChatPanel(
     remaining: (n: number) => isEl ? `${n} ερωτήσεις ακόμα` : `${n} prompts left`,
     refineBtn: isEl ? 'Δεν σας αρέσουν τα αποτελέσματα; Συνεχίστε τη συνομιλία' : "Not happy with the results? Continue refining",
     hardStopMsg: isEl ? 'Έχετε φτάσει το όριο συνομιλίας. Δείτε τα παρακάτω αποτελέσματα.' : 'Conversation limit reached. See the results below.',
+    switchToManual: isEl ? 'Δοκιμάστε χειροκίνητα φίλτρα' : 'Try manual filters',
+    approachingLimit: (n: number) => isEl ? `Απομένουν μόνο ${n} ερωτήσεις — ή μεταβείτε σε χειροκίνητη αναζήτηση.` : `Only ${n} prompts left — or switch to manual filters.`,
     searching: isEl ? 'Αναζήτηση...' : 'Searching...',
     foundPrefix: isEl ? 'Βρήκα' : 'Found',
     foundSuffix: isEl ? 'ακίνητα για εσάς ↓' : 'properties for you ↓',
@@ -267,7 +269,22 @@ function AIChatPanel(
       {/* Input / paused / hard-stop footer */}
       <div className="px-6 pb-6 pt-3">
         {hardStop ? (
-          <p className="text-center text-sm text-[var(--text-muted)] py-2">{t.hardStopMsg}</p>
+          <div className="flex flex-col gap-2 py-2 text-center">
+            <p className="text-sm text-[var(--text-muted)]">{t.hardStopMsg}</p>
+            <button
+              onClick={onBack}
+              className="mx-auto rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all"
+            >
+              ⚙️ {t.switchToManual}
+            </button>
+          </div>
+        ) : remaining <= 2 && promptCount > 0 ? (
+          <div className="mb-2 rounded-xl border border-[var(--status-warning)] bg-[var(--status-warning-bg)] px-4 py-2 text-xs text-[var(--status-warning)]">
+            {t.approachingLimit(remaining)}{' '}
+            <button onClick={onBack} className="underline font-semibold">
+              {t.switchToManual}
+            </button>
+          </div>
         ) : paused ? (
           <button
             onClick={handleResume}
