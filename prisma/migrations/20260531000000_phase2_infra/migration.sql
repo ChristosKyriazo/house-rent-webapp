@@ -14,7 +14,7 @@ WHERE "photoTags" IS NOT NULL
   AND "photoTags" ~ '^\[';
 
 -- GIN index for fast tag containment queries (WHERE "photoTagsArray" @> ARRAY['balcony'])
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "homes_photo_tags_array_gin_idx"
+CREATE INDEX IF NOT EXISTS "homes_photo_tags_array_gin_idx"
   ON "homes" USING GIN("photoTagsArray");
 
 -- Track which home a user clicked after an AI search result
