@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!checkTranslationLimit(user.id)) {
+    if (!(await checkTranslationLimit(user.id))) {
       return NextResponse.json({ error: 'Too many requests. Please wait before translating again.' }, { status: 429 })
     }
 

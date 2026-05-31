@@ -158,25 +158,12 @@ export async function POST(request: NextRequest) {
     if (preExtractedFilters) {
       extractedFiltersResult = { ...preExtractedFilters, confidence: preExtractedFilters.confidence ?? 0.9 }
     } else {
-      // Check if OpenAI is available
-      if (!openai) {
-        errorMessage = 'OpenAI package not installed'
-        return NextResponse.json(
-          { error: 'OpenAI package not installed. Please run: npm install openai' },
-          { status: 500 }
-        )
+      // When OpenAI is unavailable fall back to unfiltered results (recency-sorted) rather than hard error
+      if (!openai || !process.env.OPENAI_API_KEY) {
+        extractedFiltersResult = { confidence: 0 }
+      } else {
+        extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
       }
-
-      // Check if OpenAI API key is configured
-      if (!process.env.OPENAI_API_KEY) {
-        errorMessage = 'OpenAI API key not configured'
-        return NextResponse.json(
-          { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
-          { status: 500 }
-        )
-      }
-
-      extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
     }
     
     // Extract the filters (reasoning is extracted but not returned to client)
@@ -238,6 +225,22 @@ export async function POST(request: NextRequest) {
       softFilters.parkingSoftPreference = (extractedFilters as any).parkingSoftPreference
     }
     
+    // When confidence is low, widen distance categories so ambiguous queries don't over-filter
+    const extractionConfidence = (extractedFiltersResult as any).confidence ?? 0.9
+    if (extractionConfidence < 0.7) {
+      const widen = (cat: string | null | undefined) => {
+        if (cat === 'Essential') return 'Strong'
+        if (cat === 'Strong') return 'Not important'
+        return cat
+      }
+      extractedFilters.Metro = widen(extractedFilters.Metro)
+      extractedFilters.Bus = widen(extractedFilters.Bus)
+      extractedFilters.University = widen(extractedFilters.University)
+      extractedFilters.School = widen(extractedFilters.School)
+      extractedFilters.Hospital = widen(extractedFilters.Hospital)
+      extractedFilters.Park = widen(extractedFilters.Park)
+    }
+
     // Extract individual distance categories
     metroCategory = extractedFilters.Metro !== undefined && extractedFilters.Metro !== null ? extractedFilters.Metro : null
     busCategory = extractedFilters.Bus !== undefined && extractedFilters.Bus !== null ? extractedFilters.Bus : null
@@ -1149,7 +1152,11 @@ export async function POST(request: NextRequest) {
       // Skip disqualified homes to keep their score locked at 0
       homes.forEach(home => {
         if (disqualifierMap.has(home.id)) return
-        const photoBonus = calculatePhotoBonus(userQuery, (home as any).photoTags)
+        // photoTagsArray is the canonical column; JSON-stringify it for calculatePhotoBonus compatibility
+        const tagsRaw = Array.isArray((home as any).photoTagsArray) && (home as any).photoTagsArray.length > 0
+          ? JSON.stringify((home as any).photoTagsArray)
+          : null
+        const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
         if (photoBonus > 0) {
           const cur = matchMap.get(home.id) || 0
           matchMap.set(home.id, Math.min(100, cur + photoBonus))

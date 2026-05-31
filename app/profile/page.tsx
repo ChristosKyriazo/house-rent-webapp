@@ -338,8 +338,13 @@ function ProfilePageInner() {
           <div className="space-y-4 mb-6">
             <div className="pb-4 border-b border-[var(--border-subtle)]">
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'userName')}</label>
-              <p className={`text-lg ${user.name ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
+              <p className={`flex items-center gap-2 text-lg ${user.name ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
                 {user.name || getTranslation(language, 'notSet')}
+                {(user as any).verified && (
+                  <span title={language === 'el' ? 'Επαληθευμένος ιδιοκτήτης' : 'Verified owner'} className="inline-flex items-center gap-1 rounded-full bg-[var(--status-info-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--status-info)]">
+                    ✓ {language === 'el' ? 'Επαληθ.' : 'Verified'}
+                  </span>
+                )}
               </p>
             </div>
             {/* Don't show age/date of birth for brokers */}

@@ -223,6 +223,32 @@ export function calculateDisqualifiers(userQuery: string, homeDescription: strin
       ],
       reason: 'No students allowed',
     },
+    {
+      // Short-term / flexible lease queries vs long minimum-term requirements
+      queryPatterns: [
+        /\bshort[\s-]term\b/, /\b1[\s-]month\b/, /\bmonth[\s-]to[\s-]month\b/,
+        /\bflexible\s+(lease|term|contract)\b/, /βραχυχρόνι/, /\bμήνα[\s-]+μήνα\b/,
+      ],
+      descPatterns: [
+        /minimum\s+(lease|contract|rental)?\s*(of\s+)?(6|7|8|9|10|11|12|18|24)\s*months?/,
+        /\b(6|7|8|9|10|11|12|18|24)[\s-]month\s+minimum/,
+        /long[\s-]term\s+only/,
+        /ελάχιστη\s+διάρκεια\s+(μίσθωσης?\s+)?(6|7|8|9|10|11|12)\s*μήν/,
+      ],
+      reason: 'Minimum lease term required',
+    },
+    {
+      // Single-person / solo queries vs couples/families only listings
+      queryPatterns: [
+        /\bsingle\s+(person|tenant|occupant)\b/, /\bjust\s+(me|myself)\b/,
+        /\bone\s+person\b/, /\bsolo\b/, /\bμόνο[ς]?\s+μου\b/,
+      ],
+      descPatterns: [
+        /couples?\s+only/, /families\s+only/, /family\s+preferred/,
+        /suitable\s+for\s+(couples?|families)/, /μόνο\s+ζευγάρι/, /μόνο\s+οικογένει/,
+      ],
+      reason: 'Couples or families preferred',
+    },
   ]
   /* eslint-enable security/detect-unsafe-regex */
 

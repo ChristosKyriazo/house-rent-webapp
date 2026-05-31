@@ -686,7 +686,7 @@ export async function POST(request: NextRequest) {
         yearRenovated: resolveYear(yearRenovated),
         availableFrom: availableFromDate,
               photos: (photos as string | null | undefined) || null,
-              photoTags: photoTagsJson,
+              photoTagsArray: photoTagsList,
               // Distance values from Google Maps API
               closestMetro: distances.closestMetro,
               closestBus: distances.closestBus,

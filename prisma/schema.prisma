@@ -18,6 +18,7 @@ model User {
   title           String?
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
+  verified        Boolean   @default(false)  // verified owner/broker badge
   calComUsername  String?   // Cal.com username (optional, for direct link)
   calComAccessToken String? // Cal.com OAuth access token
   calComRefreshToken String? // Cal.com OAuth refresh token
@@ -73,8 +74,7 @@ model Home {
   parking           Boolean? // Whether parking is available (yes/no)
   energyClass       String?  // Energy class: "A+", "A", "B", "C", "D", "E", "F", "G"
   embedding         Json?    // text-embedding-3-small vector (1536 floats) for semantic search
-  photoTags         String?  // Legacy JSON string of visual feature tags (kept for compat)
-  photoTagsArray    String[] @default([])  // Native array with GIN index for fast tag queries
+  photoTagsArray    String[] @default([])  // Visual feature tags (GIN indexed)
   ownerId           Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

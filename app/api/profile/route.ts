@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
           dateOfBirth: true,
           occupation: true,
           role: true,
+          verified: true,
           createdAt: true,
         },
       })

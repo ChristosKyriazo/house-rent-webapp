@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
 import * as Sentry from '@sentry/nextjs'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 // POST /api/admin/backfill-bilingual
 // Backfills titleGreek, streetGreek, descriptionGreek for existing homes that are missing them.
@@ -15,6 +16,11 @@ export async function POST(request: NextRequest) {
       extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
     })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Rate limit: max 10 calls per minute globally to prevent abuse if secret leaks
+  if (!(await checkRateLimit('admin:backfill-bilingual', 10, 60_000))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null

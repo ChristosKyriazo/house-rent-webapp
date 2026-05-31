@@ -238,7 +238,7 @@ export async function processBulkUploadJob(jobId: string) {
             pricePerMonth, bedrooms, bathrooms, floor,
             heatingCategory, heatingAgent, parking, sizeSqMeters,
             yearBuilt, yearRenovated, availableFrom,
-            photos: photosJson, photoTags: photoTagsJson, photoTagsArray: photoTagsList, energyClass,
+            photos: photosJson, photoTagsArray: photoTagsList, energyClass,
             closestMetro: distances.closestMetro,
             closestBus: distances.closestBus,
             closestSchool: distances.closestSchool,

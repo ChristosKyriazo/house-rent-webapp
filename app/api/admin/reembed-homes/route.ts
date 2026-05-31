@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
 import * as Sentry from '@sentry/nextjs'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 // POST /api/admin/reembed-homes
 // Re-generates embeddings for all homes using the improved buildHomeText().
@@ -15,6 +16,10 @@ export async function POST(request: NextRequest) {
       extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
     })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!(await checkRateLimit('admin:reembed-homes', 10, 60_000))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null

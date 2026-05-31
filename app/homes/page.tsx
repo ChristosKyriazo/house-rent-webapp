@@ -98,6 +98,7 @@ function HomesPageInner() {
   const [showOrderDropdown, setShowOrderDropdown] = useState(false)
   const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
+  const [compareKeys, setCompareKeys] = useState<string[]>([])
   const isInitialized = useRef(false)
   const homesRef = useRef(homes)
   
@@ -492,6 +493,14 @@ function HomesPageInner() {
       const data = await response.json()
       const homesResults = data.homes || []
       setHomes(homesResults)
+      // Record to search history (fire-and-forget, non-blocking)
+      if (aiQuery) {
+        fetch('/api/homes/search-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: aiQuery, type: searchType }),
+        }).catch(() => { /* ignore */ })
+      }
       setIsAISearchActive(true) // Mark AI search as active
       setShowFilters(false) // Hide filters section
       
@@ -572,6 +581,7 @@ function HomesPageInner() {
   }
 
   return (
+    <>
     <div className="min-h-screen py-12 px-4">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 shadow-inner motion-safe:animate-fade-in-slow">
@@ -1218,9 +1228,28 @@ function HomesPageInner() {
                   }`}
                   title={isDismissed ? (language === 'el' ? 'Απέρριψες αυτό το ακίνητο' : 'You dismissed this property') : undefined}
                 >
-                  {/* Save button - Top Left */}
-                  <div className="absolute left-4 top-4 z-20">
+                  {/* Save + Compare buttons - Top Left */}
+                  <div className="absolute left-4 top-4 z-20 flex gap-1">
                     <SaveButton homeKey={home.key} size="sm" />
+                    <button
+                      onClick={e => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setCompareKeys(prev =>
+                          prev.includes(home.key)
+                            ? prev.filter(k => k !== home.key)
+                            : prev.length < 3 ? [...prev, home.key] : prev
+                        )
+                      }}
+                      title={language === 'el' ? 'Σύγκριση' : 'Compare'}
+                      className={`rounded-full p-1.5 text-xs transition-all hover:scale-110 ${
+                        compareKeys.includes(home.key)
+                          ? 'bg-[var(--accent)] text-[var(--ink)]'
+                          : 'bg-[var(--ink-soft)] text-[var(--text-muted)] hover:text-[var(--accent)]'
+                      }`}
+                    >
+                      ⚖
+                    </button>
                   </div>
 
                   {/* AI Match Percentage Badge - Top Right */}
@@ -1479,6 +1508,29 @@ function HomesPageInner() {
         ) : null}
       </div>
     </div>
+
+    {/* Compare bar — appears when 2+ homes are selected */}
+
+    {compareKeys.length >= 2 && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[var(--z-fixed)] flex items-center gap-3 rounded-2xl border border-[var(--accent)]/40 bg-[var(--ink-soft)] px-5 py-3 shadow-2xl backdrop-blur-xl">
+        <span className="text-sm font-semibold text-[var(--text)]">
+          ⚖ {compareKeys.length} {language === 'el' ? 'επιλεγμένα' : 'selected'}
+        </span>
+        <button
+          onClick={() => router.push(`/homes/compare?keys=${compareKeys.join(',')}`)}
+          className="btn-primary rounded-xl px-4 py-2 text-sm"
+        >
+          {language === 'el' ? 'Σύγκριση' : 'Compare'}
+        </button>
+        <button
+          onClick={() => setCompareKeys([])}
+          className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+        >
+          {language === 'el' ? 'Ακύρωση' : 'Clear'}
+        </button>
+      </div>
+    )}
+    </>
   )
 }
 
