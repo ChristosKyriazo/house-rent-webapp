@@ -44,6 +44,9 @@ export default function NewHomePage() {
   const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
   const [addingArea, setAddingArea] = useState(false)
   const [showAddAreaOption, setShowAddAreaOption] = useState(false)
+  const [newAreaMode, setNewAreaMode] = useState(false)
+  const [newAreaNameEl, setNewAreaNameEl] = useState('')
+  const [newAreaNameEn, setNewAreaNameEn] = useState('')
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
   const [bulkUploadLoading, setBulkUploadLoading] = useState(false)
   const [bulkUploadError, setBulkUploadError] = useState('')
@@ -209,14 +212,32 @@ export default function NewHomePage() {
     }
   }
 
-  const handleAddArea = async (name: string) => {
+  const openNewAreaForm = () => {
+    const typed = areaSearchQuery.trim()
+    if (isGreekInput(typed)) {
+      setNewAreaNameEl(typed)
+      setNewAreaNameEn('')
+    } else {
+      setNewAreaNameEn(typed)
+      setNewAreaNameEl('')
+    }
+    setShowAreaDropdown(false)
+    setShowAddAreaOption(false)
+    setNewAreaMode(true)
+  }
+
+  const handleAddArea = async () => {
+    const nameEl = newAreaNameEl.trim()
+    const nameEn = newAreaNameEn.trim()
+    if (!nameEl && !nameEn) return
     setAddingArea(true)
     try {
       const res = await fetch('/api/areas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(),
+          name: nameEn || undefined,
+          nameGreek: nameEl || undefined,
           city: formData.city || undefined,
           country: formData.country || undefined,
         }),
@@ -225,9 +246,10 @@ export default function NewHomePage() {
         const { area } = await res.json()
         setAllAreas(prev => [...prev, { id: area.id, name: area.name, nameGreek: area.nameGreek }])
         setFormData(prev => ({ ...prev, area: area.name }))
-        setAreaSearchQuery(name.trim())
-        setShowAreaDropdown(false)
-        setShowAddAreaOption(false)
+        setAreaSearchQuery(nameEl || nameEn)
+        setNewAreaMode(false)
+        setNewAreaNameEl('')
+        setNewAreaNameEn('')
         setAreaSelectedFromDropdown(true)
       }
     } catch { /* ignore */ }
@@ -781,24 +803,75 @@ export default function NewHomePage() {
                     {showAddAreaOption && (
                       <button
                         type="button"
-                        disabled={addingArea}
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          handleAddArea(areaSearchQuery)
+                          openNewAreaForm()
                         }}
-                        className="w-full px-4 py-3 text-left text-[var(--accent)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center gap-2 disabled:opacity-50"
+                        className="w-full px-4 py-3 text-left text-[var(--accent)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center gap-2"
                       >
                         <span className="text-lg leading-none">+</span>
                         <span className="font-medium">
-                          {addingArea
-                            ? (language === 'el' ? 'Προσθήκη...' : 'Adding...')
-                            : (language === 'el'
-                                ? `Προσθήκη "${areaSearchQuery}" ως νέα περιοχή`
-                                : `Add "${areaSearchQuery}" as a new area`)}
+                          {language === 'el'
+                            ? `Προσθήκη "${areaSearchQuery}" ως νέα περιοχή`
+                            : `Add "${areaSearchQuery}" as a new area`}
                         </span>
                       </button>
                     )}
+                  </div>
+                )}
+
+                {/* Two-column new-area form */}
+                {newAreaMode && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-default)] rounded-2xl shadow-xl p-4 space-y-3">
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {language === 'el' ? 'Καταχώρηση νέας περιοχής' : 'Register new area'}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">
+                          {language === 'el' ? 'Ελληνικό όνομα' : 'Greek name'}
+                        </label>
+                        <input
+                          type="text"
+                          value={newAreaNameEl}
+                          onChange={e => setNewAreaNameEl(e.target.value)}
+                          placeholder="π.χ. Νέα Σμύρνη"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">
+                          {language === 'el' ? 'Αγγλικό όνομα' : 'English name'}
+                        </label>
+                        <input
+                          type="text"
+                          value={newAreaNameEn}
+                          onChange={e => setNewAreaNameEn(e.target.value)}
+                          placeholder="e.g. Nea Smyrni"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={addingArea || (!newAreaNameEl.trim() && !newAreaNameEn.trim())}
+                        onClick={handleAddArea}
+                        className="btn-primary px-4 py-2 text-sm disabled:opacity-40"
+                      >
+                        {addingArea
+                          ? (language === 'el' ? 'Προσθήκη...' : 'Adding...')
+                          : (language === 'el' ? 'Καταχώρηση' : 'Register')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setNewAreaMode(false); setNewAreaNameEl(''); setNewAreaNameEn('') }}
+                        className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors border border-[var(--border-subtle)] rounded-xl"
+                      >
+                        {language === 'el' ? 'Ακύρωση' : 'Cancel'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

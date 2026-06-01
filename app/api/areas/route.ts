@@ -48,19 +48,29 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const name = typeof body.name === 'string' ? body.name.trim() : ''
-    if (!name) {
+    // Accept separate English (name) and Greek (nameGreek) inputs so each is stored
+    // in its correct column. At least one must be provided.
+    const nameEn = typeof body.name === 'string' ? body.name.trim() || null : null
+    const nameEl = typeof body.nameGreek === 'string' ? body.nameGreek.trim() || null : null
+    if (!nameEn && !nameEl) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
+    // name column is NOT NULL — use English if available, fall back to Greek
+    const canonicalName = nameEn || nameEl!
+
     // Return existing area instead of duplicating
     const existing = await prisma.area.findFirst({
-      where: { OR: [{ name }, { nameGreek: name }] },
+      where: {
+        OR: [
+          ...(nameEn ? [{ name: nameEn }] : []),
+          ...(nameEl ? [{ nameGreek: nameEl }, { name: nameEl }] : []),
+        ],
+      },
       select: { id: true, key: true, name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
     })
     if (existing) return NextResponse.json({ area: existing })
 
-    const isGreek = /[Ͱ-Ͽἀ-῿]/.test(name)
     const city = typeof body.city === 'string' ? body.city.trim() || null : null
     const country = typeof body.country === 'string' ? body.country.trim() || null : null
 
@@ -73,8 +83,8 @@ export async function POST(request: NextRequest) {
 
     const area = await prisma.area.create({
       data: {
-        name,
-        nameGreek: isGreek ? name : null,
+        name: canonicalName,
+        nameGreek: nameEl,
         city: cityRef?.city || city,
         cityGreek: cityRef?.cityGreek || null,
         country: countryRef?.country || country,

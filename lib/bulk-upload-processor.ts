@@ -62,6 +62,8 @@ export async function processBulkUploadJob(jobId: string) {
           ca.city ? prisma.area.findFirst({ where: { OR: [{ city: ca.city }, { cityGreek: ca.city }] }, select: { city: true, cityGreek: true } }) : null,
           ca.country ? prisma.area.findFirst({ where: { OR: [{ country: ca.country }, { countryGreek: ca.country }] }, select: { country: true, countryGreek: true } }) : null,
         ])
+        // name is NOT NULL — always filled. Greek areas go in nameGreek too.
+        // English areas leave nameGreek null (no auto-detection ambiguity).
         await prisma.area.create({
           data: {
             name: ca.area,
