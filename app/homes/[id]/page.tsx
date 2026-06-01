@@ -1097,15 +1097,15 @@ export default function HomeDetailPage() {
             {/* Finalize Button - Only show for owners/brokers when inquiry is approved */}
             {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && isOwner && isOwnerOrBroker && !pendingFinalization && (
               <div className="mt-8 pt-8 border-t border-[var(--border-subtle)]">
-                <div className="mb-4 p-3 bg-green-600/20 border border-green-500/50 rounded-xl text-center">
-                  <p className="text-sm font-medium text-green-400">
+                <div className="mb-4 p-3 bg-[var(--status-success-bg)] border border-[var(--status-success)] rounded-xl text-center">
+                  <p className="text-sm font-medium text-[var(--status-success)]">
                     ✅ {getTranslation(language, 'approved')}
                   </p>
                 </div>
                 {finalizeRequestSent ? (
                   <button
                     disabled
-                    className="w-full px-6 py-4 bg-green-600/50 border border-green-500/50 text-green-300 rounded-xl font-semibold text-lg transition-all cursor-not-allowed"
+                    className="w-full px-6 py-4 bg-[var(--status-success-bg)] border border-[var(--status-success)] text-[var(--status-success)] rounded-xl font-semibold text-lg transition-all cursor-not-allowed"
                   >
                     {getTranslation(language, 'awaitingFinalizeApproval')}
                   </button>
@@ -1140,7 +1140,7 @@ export default function HomeDetailPage() {
                   <button
                     onClick={handleRejectFinalization}
                     disabled={dismissingFinalization}
-                    className="flex-1 px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                    className="flex-1 px-6 py-4 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
                   >
                     {dismissingFinalization ? getTranslation(language, 'loading') : getTranslation(language, 'reject')}
                   </button>
@@ -1158,7 +1158,7 @@ export default function HomeDetailPage() {
                     disabled={updatingInquiry}
                     className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all ${
                       inquiryStatus === 'inquired'
-                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        ? 'bg-[var(--status-error)] hover:opacity-90 text-white'
                         : 'bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)]'
                     } disabled:opacity-50`}
                   >

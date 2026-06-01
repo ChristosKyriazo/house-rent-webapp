@@ -332,7 +332,7 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
                 closeMenu()
                 handleLogout()
               }}
-              className="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+              className="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 bg-[var(--status-error-bg)] text-[var(--status-error)] hover:bg-[var(--status-error-bg)] border border-[var(--status-error)]"
             >
               <span className="text-2xl">🚪</span>
               <span className="text-lg font-semibold">{getTranslation(language, 'logout')}</span>
@@ -341,18 +341,6 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
         </div>
       </div>
 
-      <style jsx global>{`
-        @keyframes slideInLeft {
-          from {
-            opacity: 0;
-            transform: translateX(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-      `}</style>
     </>
   )
 }

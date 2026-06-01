@@ -439,9 +439,10 @@ export const translations = {
     placeholderCountry: 'Ελλάδα',
     placeholderSize: 'π.χ., 85',
     placeholderBedrooms: 'π.χ., 3',
+    placeholderFloor: 'π.χ., 2',
     placeholderYearBuilt: 'π.χ., 2010',
     placeholderYearRenovated: 'π.χ., 2020',
-    
+
     // Areas (common Greek areas)
     'Nea Smirni': 'Νέα Σμύρνη',
     'Kallithea': 'Καλλιθέα',
@@ -912,9 +913,10 @@ export const translations = {
     placeholderCountry: 'Greece',
     placeholderSize: 'e.g., 85',
     placeholderBedrooms: 'e.g., 3',
+    placeholderFloor: 'e.g., 2',
     placeholderYearBuilt: 'e.g., 2010',
     placeholderYearRenovated: 'e.g., 2020',
-    
+
     // Areas (keep same for English)
     'Nea Smirni': 'Nea Smirni',
     'Kallithea': 'Kallithea',

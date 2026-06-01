@@ -660,8 +660,9 @@ function HomesPageInner() {
               {/* Row 1: City, Country */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="relative">
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
+                  <label htmlFor="filter-city" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
+                  id="filter-city"
                   type="text"
                   value={citySearchQuery || (manualFilters.city ? (language === 'el' ? (areas.find(a => a.city === manualFilters.city)?.cityGreek || manualFilters.city) : manualFilters.city) : '')}
                   onChange={(e) => {
@@ -687,17 +688,17 @@ function HomesPageInner() {
                   onBlur={() => {
                     setTimeout(() => setShowCityDropdown(false), 200)
                   }}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'anyCity')}
                 />
                 {showCityDropdown && citySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {citySuggestions.map((city, index) => (
                       <button
                         key={index}
                         type="button"
                         onClick={() => handleCitySelect(city)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
                         <div className="font-medium">{isGreekInput(citySearchQuery) && city.cityGreek ? city.cityGreek : city.city}</div>
                       </button>
@@ -706,8 +707,9 @@ function HomesPageInner() {
                 )}
               </div>
               <div className="relative">
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
+                  <label htmlFor="filter-country" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
+                  id="filter-country"
                   type="text"
                   value={countrySearchQuery || (manualFilters.country ? (language === 'el' ? (areas.find(a => a.country === manualFilters.country)?.countryGreek || manualFilters.country) : manualFilters.country) : '')}
                   onChange={(e) => {
@@ -733,17 +735,17 @@ function HomesPageInner() {
                   onBlur={() => {
                     setTimeout(() => setShowCountryDropdown(false), 200)
                   }}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'anyCountry')}
                 />
                 {showCountryDropdown && countrySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {countrySuggestions.map((country, index) => (
                       <button
                         key={index}
                         type="button"
                         onClick={() => handleCountrySelect(country)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
                         <div className="font-medium">{isGreekInput(countrySearchQuery) && country.countryGreek ? country.countryGreek : country.country}</div>
                       </button>
@@ -755,7 +757,7 @@ function HomesPageInner() {
 
               {/* Row 2: City Area (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')}</label>
+                <label htmlFor="filter-area" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')}</label>
                 <div className="space-y-3">
                   {/* Selected areas as chips */}
                   {selectedAreas.length > 0 && (
@@ -769,7 +771,7 @@ function HomesPageInner() {
                           <button
                             type="button"
                             onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
-                            className="text-[var(--btn-primary-fg)] hover:text-red-600 transition-colors"
+                            className="text-[var(--btn-primary-fg)] hover:text-[var(--status-error)] transition-colors"
                             aria-label={getTranslation(language, 'close')}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -783,6 +785,7 @@ function HomesPageInner() {
                   {/* Area autocomplete with multi-select */}
                   <div className="relative">
                     <input
+                      id="filter-area"
                       type="text"
                       value={areaSearchQuery}
                       onChange={(e) => {
@@ -804,17 +807,17 @@ function HomesPageInner() {
                       onBlur={() => {
                         setTimeout(() => setShowAreaDropdown(false), 200)
                       }}
-                      className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                      className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                       placeholder={getTranslation(language, 'selectCityArea')}
                     />
                     {showAreaDropdown && areaSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                      <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                         {areaSuggestions.map((area) => (
                           <button
                             key={area.id}
                             type="button"
                             onClick={() => handleAreaSelect(area)}
-                            className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                            className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                           >
                             <div className="font-medium">{isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name}</div>
                           </button>
@@ -828,24 +831,26 @@ function HomesPageInner() {
               {/* Row 3: Min Price, Max Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minPrice')}</label>
+                  <label htmlFor="filter-price-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minPrice')}</label>
                   <input
+                    id="filter-price-min"
                     type="number"
                     min="0"
                     value={manualFilters.minPrice}
                     onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxPrice')}</label>
+                  <label htmlFor="filter-price-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxPrice')}</label>
                   <input
+                    id="filter-price-max"
                     type="number"
                     min="0"
                     value={manualFilters.maxPrice}
                     onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                   />
                 </div>
@@ -854,24 +859,26 @@ function HomesPageInner() {
               {/* Row 4: Min Size, Max Size */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minSize')}</label>
+                  <label htmlFor="filter-size-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minSize')}</label>
                   <input
+                    id="filter-size-min"
                     type="number"
                     min="0"
                     value={manualFilters.minSize}
                     onChange={(e) => setManualFilters({ ...manualFilters, minSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxSize')}</label>
+                  <label htmlFor="filter-size-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxSize')}</label>
                   <input
+                    id="filter-size-max"
                     type="number"
                     min="0"
                     value={manualFilters.maxSize}
                     onChange={(e) => setManualFilters({ ...manualFilters, maxSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                   />
                 </div>
@@ -880,11 +887,12 @@ function HomesPageInner() {
               {/* Row 5: Heating Category, Heating Agent */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')}</label>
+                  <label htmlFor="filter-heating-category" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')}</label>
                   <select
+                    id="filter-heating-category"
                     value={manualFilters.heatingCategory}
                     onChange={(e) => setManualFilters({ ...manualFilters, heatingCategory: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
                   >
                     <option value="">{getTranslation(language, 'any')}</option>
                     <option value="central">{translateValue(language, 'central')}</option>
@@ -892,11 +900,12 @@ function HomesPageInner() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')}</label>
+                  <label htmlFor="filter-heating-agent" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')}</label>
                   <select
+                    id="filter-heating-agent"
                     value={manualFilters.heatingAgent}
                     onChange={(e) => setManualFilters({ ...manualFilters, heatingAgent: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
+                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
                   >
                     <option value="">{getTranslation(language, 'any')}</option>
                     <option value="oil">{translateValue(language, 'oil')}</option>
@@ -910,24 +919,26 @@ function HomesPageInner() {
               {/* Row 6: Min Bedrooms, Max Bedrooms */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minBedrooms')}</label>
+                  <label htmlFor="filter-bedrooms-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minBedrooms')}</label>
                 <input
+                  id="filter-bedrooms-min"
                   type="number"
                   min="0"
                   value={manualFilters.minBedrooms}
                   onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder="0"
                 />
               </div>
               <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
+                  <label htmlFor="filter-bedrooms-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
                 <input
+                  id="filter-bedrooms-max"
                   type="number"
                   min="0"
                   value={manualFilters.maxBedrooms}
                   onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                     placeholder={getTranslation(language, 'any')}
                 />
               </div>
@@ -935,14 +946,15 @@ function HomesPageInner() {
 
               {/* Row 7: Year Built (alone) */}
               <div>
-                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')}</label>
+                <label htmlFor="filter-year" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')}</label>
                 <input
+                  id="filter-year"
                   type="number"
                   min="1900"
                   max={new Date().getFullYear()}
                   value={manualFilters.yearBuilt}
                   onChange={(e) => setManualFilters({ ...manualFilters, yearBuilt: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
+                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'any')}
                 />
               </div>
@@ -1029,18 +1041,18 @@ function HomesPageInner() {
             <div className="relative order-dropdown-container">
               <button
                 onClick={() => setShowOrderDropdown(!showOrderDropdown)}
-                className="btn-primary px-6 py-3"
+                className="btn-secondary px-6 py-3"
               >
                 {getTranslation(language, 'order') || 'Order'}
               </button>
               {showOrderDropdown && (
-                <div className="absolute z-10 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden">
+                <div className="absolute z-50 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl overflow-hidden">
                   <button
                     onClick={() => {
                       setSortOrder('price-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceAscending') || 'Price Ascending'}</span>
                     {sortOrder === 'price-asc' && (
@@ -1052,7 +1064,7 @@ function HomesPageInner() {
                       setSortOrder('price-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceDescending') || 'Price Descending'}</span>
                     {sortOrder === 'price-desc' && (
@@ -1064,7 +1076,7 @@ function HomesPageInner() {
                       setSortOrder('size-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeAscending') || 'Size Ascending'}</span>
                     {sortOrder === 'size-asc' && (
@@ -1076,7 +1088,7 @@ function HomesPageInner() {
                       setSortOrder('size-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeDescending') || 'Size Descending'}</span>
                     {sortOrder === 'size-desc' && (
@@ -1088,7 +1100,7 @@ function HomesPageInner() {
                       setSortOrder('date-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateAscending') || 'Date of Publish Ascending'}</span>
                     {sortOrder === 'date-asc' && (
@@ -1100,7 +1112,7 @@ function HomesPageInner() {
                       setSortOrder('date-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateDescending') || 'Date of Publish Descending'}</span>
                     {sortOrder === 'date-desc' && (

@@ -6,6 +6,7 @@ import security from "eslint-plugin-security";
 import prettierConfig from "eslint-config-prettier";
 
 const eslintConfig = defineConfig([
+  globalIgnores(['.claude/**']),
   ...nextVitals,
   ...nextTs,
   {

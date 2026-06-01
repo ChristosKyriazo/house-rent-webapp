@@ -36,8 +36,8 @@ html {
   /* Semantic status colors — aligned with the amber palette */
   --status-success: #5db87a;
   --status-success-bg: rgba(93, 184, 122, 0.15);
-  --status-warning: #d4a574;
-  --status-warning-bg: rgba(212, 165, 116, 0.15);
+  --status-warning: #c8a020;
+  --status-warning-bg: rgba(200, 160, 32, 0.15);
   --status-error: #e06b6b;
   --status-error-bg: rgba(224, 107, 107, 0.15);
   --status-info: #6b9fb2;

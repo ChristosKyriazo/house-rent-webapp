@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useLanguage } from '@/app/contexts/LanguageContext'
 
 interface SaveButtonProps {
   homeKey: string
@@ -12,6 +13,7 @@ interface SaveButtonProps {
 export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md' }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved)
   const [loading, setLoading] = useState(false)
+  const { language } = useLanguage()
 
   const toggle = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -43,7 +45,8 @@ export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md
     <button
       onClick={toggle}
       disabled={loading}
-      title={saved ? 'Remove from saved' : 'Save property'}
+      title={saved ? (language === 'el' ? 'Αφαίρεση από αποθηκευμένα' : 'Remove from saved') : (language === 'el' ? 'Αποθήκευση ακινήτου' : 'Save property')}
+      aria-label={saved ? (language === 'el' ? 'Αφαίρεση από αποθηκευμένα' : 'Remove from saved') : (language === 'el' ? 'Αποθήκευση ακινήτου' : 'Save property')}
       className={`${sizeClass} rounded-full transition-all hover:scale-110 active:scale-95 ${
         saved
           ? 'text-[var(--status-error)] bg-[var(--status-error-bg)]'

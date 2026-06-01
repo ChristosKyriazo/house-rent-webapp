@@ -130,13 +130,13 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
   let bannerColor = ''
   let bannerText = ''
   if (hasInquiry) {
-    bannerColor = 'bg-[var(--status-warning-bg)] border-[var(--status-warning)]'
+    bannerColor = 'bg-[var(--status-warning-bg)] border-[var(--status-warning)] text-[var(--status-warning)]'
     bannerText = getTranslation(language, 'inquiryMadeBanner')
   } else if (isApproved) {
-    bannerColor = 'bg-[var(--status-success-bg)] border-[var(--status-success)]'
+    bannerColor = 'bg-[var(--status-success-bg)] border-[var(--status-success)] text-[var(--status-success)]'
     bannerText = getTranslation(language, 'approvedBanner')
   } else if (isDismissed) {
-    bannerColor = 'bg-[var(--status-error-bg)] border-[var(--status-error)]'
+    bannerColor = 'bg-[var(--status-error-bg)] border-[var(--status-error)] text-[var(--status-error)]'
     bannerText = getTranslation(language, 'dismissedBanner')
   }
 
@@ -157,7 +157,8 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); onCompareToggle(home.key) }}
           title={language === 'el' ? 'Σύγκριση' : 'Compare'}
-          className={`rounded-full p-1.5 text-xs transition-all hover:scale-110 ${
+          aria-label={language === 'el' ? 'Σύγκριση' : 'Compare'}
+          className={`rounded-full p-2 text-xs transition-all hover:scale-110 ${
             compareKeys.includes(home.key)
               ? 'bg-[var(--accent)] text-[var(--ink)]'
               : 'bg-[var(--ink-soft)] text-[var(--text-muted)] hover:text-[var(--accent)]'
@@ -196,7 +197,7 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
       {status && (
         <div className="absolute top-1/2 left-1/2 z-10 transform -translate-x-1/2 -translate-y-1/2 origin-center">
           <div
-            className={`relative ${bannerColor} text-white px-6 py-3 shadow-lg border-2 whitespace-nowrap`}
+            className={`relative ${bannerColor} px-6 py-3 shadow-lg border-2 whitespace-nowrap`}
             style={{
               clipPath: 'polygon(2% 0%, 98% 0%, 100% 5%, 98% 10%, 100% 15%, 98% 20%, 100% 25%, 98% 30%, 100% 35%, 98% 40%, 100% 45%, 98% 50%, 100% 55%, 98% 60%, 100% 65%, 98% 70%, 100% 75%, 98% 80%, 100% 85%, 98% 90%, 100% 95%, 98% 100%, 2% 100%, 0% 95%, 2% 90%, 0% 85%, 2% 80%, 0% 75%, 2% 70%, 0% 65%, 2% 60%, 0% 55%, 2% 50%, 0% 45%, 2% 40%, 0% 35%, 2% 30%, 0% 25%, 2% 20%, 0% 15%, 2% 10%, 0% 5%)',
             }}

@@ -315,8 +315,8 @@ export default function CalendarPage() {
                           booking.status === 'scheduled'
                             ? 'bg-blue-500/20 text-blue-400'
                             : booking.status === 'completed'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
+                            ? 'bg-[var(--status-success-bg)] text-[var(--status-success)]'
+                            : 'bg-[var(--status-error-bg)] text-[var(--status-error)]'
                         }`}>
                           {booking.status}
                         </span>
@@ -972,7 +972,7 @@ function RescheduleModal({
         )}
 
         {selectedDate && selectedTimeSlot && (
-          <div className="mt-6 bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-green-500/50">
+          <div className="mt-6 bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--status-success)]">
             <p className="text-[var(--text)] mb-2">
               <strong>{getTranslation(language, 'newBookingTime')}:</strong>
             </p>

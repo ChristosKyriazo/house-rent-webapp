@@ -1177,7 +1177,7 @@ export default function NewHomePage() {
                         .map(ua => {
                           const house = parsedHouses.find(h => h.rowIndex === ua.rowIndex)
                           const area = areaDecisions[ua.rowIndex] === 'new'
-                            ? areaCustomNames[ua.rowIndex]
+                            ? (areaCustomNames[ua.rowIndex] || ua.areaInput)
                             : (ua.suggestion ?? ua.areaInput)
                           return {
                             rowIndex: ua.rowIndex,
@@ -1370,6 +1370,9 @@ export default function NewHomePage() {
                                       type="button"
                                       disabled={!customName.trim()}
                                       onClick={() => {
+                                        if (!areaCustomNames[house.rowIndex]) {
+                                          setAreaCustomNames(prev => ({ ...prev, [house.rowIndex]: customName }))
+                                        }
                                         setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'new' }))
                                         setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))
                                       }}

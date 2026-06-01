@@ -187,7 +187,7 @@ function AIChatPanel(
           {promptCount > 0 && !hardStop && (
             <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
               remaining <= 2
-                ? 'border-orange-400/40 bg-orange-400/10 text-orange-400'
+                ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
                 : 'border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
             }`}>
               {t.remaining(remaining)}
@@ -232,7 +232,7 @@ function AIChatPanel(
               <div
                 className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   m.role === 'user'
-                    ? 'bg-[var(--accent)] text-white rounded-tr-sm'
+                    ? 'bg-[var(--accent)] text-[var(--ink)] rounded-tr-sm'
                     : 'bg-[var(--ink-soft)] text-[var(--text)] rounded-tl-sm border border-[var(--border-subtle)]'
                 }`}
               >
@@ -261,7 +261,7 @@ function AIChatPanel(
       )}
 
       {error && (
-        <div className="mx-6 mb-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm text-red-500">
+        <div className="mx-6 mb-3 rounded-xl bg-[var(--status-error-bg)] border border-[var(--status-error)] px-4 py-2 text-sm text-[var(--status-error)]">
           {error}
         </div>
       )}

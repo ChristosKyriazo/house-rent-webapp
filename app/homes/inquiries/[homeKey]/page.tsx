@@ -191,8 +191,8 @@ export default function HomeInquiriesPage() {
         ) : (
           <>
             {unapprovedInquiries.length === 0 && inquiries.length > 0 && (
-              <div className="bg-green-500/20 border border-green-500/50 rounded-2xl p-4 mb-6 text-center">
-                <p className="text-green-400 font-semibold">
+              <div className="bg-[var(--status-success-bg)] border border-[var(--status-success)] rounded-2xl p-4 mb-6 text-center">
+                <p className="text-[var(--status-success)] font-semibold">
                   {getTranslation(language, 'allInquiriesProcessed')}
                 </p>
               </div>
@@ -214,7 +214,7 @@ export default function HomeInquiriesPage() {
                     isGrayedOut
                       ? 'border-[var(--border-subtle)] opacity-50'
                       : isApproved
-                      ? 'border-green-500/50'
+                      ? 'border-[var(--status-success)]'
                       : isHighlighted
                       ? 'border-yellow-500/70 ring-4 ring-yellow-500/30'
                       : 'border-[var(--border-subtle)]'
@@ -230,7 +230,7 @@ export default function HomeInquiriesPage() {
                           {inquiry.user.name || inquiry.user.email.split('@')[0]}
                         </Link>
                         {isApproved && (
-                          <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-semibold">
+                          <span className="bg-[var(--status-success-bg)] text-[var(--status-success)] px-3 py-1 rounded-full text-sm font-semibold">
                             {getTranslation(language, 'approved')}
                           </span>
                         )}
@@ -258,7 +258,7 @@ export default function HomeInquiriesPage() {
                             <button
                               onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
                               disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-6 py-3 bg-[var(--status-success)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {processingId === inquiry.id
                                 ? getTranslation(language, 'loading')
@@ -267,7 +267,7 @@ export default function HomeInquiriesPage() {
                             <button
                               onClick={() => handleDismiss(inquiry.id)}
                               disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-6 py-3 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {processingId === inquiry.id
                                 ? getTranslation(language, 'loading')
