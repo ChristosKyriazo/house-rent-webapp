@@ -52,7 +52,9 @@ export default function NewHomePage() {
   const [excelInputKey, setExcelInputKey] = useState(0)
   const [areaValidating, setAreaValidating] = useState(false)
   const [unknownAreas, setUnknownAreas] = useState<Array<{ rowIndex: number; rowNumber: number; areaInput: string; suggestion: string | null }>>([])
-  const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'rejected'>>({})
+  const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'new' | 'rejected'>>({})
+  const [areaCustomNames, setAreaCustomNames] = useState<Record<number, string>>({})
+  const [areaEditingNew, setAreaEditingNew] = useState<Record<number, boolean>>({})
   const [homeCount, setHomeCount] = useState<number>(0)
   const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
   const [showCityDropdown, setShowCityDropdown] = useState(false)
@@ -1145,15 +1147,18 @@ export default function NewHomePage() {
                       uploadFormData.append('useAIDescription', useAIDescriptionBulk ? 'true' : 'false')
 
                       // Include areas confirmed by owner.
-                      // When a suggestion exists, use the suggestion (already in DB, no new entry needed).
-                      // When no suggestion, use the original input (will be added as a new area).
+                      // 'confirmed' → use the matched suggestion (maps to existing DB area).
+                      // 'new' → use the owner-supplied custom name (processor will create it).
                       const confirmedNewAreas = unknownAreas
-                        .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed')
+                        .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed' || areaDecisions[ua.rowIndex] === 'new')
                         .map(ua => {
                           const house = parsedHouses.find(h => h.rowIndex === ua.rowIndex)
+                          const area = areaDecisions[ua.rowIndex] === 'new'
+                            ? areaCustomNames[ua.rowIndex]
+                            : (ua.suggestion ?? ua.areaInput)
                           return {
                             rowIndex: ua.rowIndex,
-                            area: ua.suggestion ?? ua.areaInput,
+                            area,
                             city: house?.city || undefined,
                             country: house?.country || undefined,
                           }
@@ -1251,58 +1256,148 @@ export default function NewHomePage() {
                           const ua = unknownAreas.find(u => u.rowIndex === house.rowIndex)
                           if (!ua) return null
                           const decision = areaDecisions[house.rowIndex]
+                          const isEditingNew = areaEditingNew[house.rowIndex]
+                          const customName = areaCustomNames[house.rowIndex] ?? ua.areaInput
+
+                          const undoButton = (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAreaDecisions(prev => { const n = { ...prev }; delete n[house.rowIndex]; return n })
+                                setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))
+                              }}
+                              className="text-xs underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity ml-2"
+                            >
+                              {language === 'el' ? 'Αναίρεση' : 'Undo'}
+                            </button>
+                          )
+
                           if (decision === 'confirmed') {
-                            const resolvedName = ua.suggestion ?? ua.areaInput
                             return (
-                              <div className="mb-3 px-3 py-2 bg-green-50/80 border border-green-200 rounded-xl text-sm text-green-700">
-                                {ua.suggestion
-                                  ? (language === 'el'
-                                    ? `✓ Θα χρησιμοποιηθεί η περιοχή "${resolvedName}"`
-                                    : `✓ Will use area "${resolvedName}"`)
-                                  : (language === 'el'
-                                    ? `✓ Η νέα περιοχή "${resolvedName}" θα προστεθεί στη βάση δεδομένων`
-                                    : `✓ New area "${resolvedName}" will be added to the database`)}
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-success-bg)] border border-[var(--status-success)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-success)] font-medium">
+                                  {language === 'el'
+                                    ? `✓ Αντιστοιχίστηκε στην υπάρχουσα περιοχή "${ua.suggestion}"`
+                                    : `✓ Mapped to existing area "${ua.suggestion}"`}
+                                </span>
+                                {undoButton}
                               </div>
                             )
                           }
+
+                          if (decision === 'new') {
+                            return (
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-success-bg)] border border-[var(--status-success)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-success)] font-medium">
+                                  {language === 'el'
+                                    ? `✓ Νέα περιοχή "${areaCustomNames[house.rowIndex]}" θα καταχωρηθεί στη βάση`
+                                    : `✓ New area "${areaCustomNames[house.rowIndex]}" will be registered`}
+                                </span>
+                                {undoButton}
+                              </div>
+                            )
+                          }
+
                           if (decision === 'rejected') {
                             return (
-                              <div className="mb-3 px-3 py-2 bg-red-50/80 border border-red-200 rounded-xl text-sm text-red-700">
-                                {language === 'el'
-                                  ? `✗ Παρακαλώ διορθώστε την περιοχή "${ua.areaInput}" στο Excel και ανεβάστε ξανά`
-                                  : `✗ Please correct the area "${ua.areaInput}" in your Excel and re-upload`}
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-error-bg)] border border-[var(--status-error)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-error)]">
+                                  {language === 'el'
+                                    ? `✗ Διορθώστε "${ua.areaInput}" στο Excel και ανεβάστε ξανά`
+                                    : `✗ Please correct "${ua.areaInput}" in your Excel and re-upload`}
+                                </span>
+                                {undoButton}
                               </div>
                             )
                           }
+
+                          // Pending — no decision yet
                           return (
-                            <div className="mb-3 px-3 py-3 bg-yellow-50/80 border border-yellow-200 rounded-xl text-sm">
-                              <p className="text-yellow-800 font-medium mb-1">
-                                {ua.suggestion
-                                  ? (language === 'el'
-                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε. Εννοείτε "${ua.suggestion}";`
-                                    : `⚠ Area "${ua.areaInput}" not found. Did you mean "${ua.suggestion}"?`)
-                                  : (language === 'el'
-                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν υπάρχει στη βάση δεδομένων`
-                                    : `⚠ Area "${ua.areaInput}" does not exist in the database`)}
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
-                                  className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold transition-colors"
-                                >
+                            <div className="mb-3 px-4 py-3 bg-[var(--status-warning-bg)] border border-[var(--status-warning)]/30 rounded-xl text-sm space-y-3">
+                              <div>
+                                <p className="font-semibold text-[var(--text)]">
+                                  {language === 'el' ? '⚠ Περιοχή δεν αναγνωρίστηκε' : '⚠ Area not recognised'}
+                                </p>
+                                <p className="text-[var(--text-muted)] mt-0.5">
                                   {ua.suggestion
-                                    ? (language === 'el' ? `Χρήση "${ua.suggestion}"` : `Use "${ua.suggestion}"`)
-                                    : (language === 'el' ? `Προσθήκη "${ua.areaInput}"` : `Add "${ua.areaInput}"`)}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
-                                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors"
-                                >
-                                  {language === 'el' ? 'Θα το διορθώσω' : "I'll fix it"}
-                                </button>
+                                    ? (language === 'el'
+                                      ? `Πληκτρολογήσατε "${ua.areaInput}" — η πλησιέστερη αντιστοιχία είναι "${ua.suggestion}"`
+                                      : `You entered "${ua.areaInput}" — closest match is "${ua.suggestion}"`)
+                                    : (language === 'el'
+                                      ? `Η περιοχή "${ua.areaInput}" δεν βρέθηκε στη βάση δεδομένων`
+                                      : `"${ua.areaInput}" was not found in the database`)}
+                                </p>
                               </div>
+
+                              {isEditingNew || !ua.suggestion ? (
+                                // New area name input (shown when no suggestion, or user chose to register new)
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                                    {language === 'el' ? 'Όνομα νέας περιοχής' : 'New area name'}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={customName}
+                                    onChange={e => setAreaCustomNames(prev => ({ ...prev, [house.rowIndex]: e.target.value }))}
+                                    className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                                    placeholder={ua.areaInput}
+                                  />
+                                  <div className="flex gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      disabled={!customName.trim()}
+                                      onClick={() => {
+                                        setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'new' }))
+                                        setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))
+                                      }}
+                                      className="px-4 py-1.5 bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-[var(--ink)] rounded-lg text-xs font-semibold transition-opacity"
+                                    >
+                                      {language === 'el' ? 'Καταχώρηση νέας περιοχής' : 'Register new area'}
+                                    </button>
+                                    {isEditingNew && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))}
+                                        className="px-4 py-1.5 border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text)] rounded-lg text-xs font-semibold transition-colors"
+                                      >
+                                        {language === 'el' ? 'Ακύρωση' : 'Cancel'}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
+                                      className="px-4 py-1.5 border border-[var(--status-error)]/40 text-[var(--status-error)] hover:bg-[var(--status-error-bg)] rounded-lg text-xs font-semibold transition-colors"
+                                    >
+                                      {language === 'el' ? 'Θα το διορθώσω στο Excel' : 'Correct in Excel'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                // Suggestion exists — show primary actions
+                                <div className="flex gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
+                                    className="px-4 py-1.5 bg-[var(--status-success)] hover:opacity-90 text-white rounded-lg text-xs font-semibold transition-opacity"
+                                  >
+                                    {language === 'el' ? `Χρήση "${ua.suggestion}"` : `Use "${ua.suggestion}"`}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: true }))}
+                                    className="px-4 py-1.5 border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-lg text-xs font-semibold transition-colors"
+                                  >
+                                    {language === 'el' ? 'Καταχώρηση υπό διαφορετικό όνομα' : 'Register under a different name'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
+                                    className="px-4 py-1.5 border border-[var(--status-error)]/40 text-[var(--status-error)] hover:bg-[var(--status-error-bg)] rounded-lg text-xs font-semibold transition-colors"
+                                  >
+                                    {language === 'el' ? 'Θα το διορθώσω στο Excel' : 'Correct in Excel'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )
                         })()}
