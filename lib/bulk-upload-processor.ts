@@ -49,10 +49,23 @@ export async function processBulkUploadJob(jobId: string) {
     for (const ca of (options.confirmedNewAreas || [])) {
       if (!ca.area) continue
       rowAreaOverrides.set(ca.rowIndex, ca.area)
-      const existing = await prisma.area.findFirst({ where: { name: ca.area } })
+
+      // Check both columns so we don't duplicate an area already stored in nameGreek
+      const existing = await prisma.area.findFirst({
+        where: { OR: [{ name: ca.area }, { nameGreek: ca.area }] },
+      })
       if (!existing) {
+        const isGreek = /[Ͱ-Ͽἀ-῿]/.test(ca.area)
         await prisma.area.create({
-          data: { name: ca.area, city: ca.city || null, country: ca.country || null },
+          data: {
+            // name is NOT NULL — use the provided value regardless of language.
+            // If Greek, also store in nameGreek so the area is discoverable by
+            // both columns (admin can add the English transliteration later).
+            name: ca.area,
+            nameGreek: isGreek ? ca.area : null,
+            city: ca.city || null,
+            country: ca.country || null,
+          },
         })
       }
     }
