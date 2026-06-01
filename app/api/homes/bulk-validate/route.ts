@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
       select: { name: true, nameGreek: true },
     })
 
-    const allAreaNames = allAreas.map((a) => a.name).filter(Boolean) as string[]
+    // Build a deduplicated list of all known names (English + Greek, accent-normalized)
+    // Used both for isKnownArea checks and as the suggestion candidate pool.
+    const allAreaNames = [
+      ...allAreas.map(a => a.name).filter(Boolean) as string[],
+      ...allAreas.map(a => a.nameGreek).filter(Boolean) as string[],
+    ]
 
     function isKnownArea(input: string): boolean {
       const lower = input.trim().toLowerCase()
@@ -69,11 +74,20 @@ export async function POST(request: NextRequest) {
       if (!areaInput) continue
 
       if (!isKnownArea(areaInput)) {
+        // Normalize accents on the input so e.g. "Κεραμεικός" matches "Κεραμεικος"
+        const normalizedInput = removeGreekAccents(areaInput.toLowerCase())
+        // Find best suggestion from both English and Greek names
+        const rawSuggestion = findBestMatch(normalizedInput, allAreaNames.map(n => removeGreekAccents(n.toLowerCase())))
+        // Map back to the original (non-normalized) canonical name
+        const suggestion = rawSuggestion
+          ? (allAreaNames.find(n => removeGreekAccents(n.toLowerCase()) === rawSuggestion) ?? rawSuggestion)
+          : null
+
         unknownAreas.push({
           rowIndex: i,
           rowNumber: i + 2,
           areaInput,
-          suggestion: findBestMatch(areaInput, allAreaNames, 0.5),
+          suggestion,
         })
       }
     }

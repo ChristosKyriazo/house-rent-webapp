@@ -1,79 +1,65 @@
-/**
- * Calculate Levenshtein distance between two strings
- * Used to find the most similar area name
- */
-function levenshteinDistance(str1: string, str2: string): number {
-  const m = str1.length
-  const n = str2.length
-  const dp: number[][] = []
+import { removeGreekAccents } from './utils'
 
-  for (let i = 0; i <= m; i++) {
-    dp[i] = [i]
-  }
-  for (let j = 0; j <= n; j++) {
-    dp[0][j] = j
-  }
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1]
-      } else {
-        dp[i][j] = Math.min(
-          dp[i - 1][j] + 1,     // deletion
-          dp[i][j - 1] + 1,     // insertion
-          dp[i - 1][j - 1] + 1  // substitution
-        )
-      }
+// Jaro-Winkler similarity — prefix-aware, avoids false suffix matches for place names.
+// See value-matcher.ts for the rationale.
+function jaroSim(s1: string, s2: string): number {
+  if (s1 === s2) return 1
+  const l1 = s1.length, l2 = s2.length
+  if (!l1 || !l2) return 0
+  const win = Math.max(0, Math.floor(Math.max(l1, l2) / 2) - 1)
+  const m1 = new Array(l1).fill(false)
+  const m2 = new Array(l2).fill(false)
+  let matches = 0
+  for (let i = 0; i < l1; i++) {
+    for (let j = Math.max(0, i - win); j < Math.min(i + win + 1, l2); j++) {
+      if (m2[j] || s1[i] !== s2[j]) continue
+      m1[i] = m2[j] = true; matches++; break
     }
   }
+  if (!matches) return 0
+  let t = 0, k = 0
+  for (let i = 0; i < l1; i++) {
+    if (!m1[i]) continue
+    while (!m2[k]) k++
+    if (s1[i] !== s2[k]) t++
+    k++
+  }
+  return (matches / l1 + matches / l2 + (matches - t / 2) / matches) / 3
+}
 
-  return dp[m][n]
+function jaroWinklerSim(s1: string, s2: string): number {
+  const jaro = jaroSim(s1, s2)
+  let p = 0
+  for (let i = 0; i < Math.min(4, Math.min(s1.length, s2.length)); i++) {
+    if (s1[i] === s2[i]) p++; else break
+  }
+  return jaro + p * 0.1 * (1 - jaro)
 }
 
 /**
- * Calculate similarity score between two strings (0-1, where 1 is identical)
- */
-function similarityScore(str1: string, str2: string): number {
-  const maxLength = Math.max(str1.length, str2.length)
-  if (maxLength === 0) return 1
-  const distance = levenshteinDistance(str1.toLowerCase(), str2.toLowerCase())
-  return 1 - distance / maxLength
-}
-
-/**
- * Find the most similar area from a list of areas
+ * Find the most similar area from a list using Jaro-Winkler.
+ * Checks English and Greek names with accent normalization.
+ * Threshold 0.82 prevents suffix-only matches (e.g. "keramikos" → "thermaikos").
  */
 export function findMostSimilarArea(
   query: string,
   areas: Array<{ id: number; name: string; nameGreek: string | null }>
 ): { id: number; name: string; nameGreek: string | null } | null {
-  if (!query || query.trim().length === 0 || areas.length === 0) {
-    return null
-  }
+  if (!query || query.trim().length === 0 || areas.length === 0) return null
 
-  const queryLower = query.toLowerCase().trim()
-  let bestMatch: { area: typeof areas[0]; score: number } | null = null
+  const q = removeGreekAccents(query.toLowerCase().trim())
+  let best: { area: (typeof areas)[0]; score: number } | null = null
 
   for (const area of areas) {
-    // Check similarity with English name
-    const scoreEn = similarityScore(queryLower, area.name.toLowerCase())
-    
-    // Check similarity with Greek name if available
-    let scoreEl = 0
-    if (area.nameGreek) {
-      scoreEl = similarityScore(queryLower, area.nameGreek.toLowerCase())
-    }
-
-    const maxScore = Math.max(scoreEn, scoreEl)
-    
-    if (!bestMatch || maxScore > bestMatch.score) {
-      bestMatch = { area, score: maxScore }
-    }
+    const scoreEn = jaroWinklerSim(q, removeGreekAccents(area.name.toLowerCase()))
+    const scoreEl = area.nameGreek
+      ? jaroWinklerSim(q, removeGreekAccents(area.nameGreek.toLowerCase()))
+      : 0
+    const score = Math.max(scoreEn, scoreEl)
+    if (!best || score > best.score) best = { area, score }
   }
 
-  // Only return if similarity is above a threshold (e.g., 0.5)
-  return bestMatch && bestMatch.score > 0.5 ? bestMatch.area : null
+  return best && best.score >= 0.82 ? best.area : null
 }
 
 /**

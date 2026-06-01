@@ -1,88 +1,105 @@
 /**
- * Fuzzy matching utility for matching user input to existing database values
+ * Fuzzy matching utility for matching user input to existing database values.
+ * Uses Jaro-Winkler similarity which gives extra weight to matching prefixes —
+ * critical for geographic names like "Keramikos" vs "Thermaikos" where the
+ * prefix encodes the distinct identity and pure Levenshtein gives false high scores
+ * due to shared suffixes (e.g. both ending in "-aikos").
  */
 
-// Calculate Levenshtein distance between two strings
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix: number[][] = []
-  const len1 = str1.length
-  const len2 = str2.length
+function jaroSimilarity(s1: string, s2: string): number {
+  if (s1 === s2) return 1
+  const len1 = s1.length
+  const len2 = s2.length
+  if (len1 === 0 || len2 === 0) return 0
 
-  if (len1 === 0) return len2
-  if (len2 === 0) return len1
+  const matchWindow = Math.max(0, Math.floor(Math.max(len1, len2) / 2) - 1)
+  const s1Matched = new Array(len1).fill(false)
+  const s2Matched = new Array(len2).fill(false)
 
-  // Initialize matrix
-  for (let i = 0; i <= len1; i++) {
-    matrix[i] = [i]
-  }
-  for (let j = 0; j <= len2; j++) {
-    matrix[0][j] = j
-  }
-
-  // Fill matrix
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,      // deletion
-        matrix[i][j - 1] + 1,      // insertion
-        matrix[i - 1][j - 1] + cost // substitution
-      )
+  let matches = 0
+  for (let i = 0; i < len1; i++) {
+    const lo = Math.max(0, i - matchWindow)
+    const hi = Math.min(i + matchWindow + 1, len2)
+    for (let j = lo; j < hi; j++) {
+      if (s2Matched[j] || s1[i] !== s2[j]) continue
+      s1Matched[i] = true
+      s2Matched[j] = true
+      matches++
+      break
     }
   }
 
-  return matrix[len1][len2]
-}
+  if (matches === 0) return 0
 
-// Calculate similarity score (0-1, where 1 is identical)
-function similarityScore(str1: string, str2: string): number {
-  const maxLen = Math.max(str1.length, str2.length)
-  if (maxLen === 0) return 1
-  const distance = levenshteinDistance(str1, str2)
-  return 1 - distance / maxLen
+  let transpositions = 0
+  let k = 0
+  for (let i = 0; i < len1; i++) {
+    if (!s1Matched[i]) continue
+    while (!s2Matched[k]) k++
+    if (s1[i] !== s2[k]) transpositions++
+    k++
+  }
+
+  return (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3
 }
 
 /**
- * Find the best matching value from a list of candidates
- * @param input - The user input to match
+ * Jaro-Winkler similarity — like Jaro but awards a prefix bonus (max 4 chars).
+ * For geographic names this is superior to Levenshtein because the prefix
+ * encodes distinct identity while shared suffixes (e.g. "-aikos") do not.
+ */
+function jaroWinkler(s1: string, s2: string, p = 0.1): number {
+  const jaro = jaroSimilarity(s1, s2)
+  let prefix = 0
+  for (let i = 0; i < Math.min(4, Math.min(s1.length, s2.length)); i++) {
+    if (s1[i] === s2[i]) prefix++
+    else break
+  }
+  return jaro + prefix * p * (1 - jaro)
+}
+
+/**
+ * Find the best matching value from a list of candidates using Jaro-Winkler similarity.
+ * Threshold raised to 0.82 for geographic names — at 0.5 the old Levenshtein approach
+ * would suggest "Thermaikos" for "Keramikos" because they share the "-aikos" suffix.
+ * Jaro-Winkler + 0.82 threshold eliminates that false positive while still catching
+ * genuine typos like "Kerameikos" → "Keramikos" (distance of 1 char, ~0.93 JW score).
+ *
+ * @param input      - The user input to match
  * @param candidates - Array of valid values to match against
- * @param threshold - Minimum similarity score (0-1) to consider a match. Default 0.6
- * @returns The best matching value or null if no match above threshold
+ * @param threshold  - Minimum Jaro-Winkler score (default 0.82)
  */
 export function findBestMatch(
   input: string | null | undefined,
   candidates: string[],
-  threshold: number = 0.6
+  threshold = 0.82
 ): string | null {
   if (!input || input.trim() === '') return null
-  
+
   const normalizedInput = input.trim().toLowerCase()
-  
-  // First, try exact match (case-insensitive)
+
+  // 1. Exact match (case-insensitive)
   const exactMatch = candidates.find(c => c.toLowerCase() === normalizedInput)
   if (exactMatch) return exactMatch
-  
-  // Try partial match (contains)
-  const partialMatch = candidates.find(c => 
+
+  // 2. Starts-with match — "keram" → "Kerameikos" ranks above suffix matches
+  const prefixMatch = candidates.find(c => c.toLowerCase().startsWith(normalizedInput) || normalizedInput.startsWith(c.toLowerCase()))
+  if (prefixMatch) return prefixMatch
+
+  // 3. Contains match (full substring)
+  const containsMatch = candidates.find(c =>
     normalizedInput.includes(c.toLowerCase()) || c.toLowerCase().includes(normalizedInput)
   )
-  if (partialMatch) return partialMatch
-  
-  // Calculate similarity scores for all candidates
-  const scores = candidates.map(candidate => ({
-    value: candidate,
-    score: similarityScore(normalizedInput, candidate.toLowerCase())
-  }))
-  
-  // Sort by score (highest first)
-  scores.sort((a, b) => b.score - a.score)
-  
-  // Return the best match if it's above threshold
-  if (scores.length > 0 && scores[0].score >= threshold) {
-    return scores[0].value
+  if (containsMatch) return containsMatch
+
+  // 4. Jaro-Winkler fuzzy match (prefix-aware, resists suffix inflation)
+  let best: { value: string; score: number } | null = null
+  for (const candidate of candidates) {
+    const score = jaroWinkler(normalizedInput, candidate.toLowerCase())
+    if (!best || score > best.score) best = { value: candidate, score }
   }
-  
-  return null
+
+  return best && best.score >= threshold ? best.value : null
 }
 
 /**
