@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { findBestMatch } from '@/lib/value-matcher'
-import { removeGreekAccents } from '@/lib/utils'
+import { removeGreekAccents, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
 import * as XLSX from 'xlsx'
 
 export interface AreaIssue {
@@ -40,15 +40,8 @@ export async function POST(request: NextRequest) {
     const data = XLSX.utils.sheet_to_json(worksheet) as any[]
 
     const allAreas = await prisma.area.findMany({
-      select: { name: true, nameGreek: true },
+      select: { name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
     })
-
-    // Build a deduplicated list of all known names (English + Greek, accent-normalized)
-    // Used both for isKnownArea checks and as the suggestion candidate pool.
-    const allAreaNames = [
-      ...allAreas.map(a => a.name).filter(Boolean) as string[],
-      ...allAreas.map(a => a.nameGreek).filter(Boolean) as string[],
-    ]
 
     function isKnownArea(input: string): boolean {
       const lower = input.trim().toLowerCase()
@@ -74,13 +67,35 @@ export async function POST(request: NextRequest) {
       if (!areaInput) continue
 
       if (!isKnownArea(areaInput)) {
+        // Resolve the row's city/country to canonical English so we can scope suggestions
+        const rowCity = row['City'] ? resolveCityToEnglishCanonical(String(row['City']).trim(), allAreas) : null
+        const rowCountry = row['Country'] ? resolveCountryToEnglishCanonical(String(row['Country']).trim(), allAreas) : null
+
+        // Narrow the candidate pool to areas that belong to the same city+country.
+        // Falls back to the full pool only if the city/country is unknown (no areas match at all).
+        const filteredAreas = (() => {
+          if (!rowCity && !rowCountry) return allAreas
+          const scoped = allAreas.filter(a => {
+            const cityMatch = !rowCity || (a.city ?? '') === rowCity
+            const countryMatch = !rowCountry || (a.country ?? '') === rowCountry
+            return cityMatch && countryMatch
+          })
+          return scoped.length > 0 ? scoped : allAreas
+        })()
+
+        const candidateNames = [
+          ...filteredAreas.map(a => a.name).filter(Boolean) as string[],
+          ...filteredAreas.map(a => a.nameGreek).filter(Boolean) as string[],
+        ]
+
         // Normalize accents on the input so e.g. "Κεραμεικός" matches "Κεραμεικος"
         const normalizedInput = removeGreekAccents(areaInput.toLowerCase())
-        // Find best suggestion from both English and Greek names
-        const rawSuggestion = findBestMatch(normalizedInput, allAreaNames.map(n => removeGreekAccents(n.toLowerCase())))
+        // Threshold raised to 0.88 — stricter than the default 0.82 to reduce false positives
+        // within the already city-scoped pool.
+        const rawSuggestion = findBestMatch(normalizedInput, candidateNames.map(n => removeGreekAccents(n.toLowerCase())), 0.88)
         // Map back to the original (non-normalized) canonical name
         const suggestion = rawSuggestion
-          ? (allAreaNames.find(n => removeGreekAccents(n.toLowerCase()) === rawSuggestion) ?? rawSuggestion)
+          ? (candidateNames.find(n => removeGreekAccents(n.toLowerCase()) === rawSuggestion) ?? rawSuggestion)
           : null
 
         unknownAreas.push({
