@@ -51,10 +51,11 @@ export async function generateHouseDescriptions(
     photoFeatures?: string[] | null
   },
   openai: OpenAI | null
-): Promise<{ description: string | null; descriptionGreek: string | null }> {
+): Promise<{ description: string | null; descriptionGreek: string | null; failReason?: string }> {
   if (!openai || !process.env.OPENAI_API_KEY) {
-    console.warn('OpenAI not available, skipping description generation')
-    return { description: null, descriptionGreek: null }
+    const reason = !process.env.OPENAI_API_KEY ? 'OPENAI_API_KEY not set' : 'OpenAI client not initialised'
+    console.warn('House description generation skipped:', reason)
+    return { description: null, descriptionGreek: null, failReason: reason }
   }
 
   const key = cacheKey(houseData)
@@ -146,7 +147,7 @@ ${safeNotes}`
       'gpt-4o-mini'
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25_000)
+    const timeoutId = setTimeout(() => controller.abort(), 55_000)
 
     // JSON output avoids fragile ENGLISH:/GREEK: parsing when models reorder or use markdown
     const completion = await openai.chat.completions.create({
@@ -240,12 +241,11 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
     descriptionCache.set(key, result)
     return result
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('House description generation timed out after 25s')
-    } else {
-      console.error('Error generating house descriptions:', error)
-    }
-    return { description: null, descriptionGreek: null }
+    const reason = error instanceof Error && error.name === 'AbortError'
+      ? 'timed out after 55s'
+      : (error instanceof Error ? error.message : String(error))
+    console.error('House description generation failed:', reason)
+    return { description: null, descriptionGreek: null, failReason: reason }
   }
 }
 

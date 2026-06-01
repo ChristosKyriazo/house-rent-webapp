@@ -207,6 +207,7 @@ export async function processBulkUploadJob(jobId: string) {
         let finalDescription = description
         let finalDescriptionGreek: string | null = descriptionGreek
         if (options.useAIDescription) {
+          log.info({ rowNumber, model: process.env.OPENAI_HOUSE_DESCRIPTION_MODEL || 'gpt-4o-mini' }, 'Generating AI description')
           const aiDescriptions = await generateHouseDescriptions({
             title, city, country, area,
             listingType: listingType === 'sale' ? 'sale' : 'rent',
@@ -227,6 +228,11 @@ export async function processBulkUploadJob(jobId: string) {
           if (aiDescriptions?.description) {
             finalDescription = aiDescriptions.description
             finalDescriptionGreek = aiDescriptions.descriptionGreek
+            log.info({ rowNumber }, 'AI description generated successfully')
+          } else {
+            const reason = aiDescriptions?.failReason || 'unknown reason'
+            log.warn({ rowNumber, reason }, 'AI description generation failed — kept original description')
+            errors.push(`Row ${rowNumber} (warning): AI description failed (${reason}) — original description kept`)
           }
         }
 
