@@ -39,27 +39,16 @@ interface HomeCardProps {
   onCompareToggle: (key: string) => void
 }
 
-export function HomeCard({ home, status, language, allAreas, areas, compareKeys, onCompareToggle }: HomeCardProps) {
-  const hasInquiry = status === 'inquired'
-  const isApproved = status === 'approved'
-  const isDismissed = status === 'dismissed'
+interface CardBodyProps {
+  home: HomeCardHome
+  language: Language
+  allAreas: HomeCardProps['allAreas']
+  areas: HomeCardProps['areas']
+  textColor: string
+}
 
-  let bannerColor = ''
-  let bannerText = ''
-  if (hasInquiry) {
-    bannerColor = 'bg-[var(--status-warning-bg)] border-[var(--status-warning)]'
-    bannerText = getTranslation(language, 'inquiryMadeBanner')
-  } else if (isApproved) {
-    bannerColor = 'bg-[var(--status-success-bg)] border-[var(--status-success)]'
-    bannerText = getTranslation(language, 'approvedBanner')
-  } else if (isDismissed) {
-    bannerColor = 'bg-[var(--status-error-bg)] border-[var(--status-error)]'
-    bannerText = getTranslation(language, 'dismissedBanner')
-  }
-
-  const textColor = status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-
-  const CardBody = () => (
+function CardBody({ home, language, allAreas, areas, textColor }: CardBodyProps) {
+  return (
     <>
       <div className="mb-4">
         <div className="flex items-start justify-between mb-2">
@@ -131,6 +120,27 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
       </div>
     </>
   )
+}
+
+export function HomeCard({ home, status, language, allAreas, areas, compareKeys, onCompareToggle }: HomeCardProps) {
+  const hasInquiry = status === 'inquired'
+  const isApproved = status === 'approved'
+  const isDismissed = status === 'dismissed'
+
+  let bannerColor = ''
+  let bannerText = ''
+  if (hasInquiry) {
+    bannerColor = 'bg-[var(--status-warning-bg)] border-[var(--status-warning)]'
+    bannerText = getTranslation(language, 'inquiryMadeBanner')
+  } else if (isApproved) {
+    bannerColor = 'bg-[var(--status-success-bg)] border-[var(--status-success)]'
+    bannerText = getTranslation(language, 'approvedBanner')
+  } else if (isDismissed) {
+    bannerColor = 'bg-[var(--status-error-bg)] border-[var(--status-error)]'
+    bannerText = getTranslation(language, 'dismissedBanner')
+  }
+
+  const textColor = status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
 
   return (
     <div
@@ -204,11 +214,11 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
 
       {isDismissed ? (
         <div className="block cursor-not-allowed pointer-events-none">
-          <CardBody />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
         </div>
       ) : (
         <Link href={`/homes/${home.key}`} className="block">
-          <CardBody />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
         </Link>
       )}
     </div>

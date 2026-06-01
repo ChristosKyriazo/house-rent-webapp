@@ -2,7 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import security from "eslint-plugin-security";
-import jsxA11y from "eslint-plugin-jsx-a11y";
+
 import prettierConfig from "eslint-config-prettier";
 
 const eslintConfig = defineConfig([
@@ -69,8 +69,8 @@ const eslintConfig = defineConfig([
     },
   },
   // jsx-a11y: accessibility rules for JSX (warn only — enforces best practices without blocking CI)
+  // Plugin is already registered by eslint-config-next/core-web-vitals; rules only here.
   {
-    plugins: { "jsx-a11y": jsxA11y },
     rules: {
       "jsx-a11y/alt-text": "warn",
       "jsx-a11y/anchor-has-content": "warn",
