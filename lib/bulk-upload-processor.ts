@@ -56,15 +56,20 @@ export async function processBulkUploadJob(jobId: string) {
       })
       if (!existing) {
         const isGreek = /[Ͱ-Ͽἀ-῿]/.test(ca.area)
+        // Look up canonical city/country Greek names from existing areas so the new
+        // area is discoverable when the search form uses a Greek city/country filter.
+        const [cityRef, countryRef] = await Promise.all([
+          ca.city ? prisma.area.findFirst({ where: { OR: [{ city: ca.city }, { cityGreek: ca.city }] }, select: { city: true, cityGreek: true } }) : null,
+          ca.country ? prisma.area.findFirst({ where: { OR: [{ country: ca.country }, { countryGreek: ca.country }] }, select: { country: true, countryGreek: true } }) : null,
+        ])
         await prisma.area.create({
           data: {
-            // name is NOT NULL — use the provided value regardless of language.
-            // If Greek, also store in nameGreek so the area is discoverable by
-            // both columns (admin can add the English transliteration later).
             name: ca.area,
             nameGreek: isGreek ? ca.area : null,
-            city: ca.city || null,
-            country: ca.country || null,
+            city: cityRef?.city || ca.city || null,
+            cityGreek: cityRef?.cityGreek || null,
+            country: countryRef?.country || ca.country || null,
+            countryGreek: countryRef?.countryGreek || null,
           },
         })
       }

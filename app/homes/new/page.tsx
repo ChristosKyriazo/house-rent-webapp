@@ -42,6 +42,8 @@ export default function NewHomePage() {
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [searchingAreas, setSearchingAreas] = useState(false)
   const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
+  const [addingArea, setAddingArea] = useState(false)
+  const [showAddAreaOption, setShowAddAreaOption] = useState(false)
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
   const [bulkUploadLoading, setBulkUploadLoading] = useState(false)
   const [bulkUploadError, setBulkUploadError] = useState('')
@@ -188,22 +190,48 @@ export default function NewHomePage() {
         const data = await response.json()
         const areas = data.areas || []
         setAreaSuggestions(areas)
-        // Update dropdown visibility based on results
-        // Only show if there are actual suggestions
-        const shouldShow = areas.length > 0
-        setShowAreaDropdown(shouldShow)
+        const hasResults = areas.length > 0
+        const canAdd = !hasResults && query.trim().length >= 2
+        setShowAddAreaOption(canAdd)
+        setShowAreaDropdown(hasResults || canAdd)
       } else {
-        // If API call fails, hide dropdown and clear suggestions
         setAreaSuggestions([])
+        setShowAddAreaOption(false)
         setShowAreaDropdown(false)
       }
     } catch (error) {
       console.error('Error searching areas:', error)
       setAreaSuggestions([])
+      setShowAddAreaOption(false)
       setShowAreaDropdown(false)
     } finally {
       setSearchingAreas(false)
     }
+  }
+
+  const handleAddArea = async (name: string) => {
+    setAddingArea(true)
+    try {
+      const res = await fetch('/api/areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          city: formData.city || undefined,
+          country: formData.country || undefined,
+        }),
+      })
+      if (res.ok) {
+        const { area } = await res.json()
+        setAllAreas(prev => [...prev, { id: area.id, name: area.name, nameGreek: area.nameGreek }])
+        setFormData(prev => ({ ...prev, area: area.name }))
+        setAreaSearchQuery(name.trim())
+        setShowAreaDropdown(false)
+        setShowAddAreaOption(false)
+        setAreaSelectedFromDropdown(true)
+      }
+    } catch { /* ignore */ }
+    finally { setAddingArea(false) }
   }
 
   const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
@@ -306,50 +334,23 @@ export default function NewHomePage() {
     setError('')
     setLoading(true)
 
-    // Always ensure we have a valid area name from the database
+    // formData.area is always set to the canonical DB name when user selects from dropdown
+    // or via fuzzy match on blur. Trust it directly; stale allAreas cache is not used here.
     let finalArea: string | null = null
-    
-    // First, check if formData.area is already a valid area name from the database
-    // This should be the case if user clicked on a suggestion from the dropdown
     if (formData.area && formData.area.trim().length > 0) {
-      const isValidArea = allAreas.some(a => a.name === formData.area.trim())
-      if (isValidArea) {
-        // formData.area is already a valid area name, use it directly (user selected from dropdown)
-        finalArea = formData.area.trim()
-      } else {
-        // formData.area exists but is not a valid area name, try to find closest match
-        // But only if user didn't explicitly select from dropdown (shouldn't happen, but safety check)
-        const mostSimilar = findMostSimilarArea(formData.area, allAreas)
-        if (mostSimilar) {
-          finalArea = mostSimilar.name
-        }
-      }
-    }
-    
-    // If we still don't have a valid area, try matching from areaSearchQuery
-    // This is a fallback for when user typed but didn't select
-    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
-      // First try exact match by display name (Greek or English)
-      const matchedArea = allAreas.find(a => 
-        a.name === areaSearchQuery.trim() || 
+      finalArea = formData.area.trim()
+    } else if (areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      // User typed but never triggered a selection — try fuzzy match against cached list
+      const matchedArea = allAreas.find(a =>
+        a.name === areaSearchQuery.trim() ||
         (a.nameGreek && a.nameGreek === areaSearchQuery.trim())
       )
       if (matchedArea) {
         finalArea = matchedArea.name
       } else {
-        // Last resort: try similarity matching
         const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
-        if (mostSimilar) {
-          finalArea = mostSimilar.name
-        }
+        finalArea = mostSimilar ? mostSimilar.name : areaSearchQuery.trim()
       }
-    }
-    
-    // Only use what they typed if no match was found and we have something
-    // But prefer to leave it null if no valid match
-    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
-      // Last resort: use what they typed (but this shouldn't happen if they clicked a suggestion)
-      finalArea = areaSearchQuery.trim()
     }
 
     try {
@@ -689,9 +690,10 @@ export default function NewHomePage() {
                       searchAreas(query)
                     } else {
                       setShowAreaDropdown(false)
+                      setShowAddAreaOption(false)
                       setAreaSuggestions([])
                       setFormData({ ...formData, area: '' })
-                      setAreaSelectedFromDropdown(false) // Reset flag when clearing
+                      setAreaSelectedFromDropdown(false)
                     }
                   }}
                   onFocus={() => {
@@ -709,9 +711,9 @@ export default function NewHomePage() {
                     // Delay to allow click on dropdown items
                     setTimeout(() => {
                       setShowAreaDropdown(false)
-                      // If user explicitly selected from dropdown, don't override their choice
+                      setShowAddAreaOption(false)
                       if (areaSelectedFromDropdown) {
-                        setAreaSelectedFromDropdown(false) // Reset flag
+                        setAreaSelectedFromDropdown(false)
                         return
                       }
                       // If user typed but didn't select, try to find most similar
@@ -742,7 +744,7 @@ export default function NewHomePage() {
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'selectCityArea')}
                 />
-                {showAreaDropdown && areaSuggestions.length > 0 && (
+                {showAreaDropdown && (areaSuggestions.length > 0 || showAddAreaOption) && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {areaSuggestions.map((area) => (
                       <button
@@ -755,8 +757,8 @@ export default function NewHomePage() {
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
-                          setAreaSelectedFromDropdown(true) // Mark that user explicitly selected from dropdown
-                          // Ensure the area is set correctly
+                          setShowAddAreaOption(false)
+                          setAreaSelectedFromDropdown(true)
                           setTimeout(() => {
                             setFormData(prev => {
                               if (prev.area !== area.name) {
@@ -776,6 +778,27 @@ export default function NewHomePage() {
                         )}
                       </button>
                     ))}
+                    {showAddAreaOption && (
+                      <button
+                        type="button"
+                        disabled={addingArea}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleAddArea(areaSearchQuery)
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--accent)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <span className="text-lg leading-none">+</span>
+                        <span className="font-medium">
+                          {addingArea
+                            ? (language === 'el' ? 'Προσθήκη...' : 'Adding...')
+                            : (language === 'el'
+                                ? `Προσθήκη "${areaSearchQuery}" ως νέα περιοχή`
+                                : `Add "${areaSearchQuery}" as a new area`)}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
