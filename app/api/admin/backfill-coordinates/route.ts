@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
+import { unauthorized } from '@/lib/api-utils'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 
-export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-admin-secret')
-  if (!secret || secret !== process.env.ADMIN_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export async function POST() {
+  const user = await getCurrentUser()
+  if (!user) return unauthorized()
 
   const homes = await prisma.home.findMany({
     where: { latitude: null },
@@ -18,19 +18,11 @@ export async function POST(request: NextRequest) {
 
   for (const home of homes) {
     try {
-      const result = await calculatePropertyDistances(
-        home.street,
-        home.area,
-        home.city,
-        home.country
-      )
+      const result = await calculatePropertyDistances(home.street, home.area, home.city, home.country)
       if (result.propertyCoordinates) {
         await prisma.home.update({
           where: { id: home.id },
-          data: {
-            latitude: result.propertyCoordinates.lat,
-            longitude: result.propertyCoordinates.lng,
-          },
+          data: { latitude: result.propertyCoordinates.lat, longitude: result.propertyCoordinates.lng },
         })
         updated++
       } else {

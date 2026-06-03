@@ -2,21 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
-import * as Sentry from '@sentry/nextjs'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getCurrentUser } from '@/lib/auth'
 
 // POST /api/admin/reembed-homes
 // Re-generates embeddings for all homes using the improved buildHomeText().
-// Protected by ADMIN_SECRET. Processes in batches to avoid timeouts.
+// Protected by Clerk auth. Processes in batches to avoid timeouts.
 export async function POST(request: NextRequest) {
-  const auth = request.headers.get('authorization')
-  if (!process.env.ADMIN_SECRET || auth !== `Bearer ${process.env.ADMIN_SECRET}`) {
-    Sentry.captureMessage('Admin auth failed: reembed-homes', {
-      level: 'warning',
-      extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
-    })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   if (!(await checkRateLimit('admin:reembed-homes', 10, 60_000))) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })

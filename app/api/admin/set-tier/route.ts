@@ -1,35 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
+import { unauthorized, badRequest } from '@/lib/api-utils'
 
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
 type Tier = (typeof VALID_TIERS)[number]
 
+// Sets the subscription tier for the currently logged-in user (test mode — no payment)
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get('x-admin-secret')
-  if (!secret || secret !== process.env.ADMIN_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await getCurrentUser()
+  if (!user) return unauthorized()
 
-  let body: { userEmail?: string; tier?: string }
+  let body: { tier?: string }
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    return badRequest('Invalid JSON')
   }
 
-  const { userEmail, tier } = body
-  if (!userEmail || !tier) {
-    return NextResponse.json({ error: 'userEmail and tier are required' }, { status: 400 })
-  }
-  if (!VALID_TIERS.includes(tier as Tier)) {
-    return NextResponse.json({ error: `tier must be one of: ${VALID_TIERS.join(', ')}` }, { status: 400 })
+  const { tier } = body
+  if (!tier || !VALID_TIERS.includes(tier as Tier)) {
+    return badRequest(`tier must be one of: ${VALID_TIERS.join(', ')}`)
   }
 
-  const user = await prisma.user.update({
-    where: { email: userEmail },
+  const updated = await prisma.user.update({
+    where: { id: user.id },
     data: { subscriptionTier: tier },
     select: { email: true, subscriptionTier: true },
   })
 
-  return NextResponse.json({ ok: true, user })
+  return NextResponse.json({ ok: true, user: updated })
 }

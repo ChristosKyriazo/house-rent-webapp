@@ -2,21 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
-import * as Sentry from '@sentry/nextjs'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getCurrentUser } from '@/lib/auth'
 
 // POST /api/admin/backfill-bilingual
 // Backfills titleGreek, streetGreek, descriptionGreek for existing homes that are missing them.
-// Protected by ADMIN_SECRET env var. Processes in batches of 20 to avoid timeouts.
+// Protected by Clerk auth. Processes in batches of 20 to avoid timeouts.
 export async function POST(request: NextRequest) {
-  const auth = request.headers.get('authorization')
-  if (!process.env.ADMIN_SECRET || auth !== `Bearer ${process.env.ADMIN_SECRET}`) {
-    Sentry.captureMessage('Admin auth failed: backfill-bilingual', {
-      level: 'warning',
-      extra: { ip: request.headers.get('x-forwarded-for') ?? 'unknown' },
-    })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Rate limit: max 10 calls per minute globally to prevent abuse if secret leaks
   if (!(await checkRateLimit('admin:backfill-bilingual', 10, 60_000))) {
