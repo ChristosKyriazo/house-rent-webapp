@@ -128,34 +128,6 @@ function UpgradePageInner() {
           </p>
         </div>
 
-        {/* Hero mockup — shows what Plus actually looks like */}
-        <div className="max-w-2xl mx-auto mb-14 rounded-3xl border border-amber-500/20 shadow-[0_0_60px_rgba(251,191,36,0.06)] overflow-hidden">
-          <div className="bg-[var(--surface)] p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-2 h-2 rounded-full bg-amber-500/60" />
-              <span className="text-xs text-[var(--text-muted)] font-[var(--font-outfit)] uppercase tracking-widest">
-                {isEl ? 'Αγγελία με AI περιγραφή' : 'AI-generated listing'}
-              </span>
-            </div>
-            <div className="space-y-3">
-              <div className="h-5 bg-[var(--ink-soft)] rounded-lg w-3/4" />
-              <div className="h-3 bg-[var(--ink-soft)] rounded w-full opacity-60" />
-              <div className="h-3 bg-[var(--ink-soft)] rounded w-5/6 opacity-60" />
-              <div className="h-3 bg-[var(--ink-soft)] rounded w-4/5 opacity-60" />
-              <div className="mt-4 flex gap-3">
-                <div className="h-8 w-24 bg-amber-500/20 rounded-xl border border-amber-500/30" />
-                <div className="h-8 w-32 bg-[var(--ink-soft)] rounded-xl" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-[var(--ink-soft)] px-6 py-3 flex items-center justify-between">
-            <span className="text-xs text-[var(--text-muted)]">
-              {isEl ? '3 αγγελίες • 12 επισκέψεις σήμερα • 2 αιτήματα' : '3 listings • 12 views today • 2 inquiries'}
-            </span>
-            <span className="text-xs text-amber-400 font-semibold">Plus ✓</span>
-          </div>
-        </div>
-
         {/* Test mode notice */}
         <div className="max-w-lg mx-auto mb-10 flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-500/8 border border-amber-500/20">
           <span className="text-amber-400 text-lg shrink-0">⚗️</span>
