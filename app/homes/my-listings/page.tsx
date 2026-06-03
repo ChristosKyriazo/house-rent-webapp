@@ -9,6 +9,7 @@ import { getCityName, getCountryName, getAreaName, getHomeTitle, getHomeStreet }
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { SkeletonList } from '@/app/components/SkeletonCard'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import UpgradeGate from '@/app/components/UpgradeGate'
 
 interface Home {
   id: number
@@ -252,19 +253,11 @@ export default function MyListingsPage() {
                           day: 'numeric',
                         })}
                       </p>
-                      {subscriptionTier === 'free' ? (
-                        <Link
-                          href="/upgrade"
-                          className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 transition-colors"
-                          title={language === 'el' ? 'Απαιτείται Plus' : 'Requires Plus'}
-                        >
-                          ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
-                        </Link>
-                      ) : (
+                      <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="promote" mode="replace">
                         <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
                           ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
                         </button>
-                      )}
+                      </UpgradeGate>
                     </div>
                   </Link>
                 </div>

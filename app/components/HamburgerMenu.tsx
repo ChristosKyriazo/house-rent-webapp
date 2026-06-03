@@ -11,9 +11,10 @@ import AppLogo from './AppLogo'
 
 interface HamburgerMenuProps {
   userRole: string // 'owner', 'user', 'both', 'broker', or 'guest'
+  subscriptionTier?: string
 }
 
-export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuProps) {
+export default function HamburgerMenu({ userRole: initialRole, subscriptionTier = 'free' }: HamburgerMenuProps) {
   const { language } = useLanguage()
   const { selectedRole, actualRole, setSelectedRole } = useRole()
   const [isOpen, setIsOpen] = useState(false)
@@ -325,8 +326,22 @@ export default function HamburgerMenu({ userRole: initialRole }: HamburgerMenuPr
             })}
           </nav>
           
+          {/* Upgrade link — only for free-tier owners/brokers */}
+          {subscriptionTier === 'free' && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
+            <div className="border-t border-[var(--border-subtle)] pt-4 mb-2">
+              <Link
+                href="/upgrade"
+                onClick={() => closeMenu()}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/15 transition-colors"
+              >
+                <span className="text-xl">⭐</span>
+                <span className="text-sm font-semibold">{language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}</span>
+              </Link>
+            </div>
+          )}
+
           {/* Logout Button at Bottom */}
-          <div className="mt-auto border-t border-[var(--border-subtle)] pt-4">
+          <div className="mt-2 border-t border-[var(--border-subtle)] pt-4">
             <button
               onClick={() => {
                 closeMenu()

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import UpgradeGate from '@/app/components/UpgradeGate'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { findMostSimilarArea } from '@/lib/area-utils'
 import * as XLSX from 'xlsx'
@@ -36,6 +37,7 @@ export default function NewHomePage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingRole, setCheckingRole] = useState(true)
+  const [subscriptionTier, setSubscriptionTier] = useState<string>('free')
   const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; key: string; name: string; nameGreek: string | null; city: string | null; country: string | null }>>([])
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
@@ -85,6 +87,7 @@ export default function NewHomePage() {
           router.push('/profile')
           return
         }
+        setSubscriptionTier(data.user.subscriptionTier ?? 'free')
         // Fetch home count
         fetch('/api/homes/my-listings')
           .then((res) => res.json())
@@ -463,13 +466,15 @@ export default function NewHomePage() {
               <h1 className="text-3xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'createListing')}
               </h1>
-              <button
-                type="button"
-                onClick={() => setShowBulkUploadModal(true)}
-                className="px-4 py-2 bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--canvas-mid)] hover:border-[var(--accent)]/45 transition-all text-sm font-semibold"
-              >
-                {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
-              </button>
+              <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="bulk-upload" mode="drawer">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkUploadModal(true)}
+                  className="px-4 py-2 bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--canvas-mid)] hover:border-[var(--accent)]/45 transition-all text-sm font-semibold"
+                >
+                  {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
+                </button>
+              </UpgradeGate>
             </div>
             <p className="text-[var(--text-muted)]">
               {getTranslation(language, 'listingDetails')}
