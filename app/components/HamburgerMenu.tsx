@@ -326,8 +326,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
             })}
           </nav>
           
-          {/* Upgrade link — free-tier owners and brokers only */}
-          {subscriptionTier === 'free' && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
+          {/* Upgrade link — free → Plus, Plus → Pro; hidden for Pro */}
+          {(subscriptionTier === 'free' || subscriptionTier === 'plus') && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
             <div className="border-t border-[var(--border-subtle)] pt-4 mb-2">
               <Link
                 href="/upgrade"
@@ -339,15 +339,18 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
                   boxShadow: '0 0 20px rgba(245,158,11,0.15), inset 0 1px 0 rgba(255,255,255,0.05)',
                 }}
               >
-                {/* shimmer */}
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent" />
-                <span className="text-xl animate-pulse">✨</span>
+                <span className="text-xl animate-pulse">{subscriptionTier === 'plus' ? '◆' : '✨'}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-amber-300 leading-none mb-0.5">
-                    {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
+                    {subscriptionTier === 'plus'
+                      ? (language === 'el' ? 'Αναβάθμιση σε Pro' : 'Upgrade to Pro')
+                      : (language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus')}
                   </p>
                   <p className="text-xs text-amber-500/70">
-                    {language === 'el' ? 'Απεριόριστες αγγελίες & analytics' : 'Unlimited listings & analytics'}
+                    {subscriptionTier === 'plus'
+                      ? (language === 'el' ? '5 θέσεις, portfolio analytics' : '5 slots, portfolio analytics')
+                      : (language === 'el' ? 'Απεριόριστες αγγελίες & analytics' : 'Unlimited listings & analytics')}
                   </p>
                 </div>
                 <span className="text-amber-400 text-sm group-hover:translate-x-0.5 transition-transform">→</span>

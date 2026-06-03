@@ -270,65 +270,62 @@ function ProfilePageInner() {
                       <h1 className="text-3xl font-bold text-[var(--text)]">{displayName}</h1>
 
                       {/* Tier badge + CTA — owners/brokers only */}
-                      {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && isOwnerOrBroker && (
-                        <Link
-                          href="/upgrade"
-                          className="group relative flex items-center gap-2 px-4 py-2 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.12) 100%)',
-                            border: '1px solid rgba(245,158,11,0.35)',
-                            boxShadow: '0 0 16px rgba(245,158,11,0.12)',
-                          }}
-                        >
-                          <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent" />
-                          <span className="text-sm">✨</span>
-                          <span className="text-sm font-semibold text-amber-300">
-                            {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
-                          </span>
-                          <span className="text-amber-500 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
-                        </Link>
-                      )}
-
-                      {(user.subscriptionTier ?? 'free') === 'plus' && isOwnerOrBroker && (
-                        <div className="flex flex-col items-center gap-1.5">
-                          <span
-                            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(217,119,6,0.15))',
-                              border: '1px solid rgba(245,158,11,0.4)',
-                              color: '#fbbf24',
-                              boxShadow: '0 0 12px rgba(245,158,11,0.15)',
-                            }}
-                          >
-                            ✦ Plus
-                          </span>
-                          {isOwnProfile && (
-                            <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-amber-400 transition-colors">
-                              {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'} →
+                      {isOwnerOrBroker && (
+                        <>
+                          {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && (
+                            <Link
+                              href="/upgrade"
+                              className="group relative flex items-center gap-2 px-4 py-2 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                              style={{
+                                background: 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.12) 100%)',
+                                border: '1px solid rgba(245,158,11,0.35)',
+                                boxShadow: '0 0 16px rgba(245,158,11,0.12)',
+                              }}
+                            >
+                              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent" />
+                              <span className="text-sm">✨</span>
+                              <span className="text-sm font-semibold text-amber-300">
+                                {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
+                              </span>
+                              <span className="text-amber-500 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
                             </Link>
                           )}
-                        </div>
-                      )}
 
-                      {(user.subscriptionTier ?? 'free') === 'pro' && isOwnerOrBroker && (
-                        <div className="flex flex-col items-center gap-1.5">
-                          <span
-                            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(120,113,108,0.3), rgba(87,83,78,0.2))',
-                              border: '1px solid rgba(161,155,150,0.3)',
-                              color: '#d6d3d1',
-                              boxShadow: '0 0 12px rgba(0,0,0,0.2)',
-                            }}
-                          >
-                            ◆ Pro
-                          </span>
-                          {isOwnProfile && (
-                            <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
-                              {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'} →
-                            </Link>
+                          {(user.subscriptionTier ?? 'free') === 'plus' && (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <span
+                                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background: 'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(217,119,6,0.15))',
+                                  border: '1px solid rgba(245,158,11,0.4)',
+                                  color: '#fbbf24',
+                                  boxShadow: '0 0 12px rgba(245,158,11,0.15)',
+                                }}
+                              >
+                                ✦ Plus
+                              </span>
+                              {isOwnProfile && (
+                                <Link href="/upgrade" className="text-xs text-amber-400/70 hover:text-amber-300 transition-colors">
+                                  {language === 'el' ? 'Αναβάθμιση σε Pro' : 'Upgrade to Pro'} →
+                                </Link>
+                              )}
+                            </div>
                           )}
-                        </div>
+
+                          {(user.subscriptionTier ?? 'free') === 'pro' && (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
+                              style={{
+                                background: 'linear-gradient(135deg, rgba(120,113,108,0.3), rgba(87,83,78,0.2))',
+                                border: '1px solid rgba(161,155,150,0.3)',
+                                color: '#d6d3d1',
+                                boxShadow: '0 0 12px rgba(0,0,0,0.2)',
+                              }}
+                            >
+                              ◆ Pro
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
           </div>
@@ -467,14 +464,16 @@ function ProfilePageInner() {
                       </span>
                     )}
                   </div>
-                  <Link
-                    href="/upgrade"
-                    className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
-                  >
-                    {(user.subscriptionTier ?? 'free') === 'free'
-                      ? (language === 'el' ? 'Αναβάθμιση' : 'Upgrade')
-                      : (language === 'el' ? 'Διαχείριση' : 'Manage')}
-                  </Link>
+                  {(user.subscriptionTier ?? 'free') !== 'pro' && (
+                    <Link
+                      href="/upgrade"
+                      className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
+                    >
+                      {(user.subscriptionTier ?? 'free') === 'free'
+                        ? (language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus')
+                        : (language === 'el' ? 'Αναβάθμιση σε Pro' : 'Upgrade to Pro')}
+                    </Link>
+                  )}
                 </div>
               </div>
             )}

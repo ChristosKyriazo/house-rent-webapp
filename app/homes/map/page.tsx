@@ -36,6 +36,10 @@ function MapContent() {
   const router = useRouter()
   const isEl = language === 'el'
   const mapRef = useRef<HTMLDivElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapInstanceRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markersRef = useRef<any[]>([])
   const [homes, setHomes] = useState<Home[]>([])
   const [selected, setSelected] = useState<Home | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,56 +56,72 @@ function MapContent() {
       .finally(() => setLoading(false))
   }, [type])
 
+  const renderMarkers = () => {
+    if (!window.google || !mapInstanceRef.current) return
+    // Clear existing markers
+    markersRef.current.forEach(m => m.setMap(null))
+    markersRef.current = []
+    setSelected(null)
+
+    homes.forEach(home => {
+      if (!home.latitude || !home.longitude) return
+      const marker = new window.google.maps.Marker({
+        position: { lat: home.latitude, lng: home.longitude },
+        map: mapInstanceRef.current,
+        title: getHomeTitle(language, home),
+        label: {
+          text: home.listingType === 'rent'
+            ? `€${home.pricePerMonth.toLocaleString()}/μ`
+            : home.pricePerMonth >= 1000
+              ? `€${(home.pricePerMonth / 1000).toFixed(0)}k`
+              : `€${home.pricePerMonth.toLocaleString()}`,
+          color: '#0c0f14',
+          fontWeight: 'bold',
+          fontSize: '10px',
+        },
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 18,
+          fillColor: '#e3a75f',
+          fillOpacity: 1,
+          strokeColor: '#b87a3d',
+          strokeWeight: 1.5,
+        },
+      })
+      marker.addListener('click', () => setSelected(home))
+      markersRef.current.push(marker)
+    })
+  }
+
   useEffect(() => {
-    if (!apiKey || !mapRef.current || homes.length === 0) return
-
-    const initMap = () => {
-      if (!window.google || !mapRef.current) return
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: 37.9838, lng: 23.7275 }, // Athens default
-        zoom: 12,
-        styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
-      })
-
-      homes.forEach(home => {
-        if (!home.latitude || !home.longitude) return
-        const marker = new window.google.maps.Marker({
-          position: { lat: home.latitude, lng: home.longitude },
-          map,
-          title: getHomeTitle(language, home),
-          label: {
-            text: home.listingType === 'rent'
-              ? `€${home.pricePerMonth.toLocaleString()}/μ`
-              : home.pricePerMonth >= 1000
-                ? `€${(home.pricePerMonth / 1000).toFixed(0)}k`
-                : `€${home.pricePerMonth.toLocaleString()}`,
-            color: '#0c0f14',
-            fontWeight: 'bold',
-            fontSize: '10px',
-          },
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 18,
-            fillColor: '#e3a75f',
-            fillOpacity: 1,
-            strokeColor: '#b87a3d',
-            strokeWeight: 1.5,
-          },
-        })
-        marker.addListener('click', () => setSelected(home))
-      })
-    }
+    if (!apiKey || !mapRef.current) return
 
     if (window.google) {
-      initMap()
+      if (!mapInstanceRef.current) {
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: { lat: 37.9838, lng: 23.7275 },
+          zoom: 12,
+          styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
+        })
+      }
+      renderMarkers()
     } else {
-      window.initMap = initMap
+      window.initMap = () => {
+        if (!mapRef.current) return
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: { lat: 37.9838, lng: 23.7275 },
+          zoom: 12,
+          styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
+        })
+        renderMarkers()
+      }
       const script = document.createElement('script')
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`
       script.async = true
       script.onerror = () => setMapError(true)
       document.head.appendChild(script)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homes, apiKey, language])
 
   const parsePhotos = (raw: string | null) => {
