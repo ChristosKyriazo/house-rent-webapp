@@ -29,6 +29,8 @@ interface Home {
   bathrooms: number
   sizeSqMeters: number | null
   finalized: boolean
+  slotPromoted: boolean
+  promotedUntil: string | null
   createdAt: string
   inquiryCount?: number
 }
@@ -43,6 +45,34 @@ export default function MyListingsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
+  const [slotsUsed, setSlotsUsed] = useState(0)
+  const [promotingKey, setPromotingKey] = useState<string | null>(null)
+
+  const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
+
+  async function handlePromote(homeKey: string, mode: 'slot' | 'boost') {
+    setPromotingKey(homeKey)
+    try {
+      const res = await fetch('/api/homes/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ homeKey, mode }),
+      })
+      const data = await res.json()
+      if (!res.ok) return
+      setUserHomes(prev => prev.map(h => {
+        if (h.key !== homeKey) return h
+        if (mode === 'slot') return { ...h, slotPromoted: data.slotPromoted }
+        return { ...h, promotedUntil: data.promotedUntil }
+      }))
+      setSlotsUsed(prev => {
+        if (mode !== 'slot') return prev
+        return data.slotPromoted ? prev + 1 : prev - 1
+      })
+    } finally {
+      setPromotingKey(null)
+    }
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,6 +93,7 @@ export default function MyListingsPage() {
         if (homesResponse.ok) {
           const homesData = await homesResponse.json()
           setUserHomes(homesData.homes || [])
+          setSlotsUsed(homesData.slotsUsed ?? 0)
         } else {
           console.error('Failed to fetch listings:', homesResponse.status)
         }
@@ -124,11 +155,28 @@ export default function MyListingsPage() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">{getTranslation(language, 'myListings')}</h1>
-          <p className="text-[var(--text-muted)]">
-            {getTranslation(language, 'manageListings')}
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{getTranslation(language, 'myListings')}</h1>
+            <p className="text-[var(--text-muted)]">{getTranslation(language, 'manageListings')}</p>
+          </div>
+
+          {/* Slot counter — Plus/Pro only */}
+          {slotLimit > 0 && (
+            <div className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl border border-amber-500/25 bg-amber-500/8">
+              <div className="flex gap-1">
+                {Array.from({ length: slotLimit }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2.5 h-2.5 rounded-full transition-colors ${i < slotsUsed ? 'bg-amber-400' : 'bg-[var(--border-subtle)]'}`}
+                  />
+                ))}
+              </div>
+              <span className="text-xs text-amber-300/80 font-medium">
+                {slotsUsed}/{slotLimit} {language === 'el' ? 'θέσεις' : 'slots'}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="mb-6 flex items-center justify-between gap-4">
@@ -253,11 +301,42 @@ export default function MyListingsPage() {
                           day: 'numeric',
                         })}
                       </p>
-                      <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="promote" mode="replace">
-                        <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
-                          ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
+                      {subscriptionTier === 'free' ? (
+                        <UpgradeGate requiredTier="plus" currentTier="free" feature="promote" mode="replace">
+                          <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold">
+                            ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
+                          </button>
+                        </UpgradeGate>
+                      ) : home.slotPromoted ? (
+                        <button
+                          onClick={() => handlePromote(home.key, 'slot')}
+                          disabled={promotingKey === home.key}
+                          className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-all font-semibold disabled:opacity-50"
+                        >
+                          ⭐ {language === 'el' ? 'Θέση ✓' : 'Slot ✓'}
                         </button>
-                      </UpgradeGate>
+                      ) : slotsUsed < slotLimit ? (
+                        <button
+                          onClick={() => handlePromote(home.key, 'slot')}
+                          disabled={promotingKey === home.key}
+                          className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all disabled:opacity-50"
+                        >
+                          ⭐ {language === 'el' ? 'Προσθήκη σε θέση' : 'Add to slot'}
+                        </button>
+                      ) : home.promotedUntil && new Date(home.promotedUntil) > new Date() ? (
+                        <span className="text-xs text-[var(--text-muted)]">
+                          {language === 'el' ? 'Boost έως ' : 'Boosted until '}
+                          {new Date(home.promotedUntil).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handlePromote(home.key, 'boost')}
+                          disabled={promotingKey === home.key}
+                          className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-amber-500/30 hover:text-amber-400 transition-all disabled:opacity-50"
+                        >
+                          ⚡ {language === 'el' ? 'Boost €4.99 / 30μ.' : 'Boost €4.99 / 30d'}
+                        </button>
+                      )}
                     </div>
                   </Link>
                 </div>

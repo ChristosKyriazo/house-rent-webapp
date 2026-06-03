@@ -65,8 +65,9 @@ model Home {
   availableFrom     DateTime
   photos            String?  // JSON array of photo file paths/URLs
   finalized         Boolean  @default(false) // Whether any inquiry for this home has been finalized
-  promotedUntil     DateTime? // Standard promotion expiry
-  premiumPromotedUntil DateTime? // Premium promotion expiry
+  slotPromoted      Boolean   @default(false) // using one of the owner's subscription promotion slots (always-on)
+  promotedUntil     DateTime? // Pay-per-boost expiry (€4.99 / 30 days)
+  premiumPromotedUntil DateTime? // Legacy — no longer used in new promotion model
   latitude          Float?   // Geocoded latitude (stored from Google Maps at creation)
   longitude         Float?   // Geocoded longitude (stored from Google Maps at creation)
   closestMetro      Float?   // Distance to closest metro (in km or minutes)

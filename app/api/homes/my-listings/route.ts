@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ homes: formattedHomes }, { status: 200 })
+    const slotsUsed = formattedHomes.filter(h => h.slotPromoted).length
+    return NextResponse.json({ homes: formattedHomes, slotsUsed }, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'Get my listings error')
     return NextResponse.json(

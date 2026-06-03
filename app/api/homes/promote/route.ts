@@ -1,94 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
-import { checkTier } from '@/lib/subscription'
+import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
+import { getSlotLimit, checkTier } from '@/lib/subscription'
 import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
-    if (!user) {
-      return unauthorized()
-    }
+    if (!user) return unauthorized()
 
-    // Check if user has owner/broker role
     const userRole = user.role || 'user'
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
-      return forbidden('Only owners and brokers can promote homes')
+      return forbidden('Only owners and brokers can promote listings')
     }
 
-    const body = await request.json()
-    const { homeKey, days, isPremium } = body
-
-    const tierBlock = checkTier(user.subscriptionTier ?? 'free', isPremium ? 'pro' : 'plus')
+    const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
     if (tierBlock) return tierBlock
 
-    const parsedDays = parsePositiveInt(days)
+    const body = await request.json()
+    const { homeKey, mode } = body
 
-    if (!homeKey || !parsedDays) {
-      return badRequest('Missing required fields')
+    if (!homeKey || !['slot', 'boost'].includes(mode)) {
+      return badRequest('homeKey and mode ("slot" | "boost") are required')
     }
 
-    // Validate days
-    if (parsedDays !== 7 && parsedDays !== 30) {
-      return badRequest('Invalid promotion duration. Must be 7 or 30 days.')
-    }
-
-    // Find the home and verify ownership
     const home = await prisma.home.findUnique({
       where: { key: homeKey },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, slotPromoted: true, promotedUntil: true },
     })
+    if (!home) return notFound('Home not found')
+    if (home.ownerId !== user.id) return forbidden('You do not own this home')
 
-    if (!home) {
-      return notFound('Home not found')
-    }
+    const tier = user.subscriptionTier ?? 'free'
 
-    if (home.ownerId !== user.id) {
-      return forbidden('You do not own this home')
-    }
+    if (mode === 'slot') {
+      if (home.slotPromoted) {
+        // Toggle off — free up the slot
+        await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: false } })
+        return NextResponse.json({ ok: true, slotPromoted: false })
+      }
 
-    // Get current home to check existing promotions
-    const currentHome = await prisma.home.findUnique({
-      where: { key: homeKey },
-      select: { promotedUntil: true, premiumPromotedUntil: true },
-    })
-
-    // Calculate promotion end date
-    const now = new Date()
-    const promotedUntil = new Date(now.getTime() + parsedDays * 24 * 60 * 60 * 1000)
-
-    // Update home with promotion
-    if (isPremium) {
-      // Premium promotion: set premiumPromotedUntil
-      // If standard promotion exists and is later, keep it; otherwise update it too
-      const standardPromotedUntil = currentHome?.promotedUntil && currentHome.promotedUntil > promotedUntil
-        ? currentHome.promotedUntil
-        : promotedUntil
-
-      await prisma.home.update({
-        where: { key: homeKey },
-        data: {
-          premiumPromotedUntil: promotedUntil,
-          promotedUntil: standardPromotedUntil,
-        },
+      // Check slot availability
+      const slotLimit = getSlotLimit(tier)
+      const slotsUsed = await prisma.home.count({
+        where: { ownerId: user.id, slotPromoted: true },
       })
-    } else {
-      // Standard promotion: set promotedUntil
-      await prisma.home.update({
-        where: { key: homeKey },
-        data: {
-          promotedUntil: promotedUntil,
-        },
-      })
+
+      if (slotsUsed >= slotLimit) {
+        return NextResponse.json(
+          { error: 'no_slots_available', slotsUsed, slotLimit, message: 'All your promotion slots are in use.' },
+          { status: 409 }
+        )
+      }
+
+      await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: true } })
+      return NextResponse.json({ ok: true, slotPromoted: true })
     }
 
-    return NextResponse.json({ success: true })
+    // mode === 'boost' — pay-per-boost (€4.99 / 30 days)
+    // TODO: gate behind Stripe payment before setting promotedUntil
+    const promotedUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    await prisma.home.update({ where: { id: home.id }, data: { promotedUntil } })
+    return NextResponse.json({ ok: true, promotedUntil: promotedUntil.toISOString() })
+
   } catch (error) {
     log.error({ err: error }, 'Error promoting home')
     return serverError()
   }
 }
-

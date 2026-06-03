@@ -18,8 +18,9 @@ const FEATURE_GROUPS: {
       { en: 'Up to 3 listings', el: 'Έως 3 αγγελίες', tiers: ['free'] },
       { en: 'Unlimited listings', el: 'Απεριόριστες αγγελίες', tiers: ['plus', 'pro'] },
       { en: 'Bulk upload via Excel + AI descriptions', el: 'Μαζική ανάρτηση + AI περιγραφές', tiers: ['plus', 'pro'] },
-      { en: 'Standard listing promotion', el: 'Τυπική προώθηση αγγελίας', tiers: ['plus', 'pro'] },
-      { en: 'Premium listing placement', el: 'Premium τοποθέτηση αγγελίας', tiers: ['pro'] },
+      { en: '2 always-on promotion slots', el: '2 θέσεις προβολής (πάντα ενεργές)', tiers: ['plus'] },
+      { en: '5 always-on slots — ranked above Plus', el: '5 θέσεις προβολής — πάνω από Plus', tiers: ['pro'] },
+      { en: 'Pay-per-boost: €4.99 / 30 days (extra listings)', el: 'Boost €4.99 / 30 μέρες (επιπλέον αγγελίες)', tiers: ['plus', 'pro'] },
     ],
   },
   {
@@ -204,8 +205,8 @@ function UpgradePageInner() {
                         </p>
                         <p className="text-sm text-[var(--text)]">
                           {isPlus
-                            ? (isEl ? 'Απεριόριστες αγγελίες, μαζική ανάρτηση, στατιστικά, Viber ειδοποιήσεις' : 'Unlimited listings, bulk upload, analytics, Viber alerts')
-                            : (isEl ? 'Όλα τα Plus + premium τοποθέτηση, portfolio analytics, branding γραφείου' : 'Everything in Plus + premium placement, portfolio analytics, agency branding')}
+                            ? (isEl ? 'Απεριόριστες αγγελίες, 2 θέσεις προβολής, analytics, Viber ειδοποιήσεις' : 'Unlimited listings, 2 promotion slots, analytics, Viber alerts')
+                            : (isEl ? 'Όλα τα Plus + 5 θέσεις πάνω από Plus, portfolio analytics, branding' : 'Everything in Plus + 5 slots ranked above Plus, portfolio analytics, branding')}
                         </p>
                       </div>
                     )}

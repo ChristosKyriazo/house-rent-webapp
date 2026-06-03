@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         owner: {
-          select: { id: true, email: true, name: true, createdAt: true },
+          select: { id: true, email: true, name: true, createdAt: true, subscriptionTier: true },
         },
       },
     })
@@ -401,6 +401,19 @@ export async function GET(request: NextRequest) {
     if (excludeHomeIds.length > 0) {
       homes = homes.filter(home => !excludeHomeIds.includes(home.id))
     }
+
+    // Promotion ranking: Pro slot → Plus slot → Pay-per-boost active → Normal
+    const now = new Date()
+    homes.sort((a, b) => {
+      const rank = (h: typeof a) => {
+        if (h.slotPromoted) return (h.owner as any)?.subscriptionTier === 'pro' ? 0 : 1
+        if (h.promotedUntil && h.promotedUntil > now) return 2
+        return 3
+      }
+      const diff = rank(a) - rank(b)
+      if (diff !== 0) return diff
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
 
     // Pagination — default 50, max 200
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200)
