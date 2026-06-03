@@ -265,27 +265,69 @@ function ProfilePageInner() {
               </svg>
             </div>
 
-                    <div className="flex flex-col items-center gap-1">
-                      <h1 className="text-3xl font-bold text-[var(--text)] mb-1">{displayName}</h1>
-                      {(user.subscriptionTier ?? 'free') === 'plus' && (
-                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-                          Plus
-                        </span>
-                      )}
-                      {(user.subscriptionTier ?? 'free') === 'pro' && (
-                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                          Pro
-                        </span>
-                      )}
+                    <div className="flex flex-col items-center gap-3">
+                      <h1 className="text-3xl font-bold text-[var(--text)]">{displayName}</h1>
+
+                      {/* Tier badge + CTA */}
                       {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && (
-                        <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors underline underline-offset-2">
-                          {language === 'el' ? 'Αναβάθμιση πλάνου' : 'Upgrade plan'}
+                        <Link
+                          href="/upgrade"
+                          className="group relative flex items-center gap-2 px-4 py-2 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(245,158,11,0.2) 0%, rgba(217,119,6,0.12) 100%)',
+                            border: '1px solid rgba(245,158,11,0.35)',
+                            boxShadow: '0 0 16px rgba(245,158,11,0.12)',
+                          }}
+                        >
+                          <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent" />
+                          <span className="text-sm">✨</span>
+                          <span className="text-sm font-semibold text-amber-300">
+                            {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
+                          </span>
+                          <span className="text-amber-500 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
                         </Link>
                       )}
-                      {(user.subscriptionTier ?? 'free') !== 'free' && isOwnProfile && (
-                        <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-                          {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'}
-                        </Link>
+
+                      {(user.subscriptionTier ?? 'free') === 'plus' && (
+                        <div className="flex flex-col items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(217,119,6,0.15))',
+                              border: '1px solid rgba(245,158,11,0.4)',
+                              color: '#fbbf24',
+                              boxShadow: '0 0 12px rgba(245,158,11,0.15)',
+                            }}
+                          >
+                            ✦ Plus
+                          </span>
+                          {isOwnProfile && (
+                            <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-amber-400 transition-colors">
+                              {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'} →
+                            </Link>
+                          )}
+                        </div>
+                      )}
+
+                      {(user.subscriptionTier ?? 'free') === 'pro' && (
+                        <div className="flex flex-col items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(120,113,108,0.3), rgba(87,83,78,0.2))',
+                              border: '1px solid rgba(161,155,150,0.3)',
+                              color: '#d6d3d1',
+                              boxShadow: '0 0 12px rgba(0,0,0,0.2)',
+                            }}
+                          >
+                            ◆ Pro
+                          </span>
+                          {isOwnProfile && (
+                            <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                              {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'} →
+                            </Link>
+                          )}
+                        </div>
                       )}
                     </div>
           </div>
@@ -399,6 +441,43 @@ function ProfilePageInner() {
                 {user.role === 'broker' && `🏢 ${translateRole(language, 'broker')}`}
               </p>
             </div>
+
+            {/* Plan row — only on own profile */}
+            {isOwnProfile && (
+              <div className="pb-4 border-b border-[var(--border-subtle)]">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+                  {language === 'el' ? 'Πλάνο' : 'Plan'}
+                </label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {(user.subscriptionTier ?? 'free') === 'free' && (
+                      <span className="text-sm text-[var(--text-muted)]">
+                        {language === 'el' ? 'Δωρεάν' : 'Free'} · {language === 'el' ? 'Έως 3 αγγελίες' : 'Up to 3 listings'}
+                      </span>
+                    )}
+                    {(user.subscriptionTier ?? 'free') === 'plus' && (
+                      <span className="text-sm text-amber-300">
+                        ✦ Plus · {language === 'el' ? 'Απεριόριστες αγγελίες, analytics, Viber' : 'Unlimited listings, analytics, Viber'}
+                      </span>
+                    )}
+                    {(user.subscriptionTier ?? 'free') === 'pro' && (
+                      <span className="text-sm text-stone-300">
+                        ◆ Pro · {language === 'el' ? 'Όλα τα Plus + portfolio & branding' : 'Everything in Plus + portfolio & branding'}
+                      </span>
+                    )}
+                  </div>
+                  <Link
+                    href="/upgrade"
+                    className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
+                  >
+                    {(user.subscriptionTier ?? 'free') === 'free'
+                      ? (language === 'el' ? 'Αναβάθμιση' : 'Upgrade')
+                      : (language === 'el' ? 'Διαχείριση' : 'Manage')}
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'memberSince')}</label>
               <p className="text-lg text-[var(--text)]">
