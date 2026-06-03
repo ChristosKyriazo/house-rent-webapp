@@ -253,13 +253,13 @@ export default function MyListingsPage() {
                         })}
                       </p>
                       {subscriptionTier === 'free' ? (
-                        <button
-                          disabled
+                        <Link
+                          href="/upgrade"
+                          className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 transition-colors"
                           title={language === 'el' ? 'Απαιτείται Plus' : 'Requires Plus'}
-                          className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
                         >
                           ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
-                        </button>
+                        </Link>
                       ) : (
                         <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
                           ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}

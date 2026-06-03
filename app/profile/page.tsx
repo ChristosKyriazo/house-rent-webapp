@@ -278,8 +278,13 @@ function ProfilePageInner() {
                         </span>
                       )}
                       {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && (
-                        <Link href="#" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors underline underline-offset-2">
+                        <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors underline underline-offset-2">
                           {language === 'el' ? 'Αναβάθμιση πλάνου' : 'Upgrade plan'}
+                        </Link>
+                      )}
+                      {(user.subscriptionTier ?? 'free') !== 'free' && isOwnProfile && (
+                        <Link href="/upgrade" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+                          {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'}
                         </Link>
                       )}
                     </div>

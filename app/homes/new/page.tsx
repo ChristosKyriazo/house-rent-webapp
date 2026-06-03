@@ -427,11 +427,7 @@ export default function NewHomePage() {
 
       if (!response.ok) {
         if (response.status === 402) {
-          setError(
-            language === 'el'
-              ? 'Έχετε φτάσει το όριο του δωρεάν πλάνου (3 ακίνητα). Αναβαθμίστε σε Plus για απεριόριστες καταχωρήσεις.'
-              : "You've reached the free plan limit (3 listings). Upgrade to Plus to add unlimited listings."
-          )
+          router.push('/upgrade')
           return
         }
         const errorMsg = data.details
