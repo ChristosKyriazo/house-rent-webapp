@@ -41,6 +41,7 @@ export default function MyListingsPage() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,6 +56,7 @@ export default function MyListingsPage() {
           router.push('/profile')
           return
         }
+        setSubscriptionTier(profileData.user.subscriptionTier ?? 'free')
 
         const homesResponse = await fetch('/api/homes/my-listings')
         if (homesResponse.ok) {
@@ -242,7 +244,7 @@ export default function MyListingsPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+                    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
                       <p className="text-xs text-[var(--text-muted)]">
                         {getTranslation(language, 'publishedOn')} {new Date(home.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                           year: 'numeric',
@@ -250,6 +252,19 @@ export default function MyListingsPage() {
                           day: 'numeric',
                         })}
                       </p>
+                      {subscriptionTier === 'free' ? (
+                        <button
+                          disabled
+                          title={language === 'el' ? 'Απαιτείται Plus' : 'Requires Plus'}
+                          className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+                        >
+                          ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
+                        </button>
+                      ) : (
+                        <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
+                          ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
+                        </button>
+                      )}
                     </div>
                   </Link>
                 </div>

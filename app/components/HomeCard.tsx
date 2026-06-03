@@ -218,7 +218,7 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
           <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
         </div>
       ) : (
-        <Link href={`/homes/${home.key}`} className="block">
+        <Link href={`/homes/${home.key}?from=browse`} className="block">
           <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
         </Link>
       )}

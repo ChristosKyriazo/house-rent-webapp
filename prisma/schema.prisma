@@ -18,6 +18,7 @@ model User {
   title           String?
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
+  subscriptionTier String   @default("free") // "free" | "plus" | "pro"
   verified        Boolean   @default(false)  // verified owner/broker badge
   calComUsername  String?   // Cal.com username (optional, for direct link)
   calComAccessToken String? // Cal.com OAuth access token
@@ -83,6 +84,7 @@ model Home {
   availabilities    Availability[]
   embeddingQueue    EmbeddingQueue?
   savedBy           SavedHome[]
+  listingViews      ListingView[]
 
   @@index([finalized])
   @@index([finalized, city, listingType])
@@ -302,13 +304,18 @@ model SearchLog {
 }
 
 model ListingView {
-  id       Int      @id @default(autoincrement())
-  userId   Int?
-  homeId   Int
-  viewedAt DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  userId          Int?
+  sessionId       String?  // anonymous session ID (client-generated UUID in sessionStorage, cleared on tab close)
+  homeId          Int
+  source          String?  // "direct" | "browse" | "ai_search" | "filter_search" | "map" | "saved" | "compare"
+  durationSeconds Int?     // time on page in seconds, sent by client on page leave via sendBeacon
+  viewedAt        DateTime @default(now())
+  home            Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
 
   @@index([homeId, viewedAt])
   @@index([userId])
+  @@index([homeId, source])
   @@map("listing_views")
 }
 

@@ -7,6 +7,7 @@ import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue } from '@/lib/translations'
 import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
+import { meetsMinimumTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
@@ -451,6 +452,16 @@ export async function POST(request: NextRequest) {
         { error: 'Only owners can create listings' },
         { status: 403 }
       )
+    }
+
+    if (!meetsMinimumTier(user.subscriptionTier ?? 'free', 'plus')) {
+      const activeCount = await prisma.home.count({ where: { ownerId: user.id } })
+      if (activeCount >= 3) {
+        return NextResponse.json(
+          { error: 'subscription_required', requiredTier: 'plus', message: 'This feature requires a plus subscription.' },
+          { status: 402 }
+        )
+      }
     }
 
     const rawBody = await request.json()

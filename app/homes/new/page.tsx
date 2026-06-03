@@ -426,12 +426,19 @@ export default function NewHomePage() {
       }
 
       if (!response.ok) {
-        // Show detailed error message if available
-        const errorMsg = data.details 
+        if (response.status === 402) {
+          setError(
+            language === 'el'
+              ? 'Έχετε φτάσει το όριο του δωρεάν πλάνου (3 ακίνητα). Αναβαθμίστε σε Plus για απεριόριστες καταχωρήσεις.'
+              : "You've reached the free plan limit (3 listings). Upgrade to Plus to add unlimited listings."
+          )
+          return
+        }
+        const errorMsg = data.details
           ? `${data.error || getTranslation(language, 'createListingFailed')}: ${data.details}`
           : data.error || getTranslation(language, 'createListingFailed')
         setError(errorMsg)
-        console.error('Create listing error:', { 
+        console.error('Create listing error:', {
           status: response.status, 
           statusText: response.statusText,
           data,

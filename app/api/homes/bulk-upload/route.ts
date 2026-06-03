@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { checkTier } from '@/lib/subscription'
 import { processBulkUploadJob } from '@/lib/bulk-upload-processor'
 import * as XLSX from 'xlsx'
 import { writeFile, mkdir } from 'fs/promises'
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
     if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
       return NextResponse.json({ error: 'Only owners and brokers can upload listings' }, { status: 403 })
     }
+
+    const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
+    if (tierBlock) return tierBlock
 
     const formData = await request.formData()
     const excelFile = formData.get('excelFile') as File

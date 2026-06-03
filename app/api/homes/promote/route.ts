@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { badRequest, forbidden, notFound, parsePositiveInt, serverError, unauthorized } from '@/lib/api-utils'
+import { checkTier } from '@/lib/subscription'
 import { requestLogger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { homeKey, days, isPremium } = body
+
+    const tierBlock = checkTier(user.subscriptionTier ?? 'free', isPremium ? 'pro' : 'plus')
+    if (tierBlock) return tierBlock
 
     const parsedDays = parsePositiveInt(days)
 

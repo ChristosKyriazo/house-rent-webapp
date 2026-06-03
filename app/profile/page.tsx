@@ -16,6 +16,7 @@ interface User {
   dateOfBirth: string | null
   occupation: string | null
   role: string
+  subscriptionTier?: 'free' | 'plus' | 'pro'
   createdAt: string
 }
 
@@ -264,7 +265,24 @@ function ProfilePageInner() {
               </svg>
             </div>
 
-                    <h1 className="text-3xl font-bold text-[var(--text)] mb-6">{displayName}</h1>
+                    <div className="flex flex-col items-center gap-1">
+                      <h1 className="text-3xl font-bold text-[var(--text)] mb-1">{displayName}</h1>
+                      {(user.subscriptionTier ?? 'free') === 'plus' && (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                          Plus
+                        </span>
+                      )}
+                      {(user.subscriptionTier ?? 'free') === 'pro' && (
+                        <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          Pro
+                        </span>
+                      )}
+                      {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && (
+                        <Link href="#" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors underline underline-offset-2">
+                          {language === 'el' ? 'Αναβάθμιση πλάνου' : 'Upgrade plan'}
+                        </Link>
+                      )}
+                    </div>
           </div>
 
           {/* Ratings Section - Show based on display role */}

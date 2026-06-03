@@ -92,6 +92,7 @@ export default function HomeDetailPage() {
   const [hasScheduledViewingAppointment, setHasScheduledViewingAppointment] = useState(false)
   const { selectedRole, actualRole } = useRole()
   const thumbnailScrollRef = useRef<HTMLDivElement>(null)
+  const sessionIdRef = useRef<string>('')
   
   // Translate description based on current language
   const { translatedDescription } = useTranslatedDescription(
@@ -503,6 +504,38 @@ export default function HomeDetailPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showPhotoLightbox, photos.length])
+
+  // Fire view tracking event once the listing is loaded
+  useEffect(() => {
+    if (!home) return
+    const startTimeMs = Date.now()
+    const sid = (() => {
+      if (typeof window === 'undefined') return ''
+      let s = sessionStorage.getItem('kaparro_sid')
+      if (!s) {
+        s = crypto.randomUUID()
+        sessionStorage.setItem('kaparro_sid', s)
+      }
+      return s
+    })()
+    sessionIdRef.current = sid
+    const source = searchParams.get('from') || 'direct'
+
+    fetch(`/api/homes/${params.id}/view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, sessionId: sid }),
+    }).catch(() => {})
+
+    return () => {
+      const durationSeconds = Math.floor((Date.now() - startTimeMs) / 1000)
+      if (durationSeconds < 1) return
+      const payload = JSON.stringify({ sessionId: sid, durationSeconds })
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(`/api/homes/${params.id}/view/duration`, payload)
+      }
+    }
+  }, [home?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch areas for translation
   useEffect(() => {

@@ -7,6 +7,7 @@ import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
 import NavBarWrapper from "./components/NavBarWrapper";
 import OTPCursorFix from "./components/OTPCursorFix";
 import AtmosphereBackground from "./components/visual/AtmosphereBackground";
+import AppFooter from "./components/AppFooter";
 import { ClerkProvider } from "@clerk/nextjs";
 
 const fraunces = Fraunces({
@@ -50,6 +51,7 @@ export default function RootLayout({
               </NavBarWrapper>
               {/* z-0 keeps page layers below --z-chrome nav (stacking contexts from transforms would otherwise hide the burger) */}
               <main className="relative z-0 min-h-screen">{children}</main>
+              <AppFooter />
             </div>
           </LanguageProviderWrapper>
         </body>
