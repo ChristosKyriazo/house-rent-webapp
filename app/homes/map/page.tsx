@@ -70,10 +70,14 @@ function MapContent() {
           map,
           title: getHomeTitle(language, home),
           label: {
-            text: `€${(home.pricePerMonth / 1000).toFixed(0)}k`,
+            text: home.listingType === 'rent'
+              ? `€${home.pricePerMonth.toLocaleString()}/μ`
+              : home.pricePerMonth >= 1000
+                ? `€${(home.pricePerMonth / 1000).toFixed(0)}k`
+                : `€${home.pricePerMonth.toLocaleString()}`,
             color: '#0c0f14',
             fontWeight: 'bold',
-            fontSize: '11px',
+            fontSize: '10px',
           },
           icon: {
             path: window.google.maps.SymbolPath.CIRCLE,
@@ -122,20 +126,18 @@ function MapContent() {
         <button onClick={() => router.back()} className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
           ← {isEl ? 'Πίσω' : 'Back'}
         </button>
-        <h1 className="text-sm font-bold text-[var(--text)]">
-          🗺 {isEl ? `${homes.length} ακίνητα στον χάρτη` : `${homes.length} properties on map`}
-        </h1>
-        <div className="flex gap-2">
+        <div className="flex gap-1 rounded-2xl bg-[var(--surface)] p-1 border border-[var(--border-subtle)]">
           {(['rent', 'buy'] as const).map(t => (
             <Link
               key={t}
               href={`/homes/map?type=${t}`}
-              className={`rounded-xl px-3 py-1 text-xs font-semibold transition-all ${type === t ? 'bg-[var(--accent)] text-[var(--ink)]' : 'bg-[var(--surface)] text-[var(--text-muted)]'}`}
+              className={`rounded-xl px-4 py-1.5 text-sm font-semibold transition-all ${type === t ? 'bg-[var(--accent)] text-[var(--ink)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
               {t === 'rent' ? (isEl ? 'Ενοικίαση' : 'Rent') : (isEl ? 'Αγορά' : 'Buy')}
             </Link>
           ))}
         </div>
+        <div className="w-16" />{/* spacer to keep toggle centred */}
       </div>
 
       <div className="relative flex-1">
@@ -169,7 +171,10 @@ function MapContent() {
             )}
             <p className="font-bold text-[var(--text)] line-clamp-2">{getHomeTitle(language, selected)}</p>
             <p className="mt-1 text-sm text-[var(--accent)] font-semibold">
-              €{selected.pricePerMonth.toLocaleString()}{selected.listingType === 'rent' ? '/mo' : ''}
+              €{selected.pricePerMonth.toLocaleString()}
+              {selected.listingType === 'rent'
+                ? (isEl ? '/μήνα' : '/mo')
+                : (isEl ? ' συνολικά' : ' total')}
             </p>
             <p className="text-xs text-[var(--text-muted)]">
               {selected.bedrooms} {isEl ? 'υπνοδ.' : 'bed'} · {getCityName(selected.city, [], language)}
