@@ -152,6 +152,7 @@ function ProfilePageInner() {
   // Calculate username
   const displayName = user.name || user.email.split('@')[0]
   const userRole = user.role || 'user'
+  const isOwnerOrBroker = userRole === 'owner' || userRole === 'broker' || userRole === 'both'
   
   // Get query parameters
   const userIdParam = searchParams.get('userId')
@@ -268,8 +269,8 @@ function ProfilePageInner() {
                     <div className="flex flex-col items-center gap-3">
                       <h1 className="text-3xl font-bold text-[var(--text)]">{displayName}</h1>
 
-                      {/* Tier badge + CTA */}
-                      {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && (
+                      {/* Tier badge + CTA — owners/brokers only */}
+                      {(user.subscriptionTier ?? 'free') === 'free' && isOwnProfile && isOwnerOrBroker && (
                         <Link
                           href="/upgrade"
                           className="group relative flex items-center gap-2 px-4 py-2 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]"
@@ -288,7 +289,7 @@ function ProfilePageInner() {
                         </Link>
                       )}
 
-                      {(user.subscriptionTier ?? 'free') === 'plus' && (
+                      {(user.subscriptionTier ?? 'free') === 'plus' && isOwnerOrBroker && (
                         <div className="flex flex-col items-center gap-1.5">
                           <span
                             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
@@ -309,7 +310,7 @@ function ProfilePageInner() {
                         </div>
                       )}
 
-                      {(user.subscriptionTier ?? 'free') === 'pro' && (
+                      {(user.subscriptionTier ?? 'free') === 'pro' && isOwnerOrBroker && (
                         <div className="flex flex-col items-center gap-1.5">
                           <span
                             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold"
@@ -442,8 +443,8 @@ function ProfilePageInner() {
               </p>
             </div>
 
-            {/* Plan row — only on own profile */}
-            {isOwnProfile && (
+            {/* Plan row — owners/brokers on own profile only */}
+            {isOwnProfile && isOwnerOrBroker && (
               <div className="pb-4 border-b border-[var(--border-subtle)]">
                 <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                   {language === 'el' ? 'Πλάνο' : 'Plan'}

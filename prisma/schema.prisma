@@ -19,6 +19,7 @@ model User {
   occupation      String?
   role            String    @default("user") // "owner", "user", or "both"
   subscriptionTier String   @default("free") // "free" | "plus" | "pro"
+  viberAlertsActive Boolean @default(false)  // paid Viber/SMS push alerts (renter one-time purchase)
   verified        Boolean   @default(false)  // verified owner/broker badge
   calComUsername  String?   // Cal.com username (optional, for direct link)
   calComAccessToken String? // Cal.com OAuth access token
