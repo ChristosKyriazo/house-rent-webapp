@@ -19,12 +19,12 @@ const securityHeaders = [
       // clerk.accounts.dev  = development instances
       // clerk.com / *.clerk.com = production instances (Frontend API lives on a subdomain)
       // *.kaparro.com = Clerk production serves clerk.js from clerk.<your-domain>
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://challenges.cloudflare.com https://maps.googleapis.com",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com https://challenges.cloudflare.com https://maps.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com wss:",
-      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com",
+      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com https://maps.google.com wss:",
+      "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com",
       "worker-src 'self' blob:",
       // Allow Google Maps trusted-types policy alongside Clerk's policy
       "trusted-types 'allow-duplicates' goog#html google-maps-api#html lit-html default",
