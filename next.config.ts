@@ -19,7 +19,7 @@ const securityHeaders = [
       // clerk.accounts.dev  = development instances
       // clerk.com / *.clerk.com = production instances (Frontend API lives on a subdomain)
       // *.kaparro.com = Clerk production serves clerk.js from clerk.<your-domain>
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://challenges.cloudflare.com",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com https://*.kaparro.com https://challenges.cloudflare.com https://maps.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
