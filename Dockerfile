@@ -26,6 +26,8 @@ ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+# Verify Maps key is present at build time (prints key length, not the key itself)
+RUN echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY length: ${#NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}"
 # Clerk needs a key with valid format during build-time module init; the placeholder
 # is never used at runtime — docker-compose.prod.yml injects the real value via .env.
 ARG CLERK_SECRET_KEY=sk_test_placeholder

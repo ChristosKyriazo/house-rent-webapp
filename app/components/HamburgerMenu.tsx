@@ -326,8 +326,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
             })}
           </nav>
           
-          {/* Upgrade link — only for free-tier owners/brokers */}
-          {subscriptionTier === 'free' && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
+          {/* Upgrade link — all free-tier authenticated users */}
+          {subscriptionTier === 'free' && (
             <div className="border-t border-[var(--border-subtle)] pt-4 mb-2">
               <Link
                 href="/upgrade"
