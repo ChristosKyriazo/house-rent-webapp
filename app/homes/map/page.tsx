@@ -117,8 +117,8 @@ function MapContent() {
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3">
+      {/* Top bar — offset from top to clear the fixed hamburger nav */}
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
         <button onClick={() => router.back()} className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
           ← {isEl ? 'Πίσω' : 'Back'}
         </button>
