@@ -21,6 +21,7 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
 ARG NEXT_PUBLIC_SENTRY_DSN=
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 # Clerk needs a key with valid format during build-time module init; the placeholder
 # is never used at runtime — docker-compose.prod.yml injects the real value via .env.
 ARG CLERK_SECRET_KEY=sk_test_placeholder

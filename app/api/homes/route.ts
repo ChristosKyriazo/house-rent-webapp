@@ -538,6 +538,8 @@ export async function POST(request: NextRequest) {
 
     // Calculate distances using Google Maps API (7 API calls: 1 geocoding + 6 places in parallel)
     let distances: {
+      latitude: number | null
+      longitude: number | null
       closestMetro: number | null
       closestBus: number | null
       closestSchool: number | null
@@ -545,6 +547,8 @@ export async function POST(request: NextRequest) {
       closestPark: number | null
       closestUniversity: number | null
     } = {
+      latitude: null,
+      longitude: null,
       closestMetro: null,
       closestBus: null,
       closestSchool: null,
@@ -568,7 +572,7 @@ export async function POST(request: NextRequest) {
         englishCountry
       )
       
-      // Extract just the distances for database storage
+      // Extract distances and coordinates for database storage
       distances = {
         closestMetro: distanceResult.closestMetro,
         closestBus: distanceResult.closestBus,
@@ -576,6 +580,8 @@ export async function POST(request: NextRequest) {
         closestHospital: distanceResult.closestHospital,
         closestPark: distanceResult.closestPark,
         closestUniversity: distanceResult.closestUniversity,
+        latitude: distanceResult.propertyCoordinates?.lat ?? null,
+        longitude: distanceResult.propertyCoordinates?.lng ?? null,
       }
       
       // Store full details for logging/verification
@@ -698,7 +704,9 @@ export async function POST(request: NextRequest) {
         availableFrom: availableFromDate,
               photos: (photos as string | null | undefined) || null,
               photoTagsArray: photoTagsList,
-              // Distance values from Google Maps API
+              // Distance values and coordinates from Google Maps API
+              latitude: distances.latitude,
+              longitude: distances.longitude,
               closestMetro: distances.closestMetro,
               closestBus: distances.closestBus,
               closestSchool: distances.closestSchool,

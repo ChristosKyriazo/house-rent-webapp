@@ -282,7 +282,9 @@ export async function PUT(
         
         log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, bus: distanceResult.closestBus, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
 
-        // Update distance fields
+        // Update distance fields and coordinates
+        updateData.latitude = distanceResult.propertyCoordinates?.lat ?? null
+        updateData.longitude = distanceResult.propertyCoordinates?.lng ?? null
         updateData.closestMetro = distanceResult.closestMetro
         updateData.closestBus = distanceResult.closestBus
         updateData.closestSchool = distanceResult.closestSchool
