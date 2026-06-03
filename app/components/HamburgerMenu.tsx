@@ -332,10 +332,25 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
               <Link
                 href="/upgrade"
                 onClick={() => closeMenu()}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/15 transition-colors"
+                className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245,158,11,0.25) 0%, rgba(217,119,6,0.15) 100%)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  boxShadow: '0 0 20px rgba(245,158,11,0.15), inset 0 1px 0 rgba(255,255,255,0.05)',
+                }}
               >
-                <span className="text-xl">⭐</span>
-                <span className="text-sm font-semibold">{language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}</span>
+                {/* shimmer */}
+                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent" />
+                <span className="text-xl animate-pulse">✨</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-300 leading-none mb-0.5">
+                    {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
+                  </p>
+                  <p className="text-xs text-amber-500/70">
+                    {language === 'el' ? 'Απεριόριστες αγγελίες & analytics' : 'Unlimited listings & analytics'}
+                  </p>
+                </div>
+                <span className="text-amber-400 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
               </Link>
             </div>
           )}

@@ -22,9 +22,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
 ARG NEXT_PUBLIC_SENTRY_DSN=
 ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+# Explicit ENV so Next.js build picks them up and Docker cache-busts correctly when values change
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 # Clerk needs a key with valid format during build-time module init; the placeholder
 # is never used at runtime — docker-compose.prod.yml injects the real value via .env.
 ARG CLERK_SECRET_KEY=sk_test_placeholder
+ENV CLERK_SECRET_KEY=$CLERK_SECRET_KEY
 # DATABASE_URL is NOT needed at build time: prisma generate uses the schema file,
 # not an actual DB connection. It is intentionally absent here.
 RUN npm run build

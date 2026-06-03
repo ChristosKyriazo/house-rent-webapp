@@ -195,8 +195,12 @@ function UpgradePageInner() {
                   >
                     {/* Most popular badge */}
                     {isPlus && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                        <span className="px-3 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-400 border border-amber-500/30 font-[var(--font-outfit)]">
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                        </span>
+                        <span className="px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-amber-500 text-stone-950 font-[var(--font-outfit)]">
                           {isEl ? 'Πιο δημοφιλές' : 'Most popular'}
                         </span>
                       </div>
@@ -265,18 +269,23 @@ function UpgradePageInner() {
                       onClick={() => selectTier(tier.id)}
                       disabled={isCurrent || !!upgrading}
                       className={[
-                        'w-full py-3.5 rounded-2xl font-semibold text-sm transition-all duration-200 disabled:opacity-50',
+                        'group relative w-full py-4 rounded-2xl font-bold text-sm transition-all duration-300 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed',
+                        !isCurrent && !didJustUpgrade ? 'hover:scale-[1.02] active:scale-[0.98]' : '',
                         didJustUpgrade
                           ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                           : isCurrent
                             ? 'bg-[var(--ink-soft)] text-[var(--text-muted)] cursor-default border border-[var(--border-subtle)]'
                             : isPlus
-                              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+                              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-[0_4px_24px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_32px_rgba(245,158,11,0.6)]'
                               : isPro
-                                ? 'bg-stone-700 hover:bg-stone-600 text-stone-100 border border-stone-500/40'
+                                ? 'bg-stone-700 hover:bg-stone-600 text-stone-100 border border-stone-500/40 shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
                                 : 'bg-[var(--ink-soft)] text-[var(--text)] hover:bg-[var(--canvas-mid)] border border-[var(--border-subtle)]',
                       ].join(' ')}
                     >
+                      {/* shimmer on Plus */}
+                      {isPlus && !isCurrent && (
+                        <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                      )}
                       {didJustUpgrade
                         ? `✓ ${isEl ? 'Ενεργοποιήθηκε' : 'Activated'}`
                         : isUpgrading
