@@ -302,7 +302,7 @@ export default function MyListingsPage() {
                         })}
                       </p>
                       {subscriptionTier === 'free' ? (
-                        <UpgradeGate requiredTier="plus" currentTier="free" feature="promote" mode="replace">
+                        <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="promote" mode="replace">
                           <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold">
                             ⭐ {language === 'el' ? 'Προώθηση' : 'Promote'}
                           </button>

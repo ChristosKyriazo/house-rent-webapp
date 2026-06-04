@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           occupation: true,
           role: true,
           verified: true,
+          subscriptionTier: true,
           createdAt: true,
         },
       })
@@ -105,6 +106,7 @@ export async function PATCH(request: NextRequest) {
           dateOfBirth: true,
           occupation: true,
           role: true,
+          subscriptionTier: true,
           createdAt: true,
         },
       })
@@ -132,6 +134,7 @@ export async function PATCH(request: NextRequest) {
         occupation: true,
         role: true,
         calComUsername: true,
+        subscriptionTier: true,
         createdAt: true,
       },
     })
