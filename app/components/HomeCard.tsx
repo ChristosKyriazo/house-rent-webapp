@@ -151,23 +151,6 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
       }`}
       title={isDismissed ? (language === 'el' ? 'Απέρριψες αυτό το ακίνητο' : 'You dismissed this property') : undefined}
     >
-      {/* Save + Compare — top left */}
-      <div className="absolute left-4 top-4 z-20 flex gap-1">
-        <SaveButton homeKey={home.key} size="sm" />
-        <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); onCompareToggle(home.key) }}
-          title={language === 'el' ? 'Σύγκριση' : 'Compare'}
-          aria-label={language === 'el' ? 'Σύγκριση' : 'Compare'}
-          className={`rounded-full p-2 text-xs transition-all hover:scale-110 ${
-            compareKeys.includes(home.key)
-              ? 'bg-[var(--accent)] text-[var(--ink)]'
-              : 'bg-[var(--ink-soft)] text-[var(--text-muted)] hover:text-[var(--accent)]'
-          }`}
-        >
-          ⚖
-        </button>
-      </div>
-
       {/* AI match badge — top right */}
       {home.matchPercentage !== undefined && (
         <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
@@ -222,6 +205,24 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
           <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
         </Link>
       )}
+
+      {/* Save + Compare — bottom row, outside the link so they don't overlay the title */}
+      <div className="flex items-center gap-2 pt-4 mt-2 border-t border-[var(--border-subtle)]">
+        <SaveButton homeKey={home.key} size="sm" />
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onCompareToggle(home.key) }}
+          title={language === 'el' ? 'Σύγκριση' : 'Compare'}
+          aria-label={language === 'el' ? 'Σύγκριση' : 'Compare'}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all hover:scale-105 ${
+            compareKeys.includes(home.key)
+              ? 'bg-[var(--accent)] text-[var(--ink)]'
+              : 'bg-[var(--ink-soft)] text-[var(--text-muted)] hover:text-[var(--accent)]'
+          }`}
+        >
+          <span>⚖</span>
+          <span>{language === 'el' ? 'Σύγκριση' : 'Compare'}</span>
+        </button>
+      </div>
     </div>
   )
 }

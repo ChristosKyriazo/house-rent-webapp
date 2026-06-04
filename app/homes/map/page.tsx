@@ -58,6 +58,7 @@ function MapContent() {
   const homesRef = useRef<Home[]>([])
   const languageRef = useRef(language)
   const scriptTaggedRef = useRef(false)
+  const loadedLangRef = useRef<string | null>(null)
 
   const [homes, setHomes] = useState<Home[]>([])
   const [selected, setSelected] = useState<Home | null>(null)
@@ -306,15 +307,29 @@ function MapContent() {
   useEffect(() => {
     if (!apiKey || !mapRef.current) return
     const lang = language === 'el' ? 'el' : 'en'
+
+    // If language changed after the map was already loaded, tear down and reload
+    if (window.google && loadedLangRef.current && loadedLangRef.current !== lang) {
+      document.querySelector('script[src*="maps.googleapis.com"]')?.remove()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).google
+      mapInstanceRef.current = null
+      scriptTaggedRef.current = false
+    }
+
     const initMapInstance = () => {
       if (!mapRef.current) return
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: 37.9838, lng: 23.7275 },
         zoom: 12,
+        // Move Map/Satellite toggle to top-right so it doesn't clash with our filter panel
+        mapTypeControlOptions: { position: window.google.maps.ControlPosition.TOP_RIGHT },
         styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
       })
+      loadedLangRef.current = lang
       renderMarkers()
     }
+
     if (window.google) {
       if (!mapInstanceRef.current) initMapInstance()
     } else if (!scriptTaggedRef.current) {
@@ -328,8 +343,8 @@ function MapContent() {
     } else {
       window.initMap = initMapInstance
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey])
+   
+  }, [apiKey, language])
 
   useEffect(() => { renderMarkers() }, [homes, language])  
 
