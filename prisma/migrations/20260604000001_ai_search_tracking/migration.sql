@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN "aiSearchCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN "aiSearchMonthlyCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN "aiSearchMonthlyResetAt" TIMESTAMP(3);
+ALTER TABLE "users" ADD COLUMN "aiSearchPackCount" INTEGER NOT NULL DEFAULT 0;

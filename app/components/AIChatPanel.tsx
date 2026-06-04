@@ -19,6 +19,7 @@ interface AIChatPanelProps {
 
 const MAX_TOTAL_PROMPTS = 9
 const FIRST_SEARCH_TURN = 3
+const MSG_MAX_LENGTH = 200
 
 function AIChatPanel(
   { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language }: AIChatPanelProps
@@ -31,6 +32,9 @@ function AIChatPanel(
   const [paused, setPaused] = useState(false)
   const [searchCount, setSearchCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [showPurchase, setShowPurchase] = useState(false)
+  const [purchaseLoading, setPurchaseLoading] = useState(false)
+  const [packCredits, setPackCredits] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -69,6 +73,18 @@ function AIChatPanel(
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages, loading, paused])
+
+  const consumeSearchCredit = async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'consume' }) })
+      if (res.status === 402) { setShowPurchase(true); return false }
+      const data = await res.json()
+      if (data.packCredits !== undefined) setPackCredits(data.packCredits)
+      return data.ok === true
+    } catch {
+      return true // allow on network error — don't block the UX
+    }
+  }
 
   const runSearch = async (filters: object) => {
     const res = await fetch('/api/homes/ai-search', {
@@ -115,6 +131,9 @@ function AIChatPanel(
         isRefinement
 
       if (shouldSearch) {
+        const ok = await consumeSearchCredit()
+        if (!ok) { setLoading(false); return }
+
         const aiMsg = newCount >= FIRST_SEARCH_TURN && chatData.action !== 'search'
           ? t.limitReached
           : chatData.assistantMessage
@@ -150,6 +169,17 @@ function AIChatPanel(
     setTimeout(() => inputRef.current?.focus(), 80)
   }
 
+  const handlePurchase = async (size: '10' | '25' | '50') => {
+    setPurchaseLoading(true)
+    try {
+      const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'purchase', pack: size }) })
+      const data = await res.json()
+      if (data.ok) { setPackCredits(data.packCredits); setShowPurchase(false) }
+    } catch { /* silent */ } finally {
+      setPurchaseLoading(false)
+    }
+  }
+
   const handleReset = () => {
     setMessages([])
     setInput('')
@@ -158,6 +188,7 @@ function AIChatPanel(
     setPaused(false)
     setSearchCount(0)
     setError(null)
+    setShowPurchase(false)
     onResultsFound([])
     setTimeout(() => inputRef.current?.focus(), 50)
   }
@@ -268,13 +299,25 @@ function AIChatPanel(
 
       {/* Input / paused / hard-stop footer */}
       <div className="px-6 pb-6 pt-3">
-        {hardStop ? (
-          <div className="flex flex-col gap-2 py-2 text-center">
-            <p className="text-sm text-[var(--text-muted)]">{t.hardStopMsg}</p>
-            <button
-              onClick={onBack}
-              className="mx-auto rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all"
-            >
+        {(hardStop || showPurchase) ? (
+          <div className="flex flex-col gap-3 py-2">
+            {hardStop && <p className="text-sm text-[var(--text-muted)] text-center">{t.hardStopMsg}</p>}
+            <div className="rounded-xl bg-[var(--ink-soft)] border border-amber-500/30 p-4 flex flex-col gap-2.5">
+              <p className="font-[var(--font-fraunces)] text-sm italic text-white/80 text-center">
+                {isEl ? '"Βρείτε το σπίτι σας, όχι απλά μια αγγελία."' : '"Find your place, not just a listing."'}
+              </p>
+              {([['10', '€2.99', isEl ? '10 αναζητήσεις' : '10 searches'], ['25', '€5.99', isEl ? '25 αναζητήσεις' : '25 searches']] as const).map(([size, price, label]) => (
+                <button key={size} onClick={() => handlePurchase(size as '10' | '25')} disabled={purchaseLoading}
+                  className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-[var(--canvas)] border border-white/10 hover:border-amber-500/30 transition-all disabled:opacity-50">
+                  <span className="text-white font-semibold text-sm">{price}</span>
+                  <span className="text-[var(--text-muted)] text-xs">{label}</span>
+                  <span className="text-xs text-amber-400 font-semibold">{isEl ? 'Αγορά' : 'Buy'}</span>
+                </button>
+              ))}
+              <p className="text-[10px] text-white/30 text-center">{isEl ? 'Χωρίς συνδρομή. Δικά σας για πάντα.' : 'No subscription. Yours to keep.'}</p>
+            </div>
+            <button onClick={onBack}
+              className="mx-auto rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-all">
               ⚙️ {t.switchToManual}
             </button>
           </div>
@@ -293,24 +336,27 @@ function AIChatPanel(
             💬 {t.refineBtn} ({remaining} {isEl ? 'ακόμα' : 'left'})
           </button>
         ) : (
-          <div className="flex gap-3 items-end">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              placeholder={t.placeholder}
-              disabled={loading}
-              className="flex-1 resize-none rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
-            />
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="btn-primary flex-shrink-0 rounded-2xl px-5 py-3 text-sm font-semibold disabled:opacity-40"
-            >
-              {loading ? '...' : t.send}
-            </button>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-3 items-end">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value.slice(0, MSG_MAX_LENGTH))}
+                onKeyDown={handleKeyDown}
+                rows={2}
+                placeholder={t.placeholder}
+                disabled={loading}
+                className="flex-1 resize-none rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+              />
+              <button
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                className="btn-primary flex-shrink-0 rounded-2xl px-5 py-3 text-sm font-semibold disabled:opacity-40"
+              >
+                {loading ? '...' : t.send}
+              </button>
+            </div>
+            <span className="text-right text-[10px] text-[var(--text-muted)]/50">{input.length}/{MSG_MAX_LENGTH}</span>
           </div>
         )}
       </div>

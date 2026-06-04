@@ -1136,14 +1136,33 @@ function HomesPageInner() {
                 {homes.length} {homes.length === 1 ? getTranslation(language, 'listing') : getTranslation(language, 'listings')} {getTranslation(language, 'found')}
               </p>
             </div>
-            {displayRole === 'owner' && (
+            <div className="flex items-center gap-3">
+              {/* Map view button — carries current filters to the map page */}
               <Link
-                href="/homes/new"
-                className="btn-primary inline-flex items-center px-5 py-2 text-sm"
+                href={(() => {
+                  const params = new URLSearchParams({ type: searchType ?? 'rent' })
+                  if (manualFilters.minPrice) params.set('minPrice', manualFilters.minPrice)
+                  if (manualFilters.maxPrice) params.set('maxPrice', manualFilters.maxPrice)
+                  if (manualFilters.minBedrooms) params.set('minBedrooms', manualFilters.minBedrooms)
+                  if (selectedAreas.length > 0) params.set('area', selectedAreas[0])
+                  return `/homes/map?${params}`
+                })()}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors"
               >
-                + {getTranslation(language, 'newListing')}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 13l4.553 2.276A1 1 0 0021 21.382V10.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9 7" />
+                </svg>
+                {language === 'el' ? 'Χάρτης' : 'Map view'}
               </Link>
-            )}
+              {displayRole === 'owner' && (
+                <Link
+                  href="/homes/new"
+                  className="btn-primary inline-flex items-center px-5 py-2 text-sm"
+                >
+                  + {getTranslation(language, 'newListing')}
+                </Link>
+              )}
+            </div>
           </div>
         )}
 

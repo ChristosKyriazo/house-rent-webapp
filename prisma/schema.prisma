@@ -36,6 +36,10 @@ model User {
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
   bulkUploadJobs  BulkUploadJob[]
   savedHomes      SavedHome[]
+  aiSearchCount          Int       @default(0)
+  aiSearchMonthlyCount   Int       @default(0)
+  aiSearchMonthlyResetAt DateTime?
+  aiSearchPackCount      Int       @default(0)
 
   @@map("users")
 }
