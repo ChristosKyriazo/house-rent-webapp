@@ -96,8 +96,20 @@ function UpgradePageInner() {
       setJustUpgraded(tier)
       setTimeout(() => {
         setJustUpgraded(null)
-        if (fromParam) router.push(fromParam.startsWith('/') ? fromParam : `/${fromParam}`)
-        else router.refresh()
+        const FEATURE_ROUTES: Record<string, string> = {
+          'bulk-upload': '/homes/new',
+          'analytics': '/homes/my-listings',
+          'promote': '/homes/my-listings',
+          'calcom-sync': '/profile',
+          'csv-export': '/profile',
+          'portfolio-analytics': '/profile',
+        }
+        if (fromParam) {
+          const dest = fromParam.startsWith('/') ? fromParam : (FEATURE_ROUTES[fromParam] ?? '/profile')
+          router.push(dest)
+        } else {
+          router.refresh()
+        }
       }, 2000)
     } catch {
       setError(isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.')
