@@ -169,19 +169,21 @@ function MapContent() {
   }, [mode, aiMessages, conversationKey, aiPromptCount])
 
   // Consume one AI search credit
-  async function consumeCredit(): Promise<boolean> {
+  async function consumeCredit(): Promise<{ ok: boolean; remaining: number; pack: number }> {
     if (promptState.guest) {
       const stored = parseInt(localStorage.getItem(GUEST_STORAGE_KEY) ?? '0', 10)
-      if (stored >= FREE_LIMIT && promptState.packCredits === 0) return false
-      localStorage.setItem(GUEST_STORAGE_KEY, String(stored + 1))
-      setPromptState(p => ({ ...p, used: stored + 1, remaining: Math.max(0, FREE_LIMIT - stored - 1), canSearch: stored + 1 < FREE_LIMIT }))
-      return true
+      if (stored >= FREE_LIMIT && promptState.packCredits === 0) return { ok: false, remaining: 0, pack: 0 }
+      const newStored = stored + 1
+      const newRemaining = Math.max(0, FREE_LIMIT - newStored)
+      localStorage.setItem(GUEST_STORAGE_KEY, String(newStored))
+      setPromptState(p => ({ ...p, used: newStored, remaining: newRemaining, canSearch: newRemaining > 0 }))
+      return { ok: true, remaining: newRemaining, pack: promptState.packCredits }
     }
     const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'consume' }) })
-    if (res.status === 402) { setShowPurchaseModal(true); return false }
+    if (res.status === 402) { setShowPurchaseModal(true); return { ok: false, remaining: 0, pack: promptState.packCredits } }
     const data = await res.json()
     setPromptState(p => ({ ...p, remaining: data.remaining, packCredits: data.packCredits, canSearch: data.canSearch }))
-    return true
+    return { ok: true, remaining: data.remaining ?? 0, pack: data.packCredits ?? 0 }
   }
 
   // Send an AI chat message → get filters → immediately search → update pins
@@ -190,7 +192,7 @@ function MapContent() {
     if (!msg || aiLoading) return
     if (!promptState.canSearch && promptState.packCredits === 0) { setShowPurchaseModal(true); return }
 
-    const ok = await consumeCredit()
+    const { ok, remaining: newRemaining, pack: newPack } = await consumeCredit()
     if (!ok) return
 
     setAiInput('')
@@ -223,6 +225,14 @@ function MapContent() {
       const searchData = await searchRes.json()
       const matched = (searchData.homes ?? []).filter((h: Home) => h.latitude && h.longitude)
       setHomes(matched)
+
+      // Tell the user if this was their last available search
+      if (newRemaining === 0 && newPack === 0) {
+        const limitMsg = isEl
+          ? 'Αυτό είναι το τελικό αποτέλεσμα με τις διαθέσιμες αναζητήσεις σας. Αγοράστε περισσότερες για να συνεχίσετε να βελτιώνετε.'
+          : 'This is your final result with your current searches. Purchase more to keep refining.'
+        setAiMessages(prev => [...prev, { role: 'assistant', content: limitMsg }])
+      }
     } catch {
       setAiMessages(prev => [...prev, { role: 'assistant', content: isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.' }])
     } finally {
@@ -482,12 +492,25 @@ function MapContent() {
                   </div>
                 )}
 
-                {/* Search counter */}
+                {/* Search counter + last-search warning */}
                 {!atAILimit && aiPromptCount > 0 && (
-                  <div className="text-center">
-                    <span className={`text-xs px-2.5 py-1 rounded-full border ${searchesLeft <= 3 ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-white/10 text-[var(--text-muted)]'}`}>
-                      {isEl ? `${searchesLeft} αναζητήσεις αυτόν τον μήνα` : `${searchesLeft} searches left this month`}
-                    </span>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-center">
+                      <span className={`text-xs px-2.5 py-1 rounded-full border ${searchesLeft <= 3 && promptState.packCredits === 0 ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-white/10 text-[var(--text-muted)]'}`}>
+                        {promptState.packCredits > 0 && searchesLeft > 0
+                          ? (isEl ? `${searchesLeft} δωρ. + ${promptState.packCredits} pack` : `${searchesLeft} free + ${promptState.packCredits} pack`)
+                          : promptState.packCredits > 0
+                            ? (isEl ? `${promptState.packCredits} από pack` : `${promptState.packCredits} from pack`)
+                            : (isEl ? `${searchesLeft} / ${FREE_LIMIT} αυτόν τον μήνα` : `${searchesLeft} / ${FREE_LIMIT} this month`)}
+                      </span>
+                    </div>
+                    {searchesLeft === 1 && promptState.packCredits === 0 && (
+                      <p className="text-[10px] text-amber-400/80 bg-amber-500/8 border border-amber-500/20 rounded-xl px-2.5 py-1.5 leading-relaxed text-center">
+                        {isEl
+                          ? 'Τελευταία αναζήτηση — αγοράστε περισσότερες για να συνεχίσετε.'
+                          : 'Last search — purchase more to keep refining.'}
+                      </p>
+                    )}
                   </div>
                 )}
 

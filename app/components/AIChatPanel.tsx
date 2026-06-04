@@ -87,20 +87,22 @@ function AIChatPanel(
       : 'e.g. "3-bed in Thessaloniki, up to €200k, sea view"',
   }
 
-  const consumeSearchCredit = async (): Promise<boolean> => {
+  const consumeSearchCredit = async (): Promise<{ ok: boolean; remaining: number; pack: number }> => {
     try {
       const res = await fetch('/api/ai-prompt-usage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'consume' }),
       })
-      if (res.status === 402) { setShowPurchaseModal(true); return false }
+      if (res.status === 402) { setShowPurchaseModal(true); return { ok: false, remaining: 0, pack: packCredits } }
       const data = await res.json()
-      if (data.packCredits !== undefined) setPackCredits(data.packCredits)
-      if (data.remaining !== undefined && isPaid) setMonthlyRemaining(data.remaining)
-      return data.ok === true
+      const newPack = data.packCredits ?? packCredits
+      const newRemaining = data.remaining ?? 0
+      setPackCredits(newPack)
+      if (isPaid) setMonthlyRemaining(newRemaining)
+      return { ok: data.ok === true, remaining: newRemaining, pack: newPack }
     } catch {
-      return true
+      return { ok: true, remaining: searchesLeft, pack: packCredits }
     }
   }
 
@@ -148,7 +150,7 @@ function AIChatPanel(
       if (aiMsg) setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
 
       // Consume one credit and immediately search with accumulated filters
-      const ok = await consumeSearchCredit()
+      const { ok, remaining: newRemaining, pack: newPack } = await consumeSearchCredit()
       if (!ok) { setLoading(false); return }
 
       const homes = await runSearch(chatData.filters)
@@ -157,6 +159,14 @@ function AIChatPanel(
         : t.noResults
       setMessages(prev => [...prev, { role: 'assistant', content: resultMsg }])
       onResultsFound(homes)
+
+      // If this was the last available search, tell the user the result is final
+      if (newRemaining === 0 && newPack === 0) {
+        const limitMsg = isEl
+          ? 'Αυτό είναι το τελικό αποτέλεσμα με τις διαθέσιμες αναζητήσεις σας. Αγοράστε περισσότερες παρακάτω αν θέλετε να συνεχίσετε να βελτιώνετε.'
+          : 'This is your final result with your current searches. Purchase more below if you want to keep refining.'
+        setMessages(prev => [...prev, { role: 'assistant', content: limitMsg }])
+      }
     } catch {
       setError(t.errorMsg)
     } finally {
@@ -212,11 +222,15 @@ function AIChatPanel(
           <div className="flex items-center gap-3">
             {promptCount > 0 && !atLocalLimit && (
               <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                searchesLeft <= 3
+                searchesLeft <= 3 && packCredits === 0
                   ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
                   : 'border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
               }`}>
-                {searchesLeft} {isEl ? 'αναζητήσεις' : 'searches left'}
+                {packCredits > 0 && searchesLeft > 0
+                  ? (isEl ? `${searchesLeft} δωρ. + ${packCredits} pack` : `${searchesLeft} free + ${packCredits} pack`)
+                  : packCredits > 0
+                    ? (isEl ? `${packCredits} από pack` : `${packCredits} from pack`)
+                    : (isEl ? `${searchesLeft} / ${FREE_PROMPTS} αυτόν τον μήνα` : `${searchesLeft} / ${FREE_PROMPTS} this month`)}
               </span>
             )}
             {!isEmpty && (
@@ -295,6 +309,13 @@ function AIChatPanel(
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
+              {searchesLeft === 1 && packCredits === 0 && (
+                <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 leading-relaxed">
+                  {isEl
+                    ? 'Τελευταία δωρεάν αναζήτηση — το αποτέλεσμα θα είναι οριστικό εκτός αν αγοράσετε περισσότερες.'
+                    : 'Last free search — this result will be final unless you purchase more.'}
+                </p>
+              )}
               <div className="flex gap-3 items-end">
                 <textarea
                   ref={inputRef}
