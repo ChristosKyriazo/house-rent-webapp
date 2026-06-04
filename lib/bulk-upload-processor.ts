@@ -186,6 +186,8 @@ export async function processBulkUploadJob(jobId: string) {
           closestHospital: null as number | null,
           closestPark: null as number | null,
           closestUniversity: null as number | null,
+          latitude: null as number | null,
+          longitude: null as number | null,
         }
         try {
           const d = await calculatePropertyDistances(street, area, city, country)
@@ -196,6 +198,8 @@ export async function processBulkUploadJob(jobId: string) {
             closestHospital: d.closestHospital,
             closestPark: d.closestPark,
             closestUniversity: d.closestUniversity,
+            latitude: d.propertyCoordinates?.lat ?? null,
+            longitude: d.propertyCoordinates?.lng ?? null,
           }
         } catch (err) {
           log.error({ err, rowNumber }, 'Error calculating distances')
@@ -271,6 +275,8 @@ export async function processBulkUploadJob(jobId: string) {
             closestHospital: distances.closestHospital,
             closestPark: distances.closestPark,
             closestUniversity: distances.closestUniversity,
+            latitude: distances.latitude,
+            longitude: distances.longitude,
             ownerId: job.userId,
           },
         })
