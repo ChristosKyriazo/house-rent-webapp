@@ -572,7 +572,7 @@ export async function POST(request: NextRequest) {
 
     let distanceDetails: any = null
 
-    if (!checkMapsLimit(user.id)) {
+    if (!await checkMapsLimit(user.id)) {
       return NextResponse.json({ error: 'Too many requests. Please wait before creating another listing.' }, { status: 429 })
     }
 
