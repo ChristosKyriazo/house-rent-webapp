@@ -8,6 +8,8 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 
 type Tier = 'free' | 'plus' | 'pro'
 
+const TIER_RANK: Record<Tier, number> = { free: 0, plus: 1, pro: 2 }
+
 const FEATURE_GROUPS: {
   labelEn: string; labelEl: string;
   items: { en: string; el: string; tiers: Tier[] }[]
@@ -71,7 +73,10 @@ function UpgradePageInner() {
   const [currentTier, setCurrentTier] = useState<Tier>('free')
   const [loading, setLoading] = useState(true)
   const [upgrading, setUpgrading] = useState<Tier | null>(null)
-  const [justUpgraded, setJustUpgraded] = useState<Tier | null>(null)
+  const [justChanged, setJustChanged] = useState<Tier | null>(null)
+  const [lastChangeWasDowngrade, setLastChangeWasDowngrade] = useState(false)
+  const [confirmingDowngrade, setConfirmingDowngrade] = useState<Tier | null>(null)
+  const [downgradeResult, setDowngradeResult] = useState<{ slotsRevoked: number; listingsOverLimit: number } | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -83,8 +88,10 @@ function UpgradePageInner() {
 
   async function selectTier(tier: Tier) {
     if (tier === currentTier || upgrading) return
+    const isDowngrade = TIER_RANK[tier] < TIER_RANK[currentTier]
     setUpgrading(tier)
     setError('')
+    setDowngradeResult(null)
     try {
       const res = await fetch('/api/subscription/upgrade', {
         method: 'POST',
@@ -92,19 +99,25 @@ function UpgradePageInner() {
         body: JSON.stringify({ tier }),
       })
       if (!res.ok) { setError(isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.'); return }
+      const data = await res.json()
       setCurrentTier(tier)
-      setJustUpgraded(tier)
+      setJustChanged(tier)
+      setLastChangeWasDowngrade(isDowngrade)
+      setConfirmingDowngrade(null)
+      if (isDowngrade && (data.slotsRevoked > 0 || data.listingsOverLimit > 0)) {
+        setDowngradeResult({ slotsRevoked: data.slotsRevoked, listingsOverLimit: data.listingsOverLimit })
+      }
       setTimeout(() => {
-        setJustUpgraded(null)
-        const FEATURE_ROUTES: Record<string, string> = {
-          'bulk-upload': '/homes/new',
-          'analytics': '/homes/my-listings',
-          'promote': '/homes/my-listings',
-          'calcom-sync': '/profile',
-          'csv-export': '/profile',
-          'portfolio-analytics': '/profile',
-        }
-        if (fromParam) {
+        setJustChanged(null)
+        if (!isDowngrade && fromParam) {
+          const FEATURE_ROUTES: Record<string, string> = {
+            'bulk-upload': '/homes/new',
+            'analytics': '/homes/my-listings',
+            'promote': '/homes/my-listings',
+            'calcom-sync': '/profile',
+            'csv-export': '/profile',
+            'portfolio-analytics': '/profile',
+          }
           const dest = fromParam.startsWith('/') ? fromParam : (FEATURE_ROUTES[fromParam] ?? '/profile')
           router.push(dest)
         } else {
@@ -116,6 +129,16 @@ function UpgradePageInner() {
     } finally {
       setUpgrading(null)
     }
+  }
+
+  function handleCardClick(tierId: Tier) {
+    if (tierId === currentTier || upgrading) return
+    const isDowngrade = TIER_RANK[tierId] < TIER_RANK[currentTier]
+    if (isDowngrade && confirmingDowngrade !== tierId) {
+      setConfirmingDowngrade(tierId)
+      return
+    }
+    selectTier(tierId)
   }
 
   return (
@@ -160,10 +183,12 @@ function UpgradePageInner() {
               {TIERS.map((tier) => {
                 const isCurrent = tier.id === currentTier
                 const isUpgrading = upgrading === tier.id
-                const didJustUpgrade = justUpgraded === tier.id
+                const didJustChange = justChanged === tier.id
                 const isPlus = tier.id === 'plus'
                 const isPro = tier.id === 'pro'
                 const isFree = tier.id === 'free'
+                const isDowngrade = TIER_RANK[tier.id] < TIER_RANK[currentTier]
+                const isConfirming = confirmingDowngrade === tier.id
 
                 return (
                   <div
@@ -179,7 +204,7 @@ function UpgradePageInner() {
                     ].join(' ')}
                   >
                     {/* Most popular badge */}
-                    {isPlus && (
+                    {isPlus && !isCurrent && (
                       <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
@@ -250,43 +275,97 @@ function UpgradePageInner() {
                     </div>
 
                     {/* CTA button */}
-                    <button
-                      onClick={() => selectTier(tier.id)}
-                      disabled={isCurrent || !!upgrading}
-                      className={[
-                        'group relative w-full py-4 rounded-2xl font-bold text-sm transition-all duration-300 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed',
-                        !isCurrent && !didJustUpgrade ? 'hover:scale-[1.02] active:scale-[0.98]' : '',
-                        didJustUpgrade
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                          : isCurrent
-                            ? 'bg-[var(--ink-soft)] text-[var(--text-muted)] cursor-default border border-[var(--border-subtle)]'
-                            : isPlus
-                              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-[0_4px_24px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_32px_rgba(245,158,11,0.6)]'
-                              : isPro
-                                ? 'bg-stone-700 hover:bg-stone-600 text-stone-100 border border-stone-500/40 shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
-                                : 'bg-[var(--ink-soft)] text-[var(--text)] hover:bg-[var(--canvas-mid)] border border-[var(--border-subtle)]',
-                      ].join(' ')}
-                    >
-                      {/* shimmer on Plus */}
-                      {isPlus && !isCurrent && (
-                        <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => handleCardClick(tier.id)}
+                        disabled={isCurrent || !!upgrading}
+                        className={[
+                          'group relative w-full py-4 rounded-2xl font-bold text-sm transition-all duration-300 overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed',
+                          !isCurrent && !didJustChange ? 'hover:scale-[1.02] active:scale-[0.98]' : '',
+                          didJustChange
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : isCurrent
+                              ? 'bg-[var(--ink-soft)] text-[var(--text-muted)] cursor-default border border-[var(--border-subtle)]'
+                              : isConfirming
+                                ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                : isDowngrade
+                                  ? 'bg-[var(--ink-soft)] text-[var(--text-muted)] border border-[var(--border-subtle)] hover:border-[var(--text-muted)]/40'
+                                  : isPlus
+                                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-[0_4px_24px_rgba(245,158,11,0.4)] hover:shadow-[0_4px_32px_rgba(245,158,11,0.6)]'
+                                    : isPro
+                                      ? 'bg-stone-700 hover:bg-stone-600 text-stone-100 border border-stone-500/40 shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
+                                      : 'bg-[var(--ink-soft)] text-[var(--text)] hover:bg-[var(--canvas-mid)] border border-[var(--border-subtle)]',
+                        ].join(' ')}
+                      >
+                        {/* shimmer on Plus */}
+                        {isPlus && !isCurrent && !isDowngrade && (
+                          <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                        )}
+                        {didJustChange
+                          ? `✓ ${lastChangeWasDowngrade ? (isEl ? 'Υποβαθμίστηκε' : 'Downgraded') : (isEl ? 'Ενεργοποιήθηκε' : 'Activated')}`
+                          : isUpgrading
+                            ? (isEl ? 'Εφαρμογή...' : 'Applying...')
+                            : isCurrent
+                              ? (isEl ? 'Τρέχον πλάνο' : 'Current plan')
+                              : isConfirming
+                                ? (isEl ? 'Επιβεβαίωση υποβάθμισης;' : 'Confirm downgrade?')
+                                : isDowngrade
+                                  ? isFree
+                                    ? (isEl ? 'Υποβάθμιση σε Δωρεάν' : 'Downgrade to Free')
+                                    : (isEl ? `Μετάβαση σε ${tier.labelEl}` : `Switch to ${tier.labelEn}`)
+                                  : isEl
+                                    ? `Αναβάθμιση σε ${tier.labelEl}`
+                                    : `Upgrade to ${tier.labelEn}`}
+                      </button>
+
+                      {/* Cancel link shown when confirming a downgrade */}
+                      {isConfirming && (
+                        <button
+                          onClick={() => setConfirmingDowngrade(null)}
+                          className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors py-1"
+                        >
+                          {isEl ? 'Ακύρωση' : 'Cancel'}
+                        </button>
                       )}
-                      {didJustUpgrade
-                        ? `✓ ${isEl ? 'Ενεργοποιήθηκε' : 'Activated'}`
-                        : isUpgrading
-                          ? (isEl ? 'Εφαρμογή...' : 'Applying...')
-                          : isCurrent
-                            ? (isEl ? 'Τρέχον πλάνο' : 'Current plan')
-                            : isFree
-                              ? (isEl ? 'Υποβάθμιση σε Δωρεάν' : 'Downgrade to Free')
-                              : isEl
-                                ? `Αναβάθμιση σε ${tier.labelEl}`
-                                : `Upgrade to ${tier.labelEn}`}
-                    </button>
+
+                      {/* Loss summary shown when first confirming */}
+                      {isConfirming && (
+                        <p className="text-xs text-[var(--text-muted)]/70 leading-relaxed">
+                          {isFree
+                            ? (isEl
+                              ? 'Οι αγγελίες πάνω από 3 θα αποκρυφτούν (δεν θα διαγραφούν). Οι θέσεις προβολής θα απενεργοποιηθούν.'
+                              : 'Listings beyond 3 will be hidden — not deleted. Promotion slots will be removed.')
+                            : (isEl
+                              ? 'Θα χάσετε 3 θέσεις προβολής, portfolio analytics και branding.'
+                              : 'You\'ll lose 3 promotion slots, portfolio analytics, and branding.')}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )
               })}
             </div>
+
+            {/* Downgrade result banner */}
+            {downgradeResult && (downgradeResult.slotsRevoked > 0 || downgradeResult.listingsOverLimit > 0) && (
+              <div className="max-w-lg mx-auto mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/6 px-5 py-4">
+                <p className="text-sm font-semibold text-amber-300 mb-1">{isEl ? 'Αλλαγές από την υποβάθμιση' : 'Changes from downgrade'}</p>
+                {downgradeResult.slotsRevoked > 0 && (
+                  <p className="text-xs text-amber-300/70">
+                    {isEl
+                      ? `${downgradeResult.slotsRevoked} θέσεις προβολής απενεργοποιήθηκαν.`
+                      : `${downgradeResult.slotsRevoked} promotion slot${downgradeResult.slotsRevoked > 1 ? 's' : ''} removed.`}
+                  </p>
+                )}
+                {downgradeResult.listingsOverLimit > 0 && (
+                  <p className="text-xs text-amber-300/70 mt-0.5">
+                    {isEl
+                      ? `${downgradeResult.listingsOverLimit} αγγελίες πάνω από το όριο — αποκρύφτηκαν, δεν διαγράφηκαν. Νέες αγγελίες θα μπλοκαριστούν έως ότου αφαιρέσετε μερικές.`
+                      : `${downgradeResult.listingsOverLimit} listing${downgradeResult.listingsOverLimit > 1 ? 's' : ''} over the free limit — hidden, not deleted. New listings are blocked until you remove some.`}
+                  </p>
+                )}
+              </div>
+            )}
 
             {error && <p className="text-center text-[var(--status-error)] text-sm mb-6">{error}</p>}
 

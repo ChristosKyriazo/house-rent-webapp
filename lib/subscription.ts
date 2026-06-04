@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 
-const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 }
+export const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 }
 
 export function getSlotLimit(tier: string): number {
   if (tier === 'pro') return 5
   if (tier === 'plus') return 2
   return 0
+}
+
+export function getListingLimit(tier: string): number {
+  if (tier === 'free') return 3
+  return Number.MAX_SAFE_INTEGER
 }
 
 export function meetsMinimumTier(userTier: string, required: string): boolean {

@@ -40,6 +40,10 @@ function MapContent() {
   const mapInstanceRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<any[]>([])
+  const homesRef = useRef<Home[]>([])
+  const languageRef = useRef(language)
+  const scriptTaggedRef = useRef(false)
+
   const [homes, setHomes] = useState<Home[]>([])
   const [selected, setSelected] = useState<Home | null>(null)
   const [loading, setLoading] = useState(true)
@@ -47,6 +51,10 @@ function MapContent() {
   const type = searchParams.get('type') ?? 'rent'
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+  // Keep refs in sync so callbacks always read fresh values
+  homesRef.current = homes
+  languageRef.current = language
 
   useEffect(() => {
     fetch(`/api/homes?listingType=${type}&limit=200`)
@@ -56,19 +64,19 @@ function MapContent() {
       .finally(() => setLoading(false))
   }, [type])
 
-  const renderMarkers = () => {
+  function renderMarkers() {
     if (!window.google || !mapInstanceRef.current) return
-    // Clear existing markers
     markersRef.current.forEach(m => m.setMap(null))
     markersRef.current = []
     setSelected(null)
 
-    homes.forEach(home => {
+    homesRef.current.forEach(home => {
       if (!home.latitude || !home.longitude) return
+      const lang = languageRef.current
       const marker = new window.google.maps.Marker({
         position: { lat: home.latitude, lng: home.longitude },
         map: mapInstanceRef.current,
-        title: getHomeTitle(language, home),
+        title: getHomeTitle(lang, home),
         label: {
           text: home.listingType === 'rent'
             ? `€${home.pricePerMonth.toLocaleString()}/μ`
@@ -93,36 +101,48 @@ function MapContent() {
     })
   }
 
+  // Effect 1: Initialize the map and load the Maps script once
   useEffect(() => {
     if (!apiKey || !mapRef.current) return
 
+    const lang = language === 'el' ? 'el' : 'en'
+
+    const initMapInstance = () => {
+      if (!mapRef.current) return
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 37.9838, lng: 23.7275 },
+        zoom: 12,
+        styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
+      })
+      renderMarkers()
+    }
+
     if (window.google) {
       if (!mapInstanceRef.current) {
-        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-          center: { lat: 37.9838, lng: 23.7275 },
-          zoom: 12,
-          styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
-        })
+        initMapInstance()
       }
-      renderMarkers()
-    } else {
-      window.initMap = () => {
-        if (!mapRef.current) return
-        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-          center: { lat: 37.9838, lng: 23.7275 },
-          zoom: 12,
-          styles: [{ featureType: 'all', stylers: [{ saturation: -20 }] }],
-        })
-        renderMarkers()
-      }
+      // Map already exists — markers handled by Effect 2
+    } else if (!scriptTaggedRef.current) {
+      // First load: inject the Maps script with the current language
+      scriptTaggedRef.current = true
+      window.initMap = initMapInstance
       const script = document.createElement('script')
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&language=${lang}`
       script.async = true
       script.onerror = () => setMapError(true)
       document.head.appendChild(script)
+    } else {
+      // Script is still loading — update the callback so it uses fresh state when it fires
+      window.initMap = initMapInstance
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [homes, apiKey, language])
+  }, [apiKey])
+
+  // Effect 2: Re-render markers whenever homes list or language changes
+  useEffect(() => {
+    renderMarkers()
+   
+  }, [homes, language])
 
   const parsePhotos = (raw: string | null) => {
     try { const p = JSON.parse(raw ?? '[]'); return Array.isArray(p) ? p : [] } catch { return [] }
@@ -167,6 +187,15 @@ function MapContent() {
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-[var(--ink-soft)]">
             <div className="w-8 h-8 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] animate-spin" />
+          </div>
+        )}
+
+        {!loading && !mapError && homes.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--ink-soft)] gap-3 pointer-events-none">
+            <p className="text-4xl">📍</p>
+            <p className="text-[var(--text-muted)] text-sm">
+              {isEl ? 'Δεν βρέθηκαν αγγελίες με τοποθεσία για αυτή την κατηγορία.' : 'No listings with location data found for this category.'}
+            </p>
           </div>
         )}
 

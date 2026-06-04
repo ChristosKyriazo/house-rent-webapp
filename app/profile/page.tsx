@@ -464,14 +464,19 @@ function ProfilePageInner() {
                       </span>
                     )}
                   </div>
-                  {(user.subscriptionTier ?? 'free') !== 'pro' && (
+                  {(user.subscriptionTier ?? 'free') === 'free' ? (
                     <Link
                       href="/upgrade"
                       className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors shrink-0"
                     >
-                      {(user.subscriptionTier ?? 'free') === 'free'
-                        ? (language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus')
-                        : (language === 'el' ? 'Αναβάθμιση σε Pro' : 'Upgrade to Pro')}
+                      {language === 'el' ? 'Αναβάθμιση σε Plus' : 'Upgrade to Plus'}
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/upgrade"
+                      className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors shrink-0"
+                    >
+                      {language === 'el' ? 'Διαχείριση πλάνου' : 'Manage plan'}
                     </Link>
                   )}
                 </div>
