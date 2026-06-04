@@ -23,14 +23,11 @@ interface Home {
   matchPercentage?: number
 }
 
+interface AIChatMessage { role: 'user' | 'assistant'; content: string }
+
 interface PromptState {
-  used: number
-  limit: number
-  remaining: number
-  packCredits: number
-  canSearch: boolean
-  isPaid?: boolean
-  guest?: boolean
+  used: number; limit: number; remaining: number
+  packCredits: number; canSearch: boolean; isPaid?: boolean; guest?: boolean
 }
 
 declare global {
@@ -43,7 +40,9 @@ declare global {
 
 const AI_QUERY_MAX = 200
 const GUEST_STORAGE_KEY = 'kaparro_ai_map_searches'
+const MAP_AI_SESSION_KEY = 'mapAISession'
 const FREE_LIMIT = 3
+const SESSION_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 function MapContent() {
   const { language } = useLanguage()
@@ -65,11 +64,9 @@ function MapContent() {
   const [loading, setLoading] = useState(true)
   const [mapError, setMapError] = useState(false)
 
-  // Panel state
   const [panelOpen, setPanelOpen] = useState(true)
   const [mode, setMode] = useState<'manual' | 'ai'>('manual')
 
-  // Manual filters — pre-populated from URL params
   const type = searchParams.get('type') ?? 'rent'
   const [filters, setFilters] = useState({
     minPrice: searchParams.get('minPrice') ?? '',
@@ -78,11 +75,14 @@ function MapContent() {
     area: searchParams.get('area') ?? '',
   })
 
-  // AI search state
-  const [aiQuery, setAiQuery] = useState('')
+  // AI conversational state
+  const [aiMessages, setAiMessages] = useState<AIChatMessage[]>([])
+  const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [conversationKey, setConversationKey] = useState<string | null>(null)
+  const [aiPromptCount, setAiPromptCount] = useState(0)
   const [promptState, setPromptState] = useState<PromptState>({ used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT, packCredits: 0, canSearch: true })
-  const [showPaywall, setShowPaywall] = useState(false)
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
   const [purchaseLoading, setPurchaseLoading] = useState(false)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -90,13 +90,22 @@ function MapContent() {
   homesRef.current = homes
   languageRef.current = language
 
-  // Load prompt state on mount
+  // Sync filter state to URL so browser back works after navigating to a listing
+  const syncFiltersToUrl = useCallback((f: typeof filters) => {
+    const params = new URLSearchParams({ type })
+    if (f.minPrice) params.set('minPrice', f.minPrice)
+    if (f.maxPrice) params.set('maxPrice', f.maxPrice)
+    if (f.minBedrooms) params.set('minBedrooms', f.minBedrooms)
+    if (f.area) params.set('area', f.area)
+    router.replace(`/homes/map?${params}`, { scroll: false })
+  }, [type, router])
+
+  // Load prompt state + restore AI session on mount
   useEffect(() => {
     fetch('/api/ai-prompt-usage')
       .then(r => r.json())
       .then((d: PromptState) => {
         if (d.guest) {
-          // Guest: read from localStorage
           const stored = parseInt(localStorage.getItem(GUEST_STORAGE_KEY) ?? '0', 10)
           setPromptState({ used: stored, limit: FREE_LIMIT, remaining: Math.max(0, FREE_LIMIT - stored), packCredits: 0, canSearch: stored < FREE_LIMIT, guest: true })
         } else {
@@ -104,9 +113,29 @@ function MapContent() {
         }
       })
       .catch(() => {})
+
+    // Restore AI chat session from sessionStorage if recent
+    try {
+      const raw = sessionStorage.getItem(MAP_AI_SESSION_KEY)
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (Date.now() - saved.savedAt < SESSION_TTL_MS) {
+          setAiMessages(saved.messages ?? [])
+          setConversationKey(saved.conversationKey ?? null)
+          setAiPromptCount(saved.promptCount ?? 0)
+          if (saved.homes?.length) {
+            setHomes(saved.homes)
+            setMode('ai')
+            setLoading(false)
+            return
+          }
+        }
+        sessionStorage.removeItem(MAP_AI_SESSION_KEY)
+      }
+    } catch { /* ignore */ }
   }, [])
 
-  // Fetch homes (manual filter mode)
+  // Fetch homes (manual mode)
   const fetchHomes = useCallback((f: typeof filters) => {
     setLoading(true)
     const params = new URLSearchParams({ listingType: type, limit: '200' })
@@ -121,7 +150,23 @@ function MapContent() {
       .finally(() => setLoading(false))
   }, [type])
 
-  useEffect(() => { fetchHomes(filters) }, [type]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (mode === 'manual') fetchHomes(filters)
+  }, [type]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save AI session to sessionStorage before navigating to a listing
+  const saveAISession = useCallback(() => {
+    if (mode !== 'ai' || aiMessages.length === 0) return
+    try {
+      sessionStorage.setItem(MAP_AI_SESSION_KEY, JSON.stringify({
+        messages: aiMessages,
+        conversationKey,
+        promptCount: aiPromptCount,
+        homes: homesRef.current,
+        savedAt: Date.now(),
+      }))
+    } catch { /* ignore */ }
+  }, [mode, aiMessages, conversationKey, aiPromptCount])
 
   // Consume one AI search credit
   async function consumeCredit(): Promise<boolean> {
@@ -133,44 +178,79 @@ function MapContent() {
       return true
     }
     const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'consume' }) })
-    if (res.status === 402) { setShowPaywall(true); return false }
+    if (res.status === 402) { setShowPurchaseModal(true); return false }
     const data = await res.json()
     setPromptState(p => ({ ...p, remaining: data.remaining, packCredits: data.packCredits, canSearch: data.canSearch }))
     return true
   }
 
-  // AI search
-  async function runAiSearch() {
-    if (!aiQuery.trim() || aiLoading) return
-    if (!promptState.canSearch) { setShowPaywall(true); return }
+  // Send an AI chat message → get filters → immediately search → update pins
+  async function sendAIMessage() {
+    const msg = aiInput.trim()
+    if (!msg || aiLoading) return
+    if (!promptState.canSearch && promptState.packCredits === 0) { setShowPurchaseModal(true); return }
+
     const ok = await consumeCredit()
     if (!ok) return
+
+    setAiInput('')
     setAiLoading(true)
+    const newCount = aiPromptCount + 1
+    setAiPromptCount(newCount)
+    setAiMessages(prev => [...prev, { role: 'user', content: msg }])
+
     try {
-      const res = await fetch('/api/homes/ai-search', {
+      // Step 1: AI chat turn → extract accumulated filters
+      const chatRes = await fetch('/api/homes/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: aiQuery, type }),
+        body: JSON.stringify({ message: msg, conversationKey, type }),
       })
-      const data = await res.json()
-      const matched = (data.homes ?? []).filter((h: Home) => h.latitude && h.longitude)
+      const chatData = await chatRes.json()
+      if (!chatRes.ok) throw new Error(chatData.error ?? 'Chat error')
+      setConversationKey(chatData.conversationKey)
+
+      // Add assistant message (follow-up question or summary)
+      const assistantMsg = chatData.assistantMessage || chatData.followUpQuestion || ''
+      if (assistantMsg) setAiMessages(prev => [...prev, { role: 'assistant', content: assistantMsg }])
+
+      // Step 2: Immediately search with accumulated filters so far
+      const searchRes = await fetch('/api/homes/ai-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: msg, type, preExtractedFilters: chatData.filters }),
+      })
+      const searchData = await searchRes.json()
+      const matched = (searchData.homes ?? []).filter((h: Home) => h.latitude && h.longitude)
       setHomes(matched)
-    } catch { /* silent */ } finally {
+    } catch {
+      setAiMessages(prev => [...prev, { role: 'assistant', content: isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.' }])
+    } finally {
       setAiLoading(false)
     }
   }
 
-  // Purchase pack (test mode — instant grant)
+  // Purchase pack
   async function purchasePack(size: '10' | '25' | '50') {
     setPurchaseLoading(true)
     try {
       const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'purchase', pack: size }) })
       const data = await res.json()
       setPromptState(p => ({ ...p, packCredits: data.packCredits, canSearch: true }))
-      setShowPaywall(false)
+      setShowPurchaseModal(false)
     } catch { /* silent */ } finally {
       setPurchaseLoading(false)
     }
+  }
+
+  function resetAISession() {
+    setAiMessages([])
+    setAiInput('')
+    setConversationKey(null)
+    setAiPromptCount(0)
+    setHomes([])
+    try { sessionStorage.removeItem(MAP_AI_SESSION_KEY) } catch { /* ignore */ }
+    fetchHomes(filters)
   }
 
   function renderMarkers() {
@@ -185,7 +265,6 @@ function MapContent() {
       const pct = home.matchPercentage
       const hasScore = pct != null
 
-      // Pin colour: amber→green gradient for AI match, flat amber for manual
       const fillColor = hasScore
         ? pct >= 80 ? '#4ade80' : pct >= 60 ? '#e3a75f' : '#78716c'
         : '#e3a75f'
@@ -198,9 +277,7 @@ function MapContent() {
         : {
             text: home.listingType === 'rent'
               ? `€${home.pricePerMonth.toLocaleString()}/μ`
-              : home.pricePerMonth >= 1000
-                ? `€${(home.pricePerMonth / 1000).toFixed(0)}k`
-                : `€${home.pricePerMonth.toLocaleString()}`,
+              : home.pricePerMonth >= 1000 ? `€${(home.pricePerMonth / 1000).toFixed(0)}k` : `€${home.pricePerMonth.toLocaleString()}`,
             color: '#0c0f14', fontWeight: 'bold', fontSize: '10px',
           }
 
@@ -216,7 +293,6 @@ function MapContent() {
     })
   }
 
-  // Effect 1: load Maps script once
   useEffect(() => {
     if (!apiKey || !mapRef.current) return
     const lang = language === 'el' ? 'el' : 'en'
@@ -245,15 +321,15 @@ function MapContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey])
 
-  // Effect 2: re-render markers when homes/language change
   useEffect(() => { renderMarkers() }, [homes, language])  
 
   const parsePhotos = (raw: string | null) => {
     try { const p = JSON.parse(raw ?? '[]'); return Array.isArray(p) ? p : [] } catch { return [] }
   }
 
-  // Prompt counter dots
-  const dots = Array.from({ length: promptState.limit <= 3 ? 3 : 5 }, (_, i) => i < promptState.remaining)
+  const canSendAI = !aiLoading && aiInput.trim().length > 0 && (promptState.canSearch || promptState.packCredits > 0)
+  const atAILimit = aiPromptCount >= FREE_LIMIT && !promptState.isPaid && promptState.packCredits === 0
+  const dots = Array.from({ length: 3 }, (_, i) => i < Math.max(0, FREE_LIMIT - aiPromptCount))
 
   if (!apiKey) return (
     <div className="min-h-screen bg-[var(--ink-soft)] flex flex-col items-center justify-center gap-4 p-8">
@@ -284,7 +360,7 @@ function MapContent() {
       <div className="relative flex-1">
         <div ref={mapRef} className="h-full w-full" />
 
-        {/* Filter panel toggle button */}
+        {/* Filter panel toggle */}
         <button
           onClick={() => setPanelOpen(o => !o)}
           className="absolute top-3 left-3 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--surface)]/90 backdrop-blur-sm border border-[var(--border-subtle)] text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors shadow-lg"
@@ -295,22 +371,25 @@ function MapContent() {
 
         {/* Filter panel */}
         {panelOpen && (
-          <div className="absolute top-3 left-16 z-10 w-72 md:w-80 rounded-2xl bg-[var(--surface)]/90 backdrop-blur-md border border-white/10 shadow-2xl p-4 flex flex-col gap-3">
+          <div className="absolute top-3 left-16 z-10 w-72 md:w-80 rounded-2xl bg-[var(--surface)]/90 backdrop-blur-md border border-white/10 shadow-2xl p-4 flex flex-col gap-3 max-h-[calc(100vh-8rem)] overflow-y-auto">
+
             {/* Mode toggle */}
-            <div className="flex rounded-full bg-[var(--canvas)] p-1">
+            <div className="flex rounded-full bg-[var(--canvas)] p-1 shrink-0">
               {(['manual', 'ai'] as const).map(m => (
-                <button key={m} onClick={() => setMode(m)}
+                <button key={m} onClick={() => {
+                  setMode(m)
+                  if (m === 'manual') fetchHomes(filters)
+                }}
                   className={`flex-1 flex items-center justify-center gap-1.5 rounded-full py-1.5 text-xs font-semibold transition-all ${mode === m ? 'bg-[var(--accent)] text-[var(--ink)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
                   {m === 'manual'
                     ? <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>{isEl ? 'Φίλτρα' : 'Filters'}</>
-                    : <><span className={`text-sm ${mode === 'ai' ? '' : ''}`}>✦</span>{isEl ? 'AI' : 'AI'}</>}
+                    : <><span>✦</span>{isEl ? 'AI Αναζήτηση' : 'AI Search'}</>}
                 </button>
               ))}
             </div>
 
             {mode === 'manual' ? (
               <>
-                {/* Price range */}
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="text-xs text-[var(--text-muted)] mb-1 block">{isEl ? 'Από €' : 'Min €'}</label>
@@ -326,7 +405,6 @@ function MapContent() {
                   </div>
                 </div>
 
-                {/* Bedrooms */}
                 <div>
                   <label className="text-xs text-[var(--text-muted)] mb-1.5 block">{isEl ? 'Υπνοδωμάτια' : 'Bedrooms'}</label>
                   <div className="flex gap-1.5">
@@ -339,7 +417,6 @@ function MapContent() {
                   </div>
                 </div>
 
-                {/* Area */}
                 <div>
                   <label className="text-xs text-[var(--text-muted)] mb-1 block">{isEl ? 'Περιοχή' : 'Area'}</label>
                   <input type="text" placeholder={isEl ? 'π.χ. Κολωνάκι' : 'e.g. Kolonaki'} value={filters.area}
@@ -347,85 +424,117 @@ function MapContent() {
                     className="w-full bg-[var(--canvas)] border border-white/10 rounded-xl px-3 py-2 text-sm text-[var(--text)] placeholder:text-white/30 focus:outline-none focus:border-amber-500/50" />
                 </div>
 
-                <button onClick={() => fetchHomes(filters)}
+                <button onClick={() => { syncFiltersToUrl(filters); fetchHomes(filters) }}
                   className="w-full py-2.5 rounded-xl bg-[var(--accent)] text-[var(--ink)] text-sm font-bold transition-all hover:opacity-90 active:scale-95">
                   {isEl ? 'Εφαρμογή' : 'Apply filters'}
                 </button>
 
                 {(filters.minPrice || filters.maxPrice || filters.minBedrooms || filters.area) && (
-                  <button onClick={() => { const reset = { minPrice: '', maxPrice: '', minBedrooms: '', area: '' }; setFilters(reset); fetchHomes(reset) }}
+                  <button onClick={() => { const r = { minPrice: '', maxPrice: '', minBedrooms: '', area: '' }; setFilters(r); syncFiltersToUrl(r); fetchHomes(r) }}
                     className="text-xs text-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
                     {isEl ? 'Εκκαθάριση φίλτρων' : 'Clear filters'}
                   </button>
                 )}
               </>
             ) : (
-              /* AI search mode */
+              /* AI conversational mode */
               <>
-                <div className="relative">
-                  <textarea
-                    value={aiQuery}
-                    onChange={e => setAiQuery(e.target.value.slice(0, AI_QUERY_MAX))}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAiSearch() } }}
-                    placeholder={isEl ? 'Περιγράψτε το ιδανικό σπίτι σας…' : 'Describe your ideal home…'}
-                    rows={3}
-                    className="w-full bg-[var(--canvas)] border border-amber-500/40 focus:border-amber-500 rounded-xl px-3 py-2.5 text-sm text-[var(--text)] placeholder:text-white/30 focus:outline-none resize-none"
-                    disabled={!promptState.canSearch && !showPaywall}
-                  />
-                  <span className="absolute bottom-2 right-3 text-[10px] text-white/30">{aiQuery.length}/{AI_QUERY_MAX}</span>
-                </div>
-
-                {/* Prompt counter dots */}
-                <div className="flex items-center gap-2 justify-center">
-                  <div className="flex gap-1.5">
-                    {dots.map((filled, i) => (
-                      <span key={i} className={`w-2 h-2 rounded-full transition-all ${filled ? 'bg-amber-500' : 'border border-white/20'}`} />
+                {/* Chat messages */}
+                {aiMessages.length > 0 && (
+                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                    {aiMessages.map((m, i) => (
+                      <div key={i} className={`text-xs px-3 py-2 rounded-xl leading-relaxed ${m.role === 'user' ? 'bg-amber-500/15 text-amber-200 self-end ml-6' : 'bg-[var(--canvas)] text-[var(--text-muted)] self-start mr-6'}`}>
+                        {m.content}
+                      </div>
                     ))}
-                  </div>
-                  <span className={`text-xs ${promptState.remaining === 1 && !promptState.isPaid ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
-                    {promptState.isPaid
-                      ? (promptState.packCredits > 0
-                          ? (isEl ? `${promptState.packCredits} pack` : `${promptState.packCredits} pack left`)
-                          : (isEl ? `${promptState.remaining}/${promptState.limit} αυτόν τον μήνα` : `${promptState.remaining}/${promptState.limit} this month`))
-                      : (isEl ? `${promptState.remaining} αναζητήσεις` : `${promptState.remaining} searches left`)}
-                  </span>
-                </div>
-
-                {!showPaywall ? (
-                  <button onClick={runAiSearch} disabled={aiLoading || !aiQuery.trim() || !promptState.canSearch}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">
-                    {aiLoading ? (isEl ? 'Αναζήτηση…' : 'Searching…') : (isEl ? 'Αναζήτηση με AI' : 'AI Search')}
-                  </button>
-                ) : (
-                  /* Paywall card */
-                  <div className="rounded-xl bg-[var(--surface)] border border-amber-500/30 p-4 flex flex-col gap-3">
-                    <p className="font-[var(--font-fraunces)] text-sm italic text-white/80 text-center">
-                      {isEl ? '"Βρείτε το σπίτι σας, όχι απλά μια αγγελία."' : '"Find your place, not just a listing."'}
-                    </p>
-                    {[{ size: '10' as const, price: '€2.99', label: isEl ? '10 AI αναζητήσεις' : '10 AI searches' },
-                      { size: '25' as const, price: '€5.99', label: isEl ? '25 AI αναζητήσεις' : '25 AI searches' }].map(pack => (
-                      <button key={pack.size} onClick={() => purchasePack(pack.size)} disabled={purchaseLoading}
-                        className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-[var(--canvas)] border border-white/10 hover:border-amber-500/30 transition-all disabled:opacity-50">
-                        <span className="text-white font-semibold text-sm">{pack.price}</span>
-                        <span className="text-[var(--text-muted)] text-xs">{pack.label}</span>
-                        <span className="text-xs text-amber-400 font-semibold">{isEl ? 'Αγορά' : 'Buy'}</span>
-                      </button>
-                    ))}
-                    <p className="text-[10px] text-white/30 text-center">{isEl ? 'Χωρίς συνδρομή. Δικά σας για πάντα.' : 'No subscription. Yours to keep.'}</p>
-                    <button onClick={() => setShowPaywall(false)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-center">
-                      {isEl ? 'Ακύρωση' : 'Cancel'}
-                    </button>
+                    {aiLoading && (
+                      <div className="flex gap-1 items-center px-3 py-2 bg-[var(--canvas)] rounded-xl self-start w-14">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:0ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {homes.length > 0 && homes[0].matchPercentage != null && (
-                  <button onClick={() => { setMode('manual'); fetchHomes(filters) }}
-                    className="text-xs text-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
-                    {isEl ? 'Εκκαθάριση AI αποτελεσμάτων' : 'Clear AI results'}
+                {/* Input or limit CTA */}
+                {atAILimit ? (
+                  <button onClick={() => setShowPurchaseModal(true)}
+                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-sm font-bold transition-all">
+                    ✦ {isEl ? 'Αγορά περισσότερων αναζητήσεων' : 'Get more searches'}
+                  </button>
+                ) : (
+                  <div className="relative">
+                    <textarea
+                      value={aiInput}
+                      onChange={e => setAiInput(e.target.value.slice(0, AI_QUERY_MAX))}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAIMessage() } }}
+                      placeholder={aiMessages.length === 0
+                        ? (isEl ? 'Περιγράψτε το ιδανικό σπίτι σας…' : 'Describe your ideal home…')
+                        : (isEl ? 'Προσθέστε περισσότερες λεπτομέρειες…' : 'Add more details…')}
+                      rows={2}
+                      className="w-full bg-[var(--canvas)] border border-amber-500/40 focus:border-amber-500 rounded-xl px-3 py-2.5 text-sm text-[var(--text)] placeholder:text-white/30 focus:outline-none resize-none"
+                      disabled={aiLoading}
+                    />
+                    <span className="absolute bottom-2 right-3 text-[10px] text-white/30">{aiInput.length}/{AI_QUERY_MAX}</span>
+                  </div>
+                )}
+
+                {/* Prompt counter dots */}
+                {!atAILimit && (
+                  <div className="flex items-center gap-2 justify-center">
+                    <div className="flex gap-1.5">
+                      {dots.map((filled, i) => (
+                        <span key={i} className={`w-2 h-2 rounded-full transition-all ${filled ? 'bg-amber-500' : 'border border-white/20'}`} />
+                      ))}
+                    </div>
+                    <span className={`text-xs ${promptState.remaining === 1 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
+                      {promptState.isPaid
+                        ? (isEl ? `${promptState.remaining}/${promptState.limit} αυτόν τον μήνα` : `${promptState.remaining}/${promptState.limit} this month`)
+                        : (isEl ? `${Math.max(0, FREE_LIMIT - aiPromptCount)} δωρεάν αναζητήσεις` : `${Math.max(0, FREE_LIMIT - aiPromptCount)} free searches left`)}
+                    </span>
+                  </div>
+                )}
+
+                {!atAILimit && (
+                  <button onClick={sendAIMessage} disabled={!canSendAI}
+                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">
+                    {aiLoading ? (isEl ? 'Αναζήτηση…' : 'Searching…') : (isEl ? 'Αποστολή' : 'Send')}
+                  </button>
+                )}
+
+                {aiMessages.length > 0 && (
+                  <button onClick={resetAISession} className="text-xs text-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                    {isEl ? 'Νέα αναζήτηση' : 'New search'}
                   </button>
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* Purchase modal */}
+        {showPurchaseModal && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] border border-amber-500/30 p-6 flex flex-col gap-4 shadow-2xl">
+              <p className="font-[var(--font-fraunces)] text-lg italic text-white/90 text-center">
+                {isEl ? '"Βρείτε το σπίτι σας, όχι απλά μια αγγελία."' : '"Find your place, not just a listing."'}
+              </p>
+              <div className="flex flex-col gap-2">
+                {([['10', '€2.99', isEl ? '10 αναζητήσεις' : '10 AI searches'], ['25', '€5.99', isEl ? '25 αναζητήσεις' : '25 AI searches'], ['50', '€9.99', isEl ? '50 αναζητήσεις' : '50 AI searches']] as const).map(([size, price, label]) => (
+                  <button key={size} onClick={() => purchasePack(size)} disabled={purchaseLoading}
+                    className="flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--canvas)] border border-white/10 hover:border-amber-500/40 transition-all disabled:opacity-50">
+                    <span className="text-white font-bold">{price}</span>
+                    <span className="text-[var(--text-muted)] text-sm">{label}</span>
+                    <span className="text-amber-400 text-sm font-semibold">{isEl ? 'Αγορά' : 'Buy'} →</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-white/30 text-center">{isEl ? 'Χωρίς συνδρομή. Δικά σας για πάντα.' : 'No subscription. Yours to keep.'}</p>
+              <button onClick={() => setShowPurchaseModal(false)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-center">
+                {isEl ? 'Ακύρωση' : 'Cancel'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -439,7 +548,7 @@ function MapContent() {
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--ink-soft)] gap-3 pointer-events-none">
             <p className="text-4xl">📍</p>
             <p className="text-[var(--text-muted)] text-sm text-center max-w-xs">
-              {isEl ? 'Δεν βρέθηκαν αγγελίες με τοποθεσία για αυτά τα φίλτρα.' : 'No listings with location data found for these filters.'}
+              {isEl ? 'Δεν βρέθηκαν αγγελίες για αυτά τα φίλτρα.' : 'No listings found for these filters.'}
             </p>
           </div>
         )}
@@ -471,7 +580,12 @@ function MapContent() {
             <p className="text-xs text-[var(--text-muted)]">
               {selected.bedrooms} {isEl ? 'υπνοδ.' : 'bed'} · {getCityName(selected.city, [], language)}
             </p>
-            <Link href={`/homes/${selected.key}`} className="mt-3 block w-full text-center btn-primary rounded-xl py-2 text-sm">
+            {/* Pass ?from=map so listing back button returns here via router.back() */}
+            <Link
+              href={`/homes/${selected.key}?from=map`}
+              onClick={saveAISession}
+              className="mt-3 block w-full text-center btn-primary rounded-xl py-2 text-sm"
+            >
               {isEl ? 'Προβολή' : 'View property'}
             </Link>
           </div>

@@ -127,12 +127,15 @@ export default function HomeDetailPage() {
   const fromMyInquiries = fromParam === 'my-inquiries'
 
   // Get filter type from sessionStorage to preserve it in return link
+  const fromMap = fromParam === 'map'
+
   const getReturnUrl = () => {
     if (fromMyListings) return '/homes/my-listings'
     if (fromApproved) return '/homes/approved'
     if (fromInquiries) return '/homes/inquiries'
     if (fromCalendar) return '/homes/calendar'
     if (fromMyInquiries) return '/homes/my-inquiries'
+    if (fromMap) return null // handled via router.back()
 
     // Check if we have stored filter type in sessionStorage
     try {
@@ -153,6 +156,7 @@ export default function HomeDetailPage() {
     if (fromInquiries) return getTranslation(language, 'returnToInquiries') || 'Return to Inquiries'
     if (fromCalendar) return getTranslation(language, 'returnToCalendar') || 'Return to Calendar'
     if (fromMyInquiries) return getTranslation(language, 'returnToMyInquiries') || 'Return to My Inquiries'
+    if (fromMap) return language === 'el' ? '← Πίσω στον χάρτη' : '← Back to map'
     return getTranslation(language, 'returnToSearch') || 'Return to Search'
   }
 
@@ -610,12 +614,21 @@ export default function HomeDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Back Button and Edit Button */}
         <div className="flex items-center justify-between">
-          <Link
-            href={getReturnUrl()}
-            className="inline-flex items-center px-4 py-2 text-[var(--text)] hover:text-[var(--accent)] transition-colors"
-          >
-            ← {getReturnButtonText()}
-          </Link>
+          {fromMap ? (
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center px-4 py-2 text-[var(--text)] hover:text-[var(--accent)] transition-colors"
+            >
+              {getReturnButtonText()}
+            </button>
+          ) : (
+            <Link
+              href={getReturnUrl() ?? '/homes'}
+              className="inline-flex items-center px-4 py-2 text-[var(--text)] hover:text-[var(--accent)] transition-colors"
+            >
+              ← {getReturnButtonText()}
+            </Link>
+          )}
           {fromMyListings && (
             <Link
               href={`/homes/${home.key}/edit`}
