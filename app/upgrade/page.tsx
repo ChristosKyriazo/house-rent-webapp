@@ -10,6 +10,7 @@ type Tier = 'free' | 'plus' | 'pro'
 
 const TIER_RANK: Record<Tier, number> = { free: 0, plus: 1, pro: 2 }
 
+// Only show features INCLUDED in each tier — no grayed-out items
 const FEATURE_GROUPS: {
   labelEn: string; labelEl: string;
   items: { en: string; el: string; tiers: Tier[] }[]
@@ -17,12 +18,18 @@ const FEATURE_GROUPS: {
   {
     labelEn: 'Listings', labelEl: 'Αγγελίες',
     items: [
-      { en: 'Up to 3 listings', el: 'Έως 3 αγγελίες', tiers: ['free'] },
-      { en: 'Unlimited listings', el: 'Απεριόριστες αγγελίες', tiers: ['plus', 'pro'] },
+      { en: '1 listing', el: '1 αγγελία', tiers: ['free'] },
+      { en: '10 listings', el: '10 αγγελίες', tiers: ['plus'] },
+      { en: 'Unlimited listings', el: 'Απεριόριστες αγγελίες', tiers: ['pro'] },
       { en: 'Bulk upload via Excel + AI descriptions', el: 'Μαζική ανάρτηση + AI περιγραφές', tiers: ['plus', 'pro'] },
-      { en: '2 always-on promotion slots', el: '2 θέσεις προβολής (πάντα ενεργές)', tiers: ['plus'] },
-      { en: '5 always-on slots — ranked above Plus', el: '5 θέσεις προβολής — πάνω από Plus', tiers: ['pro'] },
-      { en: 'Pay-per-boost: €4.99 / 30 days (extra listings)', el: 'Boost €4.99 / 30 μέρες (επιπλέον αγγελίες)', tiers: ['plus', 'pro'] },
+    ],
+  },
+  {
+    labelEn: 'Promotions', labelEl: 'Προβολές',
+    items: [
+      { en: '2 × 7-day promotion slots', el: '2 × 7ήμερες θέσεις προβολής', tiers: ['plus'] },
+      { en: '5 × 30-day premium slots', el: '5 × 30ήμερες premium θέσεις', tiers: ['pro'] },
+      { en: 'Buy more: €1.99 / 7 days  ·  €4.99 / 30 days', el: 'Αγορά: €1.99 / 7 μέρες  ·  €4.99 / 30 μέρες', tiers: ['plus', 'pro'] },
     ],
   },
   {
@@ -54,14 +61,10 @@ const FEATURE_GROUPS: {
 ]
 
 const TIERS: { id: Tier; priceEn: string; priceEl: string; labelEn: string; labelEl: string }[] = [
-  { id: 'pro',  priceEn: '€39.99/month', priceEl: '€39.99/μήνα', labelEn: 'Pro',  labelEl: 'Pro'  },
-  { id: 'plus', priceEn: '€19.99/month', priceEl: '€19.99/μήνα', labelEn: 'Plus', labelEl: 'Plus' },
-  { id: 'free', priceEn: 'Free',         priceEl: 'Δωρεάν',       labelEn: 'Free', labelEl: 'Βασικό' },
+  { id: 'pro',  priceEn: '€39.99 / month', priceEl: '€39.99 / μήνα', labelEn: 'Pro',     labelEl: 'Pro'     },
+  { id: 'plus', priceEn: '€19.99 / month', priceEl: '€19.99 / μήνα', labelEn: 'Plus',    labelEl: 'Plus'    },
+  { id: 'free', priceEn: '€0 / month',     priceEl: '€0 / μήνα',     labelEn: 'Free',    labelEl: 'Βασικό'  },
 ]
-
-function hasTierFeature(tierId: Tier, tiers: Tier[]): boolean {
-  return tiers.includes(tierId)
-}
 
 function UpgradePageInner() {
   const router = useRouter()
@@ -145,14 +148,12 @@ function UpgradePageInner() {
     <div className="min-h-screen bg-[var(--canvas)] py-16 px-4">
       <div className="max-w-5xl mx-auto">
 
-        {/* Back link */}
         <div className="mb-10">
           <Link href="/profile" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
             ← {isEl ? 'Προφίλ' : 'Profile'}
           </Link>
         </div>
 
-        {/* Header */}
         <div className="mb-10 text-center">
           <h1 className="text-4xl font-bold text-[var(--text)] mb-3 font-[var(--font-fraunces)]">
             {isEl ? 'Επιλέξτε το πλάνο σας' : 'Choose your plan'}
@@ -164,13 +165,10 @@ function UpgradePageInner() {
           </p>
         </div>
 
-        {/* Test mode notice */}
         <div className="max-w-lg mx-auto mb-10 flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-500/8 border border-amber-500/20">
           <span className="text-amber-400 text-lg shrink-0">⚗️</span>
           <p className="text-sm text-amber-300/80 font-[var(--font-outfit)]">
-            {isEl
-              ? 'Δοκιμαστική λειτουργία — η κάρτα σας δεν θα χρεωθεί.'
-              : 'Test mode — your card won\'t be charged.'}
+            {isEl ? 'Δοκιμαστική λειτουργία — η κάρτα σας δεν θα χρεωθεί.' : "Test mode — your card won't be charged."}
           </p>
         </div>
 
@@ -178,7 +176,6 @@ function UpgradePageInner() {
           <div className="text-center text-[var(--text-muted)] py-12">{isEl ? 'Φόρτωση...' : 'Loading...'}</div>
         ) : (
           <>
-            {/* Tier cards — Pro first (anchors high), Plus elevated (the pick), Free last */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 items-start">
               {TIERS.map((tier) => {
                 const isCurrent = tier.id === currentTier
@@ -189,6 +186,14 @@ function UpgradePageInner() {
                 const isFree = tier.id === 'free'
                 const isDowngrade = TIER_RANK[tier.id] < TIER_RANK[currentTier]
                 const isConfirming = confirmingDowngrade === tier.id
+
+                // Only show features included in this tier
+                const visibleGroups = FEATURE_GROUPS
+                  .map(group => ({
+                    ...group,
+                    items: group.items.filter(f => f.tiers.includes(tier.id)),
+                  }))
+                  .filter(group => group.items.length > 0)
 
                 return (
                   <div
@@ -216,7 +221,7 @@ function UpgradePageInner() {
                       </div>
                     )}
 
-                    {/* Current plan indicator */}
+                    {/* Current plan badge */}
                     {isCurrent && (
                       <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                         <span className="px-3 py-0.5 rounded-full text-xs font-semibold bg-[var(--ink-soft)] text-[var(--text-muted)] border border-[var(--border-subtle)] font-[var(--font-outfit)]">
@@ -234,7 +239,7 @@ function UpgradePageInner() {
                       </p>
                     </div>
 
-                    {/* What you unlock highlight (Plus/Pro only) */}
+                    {/* Unlock highlight (Plus / Pro only) */}
                     {(isPlus || isPro) && (
                       <div className="mb-5 rounded-xl bg-amber-500/8 border border-amber-500/15 px-4 py-3">
                         <p className="text-xs text-amber-400/70 uppercase tracking-widest font-[var(--font-outfit)] mb-1.5">
@@ -242,39 +247,32 @@ function UpgradePageInner() {
                         </p>
                         <p className="text-sm text-[var(--text)]">
                           {isPlus
-                            ? (isEl ? 'Απεριόριστες αγγελίες, 2 θέσεις προβολής, analytics, Viber ειδοποιήσεις' : 'Unlimited listings, 2 promotion slots, analytics, Viber alerts')
-                            : (isEl ? 'Όλα τα Plus + 5 θέσεις πάνω από Plus, portfolio analytics, branding' : 'Everything in Plus + 5 slots ranked above Plus, portfolio analytics, branding')}
+                            ? (isEl ? '10 αγγελίες, 2 × 7ήμερες θέσεις, analytics, Viber' : '10 listings, 2 × 7-day slots, analytics, Viber alerts')
+                            : (isEl ? 'Απεριόριστες αγγελίες, 5 × 30ήμερες premium θέσεις, portfolio analytics, branding' : 'Unlimited listings, 5 × 30-day premium slots, portfolio analytics, branding')}
                         </p>
                       </div>
                     )}
 
-                    {/* Feature groups */}
+                    {/* Feature list — included only */}
                     <div className="flex-1 space-y-4 mb-8">
-                      {FEATURE_GROUPS.map((group, gi) => {
-                        const groupItems = group.items.filter(f => hasTierFeature(tier.id, f.tiers) || !hasTierFeature(tier.id, f.tiers))
-                        if (groupItems.length === 0) return null
-                        return (
-                          <div key={gi}>
-                            {gi > 0 && <div className="border-t border-[var(--border-subtle)] mb-3" />}
-                            <ul className="space-y-1.5">
-                              {groupItems.map((f, fi) => {
-                                const included = hasTierFeature(tier.id, f.tiers)
-                                return (
-                                  <li key={fi} className={`flex items-start gap-2 text-sm ${included ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]/30'}`}>
-                                    <span className={`shrink-0 mt-0.5 text-xs ${included ? (isPlus ? 'text-amber-500/70' : isPro ? 'text-stone-400' : 'text-[var(--text-muted)]/60') : ''}`}>
-                                      {included ? '●' : '—'}
-                                    </span>
-                                    <span>{isEl ? f.el : f.en}</span>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          </div>
-                        )
-                      })}
+                      {visibleGroups.map((group, gi) => (
+                        <div key={gi}>
+                          {gi > 0 && <div className="border-t border-[var(--border-subtle)] mb-3" />}
+                          <ul className="space-y-1.5">
+                            {group.items.map((f, fi) => (
+                              <li key={fi} className="flex items-start gap-2 text-sm text-[var(--text-muted)]">
+                                <span className={`shrink-0 mt-0.5 text-xs ${isPlus ? 'text-amber-500/70' : isPro ? 'text-stone-400' : 'text-[var(--text-muted)]/60'}`}>
+                                  ●
+                                </span>
+                                <span>{isEl ? f.el : f.en}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* CTA button */}
+                    {/* CTA */}
                     <div className="flex flex-col gap-2">
                       <button
                         onClick={() => handleCardClick(tier.id)}
@@ -297,7 +295,6 @@ function UpgradePageInner() {
                                       : 'bg-[var(--ink-soft)] text-[var(--text)] hover:bg-[var(--canvas-mid)] border border-[var(--border-subtle)]',
                         ].join(' ')}
                       >
-                        {/* shimmer on Plus */}
                         {isPlus && !isCurrent && !isDowngrade && (
                           <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                         )}
@@ -311,34 +308,25 @@ function UpgradePageInner() {
                                 ? (isEl ? 'Επιβεβαίωση υποβάθμισης;' : 'Confirm downgrade?')
                                 : isDowngrade
                                   ? isFree
-                                    ? (isEl ? 'Υποβάθμιση σε Δωρεάν' : 'Downgrade to Free')
+                                    ? (isEl ? 'Υποβάθμιση σε Βασικό' : 'Downgrade to Free')
                                     : (isEl ? `Μετάβαση σε ${tier.labelEl}` : `Switch to ${tier.labelEn}`)
                                   : isEl
                                     ? `Αναβάθμιση σε ${tier.labelEl}`
                                     : `Upgrade to ${tier.labelEn}`}
                       </button>
 
-                      {/* Cancel link shown when confirming a downgrade */}
                       {isConfirming && (
-                        <button
-                          onClick={() => setConfirmingDowngrade(null)}
-                          className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors py-1"
-                        >
-                          {isEl ? 'Ακύρωση' : 'Cancel'}
-                        </button>
-                      )}
-
-                      {/* Loss summary shown when first confirming */}
-                      {isConfirming && (
-                        <p className="text-xs text-[var(--text-muted)]/70 leading-relaxed">
-                          {isFree
-                            ? (isEl
-                              ? 'Οι αγγελίες πάνω από 3 θα αποκρυφτούν (δεν θα διαγραφούν). Οι θέσεις προβολής θα απενεργοποιηθούν.'
-                              : 'Listings beyond 3 will be hidden — not deleted. Promotion slots will be removed.')
-                            : (isEl
-                              ? 'Θα χάσετε 3 θέσεις προβολής, portfolio analytics και branding.'
-                              : 'You\'ll lose 3 promotion slots, portfolio analytics, and branding.')}
-                        </p>
+                        <>
+                          <button onClick={() => setConfirmingDowngrade(null)}
+                            className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors py-1">
+                            {isEl ? 'Ακύρωση' : 'Cancel'}
+                          </button>
+                          <p className="text-xs text-[var(--text-muted)]/70 leading-relaxed">
+                            {isFree
+                              ? (isEl ? 'Αγγελίες πάνω από 1 θα αποκρυφτούν (δεν θα διαγραφούν). Θέσεις προβολής θα απενεργοποιηθούν.' : 'Listings beyond 1 will be hidden — not deleted. Promotion slots will be removed.')
+                              : (isEl ? 'Θα χάσετε τις premium θέσεις και τα portfolio analytics.' : "You'll lose premium slots and portfolio analytics.")}
+                          </p>
+                        </>
                       )}
                     </div>
                   </div>
@@ -346,22 +334,19 @@ function UpgradePageInner() {
               })}
             </div>
 
-            {/* Downgrade result banner */}
             {downgradeResult && (downgradeResult.slotsRevoked > 0 || downgradeResult.listingsOverLimit > 0) && (
               <div className="max-w-lg mx-auto mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/6 px-5 py-4">
                 <p className="text-sm font-semibold text-amber-300 mb-1">{isEl ? 'Αλλαγές από την υποβάθμιση' : 'Changes from downgrade'}</p>
                 {downgradeResult.slotsRevoked > 0 && (
                   <p className="text-xs text-amber-300/70">
-                    {isEl
-                      ? `${downgradeResult.slotsRevoked} θέσεις προβολής απενεργοποιήθηκαν.`
-                      : `${downgradeResult.slotsRevoked} promotion slot${downgradeResult.slotsRevoked > 1 ? 's' : ''} removed.`}
+                    {isEl ? `${downgradeResult.slotsRevoked} θέσεις προβολής απενεργοποιήθηκαν.` : `${downgradeResult.slotsRevoked} promotion slot${downgradeResult.slotsRevoked > 1 ? 's' : ''} removed.`}
                   </p>
                 )}
                 {downgradeResult.listingsOverLimit > 0 && (
                   <p className="text-xs text-amber-300/70 mt-0.5">
                     {isEl
-                      ? `${downgradeResult.listingsOverLimit} αγγελίες πάνω από το όριο — αποκρύφτηκαν, δεν διαγράφηκαν. Νέες αγγελίες θα μπλοκαριστούν έως ότου αφαιρέσετε μερικές.`
-                      : `${downgradeResult.listingsOverLimit} listing${downgradeResult.listingsOverLimit > 1 ? 's' : ''} over the free limit — hidden, not deleted. New listings are blocked until you remove some.`}
+                      ? `${downgradeResult.listingsOverLimit} αγγελίες πάνω από το όριο — αποκρύφτηκαν, δεν διαγράφηκαν.`
+                      : `${downgradeResult.listingsOverLimit} listing${downgradeResult.listingsOverLimit > 1 ? 's' : ''} over the limit — hidden, not deleted.`}
                   </p>
                 )}
               </div>
@@ -370,9 +355,7 @@ function UpgradePageInner() {
             {error && <p className="text-center text-[var(--status-error)] text-sm mb-6">{error}</p>}
 
             <p className="text-center text-xs text-[var(--text-muted)]">
-              {isEl
-                ? 'Χωρίς δέσμευση · Ακυρώστε οποτεδήποτε · Χρέωση μέσω Stripe (σύντομα)'
-                : 'No commitment · Cancel anytime · Billed via Stripe (coming soon)'}
+              {isEl ? 'Χωρίς δέσμευση · Ακυρώστε οποτεδήποτε · Χρέωση μέσω Stripe (σύντομα)' : 'No commitment · Cancel anytime · Billed via Stripe (coming soon)'}
             </p>
           </>
         )}

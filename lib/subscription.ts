@@ -9,8 +9,9 @@ export function getSlotLimit(tier: string): number {
 }
 
 export function getListingLimit(tier: string): number {
-  if (tier === 'free') return 3
-  return Number.MAX_SAFE_INTEGER
+  if (tier === 'free') return 1
+  if (tier === 'plus') return 10
+  return Number.MAX_SAFE_INTEGER // pro = unlimited
 }
 
 export function meetsMinimumTier(userTier: string, required: string): boolean {
