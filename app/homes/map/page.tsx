@@ -41,7 +41,7 @@ declare global {
 const AI_QUERY_MAX = 200
 const GUEST_STORAGE_KEY = 'kaparro_ai_map_searches'
 const MAP_AI_SESSION_KEY = 'mapAISession'
-const FREE_LIMIT = 3
+const FREE_LIMIT = 10
 const SESSION_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 function MapContent() {
@@ -329,7 +329,9 @@ function MapContent() {
 
   const canSendAI = !aiLoading && aiInput.trim().length > 0 && (promptState.canSearch || promptState.packCredits > 0)
   const atAILimit = aiPromptCount >= FREE_LIMIT && !promptState.isPaid && promptState.packCredits === 0
-  const dots = Array.from({ length: 3 }, (_, i) => i < Math.max(0, FREE_LIMIT - aiPromptCount))
+  const searchesLeft = promptState.isPaid
+    ? promptState.remaining
+    : Math.max(0, FREE_LIMIT - aiPromptCount)
 
   if (!apiKey) return (
     <div className="min-h-screen bg-[var(--ink-soft)] flex flex-col items-center justify-center gap-4 p-8">
@@ -480,18 +482,11 @@ function MapContent() {
                   </div>
                 )}
 
-                {/* Prompt counter dots */}
-                {!atAILimit && (
-                  <div className="flex items-center gap-2 justify-center">
-                    <div className="flex gap-1.5">
-                      {dots.map((filled, i) => (
-                        <span key={i} className={`w-2 h-2 rounded-full transition-all ${filled ? 'bg-amber-500' : 'border border-white/20'}`} />
-                      ))}
-                    </div>
-                    <span className={`text-xs ${promptState.remaining === 1 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
-                      {promptState.isPaid
-                        ? (isEl ? `${promptState.remaining}/${promptState.limit} αυτόν τον μήνα` : `${promptState.remaining}/${promptState.limit} this month`)
-                        : (isEl ? `${Math.max(0, FREE_LIMIT - aiPromptCount)} δωρεάν αναζητήσεις` : `${Math.max(0, FREE_LIMIT - aiPromptCount)} free searches left`)}
+                {/* Search counter */}
+                {!atAILimit && aiPromptCount > 0 && (
+                  <div className="text-center">
+                    <span className={`text-xs px-2.5 py-1 rounded-full border ${searchesLeft <= 3 ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-white/10 text-[var(--text-muted)]'}`}>
+                      {isEl ? `${searchesLeft} αναζητήσεις αυτόν τον μήνα` : `${searchesLeft} searches left this month`}
                     </span>
                   </div>
                 )}

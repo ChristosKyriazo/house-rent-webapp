@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { TIER_RANK } from '@/lib/subscription'
 
-const FREE_LIMIT = 3
+const FREE_MONTHLY_LIMIT = 10
 const PAID_MONTHLY_LIMIT = 20
 const PACK_SIZES: Record<string, number> = { '10': 10, '25': 25, '50': 50 }
 
@@ -22,36 +22,27 @@ function getMonthlyReset(resetAt: Date | null): { needsReset: boolean; nextReset
 // GET /api/ai-prompt-usage — return current usage state for the logged-in user
 export async function GET() {
   const user = await getCurrentUser().catch(() => null)
-  if (!user) return NextResponse.json({ guest: true, limit: FREE_LIMIT, used: 0, remaining: FREE_LIMIT, canSearch: true })
+  if (!user) return NextResponse.json({ guest: true, limit: FREE_MONTHLY_LIMIT, used: 0, remaining: FREE_MONTHLY_LIMIT, canSearch: true })
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { subscriptionTier: true, aiSearchCount: true, aiSearchMonthlyCount: true, aiSearchMonthlyResetAt: true, aiSearchPackCount: true },
+    select: { subscriptionTier: true, aiSearchMonthlyCount: true, aiSearchMonthlyResetAt: true, aiSearchPackCount: true },
   })
-  if (!dbUser) return NextResponse.json({ guest: true, limit: FREE_LIMIT, used: 0, remaining: FREE_LIMIT, canSearch: true })
+  if (!dbUser) return NextResponse.json({ guest: true, limit: FREE_MONTHLY_LIMIT, used: 0, remaining: FREE_MONTHLY_LIMIT, canSearch: true })
 
   const paid = isPaidTier(dbUser.subscriptionTier)
+  const monthlyLimit = paid ? PAID_MONTHLY_LIMIT : FREE_MONTHLY_LIMIT
 
-  if (paid) {
-    const { needsReset } = getMonthlyReset(dbUser.aiSearchMonthlyResetAt)
-    const monthlyUsed = needsReset ? 0 : dbUser.aiSearchMonthlyCount
-    const packLeft = dbUser.aiSearchPackCount
-    const monthlyLeft = Math.max(0, PAID_MONTHLY_LIMIT - monthlyUsed)
-    return NextResponse.json({
-      used: monthlyUsed, limit: PAID_MONTHLY_LIMIT,
-      remaining: monthlyLeft, packCredits: packLeft,
-      canSearch: monthlyLeft > 0 || packLeft > 0,
-      isPaid: true,
-    })
-  }
-
+  const { needsReset } = getMonthlyReset(dbUser.aiSearchMonthlyResetAt)
+  const monthlyUsed = needsReset ? 0 : dbUser.aiSearchMonthlyCount
   const packLeft = dbUser.aiSearchPackCount
-  const freeLeft = Math.max(0, FREE_LIMIT - dbUser.aiSearchCount)
+  const monthlyLeft = Math.max(0, monthlyLimit - monthlyUsed)
+
   return NextResponse.json({
-    used: dbUser.aiSearchCount, limit: FREE_LIMIT,
-    remaining: freeLeft, packCredits: packLeft,
-    canSearch: freeLeft > 0 || packLeft > 0,
-    isPaid: false,
+    used: monthlyUsed, limit: monthlyLimit,
+    remaining: monthlyLeft, packCredits: packLeft,
+    canSearch: monthlyLeft > 0 || packLeft > 0,
+    isPaid: paid,
   })
 }
 
@@ -65,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { subscriptionTier: true, aiSearchCount: true, aiSearchMonthlyCount: true, aiSearchMonthlyResetAt: true, aiSearchPackCount: true },
+    select: { subscriptionTier: true, aiSearchMonthlyCount: true, aiSearchMonthlyResetAt: true, aiSearchPackCount: true },
   })
   if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
@@ -81,50 +72,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, packCredits: updated.aiSearchPackCount })
   }
 
-  // Consume one search
+  // Consume one search — same monthly mechanism for both free and paid users
   const paid = isPaidTier(dbUser.subscriptionTier)
+  const monthlyLimit = paid ? PAID_MONTHLY_LIMIT : FREE_MONTHLY_LIMIT
 
-  if (paid) {
-    const { needsReset, nextReset } = getMonthlyReset(dbUser.aiSearchMonthlyResetAt)
-    const monthlyUsed = needsReset ? 0 : dbUser.aiSearchMonthlyCount
-    const monthlyLeft = PAID_MONTHLY_LIMIT - monthlyUsed
-    const packLeft = dbUser.aiSearchPackCount
-
-    if (monthlyLeft <= 0 && packLeft <= 0) {
-      return NextResponse.json({ error: 'limit_reached', canSearch: false }, { status: 402 })
-    }
-
-    const updateData: Record<string, unknown> = needsReset
-      ? { aiSearchMonthlyCount: 1, aiSearchMonthlyResetAt: nextReset }
-      : monthlyLeft > 0
-        ? { aiSearchMonthlyCount: { increment: 1 } }
-        : { aiSearchPackCount: { decrement: 1 } }
-
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: updateData,
-      select: { aiSearchMonthlyCount: true, aiSearchPackCount: true, aiSearchMonthlyResetAt: true },
-    })
-    const newMonthlyLeft = Math.max(0, PAID_MONTHLY_LIMIT - updated.aiSearchMonthlyCount)
-    return NextResponse.json({ ok: true, remaining: newMonthlyLeft, packCredits: updated.aiSearchPackCount, canSearch: newMonthlyLeft > 0 || updated.aiSearchPackCount > 0 })
-  }
-
-  // Free user
-  const freeLeft = FREE_LIMIT - dbUser.aiSearchCount
+  const { needsReset, nextReset } = getMonthlyReset(dbUser.aiSearchMonthlyResetAt)
+  const monthlyUsed = needsReset ? 0 : dbUser.aiSearchMonthlyCount
+  const monthlyLeft = monthlyLimit - monthlyUsed
   const packLeft = dbUser.aiSearchPackCount
-  if (freeLeft <= 0 && packLeft <= 0) {
+
+  if (monthlyLeft <= 0 && packLeft <= 0) {
     return NextResponse.json({ error: 'limit_reached', canSearch: false }, { status: 402 })
   }
 
-  const updateData = freeLeft > 0
-    ? { aiSearchCount: { increment: 1 } }
-    : { aiSearchPackCount: { decrement: 1 } }
+  const updateData: Record<string, unknown> = needsReset
+    ? { aiSearchMonthlyCount: 1, aiSearchMonthlyResetAt: nextReset }
+    : monthlyLeft > 0
+      ? { aiSearchMonthlyCount: { increment: 1 } }
+      : { aiSearchPackCount: { decrement: 1 } }
 
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: updateData,
-    select: { aiSearchCount: true, aiSearchPackCount: true },
+    select: { aiSearchMonthlyCount: true, aiSearchPackCount: true },
   })
-  const newFreeLeft = Math.max(0, FREE_LIMIT - updated.aiSearchCount)
-  return NextResponse.json({ ok: true, remaining: newFreeLeft, packCredits: updated.aiSearchPackCount, canSearch: newFreeLeft > 0 || updated.aiSearchPackCount > 0 })
+  const newLeft = Math.max(0, monthlyLimit - updated.aiSearchMonthlyCount)
+  return NextResponse.json({ ok: true, remaining: newLeft, packCredits: updated.aiSearchPackCount, canSearch: newLeft > 0 || updated.aiSearchPackCount > 0 })
 }

@@ -17,7 +17,7 @@ interface AIChatPanelProps {
   language: string
 }
 
-const FREE_PROMPTS = 3
+const FREE_PROMPTS = 10
 const MSG_MAX_LENGTH = 200
 
 function AIChatPanel(
@@ -54,12 +54,14 @@ function AIChatPanel(
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages, loading])
 
-  // Local limit: free users hit 3, paid users use server monthly remaining
+  // Local limit: free users hit FREE_PROMPTS/month, paid users use server monthly remaining
   const atLocalLimit = isPaid
     ? (monthlyRemaining !== null && monthlyRemaining <= 0 && packCredits === 0)
     : (promptCount >= FREE_PROMPTS && packCredits === 0)
 
-  const dots = isPaid ? [] : Array.from({ length: FREE_PROMPTS }, (_, i) => i >= promptCount)
+  const searchesLeft = isPaid
+    ? (monthlyRemaining ?? (FREE_PROMPTS - promptCount))
+    : Math.max(0, FREE_PROMPTS - promptCount)
 
   const t = {
     headline: isEl ? 'Πώς μπορώ να σας βοηθήσω να βρείτε το σπίτι σας;' : "Let's find your perfect home.",
@@ -208,13 +210,14 @@ function AIChatPanel(
             ← {t.back}
           </button>
           <div className="flex items-center gap-3">
-            {/* Dot counter for free users */}
-            {dots.length > 0 && promptCount > 0 && (
-              <div className="flex items-center gap-1.5">
-                {dots.map((remaining, i) => (
-                  <span key={i} className={`w-2 h-2 rounded-full transition-all ${remaining ? 'bg-amber-500' : 'border border-white/20'}`} />
-                ))}
-              </div>
+            {promptCount > 0 && !atLocalLimit && (
+              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                searchesLeft <= 3
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                  : 'border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+              }`}>
+                {searchesLeft} {isEl ? 'αναζητήσεις' : 'searches left'}
+              </span>
             )}
             {!isEmpty && (
               <button onClick={handleReset} className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
