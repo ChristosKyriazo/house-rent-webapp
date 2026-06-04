@@ -98,9 +98,7 @@ async function geocodeAddress(
   city: string,
   country: string
 ): Promise<Coordinates | null> {
-  // Accept either the server-only key or the public key (same value, but only the public one
-  // is guaranteed to be in the GitHub secrets used by the deploy workflow)
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     console.error('GOOGLE_MAPS_API_KEY is not set')
     return null
@@ -234,7 +232,7 @@ async function findClosestPlace(
   placeType: string,
   radius: number = 5000 // Default 5km radius
 ): Promise<PlaceWithDistance> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     return { distance: null, coordinates: null }
   }
@@ -333,7 +331,7 @@ async function findClosestUniversity(
   coordinates: Coordinates,
   city: string
 ): Promise<PlaceWithDistance> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     return { distance: null, coordinates: null }
   }
