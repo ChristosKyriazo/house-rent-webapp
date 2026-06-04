@@ -126,7 +126,6 @@ jobs:
             CALCOM_TOKEN_ENCRYPTION_KEY=${{ secrets.CALCOM_TOKEN_ENCRYPTION_KEY }}
 
             # ── App config ────────────────────────────────────────────────────
-            ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
             LOG_LEVEL=info
             GITHUB_ACTIONS_ENV_EOF
 
