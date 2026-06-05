@@ -47,11 +47,6 @@ export default function MyListingsPage() {
   const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
   const [slotsUsed, setSlotsUsed] = useState(0)
   const [promotingKey, setPromotingKey] = useState<string | null>(null)
-  const [portfolioPeriod, setPortfolioPeriod] = useState<'day' | 'week' | 'month'>('month')
-  const [portfolio, setPortfolio] = useState<{
-    totals: { views: number; inquiries: number; schedules: number }
-    topListing: { key: string; title: string; titleGreek: string | null; viewsInPeriod: number; inquiriesInPeriod: number; inquiryRate: string } | null
-  } | null>(null)
 
   const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
 
@@ -95,13 +90,6 @@ export default function MyListingsPage() {
         const tier = profileData.user.subscriptionTier ?? 'free'
         setSubscriptionTier(tier)
 
-        if (tier === 'pro') {
-          fetch(`/api/homes/portfolio-analytics?period=month`)
-            .then(r => r.ok ? r.json() : null)
-            .then(d => { if (d) setPortfolio({ totals: d.totals, topListing: d.topListing }) })
-            .catch(() => {})
-        }
-
         const homesResponse = await fetch('/api/homes/my-listings')
         if (homesResponse.ok) {
           const homesData = await homesResponse.json()
@@ -126,14 +114,6 @@ export default function MyListingsPage() {
       .then((data) => setAreas(data.areas || []))
       .catch((error) => console.error('Error fetching areas:', error))
   }, [])
-
-  useEffect(() => {
-    if (subscriptionTier !== 'pro') return
-    fetch(`/api/homes/portfolio-analytics?period=${portfolioPeriod}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setPortfolio({ totals: d.totals, topListing: d.topListing }) })
-      .catch(() => {})
-  }, [portfolioPeriod, subscriptionTier])
 
   const toggleSelect = (key: string) => {
     setSelectedKeys(prev =>
@@ -180,7 +160,7 @@ export default function MyListingsPage() {
           <div>
             <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{getTranslation(language, 'myListings')}</h1>
             <p className="text-[var(--text-muted)]">{getTranslation(language, 'manageListings')}</p>
-            {subscriptionTier === 'pro' && (
+            {subscriptionTier !== 'free' && (
               <Link
                 href="/homes/analytics"
                 className="inline-flex items-center gap-1.5 mt-2 text-xs text-amber-400/70 hover:text-amber-400 transition-colors"
@@ -188,7 +168,7 @@ export default function MyListingsPage() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                {language === 'el' ? 'Portfolio Analytics →' : 'Portfolio Analytics →'}
+                {language === 'el' ? 'Αναλυτικά →' : 'Analytics →'}
               </Link>
             )}
           </div>
@@ -210,100 +190,6 @@ export default function MyListingsPage() {
             </div>
           )}
         </div>
-
-        {/* Portfolio analytics — Pro only */}
-        {subscriptionTier === 'pro' && (
-          <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/6 p-5">
-            {/* Header row */}
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs text-amber-400/70 uppercase tracking-widest font-[var(--font-outfit)]">
-                Portfolio
-              </p>
-              {/* Period filter tabs */}
-              <div className="flex items-center gap-1 bg-amber-500/10 rounded-xl p-1">
-                {([
-                  { key: 'day', en: 'Today', el: 'Σήμερα' },
-                  { key: 'week', en: 'This week', el: 'Εβδομάδα' },
-                  { key: 'month', en: 'This month', el: 'Μήνας' },
-                ] as const).map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setPortfolioPeriod(tab.key)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                      portfolioPeriod === tab.key
-                        ? 'bg-amber-500/30 text-amber-300'
-                        : 'text-amber-400/50 hover:text-amber-400/80'
-                    }`}
-                  >
-                    {language === 'el' ? tab.el : tab.en}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {portfolio ? (
-              <>
-                {/* Metrics */}
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  {[
-                    { label: language === 'el' ? 'Προβολές' : 'Visits', value: portfolio.totals.views },
-                    { label: language === 'el' ? 'Αιτήματα' : 'Inquiries', value: portfolio.totals.inquiries },
-                    { label: language === 'el' ? 'Ραντεβού' : 'Schedules', value: portfolio.totals.schedules },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <p className="text-xs text-amber-400/60 mb-0.5">{s.label}</p>
-                      <p className="text-2xl font-bold text-amber-300">{s.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Top listing */}
-                {portfolio.topListing && (
-                  <p className="text-xs text-amber-400/60 border-t border-amber-500/15 pt-3">
-                    {language === 'el' ? 'Κορυφαία:' : 'Top listing:'}{' '}
-                    <Link href={`/homes/${portfolio.topListing.key}/analytics`} className="text-amber-400 hover:underline">
-                      {language === 'el' ? (portfolio.topListing.titleGreek ?? portfolio.topListing.title) : portfolio.topListing.title}
-                    </Link>
-                    {' '}·{' '}{portfolio.topListing.viewsInPeriod} {language === 'el' ? 'προβολές' : 'views'}
-                    {portfolio.topListing.inquiriesInPeriod > 0 && (
-                      <> · {portfolio.topListing.inquiriesInPeriod} {language === 'el' ? 'νέα αιτήματα' : 'new inquiries'}</>
-                    )}
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="grid grid-cols-3 gap-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="h-3 w-16 bg-amber-500/20 rounded mb-2" />
-                    <div className="h-7 w-10 bg-amber-500/20 rounded" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-3 pt-3 border-t border-amber-500/15 flex items-center justify-end">
-              <button
-                onClick={() => {
-                  const rows = [['Title', 'City', 'Type', 'Price', 'Views (period)', 'New inquiries', 'Inquiry rate']]
-                  fetch(`/api/homes/portfolio-analytics?period=${portfolioPeriod}`).then(r => r.json()).then(d => {
-                    d.homes?.forEach((h: { title: string; city: string; listingType: string; pricePerMonth: number; viewsInPeriod: number; inquiriesInPeriod: number; inquiryRate: string }) => {
-                      rows.push([h.title, h.city, h.listingType, String(h.pricePerMonth), String(h.viewsInPeriod), String(h.inquiriesInPeriod), h.inquiryRate + '%'])
-                    })
-                    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
-                    const blob = new Blob([csv], { type: 'text/csv' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a'); a.href = url; a.download = 'portfolio.csv'; a.click()
-                    URL.revokeObjectURL(url)
-                  })
-                }}
-                className="text-xs text-amber-400/50 hover:text-amber-400 transition-colors"
-              >
-                ↓ CSV
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="mb-6 flex items-center justify-between gap-4">
           {userHomes.length > 0 && (

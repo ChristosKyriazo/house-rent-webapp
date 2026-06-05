@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return unauthorized()
 
-  const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'pro')
+  const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
   if (tierBlock) return tierBlock
 
   const period = (request.nextUrl.searchParams.get('period') ?? 'month') as 'day' | 'week' | 'month'
