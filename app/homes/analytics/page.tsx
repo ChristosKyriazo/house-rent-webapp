@@ -434,7 +434,11 @@ export default function PortfolioAnalyticsPage() {
                         <span className="text-sm text-[var(--text-muted)] text-right">{home.savesTotal}</span>
                         <span className="text-sm text-[var(--text-muted)] text-right">{home.inquiriesTotal}</span>
                         <span className="text-sm text-[var(--text-muted)] text-right">{home.inquiryRate}%</span>
-                        <span className="text-sm text-[var(--text-muted)] text-right">{home.daysOnMarket}</span>
+                        <span className="text-sm text-right">
+                          {home.finalized
+                            ? <span className="text-purple-400/70 text-xs">done</span>
+                            : <span className="text-[var(--text-muted)]">{home.daysOnMarket}d</span>}
+                        </span>
                       </div>
                     )
                   })
@@ -453,8 +457,8 @@ export default function PortfolioAnalyticsPage() {
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">
                   {isEl
-                    ? 'Επισκ. = επισκέψεις στην επιλεγμένη περίοδο · Χρόνος = μέσος χρόνος (30ήμ.) · Αιτ. = συνολικά · Ημέρες = από τη δημοσίευση'
-                    : 'Visits = selected period · Avg time = last 30 days · Inq. = all time · Days = since published'}
+                    ? 'Επισκ. = επιλεγμένη περίοδος · Χρόνος = μέσος (30ήμ.) · Αιτ. = συνολικά · Ημέρες = ενεργά (μη ολοκληρωμένα)'
+                    : 'Visits = selected period · Avg time = last 30 days · Inq. = all time · Days = active days (not finalized)'}
                 </p>
               </div>
             </section>

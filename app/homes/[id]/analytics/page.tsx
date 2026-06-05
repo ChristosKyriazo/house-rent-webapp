@@ -18,6 +18,7 @@ interface AnalyticsData {
   hotSignal: boolean
   hotSignalCount: number
   daysOnMarket: number
+  finalized: boolean
   timeSeries: { date: string; views: number }[]
 }
 
@@ -240,8 +241,9 @@ export default function ListingAnalyticsPage() {
                   sub={isEl ? 'επισκέψεις 2+ φορές / 30μ.' : '2+ visits in 30d'}
                 />
                 <StatCard
-                  label={isEl ? 'Μέρες στην αγορά' : 'Days on market'}
-                  value={data.daysOnMarket}
+                  label={isEl ? 'Μέρες ενεργή' : 'Days active'}
+                  value={data.finalized ? '—' : data.daysOnMarket}
+                  sub={data.finalized ? (isEl ? 'Ολοκληρώθηκε' : 'Finalized') : undefined}
                 />
               </div>
             </section>

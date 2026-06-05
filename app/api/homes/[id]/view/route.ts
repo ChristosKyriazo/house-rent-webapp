@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
 const VALID_SOURCES = ['direct', 'browse', 'ai_search', 'filter_search', 'map', 'saved', 'compare']
-const DEDUP_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
+const DEDUP_WINDOW_MS = 5 * 1000 // 5 seconds — prevents double-fire on the same page load only
 
 export async function POST(
   request: NextRequest,

@@ -46,7 +46,7 @@ export async function GET(
 
     const home = await prisma.home.findFirst({
       where: { OR: [{ key: homeKey }, { id: isNaN(Number(homeKey)) ? -1 : Number(homeKey) }] },
-      select: { id: true, key: true, ownerId: true, createdAt: true },
+      select: { id: true, key: true, ownerId: true, createdAt: true, finalized: true },
     })
     if (!home) return notFound('Home not found')
     if (home.ownerId !== user.id) return forbidden('You do not own this home')
@@ -132,6 +132,7 @@ export async function GET(
       hotSignal,
       hotSignalCount,
       daysOnMarket,
+      finalized: home.finalized,
       timeSeries,
     })
   } catch (error) {
