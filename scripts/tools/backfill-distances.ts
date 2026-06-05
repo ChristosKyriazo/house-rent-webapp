@@ -17,7 +17,6 @@ async function main() {
   const homes = await prisma.home.findMany({
     where: {
       closestMetro: null,
-      closestBus: null,
       closestSchool: null,
       closestHospital: null,
       closestPark: null,
