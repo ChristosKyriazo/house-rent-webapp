@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     savesByHome,
     approvedByHome,
     finalizedByHome,
-    totalPeriodSchedules,
+    periodBookingsByHome,
     avgDurationByHome,
     views30d,
   ] = await Promise.all([
@@ -79,8 +79,12 @@ export async function GET(request: NextRequest) {
     prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, approved: true }, _count: { id: true } }),
     // All-time finalized per home
     prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, finalized: true }, _count: { id: true } }),
-    // Period new bookings for this owner (across all listings)
-    prisma.booking.count({ where: { ownerId: user.id, createdAt: { gte: periodStart }, status: { not: 'cancelled' } } }),
+    // Period new bookings per home + total (uses direct homeId link)
+    prisma.booking.groupBy({
+      by: ['homeId'],
+      where: { homeId: { in: homeIds }, createdAt: { gte: periodStart }, status: { not: 'cancelled' } },
+      _count: { id: true },
+    }),
     // 30-day avg duration per home
     prisma.listingView.groupBy({
       by: ['homeId'],
@@ -100,13 +104,16 @@ export async function GET(request: NextRequest) {
   const saveMap = new Map(savesByHome.map(r => [r.homeId, r._count.id]))
   const approvedMap = new Map(approvedByHome.map(r => [r.homeId, r._count.id]))
   const finalizedMap = new Map(finalizedByHome.map(r => [r.homeId, r._count.id]))
+  const bookingMap = new Map(periodBookingsByHome.map(r => [r.homeId, r._count.id]))
   const avgDurMap = new Map(avgDurationByHome.map(r => [r.homeId, r._avg.durationSeconds]))
+  const totalPeriodSchedules = [...bookingMap.values()].reduce((a, b) => a + b, 0)
 
   const portfolioAvgRate = totalPeriodViews > 0 ? (totalPeriodInquiries / totalPeriodViews * 100) : 0
 
   const rows = homes.map(h => {
     const viewsInPeriod = viewMap.get(h.id) ?? 0
     const inquiriesInPeriod = periodInquiryMap.get(h.id) ?? 0
+    const schedulesInPeriod = bookingMap.get(h.id) ?? 0
     const inquiriesTotal = allInquiryMap.get(h.id) ?? 0
     const savesTotal = saveMap.get(h.id) ?? 0
     const approved = approvedMap.get(h.id) ?? 0
@@ -133,6 +140,7 @@ export async function GET(request: NextRequest) {
       daysOnMarket,
       viewsInPeriod,
       inquiriesInPeriod,
+      schedulesInPeriod,
       inquiriesTotal,
       savesTotal,
       approved,

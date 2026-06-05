@@ -295,9 +295,10 @@ export async function POST(request: NextRequest) {
 
     // If availabilityId is provided, get ownerId and homeKey from the availability
     let finalOwnerId = ownerId
+    let finalHomeId: number | null = null
     let homeKey: string | null = null
     let ownerKey: string | null = null
-    
+
     const parsedAvailabilityId = availabilityId ? parsePositiveInt(availabilityId) : null
     const parsedOwnerId = ownerId ? parsePositiveInt(ownerId) : null
     const parsedStartTime = parseValidDate(startTime)
@@ -310,22 +311,20 @@ export async function POST(request: NextRequest) {
     if (availabilityId && !parsedOwnerId) {
       const availability = await prisma.availability.findUnique({
         where: { id: parsedAvailabilityId ?? -1 },
-        include: { 
-          home: { 
-            select: { 
+        include: {
+          home: {
+            select: {
+              id: true,
               ownerId: true,
               key: true,
-              owner: {
-                select: {
-                  key: true,
-                },
-              },
-            } 
-          } 
+              owner: { select: { key: true } },
+            },
+          },
         },
       })
       if (availability) {
         finalOwnerId = availability.home.ownerId
+        finalHomeId = availability.home.id
         homeKey = availability.home.key
         ownerKey = availability.home.owner.key
       }
@@ -337,17 +336,15 @@ export async function POST(request: NextRequest) {
           include: {
             home: {
               select: {
+                id: true,
                 key: true,
-                owner: {
-                  select: {
-                    key: true,
-                  },
-                },
+                owner: { select: { key: true } },
               },
             },
           },
         })
         if (inquiry) {
+          finalHomeId = inquiry.home.id
           homeKey = inquiry.home.key
           ownerKey = inquiry.home.owner.key
         }
@@ -367,6 +364,7 @@ export async function POST(request: NextRequest) {
         select: { homeId: true },
       })
       if (av) {
+        if (finalHomeId === null) finalHomeId = av.homeId
         const match = await prisma.inquiry.findFirst({
           where: {
             userId: user.id,
@@ -401,6 +399,7 @@ export async function POST(request: NextRequest) {
         data: {
           userId: user.id,
           ownerId: finalOwnerId,
+          homeId: finalHomeId,
           inquiryId: finalInquiryId,
           availabilityId: parsedAvailabilityId,
           title,

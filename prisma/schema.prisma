@@ -91,6 +91,7 @@ model Home {
   owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   inquiries         Inquiry[]
   availabilities    Availability[]
+  bookings          Booking[]
   embeddingQueue    EmbeddingQueue?
   savedBy           SavedHome[]
   listingViews      ListingView[]
@@ -261,6 +262,7 @@ model Booking {
   key             String   @unique @default(cuid())
   userId          Int      // User who has the booking (attendee)
   ownerId         Int      // Owner/broker who created the booking
+  homeId          Int?     // Direct link to the listing this booking is for
   inquiryId       Int?     // Related inquiry (if booking is from an inquiry)
   availabilityId  Int?     // Related availability slot that was booked
   calComBookingId String?  // Cal.com booking ID (if synced from Cal.com)
@@ -274,10 +276,12 @@ model Booking {
   updatedAt       DateTime @updatedAt
   user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
   owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  home            Home?    @relation(fields: [homeId], references: [id], onDelete: SetNull)
   availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([ownerId])
+  @@index([homeId])
   @@index([startTime])
   @@index([status])
   @@index([availabilityId])
