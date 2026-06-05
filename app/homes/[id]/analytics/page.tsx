@@ -13,6 +13,12 @@ interface AnalyticsData {
   saves: number
   topSources: { source: string; count: number }[]
   inquiryRate: string
+  inquiryPipeline: { pending: number; approved: number; dismissed: number; finalized: number }
+  repeatVisitors: number
+  hotSignal: boolean
+  hotSignalCount: number
+  daysOnMarket: number
+  timeSeries: { date: string; views: number }[]
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -29,6 +35,22 @@ function formatDuration(s: number | null, isEl: boolean): string {
   if (s === null) return isEl ? 'Δεν υπάρχουν αρκετά δεδομένα' : 'Not enough data'
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+function TimeSeriesChart({ data }: { data: { date: string; views: number }[] }) {
+  const max = Math.max(...data.map(d => d.views), 1)
+  return (
+    <div className="flex items-end gap-px h-20">
+      {data.map((d, i) => (
+        <div
+          key={i}
+          className="flex-1 bg-amber-500/35 hover:bg-amber-400/55 rounded-t transition-colors cursor-default"
+          style={{ height: `${Math.max((d.views / max) * 100, 2)}%` }}
+          title={`${d.date}: ${d.views}`}
+        />
+      ))}
+    </div>
+  )
 }
 
 const SOURCE_LABELS: Record<string, { en: string; el: string }> = {
@@ -72,14 +94,19 @@ export default function ListingAnalyticsPage() {
   }, [homeKey, isEl])
 
   const maxSource = data?.topSources.length ? Math.max(...data.topSources.map(s => s.count)) : 1
+  const pipeline = data?.inquiryPipeline
+  const totalInquiries = pipeline ? pipeline.pending + pipeline.approved + pipeline.dismissed + pipeline.finalized : 0
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
 
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center gap-4">
           <Link href="/homes/my-listings" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
             ← {isEl ? 'Οι αγγελίες μου' : 'My listings'}
+          </Link>
+          <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+            {isEl ? 'Portfolio' : 'Portfolio'}
           </Link>
         </div>
 
@@ -112,6 +139,24 @@ export default function ListingAnalyticsPage() {
 
         {data && (
           <div className="flex flex-col gap-8">
+
+            {/* Hot signal banner */}
+            {data.hotSignal && (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 flex items-start gap-3">
+                <span className="text-xl">🔥</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-300">
+                    {isEl ? 'Υψηλό ενδιαφέρον' : 'High interest signal'}
+                  </p>
+                  <p className="text-xs text-amber-400/70 mt-0.5">
+                    {isEl
+                      ? `${data.hotSignalCount} ${data.hotSignalCount === 1 ? 'επισκέπτης' : 'επισκέπτες'} επέστρεψαν 3+ φορές τις τελευταίες 7 μέρες`
+                      : `${data.hotSignalCount} ${data.hotSignalCount === 1 ? 'person' : 'people'} viewed this listing 3+ times in the last 7 days`}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Views */}
             <section>
               <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
@@ -119,32 +164,103 @@ export default function ListingAnalyticsPage() {
               </h2>
               <div className="grid grid-cols-3 gap-4">
                 <StatCard label={isEl ? 'Σήμερα' : 'Today'} value={data.views.today} />
-                <StatCard label={isEl ? 'Αυτή την εβδομάδα' : 'This week'} value={data.views.thisWeek}
-                  sub={isEl ? `${data.uniqueViewers.thisWeek} μοναδικοί` : `${data.uniqueViewers.thisWeek} unique`} />
-                <StatCard label={isEl ? 'Αυτόν τον μήνα' : 'This month'} value={data.views.thisMonth}
-                  sub={isEl ? `${data.uniqueViewers.thisMonth} μοναδικοί` : `${data.uniqueViewers.thisMonth} unique`} />
+                <StatCard
+                  label={isEl ? 'Αυτή την εβδομάδα' : 'This week'}
+                  value={data.views.thisWeek}
+                  sub={isEl ? `${data.uniqueViewers.thisWeek} μοναδικοί` : `${data.uniqueViewers.thisWeek} unique`}
+                />
+                <StatCard
+                  label={isEl ? 'Αυτόν τον μήνα' : 'This month'}
+                  value={data.views.thisMonth}
+                  sub={isEl ? `${data.uniqueViewers.thisMonth} μοναδικοί` : `${data.uniqueViewers.thisMonth} unique`}
+                />
               </div>
             </section>
+
+            {/* 30-day chart */}
+            {data.timeSeries.length > 0 && (
+              <section>
+                <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
+                  {isEl ? 'Τελευταίες 30 ημέρες' : 'Last 30 days'}
+                </h2>
+                <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] px-5 pt-5 pb-3">
+                  <TimeSeriesChart data={data.timeSeries} />
+                  <div className="flex justify-between mt-2">
+                    <span className="text-xs text-[var(--text-muted)]">{data.timeSeries[0]?.date}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{data.timeSeries[data.timeSeries.length - 1]?.date}</span>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Engagement */}
             <section>
               <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
                 {isEl ? 'Αλληλεπίδραση' : 'Engagement'}
               </h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard
                   label={isEl ? 'Μέσος χρόνος' : 'Avg time on page'}
                   value={formatDuration(data.avgDurationSeconds, isEl)}
-                  sub={data.avgDurationSeconds !== null ? (isEl ? `από ${data.durationCaptureRate}% επισκέψεων` : `from ${data.durationCaptureRate}% of visits`) : undefined}
+                  sub={data.avgDurationSeconds !== null
+                    ? (isEl ? `από ${data.durationCaptureRate}% επισκέψεων` : `from ${data.durationCaptureRate}% of visits`)
+                    : undefined}
                 />
                 <StatCard label={isEl ? 'Αποθηκεύσεις' : 'Saves'} value={data.saves} />
                 <StatCard
-                  label={isEl ? 'Ποσοστό αιτημάτων' : 'Inquiry rate'}
-                  value={`${data.inquiryRate}%`}
-                  sub={isEl ? 'αιτήματα / προβολές' : 'inquiries / views'}
+                  label={isEl ? 'Επαναλαμβ.' : 'Repeat visitors'}
+                  value={data.repeatVisitors}
+                  sub={isEl ? 'επισκέψεις 2+ φορές / 30μ.' : '2+ visits in 30d'}
+                />
+                <StatCard
+                  label={isEl ? 'Μέρες στην αγορά' : 'Days on market'}
+                  value={data.daysOnMarket}
                 />
               </div>
             </section>
+
+            {/* Inquiry pipeline */}
+            {totalInquiries > 0 && pipeline && (
+              <section>
+                <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
+                  {isEl ? 'Αιτήματα' : 'Inquiry pipeline'}
+                </h2>
+                <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {isEl ? `${totalInquiries} αιτήματα συνολικά · ${data.inquiryRate}% ποσοστό` : `${totalInquiries} total · ${data.inquiryRate}% inquiry rate`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { key: 'pending', label: isEl ? 'Σε αναμονή' : 'Pending', color: 'bg-blue-500/25 text-blue-300', count: pipeline.pending },
+                      { key: 'approved', label: isEl ? 'Εγκεκριμένα' : 'Approved', color: 'bg-green-500/25 text-green-300', count: pipeline.approved },
+                      { key: 'dismissed', label: isEl ? 'Απορρίφθηκαν' : 'Dismissed', color: 'bg-[var(--ink-soft)] text-[var(--text-muted)]', count: pipeline.dismissed },
+                      { key: 'finalized', label: isEl ? 'Ολοκληρώθηκαν' : 'Finalized', color: 'bg-purple-500/25 text-purple-300', count: pipeline.finalized },
+                    ].map(s => (
+                      <div key={s.key} className={`rounded-xl p-3 text-center ${s.color}`}>
+                        <p className="text-2xl font-bold">{s.count}</p>
+                        <p className="text-xs mt-0.5 opacity-80">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* No inquiries yet — show rate only */}
+            {totalInquiries === 0 && (
+              <section>
+                <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
+                  {isEl ? 'Αιτήματα' : 'Inquiries'}
+                </h2>
+                <StatCard
+                  label={isEl ? 'Ποσοστό αιτημάτων' : 'Inquiry rate'}
+                  value={`${data.inquiryRate}%`}
+                  sub={isEl ? 'αιτήματα / προβολές μήνα' : 'inquiries / monthly views'}
+                />
+              </section>
+            )}
 
             {/* Traffic sources */}
             {data.topSources.length > 0 && (
@@ -169,6 +285,7 @@ export default function ListingAnalyticsPage() {
                 </div>
               </section>
             )}
+
           </div>
         )}
       </div>
