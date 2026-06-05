@@ -37,9 +37,6 @@ interface DistanceResult {
   closestMetro: number | null
   closestMetroLocation: Coordinates | null
   closestMetroName: string | null
-  closestBus: number | null
-  closestBusLocation: Coordinates | null
-  closestBusName: string | null
   closestSchool: number | null
   closestSchoolLocation: Coordinates | null
   closestSchoolName: string | null
@@ -505,9 +502,6 @@ export async function calculatePropertyDistances(
     closestMetro: null,
     closestMetroLocation: null,
     closestMetroName: null,
-    closestBus: null,
-    closestBusLocation: null,
-    closestBusName: null,
     closestSchool: null,
     closestSchoolLocation: null,
     closestSchoolName: null,
@@ -533,14 +527,12 @@ export async function calculatePropertyDistances(
   // Note: University search uses database
   const [
     metroResult,
-    busResult,
     schoolResult,
     hospitalResult,
     parkResult,
     universityResult,
   ] = await Promise.all([
     findClosestPlace(propertyCoordinates, 'subway_station'), // Metro station (only subway_station)
-    findClosestPlace(propertyCoordinates, 'bus_stop'), // Bus stop (OASA city stops + KTEL terminals)
     findClosestPlace(propertyCoordinates, 'school'), // School (primary/secondary/high school)
     findClosestPlace(propertyCoordinates, 'hospital'), // Hospital (only hospital, NOT clinic/pharmacy)
     findClosestPlace(propertyCoordinates, 'park'), // Park (only actual parks, NOT stores/gardens)
@@ -552,9 +544,6 @@ export async function calculatePropertyDistances(
     closestMetro: metroResult.distance,
     closestMetroLocation: metroResult.coordinates,
     closestMetroName: metroResult.name || null,
-    closestBus: busResult.distance,
-    closestBusLocation: busResult.coordinates,
-    closestBusName: busResult.name || null,
     closestSchool: schoolResult.distance,
     closestSchoolLocation: schoolResult.coordinates,
     closestSchoolName: schoolResult.name || null,

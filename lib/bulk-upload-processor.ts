@@ -181,7 +181,6 @@ export async function processBulkUploadJob(jobId: string) {
 
         let distances = {
           closestMetro: null as number | null,
-          closestBus: null as number | null,
           closestSchool: null as number | null,
           closestHospital: null as number | null,
           closestPark: null as number | null,
@@ -193,7 +192,6 @@ export async function processBulkUploadJob(jobId: string) {
           const d = await calculatePropertyDistances(street, area, city, country)
           distances = {
             closestMetro: d.closestMetro,
-            closestBus: d.closestBus,
             closestSchool: d.closestSchool,
             closestHospital: d.closestHospital,
             closestPark: d.closestPark,
@@ -238,7 +236,6 @@ export async function processBulkUploadJob(jobId: string) {
             pricePerMonth, bedrooms, bathrooms, floor, sizeSqMeters,
             yearBuilt, yearRenovated, heatingCategory, heatingAgent, parking, energyClass,
             closestMetro: distances.closestMetro,
-            closestBus: distances.closestBus,
             closestSchool: distances.closestSchool,
             closestHospital: distances.closestHospital,
             closestPark: distances.closestPark,
@@ -270,7 +267,6 @@ export async function processBulkUploadJob(jobId: string) {
             yearBuilt, yearRenovated, availableFrom,
             photos: photosJson, photoTagsArray: photoTagsList, energyClass,
             closestMetro: distances.closestMetro,
-            closestBus: distances.closestBus,
             closestSchool: distances.closestSchool,
             closestHospital: distances.closestHospital,
             closestPark: distances.closestPark,

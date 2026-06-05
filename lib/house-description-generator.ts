@@ -37,7 +37,6 @@ export async function generateHouseDescriptions(
     parking: boolean | null
     energyClass: string | null
     closestMetro: number | null
-    closestBus: number | null
     closestSchool: number | null
     closestHospital: number | null
     closestPark: number | null
@@ -100,10 +99,6 @@ export async function generateHouseDescriptions(
     const proximityInfo: string[] = []
     if (houseData.closestMetro !== null && houseData.closestMetro <= 2) {
       proximityInfo.push('Metro: nearby')
-    }
-    
-    if (houseData.closestBus !== null && houseData.closestBus <= 1) {
-      proximityInfo.push('Bus: nearby')
     }
     
     if (houseData.closestSchool !== null && houseData.closestSchool <= 2) {

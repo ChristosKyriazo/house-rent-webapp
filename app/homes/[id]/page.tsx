@@ -38,7 +38,6 @@ interface Home {
   availableFrom: string
   photos: string | null
   closestMetro: number | null
-  closestBus: number | null
   closestSchool: number | null
   closestHospital: number | null
   closestPark: number | null
@@ -1079,7 +1078,7 @@ export default function HomeDetailPage() {
             )}
 
             {/* Distance Information - Always show to display university distance */}
-            {((home.closestMetro != null) || (home.closestBus != null) || (home.closestSchool != null) || 
+            {((home.closestMetro != null) || (home.closestSchool != null) ||
               (home.closestHospital != null) || (home.closestPark != null) ||
               true) && ( // Always show section to display university distance
               <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
@@ -1089,12 +1088,6 @@ export default function HomeDetailPage() {
                     <div>
                       <p className="text-sm text-[var(--text-muted)] mb-1">🚇 {getTranslation(language, 'closestMetro')}</p>
                       <p className="text-xl font-bold text-[var(--text)]">{home.closestMetro.toFixed(1)} km</p>
-                    </div>
-                  )}
-                  {home.closestBus != null && (
-                    <div>
-                      <p className="text-sm text-[var(--text-muted)] mb-1">🚌 {getTranslation(language, 'closestBus')}</p>
-                      <p className="text-xl font-bold text-[var(--text)]">{home.closestBus.toFixed(1)} km</p>
                     </div>
                   )}
                   {home.closestPark != null && (

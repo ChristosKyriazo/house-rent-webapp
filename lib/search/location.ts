@@ -118,13 +118,12 @@ export function getLocationVariations(
 }
 
 export function getDistanceFields(extractedFilters: Record<string, unknown>): Array<{
-  field: 'closestMetro' | 'closestBus' | 'closestSchool' | 'closestHospital' | 'closestPark' | 'closestUniversity'
+  field: 'closestMetro' | 'closestSchool' | 'closestHospital' | 'closestPark' | 'closestUniversity'
   category: string | null | undefined
   name: string
 }> {
   return [
     { field: 'closestMetro', category: extractedFilters.Metro as string, name: 'Metro' },
-    { field: 'closestBus', category: extractedFilters.Bus as string, name: 'Bus' },
     { field: 'closestUniversity', category: extractedFilters.University as string, name: 'University' },
     { field: 'closestSchool', category: extractedFilters.School as string, name: 'School' },
     { field: 'closestPark', category: extractedFilters.Park as string, name: 'Park' },

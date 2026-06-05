@@ -558,7 +558,6 @@ export async function POST(request: NextRequest) {
       latitude: number | null
       longitude: number | null
       closestMetro: number | null
-      closestBus: number | null
       closestSchool: number | null
       closestHospital: number | null
       closestPark: number | null
@@ -567,7 +566,6 @@ export async function POST(request: NextRequest) {
       latitude: null,
       longitude: null,
       closestMetro: null,
-      closestBus: null,
       closestSchool: null,
       closestHospital: null,
       closestPark: null,
@@ -592,7 +590,6 @@ export async function POST(request: NextRequest) {
       // Extract distances and coordinates for database storage
       distances = {
         closestMetro: distanceResult.closestMetro,
-        closestBus: distanceResult.closestBus,
         closestSchool: distanceResult.closestSchool,
         closestHospital: distanceResult.closestHospital,
         closestPark: distanceResult.closestPark,
@@ -665,7 +662,6 @@ export async function POST(request: NextRequest) {
         parking: resolveParking(parking),
         energyClass: resolveEnergyClass(energyClass),
         closestMetro: distances.closestMetro,
-        closestBus: distances.closestBus,
         closestSchool: distances.closestSchool,
         closestHospital: distances.closestHospital,
         closestPark: distances.closestPark,
@@ -728,7 +724,6 @@ export async function POST(request: NextRequest) {
               latitude: distances.latitude,
               longitude: distances.longitude,
               closestMetro: distances.closestMetro,
-              closestBus: distances.closestBus,
               closestSchool: distances.closestSchool,
               closestHospital: distances.closestHospital,
               closestPark: distances.closestPark,

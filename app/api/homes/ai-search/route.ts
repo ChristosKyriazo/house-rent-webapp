@@ -766,92 +766,13 @@ export async function POST(request: NextRequest) {
         let distanceCount = 0
         const distanceScores: Array<{ field: string; distance: number | null; score: number }> = []
         
-        // Check if both Metro and Bus are Essential or Strong
-        const metroInfo = distancesToConsider.find(d => d.field === 'closestMetro')
-        const busInfo = distancesToConsider.find(d => d.field === 'closestBus')
-        const hasMetro = !!metroInfo
-        const hasBus = !!busInfo
-        const bothEssential = hasMetro && hasBus && 
-          metroInfo?.category === 'Essential' && busInfo?.category === 'Essential'
-        const bothStrong = hasMetro && hasBus && 
-          metroInfo?.category === 'Strong' && busInfo?.category === 'Strong'
-        
-        if (bothEssential || bothStrong) {
-          // Priority logic: 
-          // 1. If Metro <= 2km, prioritize Metro
-          // 2. If Metro > 2km and Bus <= 2km, prioritize Bus
-          // 3. If both > 2km, treat them equally (average)
-          const threshold = 2.0 // Same threshold for both Essential and Strong
-          
-          const metroDistance = home[metroInfo!.field] as number | null
-          const busDistance = home[busInfo!.field] as number | null
-          
-          const metroScore = calculateDistanceScore(metroDistance, metroInfo!.category)
-          const busScore = calculateDistanceScore(busDistance, busInfo!.category)
-          
-          // Determine how to combine Metro and Bus scores
-          if (metroDistance !== null && busDistance !== null) {
-            if (metroDistance <= threshold) {
-              // Metro <= 2km: prioritize Metro (80% metro, 20% bus)
-              totalDistanceScore = (metroScore * 0.8) + (busScore * 0.2)
-              distanceCount = 1
-            } else if (metroDistance > threshold && busDistance <= threshold) {
-              // Metro > 2km and Bus <= 2km: prioritize Bus (70% bus, 30% metro)
-              totalDistanceScore = (busScore * 0.7) + (metroScore * 0.3)
-              distanceCount = 1
-            } else {
-              // Both > 2km: treat equally (average them)
-              totalDistanceScore = metroScore + busScore
-              distanceCount = 2
-            }
-          } else if (metroDistance === null && busDistance !== null) {
-            // Only Bus available
-            totalDistanceScore = busScore
-            distanceCount = 1
-          } else if (busDistance === null && metroDistance !== null) {
-            // Only Metro available
-            totalDistanceScore = metroScore
-            distanceCount = 1
-          } else {
-            // Both null
-            totalDistanceScore = 0
-            distanceCount = 0
-          }
-          
-          // Store both for logging
-          distanceScores.push({ 
-            field: metroInfo!.name, 
-            distance: metroDistance, 
-            score: metroScore 
-          })
-          distanceScores.push({ 
-            field: busInfo!.name, 
-            distance: busDistance, 
-            score: busScore 
-          })
-          
-          // Add other distance types (School, Hospital, Park, University) normally
-          for (const distanceInfo of distancesToConsider) {
-            if (distanceInfo.field !== 'closestMetro' && distanceInfo.field !== 'closestBus') {
-              const distance = home[distanceInfo.field] as number | null
-              const score = calculateDistanceScore(distance, distanceInfo.category)
-              totalDistanceScore += score
-              distanceScores.push({ field: distanceInfo.name, distance, score })
-              if (distance !== null && distance !== undefined) {
-                distanceCount++
-              }
-            }
-          }
-        } else {
-          // Normal calculation: average all distance scores
-          for (const distanceInfo of distancesToConsider) {
-            const distance = home[distanceInfo.field] as number | null
-            const score = calculateDistanceScore(distance, distanceInfo.category)
-            totalDistanceScore += score
-            distanceScores.push({ field: distanceInfo.name, distance, score })
-            if (distance !== null && distance !== undefined) {
-              distanceCount++
-            }
+        for (const distanceInfo of distancesToConsider) {
+          const distance = home[distanceInfo.field] as number | null
+          const score = calculateDistanceScore(distance, distanceInfo.category)
+          totalDistanceScore += score
+          distanceScores.push({ field: distanceInfo.name, distance, score })
+          if (distance !== null && distance !== undefined) {
+            distanceCount++
           }
         }
         

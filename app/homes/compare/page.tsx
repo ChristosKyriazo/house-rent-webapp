@@ -30,7 +30,6 @@ interface Home {
   descriptionGreek: string | null
   photos: string | null
   closestMetro: number | null
-  closestBus: number | null
   closestSchool: number | null
   closestHospital: number | null
   closestPark: number | null
@@ -102,7 +101,6 @@ function CompareContent() {
     { label: isEl ? 'Θέρμανση' : 'Heating', values: h => [h.heatingCategory, h.heatingAgent].filter(Boolean).join(' / ') || '—' },
     { label: isEl ? 'Parking' : 'Parking', values: h => fmtBool(h.parking, language) },
     { label: isEl ? 'Μετρό (km)' : 'Metro (km)', values: h => fmt(h.closestMetro) },
-    { label: isEl ? 'Λεωφορείο (km)' : 'Bus (km)', values: h => fmt(h.closestBus) },
     { label: isEl ? 'Σχολείο (km)' : 'School (km)', values: h => fmt(h.closestSchool) },
     { label: isEl ? 'Νοσοκομείο (km)' : 'Hospital (km)', values: h => fmt(h.closestHospital) },
     { label: isEl ? 'Πάρκο (km)' : 'Park (km)', values: h => fmt(h.closestPark) },

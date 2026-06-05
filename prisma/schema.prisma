@@ -76,7 +76,6 @@ model Home {
   latitude          Float?   // Geocoded latitude (stored from Google Maps at creation)
   longitude         Float?   // Geocoded longitude (stored from Google Maps at creation)
   closestMetro      Float?   // Distance to closest metro (in km or minutes)
-  closestBus        Float?   // Distance to closest bus stop (in km or minutes)
   closestSchool     Float?   // Distance to closest school (in km or minutes)
   closestHospital   Float?  // Distance to closest hospital (in km or minutes)
   closestPark       Float?   // Distance to closest park (in km or minutes)

@@ -280,13 +280,12 @@ export async function PUT(
           englishCountry
         )
         
-        log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, bus: distanceResult.closestBus, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
+        log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
 
         // Update distance fields and coordinates
         updateData.latitude = distanceResult.propertyCoordinates?.lat ?? null
         updateData.longitude = distanceResult.propertyCoordinates?.lng ?? null
         updateData.closestMetro = distanceResult.closestMetro
-        updateData.closestBus = distanceResult.closestBus
         updateData.closestSchool = distanceResult.closestSchool
         updateData.closestHospital = distanceResult.closestHospital
         updateData.closestPark = distanceResult.closestPark

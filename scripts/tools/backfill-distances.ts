@@ -53,7 +53,6 @@ async function main() {
         where: { id: home.id },
         data: {
           closestMetro: result.closestMetro,
-          closestBus: result.closestBus,
           closestSchool: result.closestSchool,
           closestHospital: result.closestHospital,
           closestPark: result.closestPark,
@@ -61,7 +60,7 @@ async function main() {
         },
       })
 
-      console.log(`  ✅ metro=${result.closestMetro} bus=${result.closestBus} school=${result.closestSchool} hospital=${result.closestHospital} park=${result.closestPark} university=${result.closestUniversity}`)
+      console.log(`  ✅ metro=${result.closestMetro} school=${result.closestSchool} hospital=${result.closestHospital} park=${result.closestPark} university=${result.closestUniversity}`)
       success++
     } catch (err) {
       console.error(`  ❌ Failed:`, err)
