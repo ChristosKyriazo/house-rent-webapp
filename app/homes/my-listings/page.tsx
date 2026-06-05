@@ -282,10 +282,7 @@ export default function MyListingsPage() {
               </div>
             )}
 
-            <div className="mt-3 pt-3 border-t border-amber-500/15 flex items-center justify-between">
-              <Link href="/homes/analytics" className="text-xs text-amber-400/60 hover:text-amber-400 transition-colors">
-                {language === 'el' ? 'Πλήρη analytics →' : 'Full analytics →'}
-              </Link>
+            <div className="mt-3 pt-3 border-t border-amber-500/15 flex items-center justify-end">
               <button
                 onClick={() => {
                   const rows = [['Title', 'City', 'Type', 'Price', 'Views (period)', 'New inquiries', 'Inquiry rate']]
