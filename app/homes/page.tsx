@@ -11,6 +11,7 @@ import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/ar
 import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
+import { ManualFiltersPanel } from '@/app/homes/components/ManualFiltersPanel'
 import { SaveButton } from '@/app/components/SaveButton'
 import { HomeCard } from '@/app/components/HomeCard'
 
@@ -646,353 +647,31 @@ function HomesPageInner() {
 
         {/* Manual Filter Form */}
         {searchType && filterType === 'manual' && showFilters && (
-          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[var(--text)]">{getTranslation(language, 'filterByFeatures')}</h2>
-              <button
-                onClick={() => setFilterType(null)}
-                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
-              >
-                ← {getTranslation(language, 'back')}
-              </button>
-            </div>
-            <div className="space-y-4 mb-4">
-              {/* Row 1: City, Country */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="relative">
-                  <label htmlFor="filter-city" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
-                <input
-                  id="filter-city"
-                  type="text"
-                  value={citySearchQuery || (manualFilters.city ? (language === 'el' ? (areas.find(a => a.city === manualFilters.city)?.cityGreek || manualFilters.city) : manualFilters.city) : '')}
-                  onChange={(e) => {
-                    const query = e.target.value
-                    setCitySearchQuery(query)
-                    if (query.length > 0) {
-                      setShowCityDropdown(true)
-                      searchCities(query)
-                    } else {
-                      setShowCityDropdown(false)
-                      setCitySuggestions([])
-                      setManualFilters({ ...manualFilters, city: '' })
-                    }
-                  }}
-                  onFocus={() => {
-                    if (citySearchQuery.length > 0 || manualFilters.city) {
-                      setShowCityDropdown(true)
-                      if (citySearchQuery.length > 0) {
-                        searchCities(citySearchQuery)
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCityDropdown(false), 200)
-                  }}
-                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'anyCity')}
-                />
-                {showCityDropdown && citySuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {citySuggestions.map((city, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleCitySelect(city)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                      >
-                        <div className="font-medium">{isGreekInput(citySearchQuery) && city.cityGreek ? city.cityGreek : city.city}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="relative">
-                  <label htmlFor="filter-country" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
-                <input
-                  id="filter-country"
-                  type="text"
-                  value={countrySearchQuery || (manualFilters.country ? (language === 'el' ? (areas.find(a => a.country === manualFilters.country)?.countryGreek || manualFilters.country) : manualFilters.country) : '')}
-                  onChange={(e) => {
-                    const query = e.target.value
-                    setCountrySearchQuery(query)
-                    if (query.length > 0) {
-                      setShowCountryDropdown(true)
-                      searchCountries(query)
-                    } else {
-                      setShowCountryDropdown(false)
-                      setCountrySuggestions([])
-                      setManualFilters({ ...manualFilters, country: '' })
-                    }
-                  }}
-                  onFocus={() => {
-                    if (countrySearchQuery.length > 0 || manualFilters.country) {
-                      setShowCountryDropdown(true)
-                      if (countrySearchQuery.length > 0) {
-                        searchCountries(countrySearchQuery)
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCountryDropdown(false), 200)
-                  }}
-                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'anyCountry')}
-                />
-                {showCountryDropdown && countrySuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {countrySuggestions.map((country, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleCountrySelect(country)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                      >
-                        <div className="font-medium">{isGreekInput(countrySearchQuery) && country.countryGreek ? country.countryGreek : country.country}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
-              </div>
-
-              {/* Row 2: City Area (alone) */}
-              <div>
-                <label htmlFor="filter-area" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')}</label>
-                <div className="space-y-3">
-                  {/* Selected areas as chips */}
-                  {selectedAreas.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedAreas.map((area) => (
-                        <div
-                          key={area}
-                          className="btn-primary inline-flex items-center gap-2 px-3 py-1.5 text-sm"
-                        >
-                          <span className="text-sm font-medium">{getAreaName(area, allAreas, language)}</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
-                            className="text-[var(--btn-primary-fg)] hover:text-[var(--status-error)] transition-colors"
-                            aria-label={getTranslation(language, 'close')}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Area autocomplete with multi-select */}
-                  <div className="relative">
-                    <input
-                      id="filter-area"
-                      type="text"
-                      value={areaSearchQuery}
-                      onChange={(e) => {
-                        const query = e.target.value
-                        setAreaSearchQuery(query)
-                        if (query.length > 0) {
-                          setShowAreaDropdown(true)
-                          searchAreas(query)
-                        } else {
-                          setShowAreaDropdown(false)
-                          setAreaSuggestions([])
-                        }
-                      }}
-                      onFocus={() => {
-                        if (areaSearchQuery.length > 0) {
-                          setShowAreaDropdown(true)
-                        }
-                      }}
-                      onBlur={() => {
-                        setTimeout(() => setShowAreaDropdown(false), 200)
-                      }}
-                      className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                      placeholder={getTranslation(language, 'selectCityArea')}
-                    />
-                    {showAreaDropdown && areaSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                        {areaSuggestions.map((area) => (
-                          <button
-                            key={area.id}
-                            type="button"
-                            onClick={() => handleAreaSelect(area)}
-                            className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                          >
-                            <div className="font-medium">{isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name}</div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Min Price, Max Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="filter-price-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minPrice')}</label>
-                  <input
-                    id="filter-price-min"
-                    type="number"
-                    min="0"
-                    value={manualFilters.minPrice}
-                    onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="filter-price-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxPrice')}</label>
-                  <input
-                    id="filter-price-max"
-                    type="number"
-                    min="0"
-                    value={manualFilters.maxPrice}
-                    onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Min Size, Max Size */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="filter-size-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minSize')}</label>
-                  <input
-                    id="filter-size-min"
-                    type="number"
-                    min="0"
-                    value={manualFilters.minSize}
-                    onChange={(e) => setManualFilters({ ...manualFilters, minSize: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="filter-size-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxSize')}</label>
-                  <input
-                    id="filter-size-max"
-                    type="number"
-                    min="0"
-                    value={manualFilters.maxSize}
-                    onChange={(e) => setManualFilters({ ...manualFilters, maxSize: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                  />
-                </div>
-              </div>
-
-              {/* Row 5: Heating Category, Heating Agent */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="filter-heating-category" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')}</label>
-                  <select
-                    id="filter-heating-category"
-                    value={manualFilters.heatingCategory}
-                    onChange={(e) => setManualFilters({ ...manualFilters, heatingCategory: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
-                  >
-                    <option value="">{getTranslation(language, 'any')}</option>
-                    <option value="central">{translateValue(language, 'central')}</option>
-                    <option value="autonomous">{translateValue(language, 'autonomous')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="filter-heating-agent" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')}</label>
-                  <select
-                    id="filter-heating-agent"
-                    value={manualFilters.heatingAgent}
-                    onChange={(e) => setManualFilters({ ...manualFilters, heatingAgent: e.target.value })}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
-                  >
-                    <option value="">{getTranslation(language, 'any')}</option>
-                    <option value="oil">{translateValue(language, 'oil')}</option>
-                    <option value="natural gas">{translateValue(language, 'natural gas')}</option>
-                    <option value="electricity">{translateValue(language, 'electricity')}</option>
-                    <option value="other">{translateValue(language, 'other')}</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 6: Min Bedrooms, Max Bedrooms */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="filter-bedrooms-min" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minBedrooms')}</label>
-                <input
-                  id="filter-bedrooms-min"
-                  type="number"
-                  min="0"
-                  value={manualFilters.minBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
-                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                  <label htmlFor="filter-bedrooms-max" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
-                <input
-                  id="filter-bedrooms-max"
-                  type="number"
-                  min="0"
-                  value={manualFilters.maxBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
-                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                />
-              </div>
-              </div>
-
-              {/* Row 7: Year Built (alone) */}
-              <div>
-                <label htmlFor="filter-year" className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')}</label>
-                <input
-                  id="filter-year"
-                  type="number"
-                  min="1900"
-                  max={new Date().getFullYear()}
-                  value={manualFilters.yearBuilt}
-                  onChange={(e) => setManualFilters({ ...manualFilters, yearBuilt: e.target.value })}
-                  className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder={getTranslation(language, 'any')}
-                />
-              </div>
-
-              {/* Row 8: Exclude Filters (checkboxes) */}
-              <div className="space-y-3 pt-2">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={excludeInquired}
-                    onChange={(e) => setExcludeInquired(e.target.checked)}
-                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-[var(--text)]">
-                    {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={excludeApproved}
-                    onChange={(e) => setExcludeApproved(e.target.checked)}
-                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-[var(--text)]">
-                    {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
-                  </span>
-                </label>
-              </div>
-            </div>
-            <button
-              onClick={handleManualFilter}
-              disabled={loading}
-              className="btn-primary w-full px-6 py-3 sm:w-auto disabled:opacity-50"
-            >
-              {loading ? getTranslation(language, 'searching') : getTranslation(language, 'applyFilters')}
-            </button>
-          </div>
+          <ManualFiltersPanel
+            language={language}
+            filters={manualFilters}
+            onFiltersChange={setManualFilters}
+            areas={areas}
+            allAreas={allAreas}
+            cityQuery={citySearchQuery} setCityQuery={setCitySearchQuery}
+            showCityDropdown={showCityDropdown} setShowCityDropdown={setShowCityDropdown}
+            citySuggestions={citySuggestions} setCitySuggestions={setCitySuggestions}
+            onCitySelect={handleCitySelect} searchCities={searchCities}
+            countryQuery={countrySearchQuery} setCountryQuery={setCountrySearchQuery}
+            showCountryDropdown={showCountryDropdown} setShowCountryDropdown={setShowCountryDropdown}
+            countrySuggestions={countrySuggestions} setCountrySuggestions={setCountrySuggestions}
+            onCountrySelect={handleCountrySelect} searchCountries={searchCountries}
+            areaQuery={areaSearchQuery} setAreaQuery={setAreaSearchQuery}
+            showAreaDropdown={showAreaDropdown} setShowAreaDropdown={setShowAreaDropdown}
+            areaSuggestions={areaSuggestions} setAreaSuggestions={setAreaSuggestions}
+            selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas}
+            onAreaSelect={handleAreaSelect} searchAreas={searchAreas}
+            excludeInquired={excludeInquired} setExcludeInquired={setExcludeInquired}
+            excludeApproved={excludeApproved} setExcludeApproved={setExcludeApproved}
+            loading={loading}
+            onBack={() => setFilterType(null)}
+            onSubmit={handleManualFilter}
+          />
         )}
 
         {/* AI Chat Search */}
