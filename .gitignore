@@ -58,3 +58,4 @@ next-env.d.ts
 # user-uploaded files (stored on server, not in repo)
 /public/uploads/
 backup-*.sql
+.claude/worktrees/
