@@ -26,6 +26,7 @@ const EMPTY = (period: string) => NextResponse.json({
   funnel: { views: 0, saves: 0, inquiries: 0, approved: 0, finalized: 0 },
   timeSeries: [],
   topSources: [],
+  topAreas: [],
 })
 
 export async function GET(request: NextRequest) {
@@ -180,6 +181,18 @@ export async function GET(request: NextRequest) {
   const totalApproved = [...approvedMap.values()].reduce((a, b) => a + b, 0)
   const totalFinalized = [...finalizedMap.values()].reduce((a, b) => a + b, 0)
 
+  // Top 3 areas by all-time views across the entire platform
+  const topAreasRaw = await prisma.$queryRaw<Array<{ area: string; views: bigint }>>`
+    SELECT h."area", COUNT(lv.id)::int AS views
+    FROM "listing_views" lv
+    JOIN "homes" h ON h.id = lv."homeId"
+    WHERE h."area" IS NOT NULL AND trim(h."area") != ''
+    GROUP BY h."area"
+    ORDER BY views DESC
+    LIMIT 3
+  `
+  const topAreas = topAreasRaw.map(r => ({ area: r.area, views: Number(r.views) }))
+
   return NextResponse.json({
     period,
     homes: rows,
@@ -188,5 +201,6 @@ export async function GET(request: NextRequest) {
     funnel: { views: totalPeriodViews, saves: periodSavesTotal, inquiries: totalPeriodInquiries, approved: totalApproved, finalized: totalFinalized },
     timeSeries,
     topSources: portfolioSources.map(s => ({ source: s.source ?? 'direct', count: s._count.id })),
+    topAreas,
   })
 }

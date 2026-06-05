@@ -30,6 +30,7 @@ interface PortfolioData {
   funnel: { views: number; saves: number; inquiries: number; approved: number; finalized: number }
   timeSeries: { label: string; views: number }[]
   topSources: { source: string; count: number }[]
+  topAreas: { area: string; views: number }[]
 }
 
 type SortCol = 'views' | 'inquiries' | 'saves' | 'avgTime' | 'rate' | 'days'
@@ -113,12 +114,28 @@ function DailyPulse({ data, period, prevViews, isEl }: {
   const delta = prevViews > 0 ? Math.round(((total - prevViews) / prevViews) * 100) : null
   const nowHour = new Date().getHours()
 
+  function fmtTick(label: string): string {
+    if (period === 'day') return label
+    try {
+      const d = new Date(label + 'T12:00:00')
+      if (period === 'week') return d.toLocaleDateString('en', { weekday: 'short' })
+      return d.toLocaleDateString('en', { day: 'numeric', month: 'short' })
+    } catch { return label }
+  }
+
+  const n = data.length
+  const tickIdxs: number[] = n <= 7
+    ? data.map((_, i) => i)
+    : period === 'day'
+      ? [0, 6, 12, 18, 23]
+      : [0, Math.floor(n / 2), n - 1]
+
   return (
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-1">
-            {isEl ? 'Καθημερινή ροή' : 'Daily Pulse'}
+            {isEl ? 'Παλμός Προβολών' : 'View Pulse'}
           </p>
           <p className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">{total}</p>
         </div>
@@ -130,34 +147,98 @@ function DailyPulse({ data, period, prevViews, isEl }: {
           </div>
         )}
       </div>
-      <div className="flex items-end gap-px h-20">
-        {data.map((d, i) => {
-          const isPeak = i === peakIdx && d.views > 0
-          const isCurrent = period === 'day' && i === nowHour
-          return (
-            <div
-              key={i}
-              className={`flex-1 rounded-t transition-all ${
-                isPeak ? 'bg-amber-400' : isCurrent ? 'bg-amber-500/70 ring-1 ring-amber-400' : 'bg-amber-500/30 hover:bg-amber-500/50'
-              }`}
-              style={{ height: `${Math.max((d.views / max) * 100, d.views > 0 ? 4 : 1)}%` }}
-              title={`${d.label}: ${d.views}`}
-            />
-          )
-        })}
-      </div>
-      <div className="flex justify-between mt-2">
-        {[data[0], data[Math.floor(data.length / 2)], data[data.length - 1]].map((d, i) => (
-          <span key={i} className="text-[10px] text-[var(--text-muted)]">{d?.label ?? ''}</span>
-        ))}
+      <div className="relative">
+        <div className="flex items-end gap-[2px] h-24">
+          {data.map((d, i) => {
+            const isPeak = i === peakIdx && d.views > 0
+            const isCurrent = period === 'day' && i === nowHour
+            const hPct = d.views > 0 ? Math.max((d.views / max) * 100, 6) : 0
+            return (
+              <div
+                key={i}
+                title={`${fmtTick(d.label)}: ${d.views}`}
+                className="flex-1 flex flex-col justify-end h-full"
+              >
+                <div
+                  className={`w-full rounded-t-sm transition-all ${
+                    isPeak ? 'bg-amber-400' :
+                    isCurrent ? 'bg-amber-500/80 ring-1 ring-inset ring-amber-300/50' :
+                    d.views === 0 ? 'bg-[var(--ink-soft)]' :
+                    'bg-amber-500/35 hover:bg-amber-500/55'
+                  }`}
+                  style={{ height: d.views > 0 ? `${hPct}%` : '3px' }}
+                />
+              </div>
+            )
+          })}
+        </div>
+        <div className="relative h-5 mt-1">
+          {tickIdxs.map(idx => (
+            <span
+              key={idx}
+              className="absolute text-[10px] text-[var(--text-muted)] -translate-x-1/2 whitespace-nowrap"
+              style={{ left: n <= 1 ? '50%' : `${(idx / (n - 1)) * 100}%` }}
+            >
+              {fmtTick(data[idx]?.label ?? '')}
+            </span>
+          ))}
+        </div>
       </div>
       {data[peakIdx]?.views > 0 && (
         <p className="text-xs text-[var(--text-muted)] mt-3">
           {isEl ? 'Κορύφωση' : 'Peak'}{' '}
           <span className="text-amber-400 font-medium">{data[peakIdx].views}</span>
-          {' '}{isEl ? 'στις' : 'at'} {data[peakIdx].label}
+          {' '}{isEl ? 'στις' : 'at'} {fmtTick(data[peakIdx].label)}
         </p>
       )}
+    </div>
+  )
+}
+
+// ─── Top Areas ───────────────────────────────────────────────────────────────
+function TopAreas({ areas, isEl }: { areas: { area: string; views: number }[]; isEl: boolean }) {
+  if (!areas.length) return (
+    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
+      <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-3">
+        {isEl ? 'Κορυφαίες Περιοχές' : 'Top Areas'}
+      </p>
+      <p className="text-sm text-[var(--text-muted)]">{isEl ? 'Δεν υπάρχουν δεδομένα ακόμα' : 'No data yet'}</p>
+    </div>
+  )
+  const maxV = areas[0].views
+  const medals = ['🥇', '🥈', '🥉']
+  const colors = ['bg-amber-400', 'bg-amber-500/70', 'bg-amber-500/45']
+  return (
+    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
+      <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-5">
+        {isEl ? 'Κορυφαίες Περιοχές — Πλατφόρμα' : 'Top Areas — Platform Wide'}
+      </p>
+      <div className="flex flex-col gap-4">
+        {areas.map((a, i) => (
+          <div key={a.area} className="flex items-center gap-3">
+            <span className="text-base shrink-0 w-6 text-center">{medals[i]}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm font-medium text-[var(--text)] truncate">{a.area}</span>
+                <span className="text-xs text-[var(--text-muted)] shrink-0 ml-3 tabular-nums">
+                  {a.views.toLocaleString()} {isEl ? 'προβ.' : 'views'}
+                </span>
+              </div>
+              <div className="h-1.5 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${colors[i]}`}
+                  style={{ width: `${Math.round((a.views / maxV) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--text-muted)] mt-4 leading-relaxed">
+        {isEl
+          ? 'Συνολικές all-time προβολές αγγελιών ανά περιοχή στην πλατφόρμα'
+          : 'All-time listing views per area across the entire platform'}
+      </p>
     </div>
   )
 }
@@ -319,52 +400,6 @@ function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }
   )
 }
 
-// ─── Free: full upgrade wall ──────────────────────────────────────────────────
-function FreeWall({ isEl }: { isEl: boolean }) {
-  return (
-    <div className="relative rounded-2xl overflow-hidden border border-[var(--border-subtle)]">
-      <div className="opacity-20 pointer-events-none select-none p-6 flex flex-col gap-5">
-        <div className="grid grid-cols-3 gap-4">
-          {[8, 3, 1].map((n, i) => (
-            <div key={i} className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
-              <div className="h-2 w-12 bg-[var(--ink-soft)] rounded mb-3" />
-              <p className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">{n}</p>
-            </div>
-          ))}
-        </div>
-        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
-          <div className="h-2 w-20 bg-[var(--ink-soft)] rounded mb-4" />
-          <div className="flex items-end gap-px h-16">
-            {[30, 50, 40, 70, 60, 90, 80, 45, 65, 55, 75, 85, 40, 60, 50].map((h, i) => (
-              <div key={i} className="flex-1 bg-amber-500/30 rounded-t" style={{ height: `${h}%` }} />
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-5">
-          <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5 h-36" />
-          <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5 h-36" />
-        </div>
-      </div>
-      <div className="absolute inset-0 bg-[var(--canvas)]/80 backdrop-blur-[2px] flex flex-col items-center justify-center gap-5 p-8">
-        <p className="text-2xl font-bold text-[var(--text)] font-[var(--font-fraunces)] text-center">
-          {isEl ? 'Analytics — από Plus' : 'Analytics — from Plus'}
-        </p>
-        <div className="flex flex-col gap-1.5 text-center">
-          <p className="text-sm text-[var(--text-muted)]">
-            {isEl ? 'Plus: αποθηκεύσεις, αιτήματα και ραντεβού ανά αγγελία' : 'Plus: saves, inquiries, and schedules per listing'}
-          </p>
-          <p className="text-sm text-[var(--text-muted)]">
-            {isEl ? 'Pro: προβολές, τάσεις, σύγκριση προωθήσεων, βαθμολογία ενδιαφέροντος' : 'Pro: live views, trends, promotion comparison, engagement scores'}
-          </p>
-        </div>
-        <Link href="/upgrade" className="px-6 py-3 bg-amber-500 text-black rounded-2xl font-semibold hover:bg-amber-400 transition-colors">
-          {isEl ? 'Αναβάθμιση →' : 'Upgrade →'}
-        </Link>
-      </div>
-    </div>
-  )
-}
-
 // ─── Plus: basic view + blurred Pro teaser ────────────────────────────────────
 function PlusView({ data, period, isEl }: {
   data: PortfolioData; period: 'day' | 'week' | 'month'; isEl: boolean
@@ -504,6 +539,10 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
         <EngagementDepth homes={data.homes} isEl={isEl} />
       </div>
 
+      {data.topAreas?.length > 0 && (
+        <TopAreas areas={data.topAreas} isEl={isEl} />
+      )}
+
       {/* Listings table */}
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
         <div className="grid grid-cols-[1.5rem_1rem_1fr_4.5rem_5rem_4rem_4rem_4.5rem_4rem] gap-3 px-5 py-3 border-b border-[var(--border-subtle)]">
@@ -630,7 +669,8 @@ export default function AnalyticsPage() {
         if (!p.user) { router.push('/login'); return }
         const t = (p.user.subscriptionTier ?? 'free') as 'free' | 'plus' | 'pro'
         setTier(t)
-        if (t !== 'free') return fetchData('month')
+        if (t === 'free') { router.push('/upgrade'); return }
+        return fetchData('month')
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -667,6 +707,8 @@ export default function AnalyticsPage() {
     )
   }
 
+  if (tier === 'free') return null
+
   const isPlus = tier === 'plus'
   const isPro = tier === 'pro'
 
@@ -675,17 +717,11 @@ export default function AnalyticsPage() {
       <div className="max-w-4xl mx-auto">
 
         <div className="mb-8 flex items-center justify-between">
-          <Link href="/homes/my-listings" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-            ← {isEl ? 'Αγγελίες' : 'My listings'}
-          </Link>
+          <h1 className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">
+            {isEl ? 'Αναλυτικά' : 'Analytics'}
+          </h1>
           {(isPlus || isPro) && <PeriodTabs period={period} onChange={setPeriod} isEl={isEl} />}
         </div>
-
-        <h1 className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)] mb-8">
-          {isEl ? 'Αναλυτικά' : 'Analytics'}
-        </h1>
-
-        {tier === 'free' && <FreeWall isEl={isEl} />}
 
         {isPlus && !data && (
           <p className="text-sm text-[var(--text-muted)] text-center py-12">{isEl ? 'Φόρτωση...' : 'Loading…'}</p>

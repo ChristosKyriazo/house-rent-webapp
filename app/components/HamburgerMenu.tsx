@@ -141,7 +141,7 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
   // Inquiries item will be dynamically set based on selected role
   const allMenuItems = [
     { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both', 'broker'] },
-    { href: '/homes/dashboard', labelKey: 'dashboard', icon: '📊', roles: ['owner', 'both', 'broker'] },
+    { href: '/homes/analytics', labelKey: 'analytics', icon: '📊', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/search', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
@@ -155,6 +155,7 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
   // show menu items for that selected role only
   const menuItems = allMenuItems
     .filter(item => item.roles.includes(normalizedRole))
+    .filter(item => item.href !== '/homes/analytics' || subscriptionTier !== 'free')
     .map(item => ({
       ...item,
       label: getTranslation(language, item.labelKey as any)
