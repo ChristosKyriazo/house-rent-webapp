@@ -47,9 +47,10 @@ export default function MyListingsPage() {
   const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
   const [slotsUsed, setSlotsUsed] = useState(0)
   const [promotingKey, setPromotingKey] = useState<string | null>(null)
+  const [portfolioPeriod, setPortfolioPeriod] = useState<'day' | 'week' | 'month'>('month')
   const [portfolio, setPortfolio] = useState<{
-    totals: { today: number; thisWeek: number; thisMonth: number }
-    topListing: { key: string; title: string; viewsThisMonth: number; inquiryRate: string } | null
+    totals: { views: number; inquiries: number; schedules: number }
+    topListing: { key: string; title: string; titleGreek: string | null; viewsInPeriod: number; inquiriesInPeriod: number; inquiryRate: string } | null
   } | null>(null)
 
   const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
@@ -95,7 +96,7 @@ export default function MyListingsPage() {
         setSubscriptionTier(tier)
 
         if (tier === 'pro') {
-          fetch('/api/homes/portfolio-analytics')
+          fetch(`/api/homes/portfolio-analytics?period=month`)
             .then(r => r.ok ? r.json() : null)
             .then(d => { if (d) setPortfolio({ totals: d.totals, topListing: d.topListing }) })
             .catch(() => {})
@@ -125,6 +126,14 @@ export default function MyListingsPage() {
       .then((data) => setAreas(data.areas || []))
       .catch((error) => console.error('Error fetching areas:', error))
   }, [])
+
+  useEffect(() => {
+    if (subscriptionTier !== 'pro') return
+    fetch(`/api/homes/portfolio-analytics?period=${portfolioPeriod}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setPortfolio({ totals: d.totals, topListing: d.topListing }) })
+      .catch(() => {})
+  }, [portfolioPeriod, subscriptionTier])
 
   const toggleSelect = (key: string) => {
     setSelectedKeys(prev =>
@@ -203,20 +212,86 @@ export default function MyListingsPage() {
         </div>
 
         {/* Portfolio analytics — Pro only */}
-        {portfolio && (
+        {subscriptionTier === 'pro' && (
           <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/6 p-5">
-            <div className="flex items-center justify-between mb-3">
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-amber-400/70 uppercase tracking-widest font-[var(--font-outfit)]">
-                {language === 'el' ? 'Portfolio — αυτόν τον μήνα' : 'Portfolio — this month'}
+                Portfolio
               </p>
+              {/* Period filter tabs */}
+              <div className="flex items-center gap-1 bg-amber-500/10 rounded-xl p-1">
+                {([
+                  { key: 'day', en: 'Today', el: 'Σήμερα' },
+                  { key: 'week', en: 'This week', el: 'Εβδομάδα' },
+                  { key: 'month', en: 'This month', el: 'Μήνας' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setPortfolioPeriod(tab.key)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      portfolioPeriod === tab.key
+                        ? 'bg-amber-500/30 text-amber-300'
+                        : 'text-amber-400/50 hover:text-amber-400/80'
+                    }`}
+                  >
+                    {language === 'el' ? tab.el : tab.en}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {portfolio ? (
+              <>
+                {/* Metrics */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  {[
+                    { label: language === 'el' ? 'Προβολές' : 'Visits', value: portfolio.totals.views },
+                    { label: language === 'el' ? 'Αιτήματα' : 'Inquiries', value: portfolio.totals.inquiries },
+                    { label: language === 'el' ? 'Ραντεβού' : 'Schedules', value: portfolio.totals.schedules },
+                  ].map(s => (
+                    <div key={s.label}>
+                      <p className="text-xs text-amber-400/60 mb-0.5">{s.label}</p>
+                      <p className="text-2xl font-bold text-amber-300">{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Top listing */}
+                {portfolio.topListing && (
+                  <p className="text-xs text-amber-400/60 border-t border-amber-500/15 pt-3">
+                    {language === 'el' ? 'Κορυφαία:' : 'Top listing:'}{' '}
+                    <Link href={`/homes/${portfolio.topListing.key}/analytics`} className="text-amber-400 hover:underline">
+                      {language === 'el' ? (portfolio.topListing.titleGreek ?? portfolio.topListing.title) : portfolio.topListing.title}
+                    </Link>
+                    {' '}·{' '}{portfolio.topListing.viewsInPeriod} {language === 'el' ? 'προβολές' : 'views'}
+                    {portfolio.topListing.inquiriesInPeriod > 0 && (
+                      <> · {portfolio.topListing.inquiriesInPeriod} {language === 'el' ? 'νέα αιτήματα' : 'new inquiries'}</>
+                    )}
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="grid grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="h-3 w-16 bg-amber-500/20 rounded mb-2" />
+                    <div className="h-7 w-10 bg-amber-500/20 rounded" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 pt-3 border-t border-amber-500/15 flex items-center justify-between">
+              <Link href="/homes/analytics" className="text-xs text-amber-400/60 hover:text-amber-400 transition-colors">
+                {language === 'el' ? 'Πλήρη analytics →' : 'Full analytics →'}
+              </Link>
               <button
                 onClick={() => {
-                  const rows = [
-                    ['Title', 'City', 'Type', 'Price', 'Views (month)', 'Inquiries', 'Inquiry rate'],
-                  ]
-                  fetch('/api/homes/portfolio-analytics').then(r => r.json()).then(d => {
-                    d.homes?.forEach((h: { title: string; city: string; listingType: string; pricePerMonth: number; viewsThisMonth: number; inquiries: number; inquiryRate: string }) => {
-                      rows.push([h.title, h.city, h.listingType, String(h.pricePerMonth), String(h.viewsThisMonth), String(h.inquiries), h.inquiryRate + '%'])
+                  const rows = [['Title', 'City', 'Type', 'Price', 'Views (period)', 'New inquiries', 'Inquiry rate']]
+                  fetch(`/api/homes/portfolio-analytics?period=${portfolioPeriod}`).then(r => r.json()).then(d => {
+                    d.homes?.forEach((h: { title: string; city: string; listingType: string; pricePerMonth: number; viewsInPeriod: number; inquiriesInPeriod: number; inquiryRate: string }) => {
+                      rows.push([h.title, h.city, h.listingType, String(h.pricePerMonth), String(h.viewsInPeriod), String(h.inquiriesInPeriod), h.inquiryRate + '%'])
                     })
                     const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
                     const blob = new Blob([csv], { type: 'text/csv' })
@@ -225,33 +300,11 @@ export default function MyListingsPage() {
                     URL.revokeObjectURL(url)
                   })
                 }}
-                className="text-xs text-amber-400/70 hover:text-amber-400 transition-colors flex items-center gap-1"
+                className="text-xs text-amber-400/50 hover:text-amber-400 transition-colors"
               >
-                ↓ {language === 'el' ? 'CSV' : 'CSV export'}
+                ↓ CSV
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: language === 'el' ? 'Σήμερα' : 'Today', value: portfolio.totals.today },
-                { label: language === 'el' ? 'Εβδομάδα' : 'This week', value: portfolio.totals.thisWeek },
-                { label: language === 'el' ? 'Μήνας' : 'This month', value: portfolio.totals.thisMonth },
-              ].map(s => (
-                <div key={s.label}>
-                  <p className="text-xs text-amber-400/60 mb-0.5">{s.label}</p>
-                  <p className="text-2xl font-bold text-amber-300">{s.value}</p>
-                  <p className="text-xs text-amber-400/50">{language === 'el' ? 'προβολές' : 'views'}</p>
-                </div>
-              ))}
-            </div>
-            {portfolio.topListing && (
-              <p className="mt-3 text-xs text-amber-400/60">
-                {language === 'el' ? 'Κορυφαία αγγελία:' : 'Top listing:'}{' '}
-                <Link href={`/homes/${portfolio.topListing.key}/analytics`} className="text-amber-400 hover:underline">
-                  {portfolio.topListing.title}
-                </Link>
-                {' '}· {portfolio.topListing.viewsThisMonth} {language === 'el' ? 'προβολές' : 'views'} · {portfolio.topListing.inquiryRate}% {language === 'el' ? 'αιτήματα' : 'inquiry rate'}
-              </p>
-            )}
           </div>
         )}
 

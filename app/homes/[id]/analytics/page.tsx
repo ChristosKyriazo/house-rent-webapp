@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -73,6 +73,18 @@ export default function ListingAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [homeTitle, setHomeTitle] = useState('')
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  const fetchAnalytics = useCallback(() => {
+    return fetch(`/api/homes/${homeKey}/analytics`)
+      .then(r => r.json())
+      .then(analytics => {
+        if (analytics.error) return
+        setData(analytics)
+        setLastUpdated(new Date())
+      })
+      .catch(() => {})
+  }, [homeKey])
 
   useEffect(() => {
     Promise.all([
@@ -87,11 +99,19 @@ export default function ListingAnalyticsPage() {
           return
         }
         setData(analytics)
+        setLastUpdated(new Date())
         setHomeTitle(homeData.home?.title || homeData.home?.titleGreek || '')
       })
       .catch(() => setError(isEl ? 'Κάτι πήγε στραβά.' : 'Something went wrong.'))
       .finally(() => setLoading(false))
   }, [homeKey, isEl])
+
+  // Live polling — 30s interval
+  useEffect(() => {
+    if (error) return
+    const interval = setInterval(fetchAnalytics, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchAnalytics, error])
 
   const maxSource = data?.topSources.length ? Math.max(...data.topSources.map(s => s.count)) : 1
   const pipeline = data?.inquiryPipeline
@@ -101,13 +121,20 @@ export default function ListingAnalyticsPage() {
     <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
 
-        <div className="mb-8 flex items-center gap-4">
-          <Link href="/homes/my-listings" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-            ← {isEl ? 'Οι αγγελίες μου' : 'My listings'}
-          </Link>
-          <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-            {isEl ? 'Portfolio' : 'Portfolio'}
-          </Link>
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/homes/my-listings" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+              ← {isEl ? 'Οι αγγελίες μου' : 'My listings'}
+            </Link>
+            <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+              Portfolio
+            </Link>
+          </div>
+          {lastUpdated && (
+            <span className="text-xs text-[var(--text-muted)]">
+              {isEl ? 'Ενημ.' : 'Updated'} {lastUpdated.toLocaleTimeString(isEl ? 'el-GR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          )}
         </div>
 
         <div className="mb-8">
