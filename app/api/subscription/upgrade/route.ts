@@ -41,9 +41,10 @@ export async function POST(request: NextRequest) {
   const newSlotLimit = getSlotLimit(newTier)
   const newListingLimit = getListingLimit(newTier)
 
+  const now = new Date()
   const [activeSlots, listingCount] = await Promise.all([
     prisma.home.findMany({
-      where: { ownerId: user.id, slotPromoted: true },
+      where: { ownerId: user.id, slotPromoted: true, OR: [{ slotPromotedUntil: null }, { slotPromotedUntil: { gt: now } }] },
       orderBy: { updatedAt: 'asc' },
       select: { id: true },
     }),

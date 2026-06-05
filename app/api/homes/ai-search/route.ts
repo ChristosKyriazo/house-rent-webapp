@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         userId = user.id
         appUserOccupation = user.occupation ?? null
 
-        if (!checkAiSearchLimit(user.id)) {
+        if (!await checkAiSearchLimit(user.id)) {
           return NextResponse.json(
             { error: 'Too many AI search requests. Please wait before searching again.' },
             { status: 429 }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
           queryEmbedding = cached.vec
         }
         if (!queryEmbedding) {
-          if (userId && !checkEmbeddingLimit(userId)) {
+          if (userId && !await checkEmbeddingLimit(userId)) {
             return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
           }
           queryEmbedding = await generateEmbedding(normalizedQuery, openai)

@@ -47,6 +47,10 @@ export default function MyListingsPage() {
   const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
   const [slotsUsed, setSlotsUsed] = useState(0)
   const [promotingKey, setPromotingKey] = useState<string | null>(null)
+  const [portfolio, setPortfolio] = useState<{
+    totals: { today: number; thisWeek: number; thisMonth: number }
+    topListing: { key: string; title: string; viewsThisMonth: number; inquiryRate: string } | null
+  } | null>(null)
 
   const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
 
@@ -87,7 +91,15 @@ export default function MyListingsPage() {
           router.push('/profile')
           return
         }
-        setSubscriptionTier(profileData.user.subscriptionTier ?? 'free')
+        const tier = profileData.user.subscriptionTier ?? 'free'
+        setSubscriptionTier(tier)
+
+        if (tier === 'pro') {
+          fetch('/api/homes/portfolio-analytics')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) setPortfolio({ totals: d.totals, topListing: d.topListing }) })
+            .catch(() => {})
+        }
 
         const homesResponse = await fetch('/api/homes/my-listings')
         if (homesResponse.ok) {
@@ -178,6 +190,59 @@ export default function MyListingsPage() {
             </div>
           )}
         </div>
+
+        {/* Portfolio analytics — Pro only */}
+        {portfolio && (
+          <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/6 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-amber-400/70 uppercase tracking-widest font-[var(--font-outfit)]">
+                {language === 'el' ? 'Portfolio — αυτόν τον μήνα' : 'Portfolio — this month'}
+              </p>
+              <button
+                onClick={() => {
+                  const rows = [
+                    ['Title', 'City', 'Type', 'Price', 'Views (month)', 'Inquiries', 'Inquiry rate'],
+                  ]
+                  fetch('/api/homes/portfolio-analytics').then(r => r.json()).then(d => {
+                    d.homes?.forEach((h: { title: string; city: string; listingType: string; pricePerMonth: number; viewsThisMonth: number; inquiries: number; inquiryRate: string }) => {
+                      rows.push([h.title, h.city, h.listingType, String(h.pricePerMonth), String(h.viewsThisMonth), String(h.inquiries), h.inquiryRate + '%'])
+                    })
+                    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a'); a.href = url; a.download = 'portfolio.csv'; a.click()
+                    URL.revokeObjectURL(url)
+                  })
+                }}
+                className="text-xs text-amber-400/70 hover:text-amber-400 transition-colors flex items-center gap-1"
+              >
+                ↓ {language === 'el' ? 'CSV' : 'CSV export'}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: language === 'el' ? 'Σήμερα' : 'Today', value: portfolio.totals.today },
+                { label: language === 'el' ? 'Εβδομάδα' : 'This week', value: portfolio.totals.thisWeek },
+                { label: language === 'el' ? 'Μήνας' : 'This month', value: portfolio.totals.thisMonth },
+              ].map(s => (
+                <div key={s.label}>
+                  <p className="text-xs text-amber-400/60 mb-0.5">{s.label}</p>
+                  <p className="text-2xl font-bold text-amber-300">{s.value}</p>
+                  <p className="text-xs text-amber-400/50">{language === 'el' ? 'προβολές' : 'views'}</p>
+                </div>
+              ))}
+            </div>
+            {portfolio.topListing && (
+              <p className="mt-3 text-xs text-amber-400/60">
+                {language === 'el' ? 'Κορυφαία αγγελία:' : 'Top listing:'}{' '}
+                <Link href={`/homes/${portfolio.topListing.key}/analytics`} className="text-amber-400 hover:underline">
+                  {portfolio.topListing.title}
+                </Link>
+                {' '}· {portfolio.topListing.viewsThisMonth} {language === 'el' ? 'προβολές' : 'views'} · {portfolio.topListing.inquiryRate}% {language === 'el' ? 'αιτήματα' : 'inquiry rate'}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mb-6 flex items-center justify-between gap-4">
           {userHomes.length > 0 && (
@@ -339,6 +404,22 @@ export default function MyListingsPage() {
                       )}
                     </div>
                   </Link>
+
+                  {/* Analytics link — Plus/Pro only */}
+                  {subscriptionTier !== 'free' && (
+                    <div className="px-1 pt-2 pb-1">
+                      <Link
+                        href={`/homes/${home.key}/analytics`}
+                        className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        {language === 'el' ? 'Στατιστικά' : 'Analytics'}
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )
             })}

@@ -28,24 +28,29 @@ export async function POST(request: NextRequest) {
 
     const home = await prisma.home.findUnique({
       where: { key: homeKey },
-      select: { id: true, ownerId: true, slotPromoted: true, promotedUntil: true },
+      select: { id: true, ownerId: true, slotPromoted: true, slotPromotedUntil: true, promotedUntil: true },
     })
     if (!home) return notFound('Home not found')
     if (home.ownerId !== user.id) return forbidden('You do not own this home')
 
     const tier = user.subscriptionTier ?? 'free'
+    const now = new Date()
 
     if (mode === 'slot') {
-      if (home.slotPromoted) {
+      const isActive = home.slotPromoted && (!home.slotPromotedUntil || home.slotPromotedUntil > now)
+      if (isActive) {
         // Toggle off — free up the slot
-        await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: false } })
+        await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: false, slotPromotedUntil: null } })
         return NextResponse.json({ ok: true, slotPromoted: false })
       }
 
-      // Check slot availability
+      // Check active (non-expired) slot count
       const slotLimit = getSlotLimit(tier)
       const slotsUsed = await prisma.home.count({
-        where: { ownerId: user.id, slotPromoted: true },
+        where: {
+          ownerId: user.id, slotPromoted: true,
+          OR: [{ slotPromotedUntil: null }, { slotPromotedUntil: { gt: now } }],
+        },
       })
 
       if (slotsUsed >= slotLimit) {
@@ -55,11 +60,14 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: true } })
-      return NextResponse.json({ ok: true, slotPromoted: true })
+      // Set expiry: 7 days for Plus, 30 days for Pro
+      const daysForTier = tier === 'pro' ? 30 : 7
+      const slotPromotedUntil = new Date(Date.now() + daysForTier * 24 * 60 * 60 * 1000)
+      await prisma.home.update({ where: { id: home.id }, data: { slotPromoted: true, slotPromotedUntil } })
+      return NextResponse.json({ ok: true, slotPromoted: true, slotPromotedUntil: slotPromotedUntil.toISOString(), daysForTier })
     }
 
-    // mode === 'boost' — pay-per-boost (€4.99 / 30 days)
+    // mode === 'boost' — pay-per-boost
     // TODO: gate behind Stripe payment before setting promotedUntil
     const promotedUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     await prisma.home.update({ where: { id: home.id }, data: { promotedUntil } })

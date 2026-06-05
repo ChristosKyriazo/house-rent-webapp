@@ -7,7 +7,7 @@ import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue } from '@/lib/translations'
 import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
-import { meetsMinimumTier, getListingLimit } from '@/lib/subscription'
+import { meetsMinimumTier, getListingLimit, checkTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
@@ -403,10 +403,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Promotion ranking: Pro slot → Plus slot → Pay-per-boost active → Normal
+    // Slot is only active if slotPromotedUntil is null (legacy) or in the future
     const now = new Date()
     homes.sort((a, b) => {
       const rank = (h: typeof a) => {
-        if (h.slotPromoted) return (h.owner as any)?.subscriptionTier === 'pro' ? 0 : 1
+        const slotActive = h.slotPromoted && (!(h as any).slotPromotedUntil || (h as any).slotPromotedUntil > now)
+        if (slotActive) return (h.owner as any)?.subscriptionTier === 'pro' ? 0 : 1
         if (h.promotedUntil && h.promotedUntil > now) return 2
         return 3
       }
@@ -638,7 +640,10 @@ export async function POST(request: NextRequest) {
     let finalDescriptionGreek: string | null = null
 
     if (useAIDescription) {
-      if (!checkAiDescriptionLimit(user.id)) {
+      const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
+      if (tierBlock) return tierBlock
+
+      if (!await checkAiDescriptionLimit(user.id)) {
         return NextResponse.json({ error: 'Too many AI description requests. Please wait before trying again.' }, { status: 429 })
       }
 
