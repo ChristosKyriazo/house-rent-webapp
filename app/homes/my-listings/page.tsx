@@ -351,6 +351,22 @@ export default function MyListingsPage() {
                     </div>
                   </Link>
 
+                  {/* Manage tenants — always shown when there are inquiries */}
+                  {!home.finalized && (home.inquiryCount ?? 0) > 0 && (
+                    <div className="px-1 pt-2 pb-1">
+                      <Link
+                        href={`/homes/inquiries/${home.key}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-400 hover:text-green-300 transition-colors"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {language === 'el' ? `Διαχείριση ενοίκων (${home.inquiryCount})` : `Manage tenants (${home.inquiryCount})`}
+                      </Link>
+                    </div>
+                  )}
+
                   {/* Analytics link — Plus/Pro only */}
                   {subscriptionTier !== 'free' && (
                     <div className="px-1 pt-2 pb-1">

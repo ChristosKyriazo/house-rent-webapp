@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const completedBookings = await prisma.booking.findMany({
       where: {
         OR: [{ userId: user.id }, { ownerId: user.id }],
-        status: 'completed',
+        status: { in: ['scheduled', 'completed'] },
         endTime: { lt: now },
       },
       include: {
