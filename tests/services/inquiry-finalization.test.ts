@@ -72,12 +72,10 @@ describe('initiateFinalization', () => {
     )
   })
 
-  it('broker role can initiate finalization', async () => {
+  it('throws 403 when broker is not the home owner', async () => {
     mockPrisma.inquiry.findUnique.mockResolvedValue(baseInquiry)
-    mockPrisma.booking.findFirst.mockResolvedValue({ id: 1, status: 'scheduled' })
-    mockPrisma.notification.create.mockResolvedValue({})
-
-    await expect(initiateFinalization(1, 99, 'broker')).resolves.not.toThrow()
+    // userId 99 is a broker but ownerId is 20 — role alone does not grant access
+    await expect(initiateFinalization(1, 99, 'broker')).rejects.toMatchObject({ status: 403 })
   })
 })
 
