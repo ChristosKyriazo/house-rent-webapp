@@ -7,6 +7,7 @@ import UpgradeGate from '@/app/components/UpgradeGate'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { findMostSimilarArea } from '@/lib/area-utils'
 import * as XLSX from 'xlsx'
+import ConfirmDialog from '@/app/components/ConfirmDialog'
 
 export default function NewHomePage() {
   const router = useRouter()
@@ -72,6 +73,7 @@ export default function NewHomePage() {
   const [bulkJobId, setBulkJobId] = useState<string | null>(null)
   const [bulkJobProgress, setBulkJobProgress] = useState(0)
   const [bulkJobTotal, setBulkJobTotal] = useState(0)
+  const [confirmBulkClose, setConfirmBulkClose] = useState(false)
 
   // Check user role on mount
   useEffect(() => {
@@ -457,6 +459,26 @@ export default function NewHomePage() {
     }
   }
 
+  function closeBulkModal() {
+    setShowBulkUploadModal(false)
+    setBulkUploadError('')
+    setBulkUploadSuccess('')
+    setParsedHouses([])
+    setExcelFile(null)
+    setHousePhotos({})
+    setExcelInputKey(prev => prev + 1)
+    setUnknownAreas([])
+    setAreaDecisions({})
+  }
+
+  function requestBulkClose() {
+    if (parsedHouses.length > 0) {
+      setConfirmBulkClose(true)
+    } else {
+      closeBulkModal()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
@@ -559,7 +581,7 @@ export default function NewHomePage() {
                 {photos.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative group">
+                      <div key={photo} className="relative group">
                         <img
                           src={photo}
                           alt={`Photo ${index + 1}`}
@@ -639,9 +661,9 @@ export default function NewHomePage() {
                 />
                 {showCityDropdown && citySuggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {citySuggestions.map((city, i) => (
+                    {citySuggestions.map((city) => (
                       <button
-                        key={i}
+                        key={city.city + '-' + city.country}
                         type="button"
                         onClick={() => {
                           const displayCity = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
@@ -682,9 +704,9 @@ export default function NewHomePage() {
                 />
                 {showCountryDropdown && countrySuggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {countrySuggestions.map((country, i) => (
+                    {countrySuggestions.map((country) => (
                       <button
-                        key={i}
+                        key={country.country}
                         type="button"
                         onClick={() => {
                           const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
@@ -1065,24 +1087,15 @@ export default function NewHomePage() {
 
       {/* Bulk Upload Modal */}
       {showBulkUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => { setShowBulkUploadModal(false); setBulkUploadError(''); setBulkUploadSuccess(''); setParsedHouses([]); setExcelFile(null); setHousePhotos({}); setExcelInputKey(prev => prev + 1); setUnknownAreas([]); setAreaDecisions({}) }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={requestBulkClose}>
           <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-[var(--text)]">
                 {language === 'el' ? 'Δημοσίευση από Αρχείο Excel' : 'Publish from Excel File'}
               </h2>
               <button
-                onClick={() => {
-                  setShowBulkUploadModal(false)
-                  setBulkUploadError('')
-                  setBulkUploadSuccess('')
-                  setParsedHouses([])
-                  setExcelFile(null)
-                  setHousePhotos({})
-                  setExcelInputKey(prev => prev + 1)
-                  setUnknownAreas([])
-                  setAreaDecisions({})
-                }}
+                type="button"
+                onClick={requestBulkClose}
                 className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
               >
                 ×
@@ -1345,7 +1358,7 @@ export default function NewHomePage() {
 
                   <div className="space-y-4 max-h-[400px] overflow-y-auto">
                     {parsedHouses.map((house, index) => (
-                      <div key={index} className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]">
+                      <div key={house.rowIndex} className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]">
                         <div className="mb-3">
                           <h3 className="text-[var(--text)] font-semibold">
                             {house.title || `House ${index + 1}`}
@@ -1602,6 +1615,21 @@ export default function NewHomePage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmBulkClose}
+        title={language === 'el' ? 'Ακύρωση εισαγωγής;' : 'Discard import?'}
+        message={
+          language === 'el'
+            ? 'Έχετε αγγελίες έτοιμες για δημοσίευση. Αν κλείσετε τώρα θα χαθούν. Θέλετε να συνεχίσετε;'
+            : 'You have listings ready to publish. Closing now will discard them. Are you sure?'
+        }
+        confirmLabel={language === 'el' ? 'Κλείσιμο' : 'Discard'}
+        onConfirm={() => { setConfirmBulkClose(false); closeBulkModal() }}
+        onCancel={() => setConfirmBulkClose(false)}
+        language={language}
+        variant="danger"
+      />
     </div>
   )
 }

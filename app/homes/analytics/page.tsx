@@ -155,7 +155,7 @@ function DailyPulse({ data, period, prevViews, isEl }: {
             const hPct = d.views > 0 ? Math.max((d.views / max) * 100, 6) : 0
             return (
               <div
-                key={i}
+                key={d.label}
                 title={`${fmtTick(d.label)}: ${d.views}`}
                 className="flex-1 flex flex-col justify-end h-full"
               >
@@ -453,8 +453,8 @@ function PlusView({ data, period, isEl }: {
         <div className="opacity-25 pointer-events-none select-none blur-sm p-5 flex flex-col gap-5">
           <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
             <div className="flex items-end gap-px h-16">
-              {data.timeSeries.slice(0, 20).map((d, i) => (
-                <div key={i} className="flex-1 bg-amber-500/30 rounded-t" style={{ height: `${Math.max((d.views / Math.max(...data.timeSeries.map(x => x.views), 1)) * 100, 2)}%` }} />
+              {data.timeSeries.slice(0, 20).map((d) => (
+                <div key={d.label} className="flex-1 bg-amber-500/30 rounded-t" style={{ height: `${Math.max((d.views / Math.max(...data.timeSeries.map(x => x.views), 1)) * 100, 2)}%` }} />
               ))}
             </div>
           </div>
@@ -649,6 +649,7 @@ export default function AnalyticsPage() {
   const router = useRouter()
 
   const [tier, setTier] = useState<'free' | 'plus' | 'pro'>('free')
+  const [tierRedirecting, setTierRedirecting] = useState(false)
   const [data, setData] = useState<PortfolioData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month')
@@ -669,7 +670,7 @@ export default function AnalyticsPage() {
         if (!p.user) { router.push('/login'); return }
         const t = (p.user.subscriptionTier ?? 'free') as 'free' | 'plus' | 'pro'
         setTier(t)
-        if (t === 'free') { router.push('/upgrade'); return }
+        if (t === 'free') { setTierRedirecting(true); setTimeout(() => router.push('/upgrade'), 2000); return }
         return fetchData('month')
       })
       .catch(() => {})
@@ -702,6 +703,21 @@ export default function AnalyticsPage() {
               <div key={i} className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5 h-24 animate-pulse" />
             ))}
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tierRedirecting) {
+    return (
+      <div className="min-h-screen bg-[var(--canvas)] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-[var(--text)] mb-2">
+            {isEl ? 'Τα αναλυτικά είναι διαθέσιμα στο Plus και Pro' : 'Analytics are available on Plus and Pro'}
+          </p>
+          <p className="text-sm text-[var(--text-muted)]">
+            {isEl ? 'Μεταφορά στις επιλογές αναβάθμισης...' : 'Redirecting to upgrade options...'}
+          </p>
         </div>
       </div>
     )

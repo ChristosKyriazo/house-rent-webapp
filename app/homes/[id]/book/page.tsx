@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -34,7 +34,7 @@ interface TimeSlot {
   isBooked: boolean
 }
 
-export default function BookPage() {
+function BookPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -292,7 +292,7 @@ export default function BookPage() {
       })
 
       if (!matchingAvailability) {
-        throw new Error('Time slot not available')
+        throw new Error(language === 'el' ? 'Η ώρα δεν είναι διαθέσιμη' : 'Time slot not available')
       }
 
       // Create start and end times based on owner threshold
@@ -302,7 +302,7 @@ export default function BookPage() {
 
       // Validate dates
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
-        throw new Error('Invalid date/time')
+        throw new Error(language === 'el' ? 'Μη έγκυρη ημερομηνία/ώρα' : 'Invalid date/time')
       }
 
       const response = await fetch('/api/bookings', {
@@ -322,7 +322,7 @@ export default function BookPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to book slot')
+        throw new Error(errorData.error || (language === 'el' ? 'Αποτυχία κράτησης' : 'Failed to book slot'))
       }
 
       // Mark availability as booked (or create a new availability record for the remaining time)
@@ -637,6 +637,14 @@ export default function BookPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function BookPageWrapper() {
+  return (
+    <Suspense>
+      <BookPage />
+    </Suspense>
   )
 }
 

@@ -71,7 +71,7 @@ export async function GET(
       prisma.listingView.findMany({ where: { homeId: home.id, viewedAt: { gte: thirtyDaysAgo }, durationSeconds: { not: null } }, select: { durationSeconds: true } }),
       prisma.savedHome.count({ where: { homeId: home.id } }),
       prisma.listingView.groupBy({ by: ['source'], where: { homeId: home.id }, _count: { source: true }, orderBy: { _count: { source: 'desc' } }, take: 5 }),
-      prisma.inquiry.findMany({ where: { homeId: home.id }, select: { approved: true, dismissed: true, finalized: true } }),
+      prisma.inquiry.findMany({ where: { homeId: home.id }, select: { approved: true, dismissed: true, finalized: true, createdAt: true } }),
     ])
 
     // Unique viewers
@@ -89,9 +89,11 @@ export async function GET(
     const durations = durationRows.map(r => r.durationSeconds as number)
     const avgDuration = durations.length >= MIN_VIEWS_FOR_DURATION
       ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null
-    const durationCaptureRate = viewsMonth > 0 ? Math.round((durationRows.length / viewsMonth) * 100) : 0
+    // Use the same rolling 30-day window for both numerator and denominator
+    const views30d = allViews30d.length
+    const durationCaptureRate = views30d > 0 ? Math.round((durationRows.length / views30d) * 100) : 0
 
-    // Inquiry pipeline
+    // Inquiry pipeline — count period-scoped inquiries for the rate calculation
     const pipeline = { pending: 0, approved: 0, dismissed: 0, finalized: 0 }
     for (const inq of inquiriesAll) {
       if (inq.finalized) pipeline.finalized++
@@ -99,7 +101,10 @@ export async function GET(
       else if (inq.approved) pipeline.approved++
       else pipeline.pending++
     }
-    const inquiryRate = viewsMonth > 0 ? ((inquiriesAll.length / viewsMonth) * 100).toFixed(1) : '0.0'
+    const inquiriesThisMonth = inquiriesAll.filter((inq: { createdAt?: Date }) =>
+      inq.createdAt ? new Date(inq.createdAt) >= thisMonth : false
+    ).length
+    const inquiryRate = viewsMonth > 0 ? ((inquiriesThisMonth / viewsMonth) * 100).toFixed(1) : '0.0'
 
     // Repeat visitors + hot signal
     const { repeatVisitors, hotSignal, hotSignalCount } = countRepeatAndHot(allViews30d, sevenDaysAgo)

@@ -272,54 +272,27 @@ export async function DELETE(
       return badRequest('Cannot cancel a meeting that has already started')
     }
 
-    // Free up the availability slot if it exists
-    if (booking.availabilityId) {
-      await prisma.availability.update({
-        where: { id: booking.availabilityId },
-        data: { isAvailable: true },
-      })
-    }
-
-    // Update booking status to cancelled
-    const cancelledBooking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'cancelled',
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            occupation: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            occupation: true,
-          },
-        },
-        availability: {
-          include: {
-            home: {
-              select: {
-                key: true,
-                title: true,
-                street: true,
-                city: true,
-                country: true,
-              },
+    const cancelledBooking = await prisma.$transaction(async (tx) => {
+      if (booking.availabilityId) {
+        await tx.availability.update({
+          where: { id: booking.availabilityId },
+          data: { isAvailable: true },
+        })
+      }
+      return tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'cancelled' },
+        select: {
+          id: true, status: true, startTime: true, endTime: true, title: true,
+          availability: {
+            include: {
+              home: { select: { key: true, title: true, street: true, city: true, country: true } },
             },
           },
         },
-      },
+      })
     })
 
-    // Transform to include home at top level for easier access
     const transformedBooking = {
       ...cancelledBooking,
       home: cancelledBooking.availability?.home || null,

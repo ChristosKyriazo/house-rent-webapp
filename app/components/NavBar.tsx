@@ -1,6 +1,7 @@
 import { getCurrentUser } from '@/lib/auth'
 import HamburgerMenu from './HamburgerMenu'
 import RoleInitializer from './RoleInitializer'
+import * as Sentry from '@sentry/nextjs'
 
 // Force dynamic rendering to ensure fresh auth state
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,7 @@ export default async function NavBar() {
       </>
     )
   } catch (error) {
-    console.error('NavBar error:', error)
+    Sentry.captureException(error)
     return null
   }
 }

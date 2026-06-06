@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -13,7 +13,7 @@ interface AvailabilitySlot {
   endTime: string
 }
 
-export default function SetAvailabilityPage() {
+function SetAvailabilityPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -316,7 +316,7 @@ export default function SetAvailabilityPage() {
               <div className="space-y-2">
                 {slots.map((slot, index) => (
                   <div
-                    key={index}
+                    key={slot.date + slot.startTime}
                     className="flex items-center justify-between p-3 bg-[var(--ink-soft)]/50 rounded-xl border border-[var(--border-subtle)]"
                   >
                     <div className="flex items-center gap-4 text-[var(--text)]">
@@ -375,6 +375,14 @@ export default function SetAvailabilityPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function SetAvailabilityPageWrapper() {
+  return (
+    <Suspense>
+      <SetAvailabilityPage />
+    </Suspense>
   )
 }
 

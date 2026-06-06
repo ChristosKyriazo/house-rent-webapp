@@ -562,7 +562,7 @@ export default function EditHomePage() {
                 {photos.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative group">
+                      <div key={photo} className="relative group">
                         <img
                           src={photo}
                           alt={`Photo ${index + 1}`}
@@ -642,11 +642,11 @@ export default function EditHomePage() {
                 />
                 {showCityDropdown && citySuggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {citySuggestions.map((city, i) => {
+                    {citySuggestions.map((city) => {
                       const display = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
                       return (
                         <button
-                          key={i}
+                          key={city.city + '-' + city.country}
                           type="button"
                           onClick={() => {
                             const displayCountry = (isGreekInput(formData.city) || language === 'el') && city.countryGreek ? city.countryGreek : city.country
@@ -683,11 +683,11 @@ export default function EditHomePage() {
                 />
                 {showCountryDropdown && countrySuggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                    {countrySuggestions.map((country, i) => {
+                    {countrySuggestions.map((country) => {
                       const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
                       return (
                         <button
-                          key={i}
+                          key={country.country}
                           type="button"
                           onClick={() => {
                             setFormData(prev => ({ ...prev, country: display }))

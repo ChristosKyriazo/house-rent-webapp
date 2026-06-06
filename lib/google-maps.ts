@@ -7,9 +7,11 @@
 
 import { prisma } from '@/lib/prisma'
 
-// In-memory geocoding cache: address string → coordinates (TTL 24 h)
+// In-memory geocoding cache: address string → coordinates (TTL 24 h for hits, 5 min for misses)
 const geocodeCache = new Map<string, { coords: Coordinates | null; expiresAt: number }>()
+const GEOCODE_CACHE_MAX = 1000
 const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const GEOCODE_CACHE_NULL_TTL_MS = 5 * 60 * 1000
 
 async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController()
@@ -61,23 +63,24 @@ async function attemptGeocode(address: string, apiKey: string): Promise<Coordina
 
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
-    console.log(`[Google Maps] Geocoding: "${address}"`)
     const response = await fetchWithTimeout(url)
     const data = await response.json()
-    console.log(`[Google Maps] Geocode response: status=${data.status}${data.error_message ? ` | error=${data.error_message}` : ''}`)
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
       const location = data.results[0].geometry.location
       const coords = { lat: location.lat, lng: location.lng }
+      if (geocodeCache.size >= GEOCODE_CACHE_MAX) {
+        geocodeCache.delete(geocodeCache.keys().next().value!)
+      }
       geocodeCache.set(address, { coords, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
       return coords
     }
 
-    console.warn('[Google Maps] Geocoding returned no results:', data.status, data.error_message ?? '')
-    geocodeCache.set(address, { coords: null, expiresAt: Date.now() + GEOCODE_CACHE_TTL_MS })
+    // Don't cache failures for long — a transient API outage shouldn't block distances for 24 h
+    geocodeCache.set(address, { coords: null, expiresAt: Date.now() + GEOCODE_CACHE_NULL_TTL_MS })
     return null
   } catch (error) {
-    console.error('[Google Maps] Geocoding API error:', error)
+    // Don't cache errors at all so the next request retries immediately
     return null
   }
 }
@@ -109,18 +112,18 @@ async function geocodeAddress(
   // Attempt 2: drop area (area can confuse geocoder if not in Google's index)
   if (area) {
     const noAreaAddress = [street, city, country].filter(Boolean).join(', ')
-    console.warn(`[Google Maps] Retrying without area: "${noAreaAddress}"`)
+    // retrying without area
     const coords2 = await attemptGeocode(noAreaAddress, apiKey)
     if (coords2) return coords2
   }
 
   // Attempt 3: city + country only (coarse but better than null)
   const cityOnlyAddress = [city, country].filter(Boolean).join(', ')
-  console.warn(`[Google Maps] Retrying with city only: "${cityOnlyAddress}"`)
+  // retrying with city only
   const coords3 = await attemptGeocode(cityOnlyAddress, apiKey)
   if (coords3) return coords3
 
-  console.error('[Google Maps] All geocoding attempts failed for:', fullAddress)
+  // all geocoding attempts failed
   return null
 }
 
@@ -242,35 +245,9 @@ async function findClosestPlace(
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
-      // Debug logging for park and university
-      if (placeType === 'park' || placeType === 'university') {
-        console.log(`\n🔍 DEBUG: ${placeType.toUpperCase()} API returned ${data.results.length} results:`)
-        data.results.slice(0, 10).forEach((place: any, index: number) => {
-          const types = place.types || []
-          const isValid = isValidPlaceType(place, placeType)
-          console.log(`  ${index + 1}. ${place.name || 'Unnamed'}`)
-          console.log(`     Types: [${types.join(', ')}]`) // Show ALL types for debugging
-          console.log(`     Primary: ${types[0] || 'none'}`)
-          console.log(`     Valid: ${isValid ? '✅' : '❌'}`)
-        })
-      }
-      
-      // Filter results to only include valid places, then calculate distances
       const validPlaces = data.results.filter((place: any) => isValidPlaceType(place, placeType))
 
       if (validPlaces.length === 0) {
-        console.warn(`\n⚠️  No valid ${placeType} found nearby (all ${data.results.length} results were filtered out)`)
-        if (placeType === 'park' || placeType === 'university') {
-          console.log(`   This means none of the ${data.results.length} results passed the validation check.`)
-          console.log(`   Check the types above to see why they were filtered.`)
-        } else {
-          // For other types, show a sample of what was returned
-          console.log(`   Sample of returned results (first 3):`)
-          data.results.slice(0, 3).forEach((place: any, index: number) => {
-            const types = place.types || []
-            console.log(`     ${index + 1}. ${place.name || 'Unnamed'} - Types: [${types.slice(0, 3).join(', ')}...]`)
-          })
-        }
         return { distance: null, coordinates: null }
       }
 
@@ -303,19 +280,15 @@ async function findClosestPlace(
       placesWithDistance.sort((a, b) => a.distance - b.distance)
       const closest = placesWithDistance[0]
 
-      console.log(`Found closest ${placeType}: ${closest.name} (primary type: ${closest.place.types[0]}) at ${Math.round(closest.distance * 10) / 10}km`)
-
       return {
         distance: Math.round(closest.distance * 10) / 10, // Round to 1 decimal place
         coordinates: closest.coordinates,
         name: closest.name,
       }
     } else {
-      console.warn(`No ${placeType} found nearby:`, data.status)
       return { distance: null, coordinates: null }
     }
-  } catch (error) {
-    console.error(`Error finding ${placeType}:`, error)
+  } catch {
     return { distance: null, coordinates: null }
   }
 }
@@ -341,7 +314,6 @@ async function findClosestUniversity(
     })
 
     if (universities.length === 0) {
-      console.warn(`No universities found in database for city: ${city}`)
       return { distance: null, coordinates: null }
     }
 
@@ -357,30 +329,6 @@ async function findClosestUniversity(
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
-      // Debug logging for universities
-      console.log(`\n🔍 DEBUG: UNIVERSITY API returned ${data.results.length} results:`)
-      console.log(`   Looking for universities in DB: ${Array.from(universityNames).join(', ')}`)
-      data.results.slice(0, 10).forEach((place: any, index: number) => {
-        const types = place.types || []
-        const isValidType = isValidPlaceType(place, 'university')
-        const placeName = (place.name || '').toLowerCase().trim()
-        let nameMatch = false
-        let matchedDbName = ''
-        for (const dbName of universityNames) {
-          if (placeName === dbName || placeName.includes(dbName) || dbName.includes(placeName)) {
-            nameMatch = true
-            matchedDbName = dbName
-            break
-          }
-        }
-        console.log(`  ${index + 1}. ${place.name || 'Unnamed'}`)
-        console.log(`     Types: [${types.slice(0, 5).join(', ')}${types.length > 5 ? '...' : ''}]`)
-        console.log(`     Primary: ${types[0] || 'none'}`)
-        console.log(`     Valid Type: ${isValidType ? '✅' : '❌'}`)
-        console.log(`     Name Match: ${nameMatch ? `✅ (matched: ${matchedDbName})` : '❌'}`)
-        console.log(`     Final Valid: ${(isValidType && nameMatch) ? '✅' : '❌'}`)
-      })
-      
       // Filter results to only include:
       // 1. Valid university type (using isValidPlaceType)
       // 2. Universities that match names in our database
@@ -430,7 +378,7 @@ async function findClosestUniversity(
         })
 
       if (validUniversities.length === 0) {
-        console.warn(`No universities from database found nearby for city: ${city}`)
+        // no matching universities found nearby
         return { distance: null, coordinates: null }
       }
 
@@ -438,7 +386,7 @@ async function findClosestUniversity(
       validUniversities.sort((a, b) => a.distance - b.distance)
       const closest = validUniversities[0]
 
-      console.log(`Found closest university from DB: ${closest.name} at ${Math.round(closest.distance * 10) / 10}km`)
+      // found closest university
 
       return {
         distance: Math.round(closest.distance * 10) / 10,
@@ -446,11 +394,11 @@ async function findClosestUniversity(
         name: closest.name,
       }
     } else {
-      console.warn(`No universities found nearby:`, data.status)
+      // no universities found nearby
       return { distance: null, coordinates: null }
     }
   } catch (error) {
-    console.error('Error finding closest university:', error)
+    // error finding closest university
     return { distance: null, coordinates: null }
   }
 }
@@ -519,7 +467,7 @@ export async function calculatePropertyDistances(
   // Step 1: Geocode the address (1 API call)
   const propertyCoordinates = await geocodeAddress(street, area, city, country)
   if (!propertyCoordinates) {
-    console.error('Failed to geocode address, returning null distances')
+    // failed to geocode address
     return defaultResult
   }
 

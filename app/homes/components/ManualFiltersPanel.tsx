@@ -81,8 +81,8 @@ export function ManualFiltersPanel(p: ManualFiltersPanelProps) {
             />
             {p.showCityDropdown && p.citySuggestions.length > 0 && (
               <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                {p.citySuggestions.map((c, i) => (
-                  <button key={i} type="button" onClick={() => p.onCitySelect(c)}
+                {p.citySuggestions.map((c) => (
+                  <button key={c.city + '-' + c.country} type="button" onClick={() => p.onCitySelect(c)}
                     className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0">
                     <div className="font-medium">{isGreekInput(p.cityQuery) && c.cityGreek ? c.cityGreek : c.city}</div>
                   </button>
@@ -105,8 +105,8 @@ export function ManualFiltersPanel(p: ManualFiltersPanelProps) {
             />
             {p.showCountryDropdown && p.countrySuggestions.length > 0 && (
               <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                {p.countrySuggestions.map((c, i) => (
-                  <button key={i} type="button" onClick={() => p.onCountrySelect(c)}
+                {p.countrySuggestions.map((c) => (
+                  <button key={c.country} type="button" onClick={() => p.onCountrySelect(c)}
                     className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0">
                     <div className="font-medium">{isGreekInput(p.countryQuery) && c.countryGreek ? c.countryGreek : c.country}</div>
                   </button>

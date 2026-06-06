@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
     prisma.inquiry.count({ where: { homeId: { in: homeIds }, createdAt: { gte: periodStart } } }),
     prisma.savedHome.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds } }, _count: { id: true } }),
     prisma.savedHome.count({ where: { homeId: { in: homeIds }, createdAt: { gte: periodStart } } }),
-    prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, approved: true }, _count: { id: true } }),
-    prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, finalized: true }, _count: { id: true } }),
+    prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, approved: true, createdAt: { gte: periodStart } }, _count: { id: true } }),
+    prisma.inquiry.groupBy({ by: ['homeId'], where: { homeId: { in: homeIds }, finalized: true, createdAt: { gte: periodStart } }, _count: { id: true } }),
     prisma.booking.groupBy({
       by: ['homeId'],
       where: { homeId: { in: homeIds }, createdAt: { gte: periodStart }, status: { not: 'cancelled' } },
@@ -157,8 +157,8 @@ export async function GET(request: NextRequest) {
     for (let h = 0; h < 24; h++) timeSeries.push({ label: `${String(h).padStart(2, '0')}:00`, views: 0 })
   } else {
     const buckets = period === 'week' ? 7 : 30
-    for (let i = buckets - 1; i >= 0; i--) {
-      const d = new Date(now); d.setDate(d.getDate() - i)
+    for (let i = 0; i < buckets; i++) {
+      const d = new Date(periodStart); d.setUTCDate(d.getUTCDate() + i)
       timeSeries.push({ label: d.toISOString().split('T')[0], views: 0 })
     }
   }
@@ -177,16 +177,17 @@ export async function GET(request: NextRequest) {
     inquiryRate: rows[0].inquiryRate,
   } : null
 
-  // All-time funnel totals
   const totalApproved = [...approvedMap.values()].reduce((a, b) => a + b, 0)
   const totalFinalized = [...finalizedMap.values()].reduce((a, b) => a + b, 0)
 
-  // Top 3 areas by all-time views across the entire platform
+  // Top 3 areas by views for this owner's listings in the current period
   const topAreasRaw = await prisma.$queryRaw<Array<{ area: string; views: bigint }>>`
     SELECT h."area", COUNT(lv.id)::int AS views
     FROM "listing_views" lv
     JOIN "homes" h ON h.id = lv."homeId"
     WHERE h."area" IS NOT NULL AND trim(h."area") != ''
+      AND h."ownerId" = ${user.id}
+      AND lv."viewedAt" >= ${periodStart}
     GROUP BY h."area"
     ORDER BY views DESC
     LIMIT 3

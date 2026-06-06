@@ -47,11 +47,13 @@ export default function MyListingsPage() {
   const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'plus' | 'pro'>('free')
   const [slotsUsed, setSlotsUsed] = useState(0)
   const [promotingKey, setPromotingKey] = useState<string | null>(null)
+  const [promoteError, setPromoteError] = useState<string | null>(null)
 
   const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
 
   async function handlePromote(homeKey: string, mode: 'slot' | 'boost') {
     setPromotingKey(homeKey)
+    setPromoteError(null)
     try {
       const res = await fetch('/api/homes/promote', {
         method: 'POST',
@@ -59,7 +61,10 @@ export default function MyListingsPage() {
         body: JSON.stringify({ homeKey, mode }),
       })
       const data = await res.json()
-      if (!res.ok) return
+      if (!res.ok) {
+        setPromoteError(language === 'el' ? 'Η προώθηση απέτυχε. Δοκιμάστε ξανά.' : 'Promotion failed. Please try again.')
+        return
+      }
       setUserHomes(prev => prev.map(h => {
         if (h.key !== homeKey) return h
         if (mode === 'slot') return { ...h, slotPromoted: data.slotPromoted }
@@ -199,6 +204,13 @@ export default function MyListingsPage() {
           </Link>
         </div>
 
+        {promoteError && (
+          <div className="mb-4 px-4 py-3 rounded-2xl bg-[var(--status-error-bg)] border border-[var(--status-error)]/30 text-[var(--status-error)] text-sm flex items-center justify-between">
+            <span>{promoteError}</span>
+            <button type="button" onClick={() => setPromoteError(null)} className="ml-4 text-[var(--status-error)]/60 hover:text-[var(--status-error)] transition-colors">✕</button>
+          </div>
+        )}
+
         {userHomes.length === 0 ? (
           <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
             <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noListings')}</p>
@@ -239,11 +251,9 @@ export default function MyListingsPage() {
                   )}
 
                   <Link
-                    href={home.finalized ? '#' : `/homes/${home.key}?from=my-listings`}
-                    onClick={(e) => {
-                      if (home.finalized) e.preventDefault()
-                    }}
+                    href={`/homes/${home.key}?from=my-listings`}
                     className={`block pr-8 ${home.finalized ? 'pointer-events-none' : ''}`}
+                    tabIndex={home.finalized ? -1 : undefined}
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">

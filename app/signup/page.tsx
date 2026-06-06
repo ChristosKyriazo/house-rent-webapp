@@ -13,14 +13,14 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('signupRole')
+      localStorage.removeItem('signupRole')
     }
     setShowRoleSelection(true)
   }, [])
 
   const handleRoleSelect = (role: string) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('signupRole', role)
+      localStorage.setItem('signupRole', role)
     }
     setShowRoleSelection(false)
   }

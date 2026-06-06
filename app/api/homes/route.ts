@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         owner: {
-          select: { id: true, email: true, name: true, createdAt: true, subscriptionTier: true },
+          select: { id: true, name: true, createdAt: true, subscriptionTier: true },
         },
       },
     })
@@ -440,11 +440,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     log.error({ err: error }, 'List homes error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -679,11 +675,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retry logic for SQLite database locks
-    const createHomeWithRetry = async (maxRetries = 3, delay = 100) => {
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          return await prisma.home.create({
+    const home = await prisma.home.create({
       data: {
         title: title.trim(),
         description: finalDescription,
@@ -733,24 +725,6 @@ export async function POST(request: NextRequest) {
         ownerId: user.id,
       },
     })
-        } catch (error: any) {
-          const isLockError = error?.code === 'SQLITE_BUSY' || 
-                             error?.message?.includes('database is locked') ||
-                             error?.message?.includes('timeout')
-          
-          if (isLockError && attempt < maxRetries) {
-            const waitTime = delay * Math.pow(2, attempt - 1) // Exponential backoff
-            log.warn({ attempt, maxRetries, waitTime }, 'Database lock detected, retrying')
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-            continue
-          }
-          throw error
-        }
-      }
-      throw new Error('Failed to create home after retries')
-    }
-
-    const home = await createHomeWithRetry()
 
     // Enqueue embedding for reliable generation with retries
     await prisma.embeddingQueue.upsert({
@@ -764,33 +738,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(
-      { message: 'Home created', home },
-      { status: 201 }
-    )
+    return NextResponse.json({ message: 'Home created', home }, { status: 201 })
   } catch (error: any) {
     log.error({ err: error }, 'Create home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    
-    // Check for database lock/timeout errors
-    const isLockError = error?.code === 'SQLITE_BUSY' || 
-                       error?.message?.includes('database is locked') ||
-                       error?.message?.includes('timeout') ||
-                       error?.message?.includes('Operations timed out')
-    
-    if (isLockError) {
-      return NextResponse.json(
-        { 
-          error: 'Database is currently locked', 
-          details: 'The database is being accessed by another application (e.g., DBeaver). Please close any database tools and try again.' 
-        },
-        { status: 503 } // Service Unavailable
-      )
-    }
-    
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

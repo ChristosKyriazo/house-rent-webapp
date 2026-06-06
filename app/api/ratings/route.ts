@@ -83,12 +83,13 @@ export async function POST(request: NextRequest) {
         where: {
           ownerId: user.id,
           userId: parsedRatedUserId,
+          status: { not: 'cancelled' },
           startTime: {
-            lt: now, // Meeting has started/passed
+            lt: now,
           },
         },
         orderBy: {
-          startTime: 'desc', // Get the most recent meeting
+          startTime: 'desc',
         },
       })
       canRate = !!booking

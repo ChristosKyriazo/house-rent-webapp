@@ -363,11 +363,11 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         owner: {
-          select: { id: true, email: true, name: true },
+          select: { id: true, name: true },
         },
       },
     })
-    
+
     homesCountBeforeFilter = homes.length
 
     // Step 4: Apply city/area/country filters with Greek/English matching
@@ -411,7 +411,7 @@ export async function POST(request: NextRequest) {
           homes = await prisma.home.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, email: true, name: true } } },
+            include: { owner: { select: { id: true, name: true } } },
           })
       }
       }
@@ -453,7 +453,7 @@ export async function POST(request: NextRequest) {
           homes = await prisma.home.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, email: true, name: true } } },
+            include: { owner: { select: { id: true, name: true } } },
           })
         }
       }

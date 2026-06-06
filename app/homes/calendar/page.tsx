@@ -806,19 +806,6 @@ function RescheduleModal({
         return true
       })
       
-      console.log('Reschedule - Finding availability:', {
-        selectedDate: dateStr,
-        selectedTimeSlot,
-        availabilitiesCount: availabilities.length,
-        matchingAvailability: matchingAvailability ? {
-          id: matchingAvailability.id,
-          date: matchingAvailability.date,
-          startTime: matchingAvailability.startTime,
-          endTime: matchingAvailability.endTime,
-          bookingsCount: matchingAvailability.bookings?.length || 0,
-        } : null,
-      })
-
       if (!matchingAvailability) {
         throw new Error('Time slot not available')
       }

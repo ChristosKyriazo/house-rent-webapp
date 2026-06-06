@@ -64,7 +64,8 @@ function HomesPageInner() {
     ? selectedRole 
     : (actualRole || userRole || 'user')
   const [aiQuery, setAiQuery] = useState('')
-  const [isAISearchActive, setIsAISearchActive] = useState(false) // Track if AI search has been performed
+  const [isAISearchActive, setIsAISearchActive] = useState(false)
+  const [aiSearchError, setAiSearchError] = useState<string | null>(null)
   const [manualFilters, setManualFilters] = useState({
     city: '',
     country: '',
@@ -250,7 +251,7 @@ function HomesPageInner() {
     }
     
     const newSearch = params.toString()
-    const currentSearch = window.location.search.replace('?', '')
+    const currentSearch = searchParams.toString()
     
     // Only update URL if it's different to avoid unnecessary navigation
     if (currentSearch !== newSearch) {
@@ -466,12 +467,14 @@ function HomesPageInner() {
 
   const fetchHomes = async () => {
     setLoading(true)
+    setAiSearchError(null)
     try {
       const response = await fetch('/api/homes')
+      if (!response.ok) throw new Error(String(response.status))
       const data = await response.json()
       setHomes(data.homes || [])
-    } catch (error) {
-      console.error('Error fetching homes:', error)
+    } catch {
+      setHomes([])
     } finally {
       setLoading(false)
     }
@@ -515,9 +518,8 @@ function HomesPageInner() {
         excludeInquired,
         excludeApproved,
       }))
-    } catch (error) {
-      console.error('Error with AI search:', error)
-      // Fallback to showing all homes if AI search fails
+    } catch {
+      setAiSearchError(language === 'el' ? 'Η αναζήτηση AI απέτυχε — εμφανίζονται όλα τα αγγέλματα.' : 'AI search failed — showing all listings.')
       fetchHomes()
     } finally {
       setLoading(false)
@@ -814,6 +816,9 @@ function HomesPageInner() {
               <p className="text-[var(--text-muted)] mt-2">
                 {homes.length} {homes.length === 1 ? getTranslation(language, 'listing') : getTranslation(language, 'listings')} {getTranslation(language, 'found')}
               </p>
+              {aiSearchError && (
+                <p className="text-sm text-amber-600 mt-1">{aiSearchError}</p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {/* Map view button — carries current filters to the map page */}

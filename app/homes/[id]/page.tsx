@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -59,7 +59,7 @@ interface Home {
   }
 }
 
-export default function HomeDetailPage() {
+function HomeDetailPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -87,6 +87,7 @@ export default function HomeDetailPage() {
   const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null; safety: number | null; vibe: string | null }>>([])
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
   const [rejectFinalizationConfirmOpen, setRejectFinalizationConfirmOpen] = useState(false)
+  const [confirmFinalizeOpen, setConfirmFinalizeOpen] = useState(false)
   const [hasBookableAvailability, setHasBookableAvailability] = useState(false)
   const [hasScheduledViewingAppointment, setHasScheduledViewingAppointment] = useState(false)
   const { selectedRole, actualRole } = useRole()
@@ -207,7 +208,11 @@ export default function HomeDetailPage() {
             currentInquiryId = inquiriesData.inquiryIds?.[data.home.id] ?? null
             if (currentInquiryId) setInquiryId(currentInquiryId)
             if (inquiriesData.finalizedHomes?.[data.home.id]) setIsFinalized(true)
-            if (status === 'dismissed') { router.push('/homes'); return }
+            if (status === 'dismissed') {
+              setToast({ type: 'info', message: language === 'el' ? 'Ο ιδιοκτήτης δεν επέλεξε το αίτημά σας. Συνεχίστε την αναζήτηση.' : 'The owner declined your inquiry. Continue searching below.' })
+              setTimeout(() => router.push('/homes'), 3000)
+              return
+            }
           }
         }
 
@@ -662,6 +667,7 @@ export default function HomeDetailPage() {
                   {photos.length > 1 && (
                     <>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
                           prevPhoto()
@@ -674,6 +680,7 @@ export default function HomeDetailPage() {
                         </svg>
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
                           nextPhoto()
@@ -688,9 +695,10 @@ export default function HomeDetailPage() {
                       
                       {/* Photo indicators */}
                       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                        {photos.map((_, index) => (
+                        {photos.map((photo, index) => (
                           <button
-                            key={index}
+                            key={photo}
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation()
                               setCurrentPhotoIndex(index)
@@ -730,7 +738,7 @@ export default function HomeDetailPage() {
                     >
                       {photos.map((photo, index) => (
                         <button
-                          key={index}
+                          key={photo}
                           onClick={() => setCurrentPhotoIndex(index)}
                           className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                             index === currentPhotoIndex
@@ -942,7 +950,7 @@ export default function HomeDetailPage() {
                     <div className="flex flex-col items-center justify-center flex-1">
                       {/* Name */}
                       <p className="text-base font-semibold text-[var(--text)] text-center mb-2">
-                        {home.owner.name || home.owner.email.split('@')[0]}
+                        {home.owner.name || 'Owner'}
                       </p>
                       
                       {/* Rating */}
@@ -955,7 +963,7 @@ export default function HomeDetailPage() {
                           <span className="text-xl font-bold text-[var(--text)]">
                             {home.owner.ratings.ownerRating.toFixed(1)}
                           </span>
-                          <StarRating rating={home.owner.ratings!.ownerRating!} size="sm" />
+                          <StarRating rating={home.owner.ratings?.ownerRating ?? 0} size="sm" />
                           {home.owner.ratings.ownerCount > 0 && (
                             <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
                               {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
@@ -1077,10 +1085,10 @@ export default function HomeDetailPage() {
               </div>
             )}
 
-            {/* Distance Information - Always show to display university distance */}
-            {((home.closestMetro != null) || (home.closestSchool != null) ||
-              (home.closestHospital != null) || (home.closestPark != null) ||
-              true) && ( // Always show section to display university distance
+            {/* Distance Information */}
+            {(home.closestMetro != null || home.closestSchool != null ||
+              home.closestHospital != null || home.closestPark != null ||
+              home.closestUniversity != null) && (
               <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
                 <h2 className="text-lg font-semibold text-[var(--text)] mb-4">{getTranslation(language, 'distances')}</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -1102,13 +1110,12 @@ export default function HomeDetailPage() {
                       <p className="text-xl font-bold text-[var(--text)]">{home.closestSchool.toFixed(1)} km</p>
                     </div>
                   )}
-                  {/* University distance - always show, display "-" if null */}
-                  <div>
-                    <p className="text-sm text-[var(--text-muted)] mb-1">🎓 {getTranslation(language, 'closestUniversity')}</p>
-                    <p className="text-xl font-bold text-[var(--text)]">
-                      {home.closestUniversity != null ? `${home.closestUniversity.toFixed(1)} km` : '-'}
-                    </p>
-                  </div>
+                  {home.closestUniversity != null && (
+                    <div>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">🎓 {getTranslation(language, 'closestUniversity')}</p>
+                      <p className="text-xl font-bold text-[var(--text)]">{home.closestUniversity.toFixed(1)} km</p>
+                    </div>
+                  )}
                   {home.closestHospital != null && (
                     <div>
                       <p className="text-sm text-[var(--text-muted)] mb-1">🏥 {getTranslation(language, 'closestHospital')}</p>
@@ -1150,7 +1157,7 @@ export default function HomeDetailPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={handleFinalize}
+                    onClick={() => setConfirmFinalizeOpen(true)}
                     disabled={finalizing}
                     className="w-full px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
                   >
@@ -1300,7 +1307,7 @@ export default function HomeDetailPage() {
                     <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 pb-2">
                       {photos.map((photo, index) => (
                         <button
-                          key={index}
+                          key={photo}
                           onClick={() => setLightboxPhotoIndex(index)}
                           className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
                             index === lightboxPhotoIndex
@@ -1349,7 +1356,7 @@ export default function HomeDetailPage() {
                 <div className="flex flex-col items-center mb-6">
                   <div className="w-32 h-32 rounded-full bg-[var(--btn-primary-bg)] flex items-center justify-center mb-4 border-4 border-[var(--border-subtle)]">
                     <span className="text-5xl font-bold text-[var(--btn-primary-fg)]">
-                      {home.owner.name ? home.owner.name[0].toUpperCase() : home.owner.email[0].toUpperCase()}
+                      {(home.owner.name || 'O')[0].toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -1357,10 +1364,12 @@ export default function HomeDetailPage() {
                   <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'name')}</label>
                   <p className="text-lg text-[var(--text)]">{home.owner.name || getTranslation(language, 'notProvided')}</p>
             </div>
-            <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'email')}</label>
-              <p className="text-lg text-[var(--text)]">{home.owner.email}</p>
-            </div>
+            {(isOwner || inquiryStatus === 'approved') && home.owner.email && (
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'email')}</label>
+                <p className="text-lg text-[var(--text)]">{home.owner.email}</p>
+              </div>
+            )}
                 {/* Rating in Modal - Show house owner rating for brokers, owner rating for regular owners */}
                 {home.owner.isBroker ? (
                   // For brokers, always show house owner rating (even if 0.0) and make it clickable
@@ -1409,7 +1418,7 @@ export default function HomeDetailPage() {
                           {home.owner.ratings.ownerRating.toFixed(1)}
                         </p>
                         <div className="mt-2">
-                          <StarRating rating={home.owner.ratings!.ownerRating!} size="base" />
+                          <StarRating rating={home.owner.ratings?.ownerRating ?? 0} size="base" />
                         </div>
                         {home.owner.ratings.ownerCount > 0 && (
                           <span className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors mt-1 block">
@@ -1466,6 +1475,28 @@ export default function HomeDetailPage() {
         language={language}
         variant="danger"
       />
+
+      <ConfirmDialog
+        open={confirmFinalizeOpen}
+        title={language === 'el' ? 'Επιβεβαίωση οριστικοποίησης' : 'Confirm finalization'}
+        message={
+          language === 'el'
+            ? 'Είστε σίγουροι ότι θέλετε να οριστικοποιήσετε αυτήν την ενοικίαση; Αυτή η ενέργεια δεν αναιρείται.'
+            : 'Are you sure you want to finalize this rental? This action cannot be undone.'
+        }
+        confirmLabel={language === 'el' ? 'Οριστικοποίηση' : 'Finalize'}
+        onConfirm={() => { setConfirmFinalizeOpen(false); handleFinalize() }}
+        onCancel={() => setConfirmFinalizeOpen(false)}
+        language={language}
+      />
     </div>
+  )
+}
+
+export default function HomeDetailPageWrapper() {
+  return (
+    <Suspense>
+      <HomeDetailPage />
+    </Suspense>
   )
 }

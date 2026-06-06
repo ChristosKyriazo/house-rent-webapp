@@ -366,7 +366,7 @@ function UpgradePageInner() {
 
 export default function UpgradePage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen" />}>
       <UpgradePageInner />
     </Suspense>
   )

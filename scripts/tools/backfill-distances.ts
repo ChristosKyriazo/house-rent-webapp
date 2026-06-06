@@ -13,14 +13,16 @@ const prisma = new PrismaClient()
 const BATCH_DELAY_MS = 1500 // 1.5s between homes to stay well under quota
 
 async function main() {
-  // Only backfill homes where ALL distance fields are null
+  // Backfill homes where ANY distance field is still null (handles partial failures)
   const homes = await prisma.home.findMany({
     where: {
-      closestMetro: null,
-      closestSchool: null,
-      closestHospital: null,
-      closestPark: null,
-      closestUniversity: null,
+      OR: [
+        { closestMetro: null },
+        { closestSchool: null },
+        { closestHospital: null },
+        { closestPark: null },
+        { closestUniversity: null },
+      ],
     },
     select: {
       id: true,

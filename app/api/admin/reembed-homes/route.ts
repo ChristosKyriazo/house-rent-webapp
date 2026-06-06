@@ -12,6 +12,11 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)
+  if (!adminEmails.includes(user.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   if (!(await checkRateLimit('admin:reembed-homes', 10, 60_000))) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
@@ -19,7 +24,8 @@ export async function POST(request: NextRequest) {
   const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
   if (!openai) return NextResponse.json({ error: 'OpenAI not configured' }, { status: 503 })
 
-  const { batchSize = 10 } = await request.json().catch(() => ({}))
+  const raw = await request.json().catch(() => ({}))
+  const batchSize = Math.min(Math.max(1, Number(raw.batchSize ?? 10)), 100)
 
   const homes = await prisma.home.findMany({
     select: {
@@ -41,10 +47,17 @@ export async function POST(request: NextRequest) {
     try {
       const text = buildHomeText(home)
       const embedding = await generateEmbedding(text, openai)
+      const vectorStr = `[${(embedding as number[]).join(',')}]`
       await prisma.home.update({
         where: { id: home.id },
         data: { embedding },
       })
+      // Also update the pgvector column used for similarity search
+      await prisma.$executeRawUnsafe(
+        `UPDATE homes SET "embeddingVec" = $1::vector WHERE id = $2`,
+        vectorStr,
+        home.id
+      )
       processed++
     } catch {
       failed++

@@ -1,0 +1,21 @@
+node_modules
+.next
+.git
+.claude
+
+# Local dev databases and backups — never in the image
+*.db
+*.sqlite
+*.sqlite3
+backup-*.sql
+*.sql
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Misc dev artefacts
+*.log
+.DS_Store
+coverage

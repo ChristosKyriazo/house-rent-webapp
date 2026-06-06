@@ -27,7 +27,6 @@ export async function GET(
         owner: {
           select: {
             id: true,
-            email: true,
             name: true,
             role: true,
             createdAt: true,
@@ -94,11 +93,7 @@ export async function GET(
     }, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'Get home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -309,11 +304,7 @@ export async function PUT(
     )
   } catch (error) {
     log.error({ err: error }, 'Update home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -381,11 +372,7 @@ export async function DELETE(
     )
   } catch (error) {
     log.error({ err: error }, 'Delete home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 

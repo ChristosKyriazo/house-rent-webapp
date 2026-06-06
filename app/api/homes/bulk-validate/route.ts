@@ -19,6 +19,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
+    const userRole = user.role || 'user'
+    if (userRole !== 'owner' && userRole !== 'both' && userRole !== 'broker') {
+      return NextResponse.json({ error: 'Only owners and brokers can use bulk upload' }, { status: 403 })
+    }
+
+    const { checkTier } = await import('@/lib/subscription')
+    const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
+    if (tierBlock) return tierBlock
+
     const formData = await request.formData()
     const excelFile = formData.get('excelFile') as File
 

@@ -30,9 +30,9 @@ export async function initiateFinalization(inquiryId: number, userId: number, us
   if (!inquiry.approved) throw new InquiryFinalizationError('Inquiry must be approved before finalization', 400)
   if (inquiry.finalized) throw new InquiryFinalizationError('Inquiry already finalized', 400)
 
-  const normalizedRole = (userRole || 'user').toLowerCase()
-  const canInitiate = userId === inquiry.home.ownerId || normalizedRole === 'broker' || normalizedRole === 'both'
-  if (!canInitiate) throw new InquiryFinalizationError('Only owners and brokers can initiate finalization', 403)
+  if (userId !== inquiry.home.ownerId) {
+    throw new InquiryFinalizationError('Only the home owner can initiate finalization', 403)
+  }
 
   const scheduledBooking = await prisma.booking.findFirst({
     where: { inquiryId: inquiry.id, status: 'scheduled' },
@@ -69,8 +69,9 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
   })
 
   if (!inquiry) throw new InquiryFinalizationError('Inquiry not found', 404)
-  if (userId !== inquiry.home.ownerId && userId !== inquiry.user.id) {
-    throw new InquiryFinalizationError('Not authorized to manage this finalization', 403)
+  // Only the tenant (inquiry creator) can respond to a finalization request
+  if (userId !== inquiry.user.id) {
+    throw new InquiryFinalizationError('Only the tenant can respond to a finalization request', 403)
   }
 
   if (action === 'approve') {

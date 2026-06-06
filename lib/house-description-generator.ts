@@ -8,6 +8,7 @@ function escapePromptInput(input: string | null | undefined, maxLen = 500): stri
 }
 
 // Server-side in-memory cache: prevents duplicate OpenAI calls for identical house data
+const DESCRIPTION_CACHE_MAX = 500
 const descriptionCache = new Map<string, { description: string | null; descriptionGreek: string | null }>()
 
 function cacheKey(data: object): string {
@@ -232,6 +233,9 @@ Return JSON only with "description" and "descriptionGreek". Both must be complet
     const result = {
       description: finalEnglishDescription,
       descriptionGreek: finalGreekDescription,
+    }
+    if (descriptionCache.size >= DESCRIPTION_CACHE_MAX) {
+      descriptionCache.delete(descriptionCache.keys().next().value!)
     }
     descriptionCache.set(key, result)
     return result

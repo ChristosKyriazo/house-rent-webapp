@@ -8,6 +8,11 @@ export async function POST() {
   const user = await getCurrentUser()
   if (!user) return unauthorized()
 
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)
+  if (!adminEmails.includes(user.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const homes = await prisma.home.findMany({
     where: { latitude: null },
     select: { id: true, street: true, area: true, city: true, country: true },

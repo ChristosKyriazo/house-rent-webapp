@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { useUser } from '@clerk/nextjs'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -31,6 +32,7 @@ export default function NotificationBell() {
   const router = useRouter()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
+  const { isSignedIn, isLoaded } = useUser()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -47,6 +49,8 @@ export default function NotificationBell() {
     : (actualRole || 'user')
 
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+
     let inFlight = false
 
     const fetchNotifications = async () => {
@@ -121,7 +125,7 @@ export default function NotificationBell() {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)
     }
-  }, [language])
+  }, [language, isLoaded, isSignedIn])
 
   // Position fixed panel under bell (portal) — avoids overflow:hidden on chrome dock clipping the dropdown
   useLayoutEffect(() => {

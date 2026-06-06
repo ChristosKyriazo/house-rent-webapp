@@ -17,6 +17,7 @@ interface User {
   occupation: string | null
   role: string
   subscriptionTier?: 'free' | 'plus' | 'pro'
+  verified?: boolean
   createdAt: string
 }
 
@@ -403,7 +404,7 @@ function ProfilePageInner() {
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'userName')}</label>
               <p className={`flex items-center gap-2 text-lg ${user.name ? 'text-[var(--text)]' : 'text-[var(--text)]/50 italic'}`}>
                 {user.name || getTranslation(language, 'notSet')}
-                {(user as any).verified && (
+                {user.verified && (
                   <span title={language === 'el' ? 'Επαληθευμένος ιδιοκτήτης' : 'Verified owner'} className="inline-flex items-center gap-1 rounded-full bg-[var(--status-info-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--status-info)]">
                     ✓ {language === 'el' ? 'Επαληθ.' : 'Verified'}
                   </span>
@@ -450,7 +451,7 @@ function ProfilePageInner() {
                   <div className="flex items-center gap-3">
                     {(user.subscriptionTier ?? 'free') === 'free' && (
                       <span className="text-sm text-[var(--text-muted)]">
-                        {language === 'el' ? 'Δωρεάν' : 'Free'} · {language === 'el' ? 'Έως 3 αγγελίες' : 'Up to 3 listings'}
+                        {language === 'el' ? 'Δωρεάν' : 'Free'} · {language === 'el' ? '1 αγγελία' : '1 listing'}
                       </span>
                     )}
                     {(user.subscriptionTier ?? 'free') === 'plus' && (

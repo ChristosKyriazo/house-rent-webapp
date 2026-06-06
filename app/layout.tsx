@@ -8,6 +8,7 @@ import NavBarWrapper from "./components/NavBarWrapper";
 import OTPCursorFix from "./components/OTPCursorFix";
 import AtmosphereBackground from "./components/visual/AtmosphereBackground";
 import AppFooter from "./components/AppFooter";
+import HtmlLangUpdater from "./components/HtmlLangUpdater";
 import { ClerkProvider } from "@clerk/nextjs";
 
 const fraunces = Fraunces({
@@ -35,13 +36,16 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html
-        lang="en"
+        lang="el"
+        suppressHydrationWarning
         className={`${fraunces.variable} ${outfit.variable} bg-[var(--canvas)]`}
       >
         <body
+          suppressHydrationWarning
           className={`relative min-h-screen font-sans antialiased bg-[var(--canvas)] text-[var(--text)] selection:bg-[var(--accent)]/25 selection:text-[var(--text)]`}
         >
           <LanguageProviderWrapper>
+            <HtmlLangUpdater />
             <AtmosphereBackground />
             <div className="relative z-10 min-h-screen">
               <OTPCursorFix />

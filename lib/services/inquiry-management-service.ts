@@ -134,9 +134,9 @@ export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: numb
 
   if (!inquiry) throw new InquiryManagementError('Inquiry not found', 404)
 
-  const normalizedRole = (actorRole || 'user').toLowerCase()
-  const isOwner = actorId === inquiry.home.ownerId || normalizedRole === 'broker' || normalizedRole === 'both'
-  if (!isOwner) throw new InquiryManagementError('Only owners and brokers can reject inquiries', 403)
+  if (actorId !== inquiry.home.ownerId) {
+    throw new InquiryManagementError('Only the home owner can reject inquiries', 403)
+  }
 
   const scheduledBooking = await prisma.booking.findFirst({
     where: { inquiryId: inquiry.id, status: 'scheduled' },

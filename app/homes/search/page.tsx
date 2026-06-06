@@ -41,6 +41,9 @@ export default function SearchPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 pb-20 pt-12">
       <div className="w-full max-w-lg space-y-8">
+        <h1 className="text-center text-3xl font-bold text-[var(--text)]">
+          {isEl ? 'Αναζήτηση ακινήτων' : 'Search properties'}
+        </h1>
         <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 shadow-inner motion-safe:animate-fade-in-slow">
           <GraphicSearchBanner className="h-14 w-full sm:h-[4.5rem]" />
         </div>
@@ -50,10 +53,10 @@ export default function SearchPage() {
             {getTranslation(language, 'whatAreYouLookingFor')}
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button onClick={() => handleChoice('rent')} className="btn-primary px-8 py-6 text-lg">
+            <button type="button" onClick={() => handleChoice('rent')} className="btn-primary px-8 py-6 text-lg">
               🏠 {getTranslation(language, 'rent')}
             </button>
-            <button onClick={() => handleChoice('buy')} className="btn-primary px-8 py-6 text-lg">
+            <button type="button" onClick={() => handleChoice('buy')} className="btn-primary px-8 py-6 text-lg">
               💰 {getTranslation(language, 'buy')}
             </button>
           </div>
@@ -73,9 +76,9 @@ export default function SearchPage() {
               </button>
             </div>
             <div className="space-y-2">
-              {history.map((entry, i) => (
+              {history.map((entry) => (
                 <button
-                  key={i}
+                  key={entry.ts}
                   onClick={() => replaySearch(entry)}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--ink-soft)]"
                 >
