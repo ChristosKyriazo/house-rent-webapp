@@ -18,7 +18,7 @@ export default function RateUserModal({
   userId,
   userName,
   userEmail,
-  inquiryId,
+  inquiryId: _inquiryId,
   onClose,
   onSuccess,
 }: RateUserModalProps) {

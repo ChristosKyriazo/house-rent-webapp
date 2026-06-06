@@ -7,10 +7,9 @@ import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue } from '@/lib/translations'
 import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
-import { meetsMinimumTier, getListingLimit, checkTier } from '@/lib/subscription'
+import { getListingLimit, checkTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
-import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
 import { processEmbeddingQueue } from '@/lib/bulk-upload-processor'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
@@ -22,8 +21,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     
     // Build filter object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {}
-    
+
     // Map 'buy' (from search UI) to sale listings (stored as "sale"; legacy rows may use "sell")
     const listingType = searchParams.get('listingType')
     if (listingType) {
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
       currentUser = await getCurrentUser()
       // Always exclude finalized houses from search
       where.finalized = false
-    } catch (error) {
+    } catch {
       // If getCurrentUser fails (user not logged in), still exclude finalized houses
       where.finalized = false
     }
@@ -407,7 +407,9 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     homes.sort((a, b) => {
       const rank = (h: typeof a) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const slotActive = h.slotPromoted && (!(h as any).slotPromotedUntil || (h as any).slotPromotedUntil > now)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (slotActive) return (h.owner as any)?.subscriptionTier === 'pro' ? 0 : 1
         if (h.promotedUntil && h.promotedUntil > now) return 2
         return 3
@@ -568,7 +570,7 @@ export async function POST(request: NextRequest) {
       closestUniversity: null,
     }
 
-    let distanceDetails: any = null
+    let _distanceDetails: unknown = null
 
     if (!await checkMapsLimit(user.id)) {
       return NextResponse.json({ error: 'Too many requests. Please wait before creating another listing.' }, { status: 429 })
@@ -595,7 +597,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Store full details for logging/verification
-      distanceDetails = distanceResult
+      _distanceDetails = distanceResult
       
       log.info({ coordinates: distanceResult.propertyCoordinates, distances }, 'Distance calculation completed')
     } catch (error) {
@@ -626,7 +628,7 @@ export async function POST(request: NextRequest) {
         photoTagsList = await analyzePhotosForTags(photoPaths, openai)
       }
     }
-    const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
+    const _photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
 
     // Generate descriptions using AI only if useAIDescription is explicitly checked
     let finalDescription = description?.trim() || null
@@ -739,7 +741,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ message: 'Home created', home }, { status: 201 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error({ err: error }, 'Create home error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

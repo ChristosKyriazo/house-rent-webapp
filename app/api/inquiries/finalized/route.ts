@@ -114,7 +114,6 @@ export async function GET(request: NextRequest) {
 
     // Check which ones already have ratings
     // Since we allow multiple ratings, check if there's at least one rating
-    const inquiryIds = finalizedInquiries.map(iq => iq.id)
     const existingRatings = await prisma.rating.findMany({
       where: {
         raterId: user.id,

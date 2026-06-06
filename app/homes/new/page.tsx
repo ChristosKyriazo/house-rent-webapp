@@ -43,7 +43,7 @@ export default function NewHomePage() {
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
-  const [searchingAreas, setSearchingAreas] = useState(false)
+  const [_searchingAreas, setSearchingAreas] = useState(false)
   const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
   const [addingArea, setAddingArea] = useState(false)
   const [showAddAreaOption, setShowAddAreaOption] = useState(false)
@@ -63,7 +63,7 @@ export default function NewHomePage() {
   const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'new' | 'rejected'>>({})
   const [areaCustomNames, setAreaCustomNames] = useState<Record<number, string>>({})
   const [areaEditingNew, setAreaEditingNew] = useState<Record<number, boolean>>({})
-  const [homeCount, setHomeCount] = useState<number>(0)
+  const [_homeCount, setHomeCount] = useState<number>(0)
   const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
   const [showCityDropdown, setShowCityDropdown] = useState(false)
   const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
@@ -124,7 +124,7 @@ export default function NewHomePage() {
           clearInterval(poll)
           setBulkJobId(null)
           setBulkUploadLoading(false)
-          const created = (status.results as any[])?.length || 0
+          const created = (status.results as unknown[])?.length || 0
           if (status.errors?.length > 0) {
             setBulkUploadError(
               language === 'el'
@@ -397,7 +397,7 @@ export default function NewHomePage() {
         }),
       })
 
-      let data: any = {}
+      let data: { error?: string; details?: string; home?: { key: string }; [key: string]: unknown } = {}
       const contentType = response.headers.get('content-type')
       const hasJsonContent = contentType && contentType.includes('application/json')
       
@@ -450,7 +450,7 @@ export default function NewHomePage() {
       }
 
       // Redirect to the newly created home's detail page
-      router.push(`/homes/${data.home.key}?from=my-listings`)
+      router.push(`/homes/${data.home?.key}?from=my-listings`)
     } catch (err) {
       console.error('Error creating listing:', err)
       setError(err instanceof Error ? err.message : getTranslation(language, 'somethingWentWrong'))
@@ -582,9 +582,10 @@ export default function NewHomePage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
                       <div key={photo} className="relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={photo}
-                          alt={`Photo ${index + 1}`}
+                          alt={`${index + 1}`}
                           className="w-full h-32 object-cover rounded-xl border border-[var(--border-subtle)]"
                         />
                         <button
@@ -1170,7 +1171,7 @@ export default function NewHomePage() {
                           const workbook = XLSX.read(arrayBuffer, { type: 'array' })
                           const sheetName = workbook.SheetNames[0]
                           const worksheet = workbook.Sheets[sheetName]
-                          const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+                          const data = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
 
                           if (data.length === 0) {
                             setBulkUploadError(language === 'el' ? 'Το αρχείο Excel είναι άδειο' : 'Excel file is empty')
@@ -1211,7 +1212,7 @@ export default function NewHomePage() {
                           } finally {
                             setAreaValidating(false)
                           }
-                        } catch (err) {
+                        } catch {
                           setBulkUploadError(language === 'el' ? 'Σφάλμα ανάγνωσης αρχείου Excel' : 'Error reading Excel file')
                           setExcelFile(null)
                         }
@@ -1310,7 +1311,7 @@ export default function NewHomePage() {
                       setBulkJobId(data.jobId)
                       setBulkJobProgress(0)
                       setBulkJobTotal(parsedHouses.length)
-                    } catch (err) {
+                    } catch {
                       setBulkUploadError(
                         language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'
                       )

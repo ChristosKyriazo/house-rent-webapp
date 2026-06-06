@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           )
         }
       }
-    } catch (error) {
+    } catch {
       // User not logged in, continue without userId
     }
 
@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Extract hard filters — skip if pre-extracted filters are provided (conversational mode)
     const listingMode = type === 'buy' || type === 'rent' ? type : undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let extractedFiltersResult: any
 
     if (preExtractedFilters) {
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Extract the filters (reasoning is extracted but not returned to client)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let extractedFilters: any = {}
     
     // Handle new format with reasoning
@@ -182,20 +184,22 @@ export async function POST(request: NextRequest) {
     delete extractedFilters.filterExtractionResponse
     
     // Capture filter extraction data for logging
-    filterExtractionPrompt = (extractedFiltersResult as any).filterExtractionPrompt || null
-    filterExtractionResponse = (extractedFiltersResult as any).filterExtractionResponse || null
-    
+    filterExtractionPrompt = (extractedFiltersResult as Record<string, unknown>).filterExtractionPrompt as string | null || null
+    filterExtractionResponse = (extractedFiltersResult as Record<string, unknown>).filterExtractionResponse as string | null || null
+
     // Separate filters into hard filters, soft filters, and distances for logging
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hardFilters: any = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const softFilters: any = {}
     
     // Hard filters: city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
     if (extractedFilters.city !== undefined && extractedFilters.city !== null) hardFilters.city = extractedFilters.city
     if (extractedFilters.country !== undefined && extractedFilters.country !== null) hardFilters.country = extractedFilters.country
     if (extractedFilters.area !== undefined && extractedFilters.area !== null) hardFilters.area = extractedFilters.area
-    if ((extractedFilters as any).districts !== undefined && (extractedFilters as any).districts !== null) hardFilters.districts = (extractedFilters as any).districts
+    if (extractedFilters.districts !== undefined && extractedFilters.districts !== null) hardFilters.districts = extractedFilters.districts
     if (extractedFilters.listingType !== undefined && extractedFilters.listingType !== null) hardFilters.listingType = extractedFilters.listingType
-    if ((extractedFilters as any).listingtype !== undefined && (extractedFilters as any).listingtype !== null) hardFilters.listingtype = (extractedFilters as any).listingtype
+    if (extractedFilters.listingtype !== undefined && extractedFilters.listingtype !== null) hardFilters.listingtype = extractedFilters.listingtype
     if (extractedFilters.minPrice !== undefined && extractedFilters.minPrice !== null) hardFilters.minPrice = extractedFilters.minPrice
     if (extractedFilters.maxPrice !== undefined && extractedFilters.maxPrice !== null) hardFilters.maxPrice = extractedFilters.maxPrice
     if (extractedFilters.minBedrooms !== undefined && extractedFilters.minBedrooms !== null) hardFilters.minBedrooms = extractedFilters.minBedrooms
@@ -205,7 +209,7 @@ export async function POST(request: NextRequest) {
     if (extractedFilters.minSize !== undefined && extractedFilters.minSize !== null) hardFilters.minSize = extractedFilters.minSize
     if (extractedFilters.maxSize !== undefined && extractedFilters.maxSize !== null) hardFilters.maxSize = extractedFilters.maxSize
     // Parking is hard filter only if not a soft preference
-    if (extractedFilters.parking !== undefined && extractedFilters.parking !== null && (extractedFilters as any).parkingSoftPreference !== true) {
+    if (extractedFilters.parking !== undefined && extractedFilters.parking !== null && extractedFilters.parkingSoftPreference !== true) {
       hardFilters.parking = extractedFilters.parking
     }
     if (extractedFilters.minFloor !== undefined && extractedFilters.minFloor !== null) hardFilters.minFloor = extractedFilters.minFloor
@@ -221,12 +225,12 @@ export async function POST(request: NextRequest) {
     if (extractedFilters.preferredAreas !== undefined && extractedFilters.preferredAreas !== null) softFilters.preferredAreas = extractedFilters.preferredAreas
     if (extractedFilters.vibePreference !== undefined && extractedFilters.vibePreference !== null) softFilters.vibePreference = extractedFilters.vibePreference
     if (extractedFilters.Safety !== undefined && extractedFilters.Safety !== null) softFilters.Safety = extractedFilters.Safety
-    if ((extractedFilters as any).parkingSoftPreference !== undefined && (extractedFilters as any).parkingSoftPreference !== null) {
-      softFilters.parkingSoftPreference = (extractedFilters as any).parkingSoftPreference
+    if (extractedFilters.parkingSoftPreference !== undefined && extractedFilters.parkingSoftPreference !== null) {
+      softFilters.parkingSoftPreference = extractedFilters.parkingSoftPreference
     }
     
     // When confidence is low, widen distance categories so ambiguous queries don't over-filter
-    const extractionConfidence = (extractedFiltersResult as any).confidence ?? 0.9
+    const extractionConfidence = (extractedFiltersResult as Record<string, unknown>).confidence as number ?? 0.9
     if (extractionConfidence < 0.7) {
       const widen = (cat: string | null | undefined) => {
         if (cat === 'Essential') return 'Strong'
@@ -253,6 +257,7 @@ export async function POST(request: NextRequest) {
     softFiltersJson = Object.keys(softFilters).length > 0 ? JSON.stringify(softFilters) : null
 
     // Step 2: Build database query with extracted filters
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {}
 
     // Match /api/homes: exclude finalized listings from browse
@@ -264,7 +269,7 @@ export async function POST(request: NextRequest) {
     } else if (type === 'rent') {
       where.listingType = 'rent'
     } else {
-      const listingTypeFilter = extractedFilters.listingType || (extractedFilters as any).listingtype
+      const listingTypeFilter = extractedFilters.listingType || extractedFilters.listingtype
       if (listingTypeFilter) {
         const listingTypeLower = String(listingTypeFilter).toLowerCase()
         if (listingTypeLower === 'buy' || listingTypeLower === 'sale' || listingTypeLower === 'sell') {
@@ -311,7 +316,7 @@ export async function POST(request: NextRequest) {
     // Parking is a HARD FILTER - if user mentions parking, filter database to only show matching homes
     // UNLESS it's marked as a soft preference (e.g., "parking would be nice but not essential")
     if (extractedFilters.parking !== undefined && extractedFilters.parking !== null) {
-      const isSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+      const isSoftPreference = extractedFilters.parkingSoftPreference === true
       if (!isSoftPreference) {
         // Only apply as hard filter if NOT a soft preference
         where.parking = extractedFilters.parking
@@ -460,8 +465,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Filter homes by districts (hard filter - multiple districts = OR condition)
-    if ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) {
-      const requestedDistricts = (extractedFilters as any).districts as string[]
+    if (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) {
+      const requestedDistricts = extractedFilters.districts as string[]
       
       // Get available districts from DB, filtered by city if city is provided
       let availableDistricts = allAreas
@@ -537,7 +542,7 @@ export async function POST(request: NextRequest) {
             if (user) {
               currentUserId = user.id
             }
-          } catch (error) {
+          } catch {
             // User not logged in, can't exclude
           }
         }
@@ -640,10 +645,10 @@ export async function POST(request: NextRequest) {
     // Soft criteria: distance categories, vibe preference
     // If ONLY hard filters are present, all matching properties should get 100%
     
-    const hasHardFilters = 
+    const hasHardFilters =
       extractedFilters.city || extractedFilters.country || extractedFilters.area ||
-      ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) ||
-      extractedFilters.listingType || (extractedFilters as any).listingtype ||
+      (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) ||
+      extractedFilters.listingType || extractedFilters.listingtype ||
       extractedFilters.minPrice || extractedFilters.maxPrice ||
       extractedFilters.minBedrooms || extractedFilters.maxBedrooms ||
       extractedFilters.minBathrooms || extractedFilters.maxBathrooms ||
@@ -657,8 +662,8 @@ export async function POST(request: NextRequest) {
     // Check if country is the ONLY hard filter - if so, return nothing
     const onlyCountryFilter = extractedFilters.country && 
       !extractedFilters.city && !extractedFilters.area &&
-      !((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) &&
-      !extractedFilters.listingType && !(extractedFilters as any).listingtype &&
+      !(extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) &&
+      !extractedFilters.listingType && !extractedFilters.listingtype &&
       !extractedFilters.minPrice && !extractedFilters.maxPrice &&
       !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
       !extractedFilters.minBathrooms && !extractedFilters.maxBathrooms &&
@@ -670,7 +675,7 @@ export async function POST(request: NextRequest) {
       !extractedFilters.minYearRenovated && !extractedFilters.maxYearRenovated
     
     // Check if we have soft criteria (distance categories, safety, vibe preference, or parking soft preference)
-    const parkingSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+    const parkingSoftPreference = extractedFilters.parkingSoftPreference === true
     const hasSoftCriteria = 
       (extractedFilters.Metro && extractedFilters.Metro !== 'Not mentioned') ||
       (extractedFilters.Bus && extractedFilters.Bus !== 'Not mentioned') ||
@@ -702,8 +707,10 @@ export async function POST(request: NextRequest) {
       homes.forEach(home => {
         let score = 55 // base
         // Energy class (0-22 pts)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         score += energyBonus[(home as any).energyClass || ''] ?? 4
         // Recency — take the best of yearBuilt / yearRenovated (0-15 pts)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const yr = Math.max((home as any).yearBuilt || 0, (home as any).yearRenovated || 0)
         if (yr >= 2020) score += 15
         else if (yr >= 2015) score += 12
@@ -714,14 +721,18 @@ export async function POST(request: NextRequest) {
         // Price efficiency — closer to budget midpoint = better (0-8 pts)
         const maxP = extractedFilters.maxPrice as number | undefined
         const minP = extractedFilters.minPrice as number | undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (maxP && (home as any).pricePerMonth) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ratio = (home as any).pricePerMonth / maxP
           if (ratio < 0.55) score += 8
           else if (ratio < 0.70) score += 6
           else if (ratio < 0.82) score += 4
           else if (ratio < 0.92) score += 2
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } else if (minP && maxP && (home as any).pricePerMonth) {
           const mid = (minP + maxP) / 2
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const dist = Math.abs((home as any).pricePerMonth - mid) / (maxP - minP)
           score += Math.max(0, Math.round((1 - dist) * 6))
         }
@@ -798,7 +809,7 @@ export async function POST(request: NextRequest) {
         const hasSafety = safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned'
         const hasVibe = !!vibePreference
         const hasParking = parkingSoftPreference
-        const hasLocationPreference = (extractedFilters as any).hasLocationPreference === true
+        const hasLocationPreference = extractedFilters.hasLocationPreference === true
         
         // Count how many components we have
         const componentCount = [hasDistance, hasSafety, hasVibe, hasParking].filter(Boolean).length
@@ -1074,7 +1085,9 @@ export async function POST(request: NextRequest) {
       homes.forEach(home => {
         if (disqualifierMap.has(home.id)) return
         // photoTagsArray is the canonical column; JSON-stringify it for calculatePhotoBonus compatibility
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const tagsRaw = Array.isArray((home as any).photoTagsArray) && (home as any).photoTagsArray.length > 0
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ? JSON.stringify((home as any).photoTagsArray)
           : null
         const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
@@ -1087,6 +1100,7 @@ export async function POST(request: NextRequest) {
       // Recency bonus — new listings get a visibility boost to prevent cold-start invisibility
       homes.forEach(home => {
         if (disqualifierMap.has(home.id)) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ageMs = Date.now() - new Date((home as any).createdAt).getTime()
         const ageDays = ageMs / (1000 * 60 * 60 * 24)
         const recencyBonus = ageDays < 7 ? 15 : ageDays < 30 ? 8 : ageDays < 60 ? 3 : 0
@@ -1194,6 +1208,7 @@ export async function POST(request: NextRequest) {
           // JS cosine fallback (loads embeddings from JSON column)
           for (const home of homes) {
             if (disqualifierMap.has(home.id)) continue
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const stored = (home as any).embedding
             if (!Array.isArray(stored)) continue
             const sim = cosineSimilarity(queryEmbedding, stored as number[])

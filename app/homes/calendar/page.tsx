@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
-import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { getHomeTitle } from '@/lib/area-utils'
 import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
@@ -47,7 +46,6 @@ interface Booking {
 }
 
 export default function CalendarPage() {
-  const router = useRouter()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -526,6 +524,7 @@ function RescheduleModal({
   onSuccess: () => void
   language: 'el' | 'en'
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [availabilities, setAvailabilities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [rescheduling, setRescheduling] = useState(false)
@@ -575,6 +574,7 @@ function RescheduleModal({
   }, [homeKey])
 
   // Generate half-hour time slots
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const generateTimeSlots = (availability: any) => {
     const slots: Array<{ time: string; availabilityId: number; isBooked: boolean }> = []
     const [startHour, startMin] = availability.startTime.split(':').map(Number)
@@ -610,6 +610,7 @@ function RescheduleModal({
       // Check if any booking overlaps with this time slot (excluding the current booking being rescheduled)
       // First check bookings for this specific home
       if (!isBooked && availability.bookings && availability.bookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.bookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -637,6 +638,7 @@ function RescheduleModal({
       
       // Also check all user/owner bookings across all properties (if available)
       if (!isBooked && availability.allUserAndOwnerBookings && availability.allUserAndOwnerBookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.allUserAndOwnerBookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -664,6 +666,7 @@ function RescheduleModal({
       
       // Also check all user/owner bookings across all properties (if available)
       if (!isBooked && availability.allUserAndOwnerBookings && availability.allUserAndOwnerBookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.allUserAndOwnerBookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -753,6 +756,7 @@ function RescheduleModal({
     try {
       const dateStr = selectedDate
       const currentBookingId = booking.id
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const matchingAvailability = availabilities.find((av: any) => {
         const avDateStr = av.date.includes('T') ? av.date.split('T')[0] : av.date
         if (avDateStr !== dateStr) return false
@@ -776,6 +780,7 @@ function RescheduleModal({
         const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hasOverlappingBooking = av.bookings.some((b: any) => {
             // Exclude the current booking being rescheduled
             if (b.id === currentBookingId) return false

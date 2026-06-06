@@ -32,6 +32,7 @@ export async function processBulkUploadJob(jobId: string) {
     const excelBuffer = await readFile(job.filePath)
     const workbook = XLSX.read(excelBuffer, { type: 'buffer' })
     const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = XLSX.utils.sheet_to_json(worksheet) as any[]
 
     const [uniqueHeatingCategories, uniqueHeatingAgents, uniqueEnergyClasses] = await Promise.all([
@@ -211,7 +212,7 @@ export async function processBulkUploadJob(jobId: string) {
         if (housePhotos.length > 0 && openai) {
           photoTagsList = await analyzePhotosForTags(housePhotos, openai)
         }
-        const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
+        const _photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
 
         let areaSafety: number | null = null
         let areaVibe: string | null = null
@@ -290,9 +291,9 @@ export async function processBulkUploadJob(jobId: string) {
         }
 
         results.push({ row: rowNumber, title, key: home.key })
-      } catch (err: any) {
+      } catch (err: unknown) {
         log.error({ err, rowNumber }, 'Error processing bulk upload row')
-        errors.push(`Row ${rowNumber}: ${err.message || 'Unknown error'}`)
+        errors.push(`Row ${rowNumber}: ${(err as Error)?.message || 'Unknown error'}`)
       }
 
       // Update progress after each row
@@ -307,7 +308,9 @@ export async function processBulkUploadJob(jobId: string) {
       data: {
         status: 'completed',
         progress: data.length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         results: results as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         errors: errors.length > 0 ? (errors as any) : null,
       },
     })
@@ -316,11 +319,12 @@ export async function processBulkUploadJob(jobId: string) {
     try {
       await rm(dirname(job.filePath), { recursive: true, force: true })
     } catch { /* ignore cleanup errors */ }
-  } catch (err: any) {
+  } catch (err: unknown) {
     log.error({ err, jobId }, 'Bulk upload job failed')
     await prisma.bulkUploadJob.update({
       where: { id: jobId },
-      data: { status: 'failed', errors: [err.message || 'Job failed'] as any },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { status: 'failed', errors: [(err as Error)?.message || 'Job failed'] as any },
     }).catch(() => {})
   }
 }
@@ -348,7 +352,7 @@ export async function processEmbeddingQueue(
       homeId
     ).catch(() => {}) // silently skip if extension not yet installed
     await db.embeddingQueue.update({ where: { homeId }, data: { status: 'completed' } })
-  } catch (err: any) {
+  } catch (err: unknown) {
     const current = await db.embeddingQueue.findUnique({ where: { homeId } })
     const failCount = (current?.failCount ?? 0) + 1
     await db.embeddingQueue.update({
@@ -356,7 +360,7 @@ export async function processEmbeddingQueue(
       data: {
         status: failCount >= MAX_RETRIES ? 'failed' : 'pending',
         failCount,
-        lastError: err.message || 'Unknown error',
+        lastError: err instanceof Error ? err.message : 'Unknown error',
       },
     })
   }

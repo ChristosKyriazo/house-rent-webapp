@@ -374,11 +374,11 @@ export default function EditHomePage() {
 
       // Read response body as text first (can only be read once)
       const responseText = await response.text()
-      let data: any = {}
-      
+      let data: { error?: string; details?: string; [key: string]: unknown } = {}
+
       try {
         data = responseText ? JSON.parse(responseText) : {}
-      } catch (parseError) {
+      } catch {
         console.error('Failed to parse JSON response:', responseText)
         setError(getTranslation(language, 'updateListingFailed'))
         return
@@ -399,7 +399,7 @@ export default function EditHomePage() {
       }
 
       router.push(`/homes/${home?.key || homeId}?from=my-listings`)
-    } catch (err) {
+    } catch {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)
@@ -563,9 +563,10 @@ export default function EditHomePage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
                       <div key={photo} className="relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={photo}
-                          alt={`Photo ${index + 1}`}
+                          alt={`${index + 1}`}
                           className="w-full h-32 object-cover rounded-xl border border-[var(--border-subtle)]"
                         />
                         <button

@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause
-    const whereClause: any = {
+    const whereClause: Record<string, unknown> = {
       OR: [
         { userId: user.id }, // Bookings where user is the attendee
         { ownerId: user.id }, // Bookings where user is the owner
@@ -198,7 +198,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Build where clause for final booking query
-    const finalWhereClause: any = {
+    const finalWhereClause: Record<string, unknown> = {
       OR: [
         { userId: user.id }, // Bookings where user is the attendee
         { ownerId: user.id }, // Bookings where user is the owner

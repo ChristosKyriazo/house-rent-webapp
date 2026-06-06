@@ -117,7 +117,7 @@ export async function manageInquiryApproval({
   return { message: 'Inquiry dismissed' }
 }
 
-export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: number, actorRole?: string | null) {
+export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: number, _actorRole?: string | null) {
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     include: {

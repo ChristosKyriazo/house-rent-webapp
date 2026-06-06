@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
 
     // First, check if the provided city/country values exist in the database
     // This helps us decide whether to apply filters or not
-    let cityFilter: any = null
-    let countryFilter: any = null
+    let cityFilter: Record<string, unknown> | null = null
+    let countryFilter: Record<string, unknown> | null = null
 
     if (city && city.trim().length > 0) {
       const cityValue = city.trim()
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build base where clause for city and country filters
-    const baseWhere: any = {}
+    const baseWhere: { AND?: object[] } = {}
     
     // Add filters only if they were found in the database
     if (cityFilter || countryFilter) {

@@ -8,6 +8,7 @@ const mockPrisma = {
   inquiry: { findUnique: vi.fn(), findFirst: vi.fn() },
   notification: { create: vi.fn(), updateMany: vi.fn() },
   $transaction: vi.fn(),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 vi.mock('@/lib/auth', () => ({ getCurrentUser: mockGetCurrentUser }))
@@ -39,6 +40,7 @@ describe('POST /api/bookings — conflict and auth cases', () => {
 
   it('returns 400 when owner ID is missing and no availabilityId', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.$transaction.mockImplementation(async (fn: any) => {
       return fn({
         booking: { count: vi.fn().mockResolvedValue(0), create: vi.fn() },
@@ -59,6 +61,7 @@ describe('POST /api/bookings — conflict and auth cases', () => {
 
   it('returns 400 on user booking conflict', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.$transaction.mockImplementation(async (fn: any) => {
       return fn({
         booking: {
@@ -78,6 +81,7 @@ describe('POST /api/bookings — conflict and auth cases', () => {
 
   it('returns 400 on owner booking conflict', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.$transaction.mockImplementation(async (fn: any) => {
       return fn({
         booking: {

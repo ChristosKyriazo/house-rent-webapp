@@ -58,7 +58,7 @@ export async function GET(
           )
         }
       }
-    } catch (error) {
+    } catch {
       // If user is not authenticated, continue normally
     }
 
@@ -208,6 +208,7 @@ export async function PUT(
       ) || existingHome.country.trim().toLowerCase() !== englishCountry.trim().toLowerCase()
 
     // Prepare update data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       title: title.trim(),
       description: description?.trim() || null,

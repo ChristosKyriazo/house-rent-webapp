@@ -8,6 +8,7 @@ const { mockGetCurrentUser, mockPrisma } = vi.hoisted(() => {
     availability: { findMany: vi.fn() },
     home: { findMany: vi.fn() },
     inquiry: { findUnique: vi.fn() },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
   return { mockGetCurrentUser, mockPrisma }
 })

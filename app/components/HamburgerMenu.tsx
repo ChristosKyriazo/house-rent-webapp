@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -158,6 +158,7 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
     .filter(item => item.href !== '/homes/analytics' || subscriptionTier !== 'free')
     .map(item => ({
       ...item,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       label: getTranslation(language, item.labelKey as any)
     }))
 
@@ -177,21 +178,25 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
       }
     }
     
+     
     menuItems.splice(insertIndex, 0, {
       href: inquiriesHref,
       labelKey: 'inquiries',
       icon: '📬',
       label: getTranslation(language, 'inquiries'),
       roles: [], // roles not used after initial filter
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
     // Add approved inquiries link after inquiries
+     
     menuItems.splice(insertIndex + 1, 0, {
       href: '/homes/approved',
       labelKey: 'approvedInquiries',
       icon: '✅',
       label: getTranslation(language, 'approvedInquiries'),
       roles: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
   }

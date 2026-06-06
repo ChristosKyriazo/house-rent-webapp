@@ -401,7 +401,7 @@ function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }
 }
 
 // ─── Plus: basic view + blurred Pro teaser ────────────────────────────────────
-function PlusView({ data, period, isEl }: {
+function PlusView({ data, period: _period, isEl }: {
   data: PortfolioData; period: 'day' | 'week' | 'month'; isEl: boolean
 }) {
   const isEl_ = isEl

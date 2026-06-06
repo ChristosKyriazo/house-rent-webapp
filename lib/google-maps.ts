@@ -79,7 +79,7 @@ async function attemptGeocode(address: string, apiKey: string): Promise<Coordina
     // Don't cache failures for long — a transient API outage shouldn't block distances for 24 h
     geocodeCache.set(address, { coords: null, expiresAt: Date.now() + GEOCODE_CACHE_NULL_TTL_MS })
     return null
-  } catch (error) {
+  } catch {
     // Don't cache errors at all so the next request retries immediately
     return null
   }
@@ -131,6 +131,7 @@ async function geocodeAddress(
  * Validate that a place matches the exact category we're looking for
  * Returns true only if the primary type matches exactly
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isValidPlaceType(place: any, requiredType: string): boolean {
   const placeTypes = place.types || []
   if (placeTypes.length === 0) return false
@@ -245,6 +246,7 @@ async function findClosestPlace(
     const data = await response.json()
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const validPlaces = data.results.filter((place: any) => isValidPlaceType(place, placeType))
 
       if (validPlaces.length === 0) {
@@ -253,12 +255,14 @@ async function findClosestPlace(
 
       // Calculate distance for all valid results and find the closest one
       type PlaceDistance = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         place: any
         distance: number
         coordinates: Coordinates
         name: string | undefined
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const placesWithDistance: PlaceDistance[] = validPlaces.map((place: any) => {
         const placeLat = place.geometry.location.lat
         const placeLng = place.geometry.location.lng
@@ -333,6 +337,7 @@ async function findClosestUniversity(
       // 1. Valid university type (using isValidPlaceType)
       // 2. Universities that match names in our database
       type UniversityDistance = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         place: any
         distance: number
         coordinates: Coordinates
@@ -340,6 +345,7 @@ async function findClosestUniversity(
       }
 
       const validUniversities: UniversityDistance[] = data.results
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((place: any) => {
           // First check if it's a valid university type
           if (!isValidPlaceType(place, 'university')) {
@@ -360,6 +366,7 @@ async function findClosestUniversity(
           
           return false
         })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((place: any) => {
           const placeLat = place.geometry.location.lat
           const placeLng = place.geometry.location.lng
@@ -397,7 +404,7 @@ async function findClosestUniversity(
       // no universities found nearby
       return { distance: null, coordinates: null }
     }
-  } catch (error) {
+  } catch {
     // error finding closest university
     return { distance: null, coordinates: null }
   }

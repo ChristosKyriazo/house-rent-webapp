@@ -48,6 +48,7 @@ const FILTER_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export async function extractFiltersWithAI(
   query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   openai: any
 ): Promise<CachedFilterResult> {
   const callStart = Date.now()
@@ -130,6 +131,7 @@ export type ListingSearchMode = 'rent' | 'buy'
  */
 export async function extractFiltersHybrid(
   query: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   openai: any | null,
   options?: { listingMode?: ListingSearchMode }
 ): Promise<ExtractedFilters> {

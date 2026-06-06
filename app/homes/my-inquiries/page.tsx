@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { getTranslation, translateValue } from '@/lib/translations'
+import { getTranslation } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { SkeletonList } from '@/app/components/SkeletonCard'
 
@@ -149,6 +149,7 @@ export default function UserInquiriesPage() {
                 {/* Photo */}
                 {home.photos && home.photos.length > 0 ? (
                   <div className="relative h-48 w-full overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={home.photos[0]}
                       alt={getHomeTitle(language, home)}

@@ -130,11 +130,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ inquiry }, { status: 201 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error({ err: error }, 'Create inquiry error')
-    
+
     // Handle Prisma unique constraint violation
-    if (error?.code === 'P2002') {
+    if ((error as { code?: string })?.code === 'P2002') {
       return NextResponse.json(
         { error: 'Inquiry already exists' },
         { status: 400 }

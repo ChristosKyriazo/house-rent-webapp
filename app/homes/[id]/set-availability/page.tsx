@@ -196,8 +196,9 @@ function SetAvailabilityPage() {
               <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Contact and Scheduling Details</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Name</label>
+                  <label htmlFor="owner-name" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Name</label>
                   <input
+                    id="owner-name"
                     type="text"
                     value={ownerDetails.name}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, name: e.target.value })}
@@ -205,8 +206,9 @@ function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Email</label>
+                  <label htmlFor="owner-email" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Email</label>
                   <input
+                    id="owner-email"
                     type="email"
                     value={ownerDetails.email}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, email: e.target.value })}
@@ -214,8 +216,9 @@ function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Phone</label>
+                  <label htmlFor="owner-phone" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Phone</label>
                   <input
+                    id="owner-phone"
                     type="text"
                     value={ownerDetails.phone}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, phone: e.target.value })}
@@ -223,8 +226,9 @@ function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Appointment Duration</label>
+                  <label htmlFor="owner-appt-duration" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Appointment Duration</label>
                   <select
+                    id="owner-appt-duration"
                     value={ownerDetails.appointmentThresholdMinutes}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, appointmentThresholdMinutes: Number(e.target.value) })}
                     className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"

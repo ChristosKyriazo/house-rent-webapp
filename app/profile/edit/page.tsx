@@ -76,7 +76,7 @@ export default function EditProfilePage() {
 
       // Success - force a full page reload to ensure NavBar gets updated role
       window.location.href = '/profile'
-    } catch (err) {
+    } catch {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)

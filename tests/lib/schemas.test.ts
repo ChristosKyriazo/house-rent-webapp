@@ -32,7 +32,7 @@ describe('createBookingSchema', () => {
   })
 
   it('allows optional fields to be absent', () => {
-    const { ownerId, ...minimal } = valid
+    const { ownerId: _ownerId, ...minimal } = valid
     expect(createBookingSchema.safeParse(minimal).success).toBe(true)
   })
 })
@@ -51,7 +51,7 @@ describe('createHomeSchema', () => {
   })
 
   it('rejects missing required fields', () => {
-    const { city, ...missing } = valid
+    const { city: _city, ...missing } = valid
     expect(createHomeSchema.safeParse(missing).success).toBe(false)
   })
 

@@ -1,5 +1,5 @@
 // Simple function to generate unique keys (CUID-like format)
-function generateKey(index) {
+function generateKey(_index) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let key = 'cl';
   for (let i = 0; i < 24; i++) {

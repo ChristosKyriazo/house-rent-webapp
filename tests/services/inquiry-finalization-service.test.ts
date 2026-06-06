@@ -14,6 +14,7 @@ const mockPrisma = {
     create: vi.fn(),
   },
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockPrisma)),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 vi.mock('@/lib/prisma', () => ({

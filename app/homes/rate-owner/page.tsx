@@ -7,7 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import RatingForm from '@/app/components/RatingForm'
-import { getHomeTitle } from '@/lib/area-utils'
+import { getHomeTitle as _getHomeTitle } from '@/lib/area-utils'
 
 interface PendingRating {
   actionType: 'movein_house' | 'moveout_house'
@@ -48,7 +48,7 @@ export default function RateOwnerPage() {
     fetchData()
   }, [router])
 
-  const handleSelect = (item: PendingRating) => setSelected(item)
+  const _handleSelect = (item: PendingRating) => setSelected(item)
 
   const moveinSections = [
     {

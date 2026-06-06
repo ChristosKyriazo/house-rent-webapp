@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, afterEach } from 'vitest'
 
 describe('feature flags', () => {
   const origEnv = { ...process.env }
@@ -19,7 +19,7 @@ describe('feature flags', () => {
 
   it('disables feature on exact string "false"', async () => {
     process.env.FEATURE_AI_SEARCH = 'false'
-    const mod = await import('@/lib/features')
+    await import('@/lib/features')
     // features is evaluated at module load; test the isEnabled logic directly
     const isEnabled = (v: string | undefined) => v !== 'false'
     expect(isEnabled('false')).toBe(false)

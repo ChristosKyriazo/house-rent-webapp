@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       let cUser
       try {
         cUser = await currentUser()
-      } catch (clerkError: any) {
+      } catch (clerkError: unknown) {
         log.error({ err: clerkError }, 'Error fetching Clerk user')
         return NextResponse.json(
           { error: 'Failed to fetch user information' },
@@ -71,9 +71,9 @@ export async function POST(request: NextRequest) {
             occupation: role === 'broker' ? 'Broker' : null, // Auto-set occupation for brokers
           },
         })
-      } catch (createError: any) {
+      } catch (createError: unknown) {
         // Handle race condition - user might have been created by another request
-        if (createError?.code === 'P2002') {
+        if ((createError as { code?: string })?.code === 'P2002') {
           user = await prisma.user.findUnique({
             where: { clerkUserId: userId },
           })
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Update user role (or create was already done with correct role)
     // If setting role to broker, also set occupation to "Broker"
-    const updateData: any = { role }
+    const updateData: { role: string; occupation?: string } = { role }
     if (role === 'broker') {
       updateData.occupation = 'Broker'
     }

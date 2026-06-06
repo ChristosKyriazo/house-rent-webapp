@@ -8,6 +8,7 @@ const { mockPrisma } = vi.hoisted(() => {
     notification: { create: vi.fn(), updateMany: vi.fn() },
     finalization: { create: vi.fn(), update: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockPrisma)),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
   return { mockPrisma }
 })
@@ -131,6 +132,7 @@ describe('respondToFinalization', () => {
     await respondToFinalization(1, 10, 'approve')
 
     const rateCalls = mockPrisma.notification.create.mock.calls.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (c: any) => c[0].data.type === 'rate'
     )
     expect(rateCalls.length).toBe(1)

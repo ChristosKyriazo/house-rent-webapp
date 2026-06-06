@@ -1,11 +1,9 @@
 import { prisma } from './prisma'
 
 // Score shapes per rating type (see schema comments for reference)
-type ViewingTenantScores = { experience: number }
 type ViewingBrokerScores = { punctual: number; helpful: number; listingMatch: number }
 type MoveinHouseScores   = { accuracy: number; condition: number; handover: number }
 type MoveoutHouseScores  = { overallCondition: number; recommend: number; ownerFair: number; moveoutHandling: number }
-type MoveoutTenantScores = { propertyCare: number; rulesPayment: number; wouldRentAgain: number }
 
 function avg(nums: number[]): number | null {
   if (nums.length === 0) return null

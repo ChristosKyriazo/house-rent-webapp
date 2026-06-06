@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
           try {
             const parsed = JSON.parse(inquiry.home.photos)
             photos = Array.isArray(parsed) ? parsed : []
-          } catch (e) {
+          } catch {
             photos = []
           }
         }
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
         if (inquiry.contactInfo) {
           try {
             contactInfo = JSON.parse(inquiry.contactInfo)
-          } catch (e) {
+          } catch {
             contactInfo = null
           }
         }
@@ -380,7 +380,7 @@ export async function GET(request: NextRequest) {
           try {
             const parsed = JSON.parse(home.photos)
             photos = Array.isArray(parsed) ? parsed : []
-          } catch (e) {
+          } catch {
             photos = []
           }
         }
@@ -390,7 +390,7 @@ export async function GET(request: NextRequest) {
         if (inquiry.contactInfo) {
           try {
             contactInfo = JSON.parse(inquiry.contactInfo)
-          } catch (e) {
+          } catch {
             contactInfo = null
           }
         }

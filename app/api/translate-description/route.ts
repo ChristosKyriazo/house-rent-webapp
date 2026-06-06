@@ -34,10 +34,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       translated: translated || description,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error({ err: error }, 'Error in translate-description API')
     return NextResponse.json(
-      { error: error.message || 'Failed to translate description' },
+      { error: (error as Error).message || 'Failed to translate description' },
       { status: 500 }
     )
   }

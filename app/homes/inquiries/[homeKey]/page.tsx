@@ -178,7 +178,7 @@ export default function HomeInquiriesPage() {
   // Find the first unapproved and not dismissed inquiry (oldest)
   const unapprovedInquiries = inquiries.filter(inq => !inq.approved && !inq.dismissed)
   const currentInquiry = unapprovedInquiries.length > 0 ? unapprovedInquiries[0] : null
-  const currentIndex = currentInquiry ? inquiries.findIndex(inq => inq.id === currentInquiry.id) : -1
+  const _currentIndex = currentInquiry ? inquiries.findIndex(inq => inq.id === currentInquiry.id) : -1
 
   if (loading) {
     return (
@@ -235,7 +235,7 @@ export default function HomeInquiriesPage() {
           <div className="space-y-4">
             {inquiries
               .filter(inq => !inq.dismissed) // Filter out dismissed inquiries
-              .map((inquiry, index) => {
+              .map((inquiry, _index) => {
               const isCurrent = inquiry.id === currentInquiry?.id
               const isApproved = inquiry.approved
               const isGrayedOut = !isCurrent && !isApproved
@@ -360,8 +360,9 @@ export default function HomeInquiriesPage() {
 
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-in date <span className="text-red-400">*</span></label>
+                <label htmlFor="move-in-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-in date <span className="text-red-400">*</span></label>
                 <input
+                  id="move-in-date"
                   type="date"
                   value={moveInDate}
                   onChange={e => setMoveInDate(e.target.value)}
@@ -370,8 +371,9 @@ export default function HomeInquiriesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-out date <span className="text-[var(--text-muted)] font-normal">(optional)</span></label>
+                <label htmlFor="move-out-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-out date <span className="text-[var(--text-muted)] font-normal">(optional)</span></label>
                 <input
+                  id="move-out-date"
                   type="date"
                   value={moveOutDate}
                   onChange={e => setMoveOutDate(e.target.value)}

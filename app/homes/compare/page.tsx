@@ -130,6 +130,7 @@ function CompareContent() {
                     <th key={home.key} className="p-3 text-left align-top min-w-[200px]">
                       <Link href={`/homes/${home.key}`} className="group block">
                         {photos[0] && (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={photos[0]} alt={home.title} className="mb-3 h-36 w-full rounded-2xl object-cover" />
                         )}
                         <p className="font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors line-clamp-2">

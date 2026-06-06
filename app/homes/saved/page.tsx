@@ -99,6 +99,7 @@ export default function SavedHomesPage() {
                 >
                   <div className="flex gap-4 items-start">
                     {thumb && (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={thumb}
                         alt={home.title}

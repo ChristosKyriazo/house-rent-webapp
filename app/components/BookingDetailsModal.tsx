@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { useRole } from '@/app/contexts/RoleContext'
+
 import { getTranslation } from '@/lib/translations'
 import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import Link from 'next/link'
@@ -189,8 +189,6 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
   }
 
   const otherPerson = isOwner ? booking.user : booking.owner
-  const ratingType = isOwner ? 'renter' : 'owner'
-  
   // For user viewing broker: use house ratings, otherwise use person ratings
   const relevantRating = isUserViewing && isBroker 
     ? houseRatings?.houseOwnerRating 

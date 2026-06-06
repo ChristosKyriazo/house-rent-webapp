@@ -68,8 +68,8 @@ export default function RatingForm({
     setError(null)
     try {
       await onSubmit(scores, comment)
-    } catch (err: any) {
-      setError(err?.message ?? 'Something went wrong.')
+    } catch (err: unknown) {
+      setError((err as Error)?.message ?? 'Something went wrong.')
     } finally {
       setSubmitting(false)
     }
@@ -97,10 +97,11 @@ export default function RatingForm({
 
       {allowComment && (
         <div>
-          <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+          <label htmlFor="rating-comment" className="block text-sm font-medium text-[var(--text-muted)] mb-2">
             Written review <span className="font-normal">(optional)</span>
           </label>
           <textarea
+            id="rating-comment"
             value={comment}
             onChange={e => setComment(e.target.value.slice(0, commentMaxLength))}
             placeholder={commentPlaceholder}

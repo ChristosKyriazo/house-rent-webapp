@@ -15,10 +15,8 @@ test.describe('Saved homes page (unauthenticated)', () => {
   test('redirects or shows auth prompt when not logged in', async ({ page }) => {
     await page.goto('/homes/saved')
     // Should either redirect to login OR show an empty state (API returns 401 → empty list)
-    const isLoginPage = page.url().includes('/login') || page.url().includes('/sign-in')
     const hasBody = await page.locator('body').isVisible()
     expect(hasBody).toBe(true)
-    expect(page.getByText(/something went wrong/i)).not.toBeVisible
   })
 })
 

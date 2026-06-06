@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await excelFile.arrayBuffer()
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
     const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+    const data = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
 
     if (data.length === 0) {
       return NextResponse.json({ error: 'Excel file is empty' }, { status: 400 })
@@ -120,10 +120,10 @@ export async function POST(request: NextRequest) {
     )
 
     return NextResponse.json({ jobId: job.id })
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error({ err: error }, 'Bulk upload error')
     return NextResponse.json(
-      { error: error.message || 'Failed to start bulk upload' },
+      { error: (error as Error).message || 'Failed to start bulk upload' },
       { status: 500 }
     )
   }

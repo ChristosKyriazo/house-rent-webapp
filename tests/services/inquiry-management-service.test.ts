@@ -11,6 +11,7 @@ const mockPrisma = {
     create: vi.fn(),
     updateMany: vi.fn(),
   },
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 vi.mock('@/lib/prisma', () => ({

@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const workbook = XLSX.read(arrayBuffer, { type: 'array' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+    const data = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
 
     const allAreas = await prisma.area.findMany({
       select: { name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
@@ -120,9 +120,9 @@ export async function POST(request: NextRequest) {
       valid: unknownAreas.length === 0,
       unknownAreas,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || 'Validation failed' },
+      { error: (error as Error).message || 'Validation failed' },
       { status: 500 }
     )
   }

@@ -5,14 +5,11 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
-import { getTranslation, translateValue } from '@/lib/translations'
-import { greekUppercaseNoAnnotations } from '@/lib/utils'
-import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/area-utils'
-import TranslatedDescription from '@/app/components/TranslatedDescription'
+import { getTranslation } from '@/lib/translations'
+import { getAreaName as _getAreaName } from '@/lib/area-utils'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
 import { ManualFiltersPanel } from '@/app/homes/components/ManualFiltersPanel'
-import { SaveButton } from '@/app/components/SaveButton'
 import { HomeCard } from '@/app/components/HomeCard'
 
 const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
@@ -85,7 +82,7 @@ function HomesPageInner() {
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
-  const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [allAreas, _setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   
   // City autocomplete state
@@ -180,10 +177,12 @@ function HomesPageInner() {
   // Restore on mount - MUST run before clearing effects
   useEffect(() => {
     restoreSearchState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Restore when navigating back to /homes page (e.g., from house detail page)
   // This should run BEFORE the clearing effect
+   
   useEffect(() => {
     if (pathname === '/homes' && homesRef.current.length === 0) {
       // Small delay to ensure this runs before clearing effect
@@ -192,25 +191,29 @@ function HomesPageInner() {
       }, 0)
       return () => clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
   // Restore when window gets focus (user navigates back)
+   
   useEffect(() => {
     const handleFocus = () => {
       if (pathname === '/homes' && homesRef.current.length === 0) {
         restoreSearchState()
       }
     }
-    
+
     window.addEventListener('focus', handleFocus)
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
-  
+
   // Clear AI search results when filterType changes or is removed from URL
   // BUT: Don't clear if we have stored state in sessionStorage (user is returning from detail page)
   // This effect should run AFTER restoration effects
+   
   useEffect(() => {
     if (!isInitialized.current) return
     
@@ -239,6 +242,7 @@ function HomesPageInner() {
   }, [searchParams, filterType, isAISearchActive])
 
   // Update URL when searchType or filterType changes (but not on initial mount)
+   
   useEffect(() => {
     if (!isInitialized.current) return
     
@@ -258,6 +262,7 @@ function HomesPageInner() {
       const newUrl = newSearch ? `/homes?${newSearch}` : '/homes'
       router.replace(newUrl, { scroll: false })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchType, filterType, router])
 
   // Check user role and fetch inquiries on mount
@@ -480,7 +485,7 @@ function HomesPageInner() {
     }
   }
 
-  const handleAISearch = async () => {
+  const _handleAISearch = async () => {
     if (!aiQuery.trim()) return
     
     setLoading(true)
@@ -526,7 +531,7 @@ function HomesPageInner() {
     }
   }
 
-  const handleNewAISearch = () => {
+  const _handleNewAISearch = () => {
     setIsAISearchActive(false) // Reset AI search state
     // Don't clear the query - keep the previous one so user can see/edit it
     // setAiQuery('') // Clear the query

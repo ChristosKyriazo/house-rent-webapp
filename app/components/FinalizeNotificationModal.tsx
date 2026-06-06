@@ -36,7 +36,9 @@ export default function FinalizeNotificationModal({
 }: FinalizeNotificationModalProps) {
   const { language } = useLanguage()
   const router = useRouter()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [home, setHome] = useState<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sender, setSender] = useState<any>(null)
   const [finalizationDetails, setFinalizationDetails] = useState<FinalizationDetails | null>(null)
   const [loading, setLoading] = useState(true)

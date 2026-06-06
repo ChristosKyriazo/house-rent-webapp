@@ -144,7 +144,9 @@ export async function processAIChatTurn(
   ]
 
   let savedKey: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messagesJson = updatedHistory as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filtersJson = mergedFilters as any
 
   if (conversation) {
@@ -188,6 +190,7 @@ function mergeFilters(
     ) {
       delete (merged as Record<string, unknown>)[key]
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(merged as any)[key] = v
     }
   }

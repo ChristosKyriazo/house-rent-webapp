@@ -140,6 +140,7 @@ export function matchParkingValue(input: string | null | undefined): boolean | n
  * Get unique non-null values from database for a specific field
  */
 export async function getUniqueFieldValues(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prisma: any,
   field: string
 ): Promise<string[]> {
@@ -153,9 +154,11 @@ export async function getUniqueFieldValues(
       },
       distinct: [field]
     })
-    
+
     return homes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((home: any) => home[field])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter((value: any): value is string => value !== null && value !== undefined)
       .filter((value: string, index: number, self: string[]) => self.indexOf(value) === index)
   } catch (error) {

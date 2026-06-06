@@ -280,7 +280,7 @@ function BookPage() {
         const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
-          const hasOverlappingBooking = av.bookings.some((booking: any) => {
+          const hasOverlappingBooking = av.bookings.some((booking: { startTime: string; endTime: string }) => {
             const bookingStart = new Date(booking.startTime)
             const bookingEnd = new Date(booking.endTime)
             return (slotStart < bookingEnd && slotEnd > bookingStart)
@@ -296,7 +296,6 @@ function BookPage() {
       }
 
       // Create start and end times based on owner threshold
-      const [hour, minute] = selectedTimeSlot.split(':').map(Number)
       const startDateTime = new Date(`${selectedDate}T${selectedTimeSlot}:00`)
       const endDateTime = new Date(startDateTime.getTime() + appointmentDurationMinutes * 60 * 1000)
 

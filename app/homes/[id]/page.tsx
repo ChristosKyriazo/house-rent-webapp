@@ -73,7 +73,7 @@ function HomeDetailPage() {
   const [showPhotoLightbox, setShowPhotoLightbox] = useState(false)
   const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0)
   const [thumbnailScrollPosition, setThumbnailScrollPosition] = useState(0)
-  const [thumbnailScrollRatio, setThumbnailScrollRatio] = useState(1)
+  const [_thumbnailScrollRatio, setThumbnailScrollRatio] = useState(1)
   const [sliderTrackWidth, setSliderTrackWidth] = useState(400)
   const [isDragging, setIsDragging] = useState(false)
   const [inquiryStatus, setInquiryStatus] = useState<'inquired' | 'approved' | 'dismissed' | null>(null)
@@ -107,6 +107,8 @@ function HomeDetailPage() {
     : (actualRole || userRole || 'user')
 
   // Parse photos safely - use useMemo to ensure consistent hook order
+   
+   
   const photos = useMemo(() => {
     if (!home || !home.photos || home.photos.trim() === '') {
       return []
@@ -118,6 +120,7 @@ function HomeDetailPage() {
       console.error('Error parsing photos:', error)
       return []
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [home?.photos])
 
   const fromParam = searchParams.get('from')
@@ -144,7 +147,7 @@ function HomeDetailPage() {
       if (storedFilterType === 'ai' || storedFilterType === 'manual') {
         return `/homes?filter=${storedFilterType}`
       }
-    } catch (error) {
+    } catch {
       // Ignore sessionStorage errors
     }
 
@@ -293,7 +296,7 @@ function HomeDetailPage() {
           const approvedInquiriesRes = await fetch(`/api/inquiries/approved?role=owner`)
           if (approvedInquiriesRes.ok) {
             const approvedData = await approvedInquiriesRes.json()
-            const approvedInquiry = approvedData.approvedInquiries?.find((inq: any) => 
+            const approvedInquiry = approvedData.approvedInquiries?.find((inq: { id: number; home: { key: string }; finalized?: boolean; waitingForFinalization?: boolean }) =>
               inquiryIdParam ? inq.id === parseInt(inquiryIdParam) : inq.home.key === data.home.key
             )
             if (approvedInquiry) {
@@ -317,11 +320,14 @@ function HomeDetailPage() {
     }
   }
 
+   
+   
   useEffect(() => {
     if (!params.id) return
     const controller = new AbortController()
     fetchHomeData(controller.signal)
     return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id, router])
 
   // Check for pending finalization when inquiryId changes
@@ -336,7 +342,7 @@ function HomeDetailPage() {
           if (notificationsRes.ok) {
             const notificationsData = await notificationsRes.json()
             const pendingFinalize = notificationsData.notifications?.find(
-              (n: any) => n.type === 'finalize' && n.inquiryId === inquiryId && !n.viewed
+              (n: { type: string; inquiryId: number; viewed: boolean }) => n.type === 'finalize' && n.inquiryId === inquiryId && !n.viewed
             )
             if (pendingFinalize) {
               setPendingFinalization(true)
@@ -650,9 +656,10 @@ function HomeDetailPage() {
               <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)]">
                 {/* Main featured photo */}
                 <div className="relative aspect-video group cursor-pointer" onClick={() => openLightbox(currentPhotoIndex)}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={photos[currentPhotoIndex]}
-                    alt={`${home.title} - Photo ${currentPhotoIndex + 1}`}
+                    alt={`${home.title} - ${currentPhotoIndex + 1}`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   
@@ -747,6 +754,7 @@ function HomeDetailPage() {
                               : 'border-transparent hover:border-[var(--accent)]/45 opacity-70 hover:opacity-100'
                           }`}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={photo}
                             alt={`Thumbnail ${index + 1}`}
@@ -1217,9 +1225,10 @@ function HomeDetailPage() {
 
               {/* Main photo */}
               <div className="relative bg-[var(--ink-soft)]/95 backdrop-blur-md rounded-3xl overflow-hidden shadow-2xl border border-[var(--border-subtle)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={photos[lightboxPhotoIndex]}
-                  alt={`${home.title} - Photo ${lightboxPhotoIndex + 1}`}
+                  alt={`${home.title} - ${lightboxPhotoIndex + 1}`}
                   className="w-full h-auto max-h-[85vh] object-contain"
                 />
                 
@@ -1262,6 +1271,7 @@ function HomeDetailPage() {
                               : 'border-transparent hover:border-[var(--accent)]/45 opacity-70 hover:opacity-100'
                           }`}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={photo}
                             alt={`Thumbnail ${index + 1}`}
@@ -1313,13 +1323,13 @@ function HomeDetailPage() {
             </div>
             {(isOwner || inquiryStatus === 'approved') && home.owner.email && (
               <div>
-                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'email')}</label>
+                <p className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'email')}</p>
                 <p className="text-lg text-[var(--text)]">{home.owner.email}</p>
               </div>
             )}
                 {/* Ratings in Modal — house score + owner score side by side */}
                 <div className="pt-4 border-t border-[var(--border-subtle)]">
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-3">Ratings</label>
+                  <p className="block text-sm font-medium text-[var(--text-muted)] mb-3">Ratings</p>
                   <div className="flex gap-4">
                     <Link href={`/homes/ratings/${home.key}`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
                       <p className="text-xs text-[var(--text-muted)] mb-1">Property</p>

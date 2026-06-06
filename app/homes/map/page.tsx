@@ -598,6 +598,7 @@ function MapContent() {
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-2xl backdrop-blur-xl">
             <button onClick={() => setSelected(null)} className="absolute right-3 top-3 text-[var(--text-muted)] hover:text-[var(--text)]">✕</button>
             {parsePhotos(selected.photos)[0] && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={parsePhotos(selected.photos)[0]} alt={selected.title} className="mb-3 h-32 w-full rounded-xl object-cover" />
             )}
             <p className="font-bold text-[var(--text)] line-clamp-2">{getHomeTitle(language, selected)}</p>
