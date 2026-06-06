@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Outfit } from "next/font/google";
 import "./globals.css";
 import NavBar from "./components/NavBar";
@@ -26,6 +26,11 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Kaparro",
   description: "Find your ideal home — rent or buy with Kaparro",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

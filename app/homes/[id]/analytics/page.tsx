@@ -190,7 +190,7 @@ export default function ListingAnalyticsPage() {
               <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
                 {isEl ? 'Προβολές' : 'Views'}
               </h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatCard label={isEl ? 'Σήμερα' : 'Today'} value={data.views.today} />
                 <StatCard
                   label={isEl ? 'Αυτή την εβδομάδα' : 'This week'}
@@ -260,7 +260,7 @@ export default function ListingAnalyticsPage() {
                       {isEl ? `${totalInquiries} αιτήματα συνολικά · ${data.inquiryRate}% ποσοστό` : `${totalInquiries} total · ${data.inquiryRate}% inquiry rate`}
                     </span>
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { key: 'pending', label: isEl ? 'Σε αναμονή' : 'Pending', color: 'bg-blue-500/25 text-blue-300', count: pipeline.pending },
                       { key: 'approved', label: isEl ? 'Εγκεκριμένα' : 'Approved', color: 'bg-green-500/25 text-green-300', count: pipeline.approved },

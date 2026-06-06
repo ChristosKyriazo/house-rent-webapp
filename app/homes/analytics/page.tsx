@@ -407,7 +407,7 @@ function PlusView({ data, period, isEl }: {
   const isEl_ = isEl
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: isEl_ ? 'Αποθηκεύσεις' : 'Saves', value: data.funnel.saves },
           { label: isEl_ ? 'Νέα αιτήματα' : 'New inquiries', value: data.totals.inquiries },
@@ -509,7 +509,7 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
   return (
     <div className="flex flex-col gap-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-2">{isEl ? 'Προβολές' : 'Views'}</p>
           <div className="flex items-end gap-3">
@@ -544,7 +544,8 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
       )}
 
       {/* Listings table */}
-      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border-subtle)]">
+      <div className="bg-[var(--surface)] min-w-[600px] overflow-hidden rounded-2xl">
         <div className="grid grid-cols-[1.5rem_1rem_1fr_4.5rem_5rem_4rem_4rem_4.5rem_4rem] gap-3 px-5 py-3 border-b border-[var(--border-subtle)]">
           <span /><span />
           <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)]">{isEl ? 'Αγγελία' : 'Listing'}</span>
@@ -581,6 +582,7 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
             </div>
           )
         })}
+      </div>
       </div>
 
       {/* Traffic sources */}
@@ -698,7 +700,7 @@ export default function AnalyticsPage() {
       <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="h-8 w-32 bg-[var(--ink-soft)] rounded-xl animate-pulse mb-12" />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5 h-24 animate-pulse" />
             ))}
