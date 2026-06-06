@@ -921,9 +921,9 @@ function HomeDetailPage() {
                     </div>
                   </Link>
                   {/* Owner score */}
-                  <div
-                    onClick={!home.owner.isBroker ? () => setShowOwnerModal(true) : undefined}
-                    className={`px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between ${!home.owner.isBroker ? 'cursor-pointer' : ''}`}
+                  <Link
+                    href={`/homes/ratings/${home.key}/owner`}
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between"
                   >
                     <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
                       {home.owner.isBroker ? 'House Owner' : (home.owner.name || 'Owner')}
@@ -935,7 +935,7 @@ function HomeDetailPage() {
                       <StarRating rating={home.ratings?.ownerScore ?? 0} size="sm" />
                       <span className="text-xs text-[var(--text-muted)] mt-1">Owner score</span>
                     </div>
-                  </div>
+                  </Link>
                 </div>
           </div>
 
@@ -1328,7 +1328,7 @@ function HomeDetailPage() {
                       </p>
                       <StarRating rating={home.ratings?.houseScore ?? 0} size="sm" />
                     </Link>
-                    <Link href={`/homes/ratings/${home.key}`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
+                    <Link href={`/homes/ratings/${home.key}/owner`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
                       <p className="text-xs text-[var(--text-muted)] mb-1">Owner</p>
                       <p className="text-xl font-bold text-[var(--text)]">
                         {home.ratings?.ownerScore != null ? home.ratings.ownerScore.toFixed(1) : '—'}

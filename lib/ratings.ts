@@ -104,6 +104,53 @@ export async function getHomeRatingScores(homeId: number) {
   }
 }
 
+// Owner score breakdown: per-dimension averages + reviews, for the owner ratings page
+export async function getOwnerRatingDetails(homeId: number) {
+  const ratings = await prisma.rating.findMany({
+    where: {
+      ratedHomeId: homeId,
+      type: { in: ['movein_house', 'moveout_house'] },
+    },
+    include: {
+      rater: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const handoverScores: number[] = []
+  const ownerFairScores: number[] = []
+  const moveoutHandlingScores: number[] = []
+  const ownerScores: number[] = []
+  const reviews: Array<{ comment: string; raterName: string | null; createdAt: Date; type: string }> = []
+
+  for (const r of ratings) {
+    if (r.type === 'movein_house') {
+      const s = r.scores as MoveinHouseScores
+      handoverScores.push(s.handover)
+      ownerScores.push(s.handover)
+    } else if (r.type === 'moveout_house') {
+      const s = r.scores as MoveoutHouseScores
+      ownerFairScores.push(s.ownerFair)
+      moveoutHandlingScores.push(s.moveoutHandling)
+      ownerScores.push(avg([s.ownerFair, s.moveoutHandling])!)
+    }
+    if (r.comment) {
+      reviews.push({ comment: r.comment, raterName: r.rater.name, createdAt: r.createdAt, type: r.type })
+    }
+  }
+
+  return {
+    ownerScore: avg(ownerScores),
+    dimensions: {
+      handover: avg(handoverScores),
+      ownerFair: avg(ownerFairScores),
+      moveoutHandling: avg(moveoutHandlingScores),
+    },
+    totalRatings: ratings.length,
+    reviews,
+  }
+}
+
 // All ratings submitted by a user (for their rating dashboard pages)
 export async function getRatingsByRater(raterId: number, type: string) {
   return prisma.rating.findMany({

@@ -7,41 +7,54 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
 
-interface Review {
-  comment: string
-  raterName: string | null
-  createdAt: string
-  type: 'movein_house' | 'moveout_house'
+interface DimensionScore {
+  label: string
+  score: number | null
 }
 
-interface HomeRatings {
+interface OwnerRatings {
   homeKey: string
   homeTitle: string
+  ownerName: string | null
   ownerRole: string
-  houseScore: number | null
   ownerScore: number | null
-  combinedScore: number | null
+  dimensions: {
+    handover: number | null
+    ownerFair: number | null
+    moveoutHandling: number | null
+  }
   totalRatings: number
-  reviews: Review[]
+  reviews: Array<{
+    comment: string
+    raterName: string | null
+    createdAt: string
+    type: 'movein_house' | 'moveout_house'
+  }>
 }
 
-function ScoreCard({ label, score }: { label: string; score: number | null }) {
+function DimensionBar({ label, score }: DimensionScore) {
+  const pct = score != null ? (score / 5) * 100 : 0
   return (
-    <div className="flex-1 bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)] shadow-xl flex flex-col items-center gap-2">
-      <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
-      <p className="text-5xl font-bold text-[var(--text)]">
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-[var(--text-muted)] w-44 shrink-0">{label}</span>
+      <div className="flex-1 h-2 bg-[var(--border-subtle)] rounded-full overflow-hidden">
+        <div
+          className="h-full bg-[var(--accent)] rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-sm font-semibold text-[var(--text)] w-8 text-right">
         {score != null ? score.toFixed(1) : '—'}
-      </p>
-      <StarRating rating={score ?? 0} size="base" />
+      </span>
     </div>
   )
 }
 
-export default function HomeRatingsPage() {
+export default function OwnerRatingsPage() {
   const params = useParams()
   const router = useRouter()
   const { language } = useLanguage()
-  const [data, setData] = useState<HomeRatings | null>(null)
+  const [data, setData] = useState<OwnerRatings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,7 +62,7 @@ export default function HomeRatingsPage() {
 
   useEffect(() => {
     if (!homeKey) return
-    fetch(`/api/ratings/home/${homeKey}`)
+    fetch(`/api/ratings/home/${homeKey}/owner`)
       .then(r => {
         if (!r.ok) throw new Error('Failed to fetch')
         return r.json()
@@ -83,6 +96,14 @@ export default function HomeRatingsPage() {
     )
   }
 
+  const ownerLabel = data.ownerRole === 'broker' ? 'House Owner' : (data.ownerName || 'Owner')
+
+  const dimensions = [
+    { label: 'Move-in handover', score: data.dimensions.handover },
+    { label: 'Fairness during tenancy', score: data.dimensions.ownerFair },
+    { label: 'Move-out handling', score: data.dimensions.moveoutHandling },
+  ].filter(d => d.score !== null)
+
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
@@ -97,30 +118,42 @@ export default function HomeRatingsPage() {
               <span>{getTranslation(language, 'goBack')}</span>
             </button>
             <Link
-              href={`/homes/ratings/${homeKey}/owner`}
+              href={`/homes/ratings/${homeKey}`}
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors underline"
             >
-              View owner ratings
+              View property ratings
             </Link>
           </div>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{data.homeTitle}</h1>
-          <p className="text-[var(--text-muted)]">
-            {data.totalRatings > 0
-              ? `${data.totalRatings} ${data.totalRatings === 1 ? 'rating' : 'ratings'}`
-              : 'No ratings yet'}
-          </p>
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{ownerLabel}</h1>
+          <p className="text-[var(--text-muted)]">{data.homeTitle}</p>
         </div>
 
-        {/* Score cards */}
-        <div className="flex gap-4 mb-10">
-          <ScoreCard label="Property" score={data.houseScore} />
-          <ScoreCard label="Owner" score={data.ownerScore} />
+        {/* Overall score */}
+        <div className="bg-[var(--surface)] rounded-3xl p-8 border border-[var(--border-subtle)] shadow-xl mb-6 flex items-center gap-8">
+          <div className="text-center">
+            <p className="text-6xl font-bold text-[var(--text)] mb-2">
+              {data.ownerScore != null ? data.ownerScore.toFixed(1) : '—'}
+            </p>
+            <StarRating rating={data.ownerScore ?? 0} size="lg" />
+            <p className="text-sm text-[var(--text-muted)] mt-2">
+              {data.totalRatings > 0
+                ? `${data.totalRatings} ${data.totalRatings === 1 ? 'rating' : 'ratings'}`
+                : 'No ratings yet'}
+            </p>
+          </div>
+          {dimensions.length > 0 && (
+            <div className="flex-1 space-y-3">
+              {dimensions.map(d => (
+                <DimensionBar key={d.label} label={d.label} score={d.score} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Written reviews */}
-        {data.reviews.length > 0 && (
+        {data.reviews.length > 0 ? (
           <div>
-            <h2 className="text-xl font-bold text-[var(--text)] mb-4">Written reviews</h2>
+            <h2 className="text-xl font-bold text-[var(--text)] mb-4">Reviews</h2>
             <div className="space-y-4">
               {data.reviews.map((review, i) => (
                 <div
@@ -152,13 +185,9 @@ export default function HomeRatingsPage() {
               ))}
             </div>
           </div>
-        )}
-
-        {data.totalRatings === 0 && (
+        ) : (
           <div className="bg-[var(--surface)] rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
-            <p className="text-xl text-[var(--text-muted)]">
-              {getTranslation(language, 'noRatingsForThisHouse') || 'No ratings for this house yet'}
-            </p>
+            <p className="text-xl text-[var(--text-muted)]">No written reviews yet.</p>
           </div>
         )}
       </div>
