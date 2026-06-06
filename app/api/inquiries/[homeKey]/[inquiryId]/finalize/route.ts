@@ -27,7 +27,20 @@ export async function POST(
       return badRequest('Invalid inquiry ID')
     }
 
-    await initiateFinalization(parsedInquiryId, user.id, user.role)
+    const body = await request.json().catch(() => ({}))
+    const { moveInDate, moveOutDate } = body
+
+    if (!moveInDate || isNaN(Date.parse(moveInDate))) {
+      return badRequest('moveInDate is required and must be a valid date')
+    }
+
+    await initiateFinalization(
+      parsedInquiryId,
+      user.id,
+      user.role,
+      new Date(moveInDate),
+      moveOutDate ? new Date(moveOutDate) : undefined,
+    )
 
     return NextResponse.json(
       { message: 'Finalization request sent', notificationCreated: true },

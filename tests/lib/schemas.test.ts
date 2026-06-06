@@ -79,19 +79,24 @@ describe('createInquirySchema', () => {
 })
 
 describe('createRatingSchema', () => {
-  const valid = { ratedUserId: 1, type: 'owner', score: 4 }
+  const validViewingTenant = { type: 'viewing_tenant', ratedUserId: 1, bookingId: 1, scores: { experience: 4 } }
+  const validMoveoutHouse = { type: 'moveout_house', ratedHomeId: 2, finalizationId: 3, scores: { overallCondition: 5, recommend: 4, ownerFair: 3, moveoutHandling: 4 }, comment: 'Great stay' }
 
-  it('accepts valid rating', () => {
-    expect(createRatingSchema.safeParse(valid).success).toBe(true)
+  it('accepts valid viewing_tenant rating', () => {
+    expect(createRatingSchema.safeParse(validViewingTenant).success).toBe(true)
+  })
+
+  it('accepts valid moveout_house rating', () => {
+    expect(createRatingSchema.safeParse(validMoveoutHouse).success).toBe(true)
   })
 
   it('rejects score out of range', () => {
-    expect(createRatingSchema.safeParse({ ...valid, score: 6 }).success).toBe(false)
-    expect(createRatingSchema.safeParse({ ...valid, score: 0 }).success).toBe(false)
+    expect(createRatingSchema.safeParse({ ...validViewingTenant, scores: { experience: 6 } }).success).toBe(false)
+    expect(createRatingSchema.safeParse({ ...validViewingTenant, scores: { experience: 0 } }).success).toBe(false)
   })
 
   it('rejects invalid type', () => {
-    expect(createRatingSchema.safeParse({ ...valid, type: 'admin' }).success).toBe(false)
+    expect(createRatingSchema.safeParse({ type: 'admin', ratedUserId: 1, bookingId: 1, scores: { experience: 4 } }).success).toBe(false)
   })
 })
 

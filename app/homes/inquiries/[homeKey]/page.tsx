@@ -20,6 +20,7 @@ interface Inquiry {
   }
   approved: boolean
   dismissed: boolean
+  finalized: boolean
   createdAt: string
 }
 
@@ -45,6 +46,10 @@ export default function HomeInquiriesPage() {
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [highlightedInquiryId, setHighlightedInquiryId] = useState<number | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [confirmingInquiry, setConfirmingInquiry] = useState<Inquiry | null>(null)
+  const [moveInDate, setMoveInDate] = useState('')
+  const [moveOutDate, setMoveOutDate] = useState('')
+  const [finalizing, setFinalizing] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -137,6 +142,36 @@ export default function HomeInquiriesPage() {
       setNotification({ type: 'error', message: getTranslation(language, 'somethingWentWrong') })
     } finally {
       setProcessingId(null)
+    }
+  }
+
+  const handleConfirmTenant = async () => {
+    if (!home || !confirmingInquiry || !moveInDate || finalizing) return
+    setFinalizing(true)
+    try {
+      const res = await fetch(`/api/inquiries/${home.key}/${confirmingInquiry.id}/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          moveInDate: new Date(moveInDate).toISOString(),
+          moveOutDate: moveOutDate ? new Date(moveOutDate).toISOString() : undefined,
+        }),
+      })
+      if (res.ok) {
+        setNotification({ type: 'success', message: 'Finalization request sent to tenant.' })
+        setConfirmingInquiry(null)
+        setMoveInDate('')
+        setMoveOutDate('')
+        const refreshed = await fetch(`/api/inquiries/${home.key}`)
+        if (refreshed.ok) setInquiries((await refreshed.json()).inquiries || [])
+      } else {
+        const data = await res.json()
+        setNotification({ type: 'error', message: data.error || 'Failed to send finalization.' })
+      }
+    } catch {
+      setNotification({ type: 'error', message: 'Something went wrong.' })
+    } finally {
+      setFinalizing(false)
     }
   }
 
@@ -251,36 +286,45 @@ export default function HomeInquiriesPage() {
                       </p>
                     </div>
 
-                    {!isApproved && (
-                      <div className="flex items-center gap-3 ml-4">
-                        {isCurrent ? (
-                          <>
-                            <button
-                              onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
-                              disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-[var(--status-success)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {processingId === inquiry.id
-                                ? getTranslation(language, 'loading')
-                                : getTranslation(language, 'approve')}
-                            </button>
-                            <button
-                              onClick={() => handleDismiss(inquiry.id)}
-                              disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {processingId === inquiry.id
-                                ? getTranslation(language, 'loading')
-                                : getTranslation(language, 'dismiss')}
-                            </button>
-                          </>
-                        ) : (
-                          <p className="text-[var(--text)]/50 text-sm italic">
-                            {getTranslation(language, 'pendingApproval')}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                      {isApproved && !inquiry.finalized && (
+                        <button
+                          onClick={() => setConfirmingInquiry(inquiry)}
+                          className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all font-semibold text-sm"
+                        >
+                          Confirm tenant
+                        </button>
+                      )}
+                      {isApproved && inquiry.finalized && (
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          Deal closed
+                        </span>
+                      )}
+                      {!isApproved && (
+                        <>
+                          {isCurrent ? (
+                            <>
+                              <button
+                                onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
+                                disabled={processingId === inquiry.id}
+                                className="px-6 py-3 bg-[var(--status-success)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {processingId === inquiry.id ? getTranslation(language, 'loading') : getTranslation(language, 'approve')}
+                              </button>
+                              <button
+                                onClick={() => handleDismiss(inquiry.id)}
+                                disabled={processingId === inquiry.id}
+                                className="px-6 py-3 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {processingId === inquiry.id ? getTranslation(language, 'loading') : getTranslation(language, 'dismiss')}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="text-[var(--text)]/50 text-sm italic">{getTranslation(language, 'pendingApproval')}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -297,6 +341,68 @@ export default function HomeInquiriesPage() {
           language={language}
           onClose={() => setNotification(null)}
         />
+      )}
+
+      {/* Confirm tenant modal */}
+      {confirmingInquiry && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmingInquiry(null)}>
+          <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-[var(--text)]">Confirm this tenant</h2>
+              <button onClick={() => setConfirmingInquiry(null)} className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl">×</button>
+            </div>
+
+            <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)] mb-6">
+              <p className="text-sm text-[var(--text-muted)] mb-1">Tenant</p>
+              <p className="font-semibold text-[var(--text)]">{confirmingInquiry.user.name || confirmingInquiry.user.email.split('@')[0]}</p>
+              <p className="text-sm text-[var(--text-muted)]">{confirmingInquiry.user.email}</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-in date <span className="text-red-400">*</span></label>
+                <input
+                  type="date"
+                  value={moveInDate}
+                  onChange={e => setMoveInDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-out date <span className="text-[var(--text-muted)] font-normal">(optional)</span></label>
+                <input
+                  type="date"
+                  value={moveOutDate}
+                  onChange={e => setMoveOutDate(e.target.value)}
+                  min={moveInDate || new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-muted)] mb-6">
+              A notification will be sent to the tenant to accept or decline. Once accepted, the deal is confirmed and ratings will unlock on schedule.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmingInquiry(null)}
+                disabled={finalizing}
+                className="flex-1 px-4 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl font-semibold transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmTenant}
+                disabled={finalizing || !moveInDate}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50"
+              >
+                {finalizing ? 'Sending...' : 'Send to tenant'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

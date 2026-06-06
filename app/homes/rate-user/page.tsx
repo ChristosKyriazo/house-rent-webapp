@@ -4,137 +4,100 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
-import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import RatingForm from '@/app/components/RatingForm'
 
-interface FinalizedInquiry {
-  id: number
-  key: string
-  home: {
-    id: number
-    key: string
-    title: string
-    titleGreek?: string | null
-    street: string | null
-    streetGreek?: string | null
-    city: string
-    country: string
-  }
-  otherUser: {
-    id: number
-    key: string
-    name: string | null
-    email: string
-  }
-  finalizedAt: string
-  alreadyRated: boolean
-  lastRatingDate?: string // Date when rating was last created/updated
+interface PendingRating {
+  actionType: 'viewing_tenant' | 'moveout_tenant'
+  finalizationId?: number
+  bookingId?: number
+  ratedUserId?: number
+  homeKey: string
+  homeTitle: string
+  counterpartName: string | null
+  dueDate?: string
 }
 
 export default function RateUserPage() {
   const router = useRouter()
   const { language } = useLanguage()
-  const { selectedRole, actualRole } = useRole()
-  const [finalizedInquiries, setFinalizedInquiries] = useState<FinalizedInquiry[]>([])
+  const [pending, setPending] = useState<PendingRating[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedInquiry, setSelectedInquiry] = useState<FinalizedInquiry | null>(null)
-  const [rating, setRating] = useState(5)
-  const [comment, setComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
-  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
-
-  const displayRole = (actualRole === 'both' && selectedRole) 
-    ? selectedRole 
-    : (actualRole || 'user')
+  const [selected, setSelected] = useState<PendingRating | null>(null)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   useEffect(() => {
-    if (displayRole !== 'owner') {
-      router.push('/profile')
-      return
-    }
-
     const fetchData = async () => {
-      try {
-        const response = await fetch('/api/inquiries/finalized?role=owner')
-        if (response.ok) {
-          const data = await response.json()
-          setFinalizedInquiries(data.finalizedInquiries || [])
-        } else {
-          if (response.status === 401) {
-            router.push('/login')
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching finalized inquiries:', error)
-      } finally {
-        setLoading(false)
+      const profileRes = await fetch('/api/profile')
+      if (!profileRes.ok) { router.push('/login'); return }
+      const { user } = await profileRes.json()
+      if (!user || (user.role !== 'owner' && user.role !== 'broker' && user.role !== 'both')) {
+        router.push('/profile'); return
       }
-    }
 
+      const res = await fetch('/api/ratings/pending')
+      if (res.ok) {
+        const data = await res.json()
+        setPending((data.pending ?? []).filter((p: PendingRating) =>
+          p.actionType === 'viewing_tenant' || p.actionType === 'moveout_tenant'
+        ))
+      }
+      setLoading(false)
+    }
     fetchData()
-  }, [router, displayRole])
+  }, [router])
 
-  // Fetch areas for city/country translation
-  useEffect(() => {
-    fetch('/api/areas')
-      .then((res) => res.json())
-      .then((data) => {
-        setAreas(data.areas || [])
-      })
-      .catch((error) => {
-        console.error('Error fetching areas for translation:', error)
-      })
-  }, [])
+  const viewingTenantSections = [
+    {
+      questions: [
+        { key: 'experience', label: 'How was your overall experience with this tenant?' },
+      ],
+    },
+  ]
 
-  const handleSubmitRating = async () => {
-    if (!selectedInquiry || submitting) return
+  const moveoutTenantSections = [
+    {
+      questions: [
+        { key: 'propertyCare', label: 'Did the tenant take good care of the property?' },
+        { key: 'rulesPayment', label: 'Did the tenant pay on time and respect house rules?' },
+        { key: 'wouldRentAgain', label: 'Would you rent to this tenant again?' },
+      ],
+    },
+  ]
 
-    setSubmitting(true)
-    try {
-      const response = await fetch('/api/ratings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ratedUserId: selectedInquiry.otherUser.id,
-          type: 'renter',
-          score: rating,
-          comment: comment.trim() || null,
-        }),
-      })
+  const handleSubmit = async (scores: Record<string, number>, comment: string) => {
+    if (!selected || !selected.ratedUserId) throw new Error('Missing context')
 
-      if (response.ok) {
-        // Refresh the inquiries list to get updated lastRatingDate
-        // This ensures the "Rate Again" button disappears immediately after rating
-        const inquiriesRes = await fetch(`/api/inquiries/finalized?role=${actualRole || 'user'}`)
-        if (inquiriesRes.ok) {
-          const inquiriesData = await inquiriesRes.json()
-          setFinalizedInquiries(inquiriesData.finalizedInquiries || [])
-        } else {
-          // Fallback: Update the inquiry to mark as rated
-          setFinalizedInquiries(prev => 
-            prev.map(inq => 
-              inq.id === selectedInquiry.id 
-                ? { ...inq, alreadyRated: true, lastRatingDate: new Date().toISOString() }
-                : inq
-            )
-          )
-        }
-        setSelectedInquiry(null)
-        setComment('')
-        setRating(5)
-      } else {
-        const data = await response.json()
-        setNotification({ type: 'error', message: data.error || getTranslation(language, 'ratingFailed') })
-      }
-    } catch (error) {
-      console.error('Error submitting rating:', error)
-      setNotification({ type: 'error', message: getTranslation(language, 'ratingFailed') })
-    } finally {
-      setSubmitting(false)
+    const body: Record<string, unknown> = {
+      type: selected.actionType,
+      ratedUserId: selected.ratedUserId,
+      scores,
+      comment: comment || undefined,
     }
+
+    if (selected.actionType === 'viewing_tenant') {
+      body.bookingId = selected.bookingId
+    } else {
+      body.finalizationId = selected.finalizationId
+    }
+
+    const res = await fetch('/api/ratings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error ?? 'Failed to submit rating')
+    }
+    setNotification({ type: 'success', message: 'Rating submitted.' })
+    setSelected(null)
+    setPending(prev => prev.filter(p =>
+      !(p.finalizationId === selected.finalizationId &&
+        p.bookingId === selected.bookingId &&
+        p.actionType === selected.actionType)
+    ))
   }
 
   if (loading) {
@@ -147,185 +110,70 @@ export default function RateUserPage() {
 
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <Link
-            href="/homes/approved"
-            className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
-          >
-            ← {getTranslation(language, 'back')}
+          <Link href="/homes/approved" className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors">
+            ← Back
           </Link>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
-            {getTranslation(language, 'rateUser')}
-          </h1>
-          <p className="text-[var(--text-muted)]">
-            {getTranslation(language, 'rateUserDescription')}
-          </p>
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">Rate your tenants</h1>
+          <p className="text-[var(--text-muted)]">Your ratings help the community identify reliable renters.</p>
         </div>
 
-        {finalizedInquiries.length === 0 ? (
-          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 shadow-xl border border-[var(--border-subtle)] text-center">
-            <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noFinalizedInquiries')}</p>
+        {pending.length === 0 ? (
+          <div className="bg-[var(--surface)] rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
+            <p className="text-xl text-[var(--text-muted)]">No pending ratings right now.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {finalizedInquiries.map((inquiry) => {
-              // Check if re-rating is available (1 minute after last rating - creation or update)
-              const canReRate = inquiry.alreadyRated && inquiry.lastRatingDate && (() => {
-                const now = new Date()
-                const ratingDate = new Date(inquiry.lastRatingDate) // This is updatedAt if rating was updated, otherwise createdAt
-                // 1 minute for testing (1 * 60 * 1000)
-                // For production: 6 months = 6 * 30 * 24 * 60 * 60 * 1000
-                const reRateInterval = 1 * 60 * 1000 // 1 minute for testing
-                const nextReRateDate = new Date(ratingDate.getTime() + reRateInterval)
-                return now >= nextReRateDate
-              })()
-
-              return (
-                <div key={inquiry.id} className="space-y-3">
-                  <Link
-                    href={`/homes/ratings/${inquiry.home.key}`}
-                    className="block bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)] transition-all duration-300 hover:scale-105 hover:border-[var(--accent)]/35 hover:shadow-2xl cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-[var(--text)] mb-2">
-                          {getHomeTitle(language, inquiry.home)}
-                        </h3>
-                        <p className="text-[var(--text-muted)] mb-3">
-                          📍 {getHomeStreet(language, inquiry.home) && `${getHomeStreet(language, inquiry.home)}, `}
-                          {getCityName(inquiry.home.city, areas, language)}, {getCountryName(inquiry.home.country, areas, language)}
-                        </p>
-                        <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)]">
-                          <p className="text-sm text-[var(--text-muted)] mb-1">
-                            {getTranslation(language, 'user')}:
-                          </p>
-                          <p className="text-lg font-semibold text-[var(--text)]">
-                            {inquiry.otherUser.name || inquiry.otherUser.email.split('@')[0]}
-                          </p>
-                          <p className="text-sm text-[var(--text-muted)]">
-                            {inquiry.otherUser.email}
-                          </p>
-                        </div>
-                      </div>
-                      {inquiry.alreadyRated && (
-                        <span className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ml-4">
-                          ✓ {getTranslation(language, 'rated')}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                  
-                  {/* Small re-rating button below if eligible */}
-                  {canReRate && (
-                    <button
-                      onClick={() => setSelectedInquiry(inquiry)}
-                      className="w-full px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm"
-                    >
-                      {getTranslation(language, 'rateAgain') || 'Rate Again'}
-                    </button>
-                  )}
-                  
-                  {/* Rate Now button if not rated yet */}
-                  {!inquiry.alreadyRated && (
-                    <button
-                      onClick={() => setSelectedInquiry(inquiry)}
-                      className="w-full px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-all font-semibold text-sm"
-                    >
-                      {getTranslation(language, 'rateNow')}
-                    </button>
-                  )}
+            {pending.map((item, i) => (
+              <div key={i} className="bg-[var(--surface)] rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-xl font-bold text-[var(--text)]">{item.homeTitle}</h3>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                      Tenant: <span className="font-semibold text-[var(--text)]">{item.counterpartName ?? 'Unknown'}</span>
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)] mt-0.5">
+                      {item.actionType === 'viewing_tenant' ? 'Post-viewing rating' : 'Move-out rating'}
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                    item.actionType === 'viewing_tenant'
+                      ? 'bg-purple-500/20 text-purple-400'
+                      : 'bg-orange-500/20 text-orange-400'
+                  }`}>
+                    {item.actionType === 'viewing_tenant' ? 'Viewing' : 'Move-out'}
+                  </span>
                 </div>
-              )
-            })}
+                <button
+                  onClick={() => setSelected(item)}
+                  className="w-full px-4 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold text-sm transition-all"
+                >
+                  Rate now
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Rating Modal */}
-        {selectedInquiry && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setSelectedInquiry(null); setComment(''); setRating(5) }}>
-            <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full p-6" onClick={(e) => e.stopPropagation()}>
+        {selected && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSelected(null)}>
+            <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-[var(--text)]">
-                  {getTranslation(language, 'rateUser')}
-                </h2>
-                <button
-                  onClick={() => {
-                    setSelectedInquiry(null)
-                    setComment('')
-                    setRating(5)
-                  }}
-                  className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
-                >
-                  ×
-                </button>
+                <div>
+                  <h2 className="text-xl font-bold text-[var(--text)]">{selected.counterpartName ?? 'Tenant'}</h2>
+                  <p className="text-sm text-[var(--text-muted)] mt-0.5">{selected.homeTitle}</p>
+                </div>
+                <button onClick={() => setSelected(null)} className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl ml-4">×</button>
               </div>
-
-              <div className="space-y-6">
-                <div>
-                  <p className="text-[var(--text)] mb-2">
-                    {getTranslation(language, 'property')}: {getHomeTitle(language, selectedInquiry.home)}
-                  </p>
-                  <p className="text-[var(--text-muted)] mb-4">
-                    {getTranslation(language, 'user')}: {selectedInquiry.otherUser.name || selectedInquiry.otherUser.email.split('@')[0]}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-3">
-                    {getTranslation(language, 'rating')}:
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        onClick={() => setRating(star)}
-                        className={`text-4xl transition-transform hover:scale-110 ${
-                          star <= rating ? 'text-yellow-400' : 'text-[var(--text)]/30'
-                        }`}
-                      >
-                        ⭐
-                      </button>
-                    ))}
-                    <span className="ml-4 text-lg font-semibold text-[var(--text)]">
-                      {rating}/5
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">
-                    {getTranslation(language, 'comment')} ({getTranslation(language, 'optional')}):
-                  </label>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'commentPlaceholder')}
-                  />
-                </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button
-                    onClick={() => {
-                      setSelectedInquiry(null)
-                      setComment('')
-                      setRating(5)
-                    }}
-                    className="flex-1 px-6 py-3 bg-[var(--ink-soft)] hover:bg-[var(--ink-soft)]/80 text-[var(--text)] rounded-xl font-semibold transition-all"
-                  >
-                    {getTranslation(language, 'cancel')}
-                  </button>
-                  <button
-                    onClick={handleSubmitRating}
-                    disabled={submitting}
-                    className="flex-1 px-6 py-3 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold transition-all disabled:opacity-50"
-                  >
-                    {submitting ? getTranslation(language, 'submitting') : getTranslation(language, 'submitRating')}
-                  </button>
-                </div>
-              </div>
+              <RatingForm
+                sections={selected.actionType === 'viewing_tenant' ? viewingTenantSections : moveoutTenantSections}
+                allowComment={selected.actionType === 'moveout_tenant'}
+                commentPlaceholder="Share your experience with this tenant (optional)..."
+                onSubmit={handleSubmit}
+                onCancel={() => setSelected(null)}
+                submitLabel="Submit rating"
+              />
             </div>
           </div>
         )}
@@ -342,6 +190,3 @@ export default function RateUserPage() {
     </div>
   )
 }
-
-
-

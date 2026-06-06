@@ -10,7 +10,13 @@ export class InquiryFinalizationError extends Error {
   }
 }
 
-export async function initiateFinalization(inquiryId: number, userId: number, userRole?: string) {
+export async function initiateFinalization(
+  inquiryId: number,
+  userId: number,
+  userRole: string | undefined,
+  moveInDate: Date,
+  moveOutDate?: Date,
+) {
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     include: {
@@ -23,12 +29,14 @@ export async function initiateFinalization(inquiryId: number, userId: number, us
         },
       },
       user: { select: { id: true } },
+      finalization: true,
     },
   })
 
   if (!inquiry) throw new InquiryFinalizationError('Inquiry not found', 404)
   if (!inquiry.approved) throw new InquiryFinalizationError('Inquiry must be approved before finalization', 400)
   if (inquiry.finalized) throw new InquiryFinalizationError('Inquiry already finalized', 400)
+  if (inquiry.finalization) throw new InquiryFinalizationError('Finalization already initiated', 400)
 
   if (userId !== inquiry.home.ownerId) {
     throw new InquiryFinalizationError('Only the home owner can initiate finalization', 403)
@@ -39,16 +47,30 @@ export async function initiateFinalization(inquiryId: number, userId: number, us
   })
   if (!scheduledBooking) throw new InquiryFinalizationError('Can only finalize after a scheduled meeting', 400)
 
-  await prisma.notification.create({
-    data: {
-      recipientId: inquiry.user.id,
-      role: 'user',
-      type: 'finalize',
-      homeKey: inquiry.home.key,
-      userId: inquiry.userId,
-      ownerKey: inquiry.home.owner.key,
-      inquiryId: inquiry.id,
-    },
+  await prisma.$transaction(async tx => {
+    await tx.finalization.create({
+      data: {
+        inquiryId: inquiry.id,
+        homeId: inquiry.home.id,
+        landlordId: inquiry.home.ownerId,
+        tenantId: inquiry.user.id,
+        moveInDate,
+        moveOutDate: moveOutDate ?? null,
+        status: 'pending_tenant',
+      },
+    })
+
+    await tx.notification.create({
+      data: {
+        recipientId: inquiry.user.id,
+        role: 'user',
+        type: 'finalize',
+        homeKey: inquiry.home.key,
+        userId: inquiry.userId,
+        ownerKey: inquiry.home.owner.key,
+        inquiryId: inquiry.id,
+      },
+    })
   })
 }
 
@@ -56,6 +78,7 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     include: {
+      finalization: true,
       home: {
         select: {
           id: true,
@@ -69,22 +92,19 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
   })
 
   if (!inquiry) throw new InquiryFinalizationError('Inquiry not found', 404)
-  // Only the tenant (inquiry creator) can respond to a finalization request
   if (userId !== inquiry.user.id) {
     throw new InquiryFinalizationError('Only the tenant can respond to a finalization request', 403)
   }
+  if (!inquiry.finalization) {
+    throw new InquiryFinalizationError('No pending finalization found for this inquiry', 400)
+  }
 
   if (action === 'approve') {
-    const [userRating, ownerRating] = await Promise.all([
-      prisma.rating.findFirst({
-        where: { raterId: inquiry.user.id, ratedUserId: inquiry.home.ownerId, type: 'owner' },
-      }),
-      prisma.rating.findFirst({
-        where: { raterId: inquiry.home.ownerId, ratedUserId: inquiry.user.id, type: 'renter' },
-      }),
-    ])
-
     await prisma.$transaction(async tx => {
+      await tx.finalization.update({
+        where: { id: inquiry.finalization!.id },
+        data: { status: 'confirmed' },
+      })
       await tx.inquiry.update({
         where: { id: inquiry.id },
         data: { finalized: true, finalizedBy: userId },
@@ -101,36 +121,28 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
         where: { homeKey: inquiry.home.key, type: 'approved', recipientId: inquiry.user.id, deleted: false },
         data: { deleted: true },
       })
-      if (!userRating) {
-        await tx.notification.create({
-          data: {
-            recipientId: inquiry.user.id,
-            role: 'user',
-            type: 'rate',
-            homeKey: inquiry.home.key,
-            ownerKey: inquiry.home.owner.key,
-            inquiryId: inquiry.id,
-          },
-        })
-      }
-      if (!ownerRating) {
-        await tx.notification.create({
-          data: {
-            recipientId: inquiry.home.ownerId,
-            role: 'owner',
-            type: 'rate',
-            homeKey: inquiry.home.key,
-            userId: inquiry.user.id,
-            inquiryId: inquiry.id,
-          },
-        })
-      }
+      // Notify tenant: move-in rating window opens 3 days after moveInDate
+      await tx.notification.create({
+        data: {
+          recipientId: inquiry.user.id,
+          role: 'user',
+          type: 'rate',
+          homeKey: inquiry.home.key,
+          ownerKey: inquiry.home.owner.key,
+          inquiryId: inquiry.id,
+        },
+      })
     })
 
     return { message: 'Deal finalized', finalized: true }
   }
 
+  // dismiss
   await prisma.$transaction(async tx => {
+    await tx.finalization.update({
+      where: { id: inquiry.finalization!.id },
+      data: { status: 'declined' },
+    })
     await tx.inquiry.update({
       where: { id: inquiry.id },
       data: { dismissed: true },
@@ -151,5 +163,5 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
     })
   })
 
-  return { message: 'Finalization dismissed', dismissed: true }
+  return { message: 'Finalization declined', declined: true }
 }

@@ -43,19 +43,20 @@ interface Home {
   closestPark: number | null
   closestUniversity: number | null
   energyClass: string | null
-      owner: {
+  owner: {
     id: number
     email: string
     name: string | null
     role: string
     createdAt: string
     isBroker?: boolean
-    ratings?: {
-      ownerRating: number | null
-      ownerCount: number
-      renterRating: number | null
-      renterCount: number
-    }
+  }
+  ratings?: {
+    houseScore: number | null
+    ownerScore: number | null
+    combinedScore: number | null
+    totalRatings: number
+    reviews: Array<{ comment: string; raterName: string | null; createdAt: string; type: string }>
   }
 }
 
@@ -901,95 +902,41 @@ function HomeDetailPage() {
                   })()}
                 </div>
                 
-                {/* Owner Profile - Right side, square */}
-                {home.owner.isBroker ? (
-                  // For brokers, show generic "House Owner" with clickable rating (no modal)
+                {/* Rating scores — House + Owner, side by side */}
+                <div className="flex gap-3">
+                  {/* House score */}
                   <Link
                     href={`/homes/ratings/${home.key}`}
-                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between"
                   >
-                    {/* Owner Title - At the top */}
-                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
-                      {getTranslation(language, 'houseOwner') || 'House Owner'}
-                    </h2>
-                    
-                    {/* Rating - Centered and prominent */}
+                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">Property</h2>
                     <div className="flex flex-col items-center justify-center flex-1">
-                      <span className="text-xl font-bold text-[var(--text)]">
-                        {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
-                          ? home.owner.ratings.ownerRating.toFixed(1) 
-                          : '0.0'}
+                      <span className="text-2xl font-bold text-[var(--text)]">
+                        {home.ratings?.houseScore != null ? home.ratings.houseScore.toFixed(1) : '—'}
                       </span>
-                      <StarRating 
-                        rating={home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
-                          ? home.owner.ratings.ownerRating 
-                          : 0} 
-                        size="sm" 
-                      />
-                      {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
-                        <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
-                          {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[var(--text)]/50 italic">
-                          {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
-                        </span>
-                      )}
+                      <StarRating rating={home.ratings?.houseScore ?? 0} size="sm" />
+                      <span className="text-xs text-[var(--text-muted)] mt-1">
+                        {home.ratings?.totalRatings ? `${home.ratings.totalRatings} ${home.ratings.totalRatings === 1 ? 'rating' : 'ratings'}` : 'No ratings yet'}
+                      </span>
                     </div>
                   </Link>
-                ) : (
-                  // For regular owners, show name and rating with modal
-                  <div 
-                    onClick={() => setShowOwnerModal(true)}
-                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-40 h-40 flex flex-col items-center justify-between"
+                  {/* Owner score */}
+                  <div
+                    onClick={!home.owner.isBroker ? () => setShowOwnerModal(true) : undefined}
+                    className={`px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between ${!home.owner.isBroker ? 'cursor-pointer' : ''}`}
                   >
-                    {/* Owner Title - At the top */}
-                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">{getTranslation(language, 'owner')}</h2>
-                    
-                    {/* Name and Rating - Centered and prominent */}
+                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
+                      {home.owner.isBroker ? 'House Owner' : (home.owner.name || 'Owner')}
+                    </h2>
                     <div className="flex flex-col items-center justify-center flex-1">
-                      {/* Name */}
-                      <p className="text-base font-semibold text-[var(--text)] text-center mb-2">
-                        {home.owner.name || 'Owner'}
-                      </p>
-                      
-                      {/* Rating */}
-                      {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                        <Link
-                          href={`/profile/ratings/${home.owner.id}?type=owner`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          <span className="text-xl font-bold text-[var(--text)]">
-                            {home.owner.ratings.ownerRating.toFixed(1)}
-                          </span>
-                          <StarRating rating={home.owner.ratings?.ownerRating ?? 0} size="sm" />
-                          {home.owner.ratings.ownerCount > 0 && (
-                            <span className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors">
-                              {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                            </span>
-                          )}
-                        </Link>
-                      ) : (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-xl font-bold text-[var(--text)]">
-                            0.0
-                          </span>
-                          <div className="flex items-center gap-0.5">
-                            {[...Array(5)].map((_, i) => (
-                              <span key={i} className="text-sm text-[var(--text)]/30">
-                                ⭐
-                              </span>
-                            ))}
-                          </div>
-                          <span className="text-xs text-[var(--text-muted)]">
-                            {getTranslation(language, 'notRatedYet')}
-                          </span>
-                        </div>
-                      )}
+                      <span className="text-2xl font-bold text-[var(--text)]">
+                        {home.ratings?.ownerScore != null ? home.ratings.ownerScore.toFixed(1) : '—'}
+                      </span>
+                      <StarRating rating={home.ratings?.ownerScore ?? 0} size="sm" />
+                      <span className="text-xs text-[var(--text-muted)] mt-1">Owner score</span>
                     </div>
                   </div>
-                )}
+                </div>
           </div>
 
               {/* Description - Below the row */}
@@ -1370,85 +1317,31 @@ function HomeDetailPage() {
                 <p className="text-lg text-[var(--text)]">{home.owner.email}</p>
               </div>
             )}
-                {/* Rating in Modal - Show house owner rating for brokers, owner rating for regular owners */}
-                {home.owner.isBroker ? (
-                  // For brokers, always show house owner rating (even if 0.0) and make it clickable
-                  <Link
-                    href={`/homes/ratings/${home.key}`}
-                    className="pt-4 border-t border-[var(--border-subtle)] block hover:opacity-80 transition-opacity cursor-pointer"
-                  >
-                    <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
-                      {getTranslation(language, 'houseOwnerRating') || 'House Owner Rating'}
-                    </label>
-                    <div>
-                      <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
-                        <span>⭐</span>
-                        {home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
-                          ? home.owner.ratings.ownerRating.toFixed(1) 
-                          : '0.0'}
+                {/* Ratings in Modal — house score + owner score side by side */}
+                <div className="pt-4 border-t border-[var(--border-subtle)]">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-3">Ratings</label>
+                  <div className="flex gap-4">
+                    <Link href={`/homes/ratings/${home.key}`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
+                      <p className="text-xs text-[var(--text-muted)] mb-1">Property</p>
+                      <p className="text-xl font-bold text-[var(--text)]">
+                        {home.ratings?.houseScore != null ? home.ratings.houseScore.toFixed(1) : '—'}
                       </p>
-                      <div className="mt-2">
-                        <StarRating 
-                          rating={home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined 
-                            ? home.owner.ratings.ownerRating 
-                            : 0} 
-                          size="base" 
-                        />
-                      </div>
-                      {home.owner.ratings?.ownerCount && home.owner.ratings.ownerCount > 0 ? (
-                        <span className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors mt-1 block">
-                          {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                        </span>
-                      ) : null}
-                    </div>
-                  </Link>
-                ) : (
-                  // For regular owners, show their personal rating
-                  home.owner.ratings?.ownerRating !== null && home.owner.ratings?.ownerRating !== undefined ? (
-                    <Link
-                      href={`/profile/ratings/${home.owner.id}?type=owner`}
-                      className="pt-4 border-t border-[var(--border-subtle)] block hover:opacity-80 transition-opacity cursor-pointer"
-                    >
-                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
-                        {getTranslation(language, 'asOwner')}
-                      </label>
-                      <div>
-                        <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
-                          <span>⭐</span>
-                          {home.owner.ratings.ownerRating.toFixed(1)}
-                        </p>
-                        <div className="mt-2">
-                          <StarRating rating={home.owner.ratings?.ownerRating ?? 0} size="base" />
-                        </div>
-                        {home.owner.ratings.ownerCount > 0 && (
-                          <span className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] underline transition-colors mt-1 block">
-                            {home.owner.ratings.ownerCount} {home.owner.ratings.ownerCount === 1 ? getTranslation(language, 'rating') : getTranslation(language, 'ratings')}
-                          </span>
-                        )}
-                      </div>
+                      <StarRating rating={home.ratings?.houseScore ?? 0} size="sm" />
                     </Link>
+                    <Link href={`/homes/ratings/${home.key}`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
+                      <p className="text-xs text-[var(--text-muted)] mb-1">Owner</p>
+                      <p className="text-xl font-bold text-[var(--text)]">
+                        {home.ratings?.ownerScore != null ? home.ratings.ownerScore.toFixed(1) : '—'}
+                      </p>
+                      <StarRating rating={home.ratings?.ownerScore ?? 0} size="sm" />
+                    </Link>
+                  </div>
+                  {home.ratings?.totalRatings ? (
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">{home.ratings.totalRatings} {home.ratings.totalRatings === 1 ? 'rating' : 'ratings'}</p>
                   ) : (
-                    <div className="pt-4 border-t border-[var(--border-subtle)]">
-                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'asOwner')}</label>
-                      <div>
-                        <p className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
-                          <span>⭐</span>
-                          0.0
-                        </p>
-                        <div className="flex items-center gap-1 mt-2">
-                          {[...Array(5)].map((_, i) => (
-                            <span key={i} className="text-base text-[var(--text)]/30">
-                              ⭐
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-sm text-[var(--text-muted)] mt-1">
-                          {getTranslation(language, 'notRatedYet')}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                )}
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">No ratings yet</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

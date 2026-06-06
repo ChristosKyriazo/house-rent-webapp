@@ -1,136 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { badRequest, forbidden, parsePositiveInt, serverError, unauthorized, validateBody } from '@/lib/api-utils'
+import { badRequest, forbidden, serverError, unauthorized, validateBody } from '@/lib/api-utils'
 import { createRatingSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
+import { hasRatedBooking, hasRatedFinalization } from '@/lib/ratings'
 
-// GET: Get ratings for current user or a specific user by userId query param
-export async function GET(request: NextRequest) {
-  const log = requestLogger(request)
-  try {
-    const searchParams = request.nextUrl.searchParams
-    const userIdParam = searchParams.get('userId')
-
-    let targetUserId: number
-    if (userIdParam) {
-      // Fetch ratings for specific user (public view)
-      const parsedUserId = parsePositiveInt(userIdParam)
-      if (!parsedUserId) {
-        return badRequest('Invalid user ID')
-      }
-      targetUserId = parsedUserId
-    } else {
-      // Get current user's ratings (requires authentication)
-      const user = await getCurrentUser()
-      if (!user) {
-        return unauthorized()
-      }
-      targetUserId = user.id
-    }
-
-    const { getUserRatings } = await import('@/lib/ratings')
-    const ratings = await getUserRatings(targetUserId)
-    return NextResponse.json({ ratings }, { status: 200 })
-  } catch (error) {
-    log.error({ err: error }, 'Get ratings error')
-    return serverError()
-  }
-}
-
-// POST: Create or update a rating
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
-    if (!user) {
-      return unauthorized()
-    }
+    if (!user) return unauthorized()
 
     const rawBody = await request.json()
     const { data: body, error: validationError } = validateBody(createRatingSchema, rawBody)
     if (validationError) return validationError
 
-    // ratedUserId is already validated by Zod as a positive integer
-    const { ratedUserId: parsedRatedUserId, type, score, comment } = body
+    const type = body.type
 
-    // Verify that there's a relationship between these users
-    // For owner/broker rating renter: check if there's a booking that has passed (startTime < now)
-    // For user rating owner: check if user has finalized inquiry with this owner
-    let canRate = false
-    let booking = null
-    
-    if (type === 'owner') {
-      // User is rating owner - check if user has finalized inquiry with this owner
-      const inquiry = await prisma.inquiry.findFirst({
-        where: {
-          userId: user.id,
-          home: {
-            ownerId: parsedRatedUserId,
-          },
-          finalized: true,
-        },
+    // ── Viewing: tenant rates broker ────────────────────────────────────────
+    if (type === 'viewing_broker') {
+      const booking = await prisma.booking.findFirst({
+        where: { id: body.bookingId, userId: user.id, status: { not: 'cancelled' } },
+        include: { home: { select: { owner: { select: { id: true, role: true } } } } },
       })
-      canRate = !!inquiry
-    } else {
-      // Owner/broker is rating renter - check if there's a booking that has passed
-      // We check for bookings where:
-      // - ownerId is the current user (owner/broker)
-      // - userId is the rated user
-      // - startTime has passed (meeting has started/passed)
-      const now = new Date()
-      booking = await prisma.booking.findFirst({
-        where: {
-          ownerId: user.id,
-          userId: parsedRatedUserId,
-          status: { not: 'cancelled' },
-          startTime: {
-            lt: now,
-          },
-        },
-        orderBy: {
-          startTime: 'desc',
-        },
-      })
-      canRate = !!booking
-    }
-
-    if (!canRate) {
-      return forbidden('Cannot rate this user. A completed meeting is required.')
-    }
-
-    // Additional check for brokers: they can only rate once per user
-    // Owners can rate multiple times (even after finalization)
-    const userRole = (user.role || 'user').toLowerCase()
-    if (type === 'renter' && userRole === 'broker') {
-      // Check if this broker has already rated this user
-      const existingRating = await prisma.rating.findFirst({
-        where: {
-          raterId: user.id,
-          ratedUserId: parsedRatedUserId,
-          type: 'renter',
-        },
-      })
-      
-      if (existingRating) {
-        return forbidden('Brokers can only rate a user once.')
+      if (!booking) return forbidden('No valid booking found')
+      if (booking.home?.owner.role !== 'broker') return forbidden('Listing is not managed by a broker')
+      if (booking.ownerId !== body.ratedUserId) return forbidden('You can only rate the broker on this booking')
+      if (await hasRatedBooking(user.id, body.bookingId, 'viewing_broker')) {
+        return forbidden('You have already rated this broker for this booking')
       }
+      const rating = await prisma.rating.create({
+        data: { type, raterId: user.id, ratedUserId: body.ratedUserId, bookingId: body.bookingId, scores: body.scores, comment: body.comment ?? null },
+      })
+      return NextResponse.json({ rating }, { status: 201 })
     }
-    // Note: Users with role "both" (owner and broker) are treated as owners and can rate multiple times
 
-    // Always create a new rating (allow multiple ratings between same users)
-    // Note: This requires removing the unique constraint from the schema
-    const rating = await prisma.rating.create({
-      data: {
-        raterId: user.id,
-        ratedUserId: parsedRatedUserId,
-        type: type,
-        score: score,
-        comment: comment || null,
-      },
-    })
+    // ── Viewing: owner/broker rates tenant ──────────────────────────────────
+    if (type === 'viewing_tenant') {
+      const booking = await prisma.booking.findFirst({
+        where: { id: body.bookingId, ownerId: user.id, userId: body.ratedUserId, status: { not: 'cancelled' } },
+      })
+      if (!booking) return forbidden('No valid booking found for this tenant')
+      if (await hasRatedBooking(user.id, body.bookingId, 'viewing_tenant')) {
+        return forbidden('You have already rated this tenant for this booking')
+      }
+      const rating = await prisma.rating.create({
+        data: { type, raterId: user.id, ratedUserId: body.ratedUserId, bookingId: body.bookingId, scores: body.scores, comment: body.comment ?? null },
+      })
+      return NextResponse.json({ rating }, { status: 201 })
+    }
 
-    return NextResponse.json({ rating }, { status: 200 })
+    // ── Move-in: tenant rates house ─────────────────────────────────────────
+    if (type === 'movein_house') {
+      const fin = await prisma.finalization.findFirst({
+        where: { id: body.finalizationId, tenantId: user.id, status: 'confirmed' },
+      })
+      if (!fin) return forbidden('No confirmed finalization found')
+      if (fin.homeId !== body.ratedHomeId) return forbidden('Home does not match finalization')
+      if (await hasRatedFinalization(user.id, body.finalizationId, 'movein_house')) {
+        return forbidden('You have already submitted a move-in rating for this finalization')
+      }
+      const rating = await prisma.rating.create({
+        data: { type, raterId: user.id, ratedHomeId: body.ratedHomeId, finalizationId: body.finalizationId, scores: body.scores, comment: body.comment ?? null },
+      })
+      return NextResponse.json({ rating }, { status: 201 })
+    }
+
+    // ── Move-out: tenant rates house ────────────────────────────────────────
+    if (type === 'moveout_house') {
+      const fin = await prisma.finalization.findFirst({
+        where: { id: body.finalizationId, tenantId: user.id, status: 'confirmed' },
+      })
+      if (!fin) return forbidden('No confirmed finalization found')
+      if (fin.homeId !== body.ratedHomeId) return forbidden('Home does not match finalization')
+      if (await hasRatedFinalization(user.id, body.finalizationId, 'moveout_house')) {
+        return forbidden('You have already submitted a move-out rating for this finalization')
+      }
+      const rating = await prisma.rating.create({
+        data: { type, raterId: user.id, ratedHomeId: body.ratedHomeId, finalizationId: body.finalizationId, scores: body.scores, comment: body.comment ?? null },
+      })
+      return NextResponse.json({ rating }, { status: 201 })
+    }
+
+    // ── Move-out: owner rates tenant ────────────────────────────────────────
+    if (type === 'moveout_tenant') {
+      const fin = await prisma.finalization.findFirst({
+        where: { id: body.finalizationId, landlordId: user.id, tenantId: body.ratedUserId, status: 'confirmed' },
+      })
+      if (!fin) return forbidden('No confirmed finalization found')
+      if (await hasRatedFinalization(user.id, body.finalizationId, 'moveout_tenant')) {
+        return forbidden('You have already rated this tenant for this finalization')
+      }
+      const rating = await prisma.rating.create({
+        data: { type, raterId: user.id, ratedUserId: body.ratedUserId, finalizationId: body.finalizationId, scores: body.scores, comment: body.comment ?? null },
+      })
+      return NextResponse.json({ rating }, { status: 201 })
+    }
+
+    return badRequest('Unknown rating type')
   } catch (error) {
     log.error({ err: error }, 'Create rating error')
     return serverError()

@@ -28,8 +28,10 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]
-  ratingsReceived Rating[]       @relation("RatedUser")
-  ratingsGiven    Rating[]       @relation("Rater")
+  ratingsGiven          Rating[]        @relation("RatingGiven")
+  ratingsReceived       Rating[]        @relation("RatingReceived")
+  landlordFinalizations Finalization[]  @relation("LandlordFinalizations")
+  tenantFinalizations   Finalization[]  @relation("TenantFinalizations")
   inquiries       Inquiry[]
   notifications   Notification[] @relation
   bookingsAsUser  Booking[]      @relation("UserBookings")
@@ -94,6 +96,8 @@ model Home {
   embeddingQueue    EmbeddingQueue?
   savedBy           SavedHome[]
   listingViews      ListingView[]
+  ratings           Rating[]
+  finalizations     Finalization[]
 
   @@index([finalized])
   @@index([finalized, city, listingType])
@@ -105,23 +109,61 @@ model Home {
   @@map("homes")
 }
 
-model Rating {
-  id          Int      @id @default(autoincrement())
-  key         String   @unique @default(cuid())
-  raterId     Int
-  ratedUserId Int
-  type        String
-  score       Int
-  comment     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  ratedUser   User     @relation("RatedUser", fields: [ratedUserId], references: [id], onDelete: Cascade)
-  rater       User     @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
+model Finalization {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique @default(cuid())
+  inquiryId     Int       @unique
+  homeId        Int
+  landlordId    Int
+  tenantId      Int
+  moveInDate    DateTime
+  moveOutDate   DateTime?
+  status        String    @default("pending_tenant") // "pending_tenant" | "confirmed" | "declined" | "cancelled"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  inquiry       Inquiry   @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  home          Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  landlord      User      @relation("LandlordFinalizations", fields: [landlordId], references: [id], onDelete: Cascade)
+  tenant        User      @relation("TenantFinalizations", fields: [tenantId], references: [id], onDelete: Cascade)
+  ratings       Rating[]
 
-  // Removed unique constraint to allow multiple ratings between same users over time
+  @@index([homeId])
+  @@index([landlordId])
+  @@index([tenantId])
+  @@map("finalizations")
+}
+
+// type values and their scores shape:
+//   "viewing_tenant"  → { experience: 1-5 }                             owner/broker rates tenant after viewing
+//   "viewing_broker"  → { punctual: 1-5, helpful: 1-5, listingMatch: 1-5 }  tenant rates broker after viewing
+//   "movein_house"    → { accuracy: 1-5, condition: 1-5, handover: 1-5 }     tenant rates house 3 days after move-in
+//   "moveout_house"   → { overallCondition: 1-5, recommend: 1-5, ownerFair: 1-5, moveoutHandling: 1-5 }  tenant rates house at move-out
+//   "moveout_tenant"  → { propertyCare: 1-5, rulesPayment: 1-5, wouldRentAgain: 1-5 }  owner rates tenant at move-out
+model Rating {
+  id              Int           @id @default(autoincrement())
+  key             String        @unique @default(cuid())
+  type            String
+  raterId         Int
+  ratedUserId     Int?          // set for viewing_broker, viewing_tenant, moveout_tenant
+  ratedHomeId     Int?          // set for movein_house, moveout_house
+  bookingId       Int?          // context for viewing-stage ratings
+  finalizationId  Int?          // context for movein/moveout ratings
+  scores          Json          // dimension scores, shape depends on type
+  comment         String?       // only for moveout_house and moveout_tenant
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  rater           User          @relation("RatingGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  ratedUser       User?         @relation("RatingReceived", fields: [ratedUserId], references: [id], onDelete: Cascade)
+  ratedHome       Home?         @relation(fields: [ratedHomeId], references: [id], onDelete: Cascade)
+  booking         Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  finalization    Finalization? @relation(fields: [finalizationId], references: [id], onDelete: SetNull)
+
   @@index([ratedUserId])
+  @@index([ratedHomeId])
+  @@index([raterId])
   @@index([type])
-  @@index([raterId, ratedUserId, type]) // Index for efficient queries
+  @@index([bookingId])
+  @@index([finalizationId])
   @@map("ratings")
 }
 
@@ -137,8 +179,9 @@ model Inquiry {
   contactInfo String?  // JSON string with contact information (name, email, phone, timeSchedule, useContactPerson)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  home        Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home         Home          @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  finalization Finalization?
 
   @@unique([userId, homeId])
   @@index([userId])
@@ -273,10 +316,11 @@ model Booking {
   status          String   @default("scheduled") // "scheduled", "completed", "cancelled"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
-  owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
-  home            Home?    @relation(fields: [homeId], references: [id], onDelete: SetNull)
+  user            User          @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
+  owner           User          @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  home            Home?         @relation(fields: [homeId], references: [id], onDelete: SetNull)
   availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
+  ratings         Rating[]
 
   @@index([userId])
   @@index([ownerId])

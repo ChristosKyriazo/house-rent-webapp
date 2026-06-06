@@ -1,69 +1,148 @@
 import { prisma } from './prisma'
 
-// Calculate average rating for a user as owner or renter
-// Returns default rating of 4.7 if no ratings exist (temporary until review system is implemented)
-// Rating scale is 0-5
-export async function getUserRatings(userId: number) {
+// Score shapes per rating type (see schema comments for reference)
+type ViewingTenantScores = { experience: number }
+type ViewingBrokerScores = { punctual: number; helpful: number; listingMatch: number }
+type MoveinHouseScores   = { accuracy: number; condition: number; handover: number }
+type MoveoutHouseScores  = { overallCondition: number; recommend: number; ownerFair: number; moveoutHandling: number }
+type MoveoutTenantScores = { propertyCare: number; rulesPayment: number; wouldRentAgain: number }
+
+function avg(nums: number[]): number | null {
+  if (nums.length === 0) return null
+  return Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1))
+}
+
+function scoresAvg(scores: Record<string, number>): number {
+  const vals = Object.values(scores)
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+}
+
+// Tenant/broker user score: average of all viewing_tenant + moveout_tenant ratings received
+export async function getUserScore(userId: number) {
   const ratings = await prisma.rating.findMany({
-    where: { ratedUserId: userId },
+    where: {
+      ratedUserId: userId,
+      type: { in: ['viewing_tenant', 'moveout_tenant'] },
+    },
+    include: { rater: { select: { id: true, name: true } } },
   })
 
-  const ownerRatings = ratings.filter(r => r.type === 'owner')
-  const renterRatings = ratings.filter(r => r.type === 'renter')
+  if (ratings.length === 0) return { score: null, count: 0, ratings: [] }
 
-  const ownerAvg = ownerRatings.length > 0
-    ? ownerRatings.reduce((sum, r) => sum + r.score, 0) / ownerRatings.length
-    : null // Return null when no ratings exist
-
-  const renterAvg = renterRatings.length > 0
-    ? renterRatings.reduce((sum, r) => sum + r.score, 0) / renterRatings.length
-    : null // Return null when no ratings exist
-
+  const scorePerRating = ratings.map(r => scoresAvg(r.scores as Record<string, number>))
   return {
-    ownerRating: ownerAvg !== null ? Number(ownerAvg.toFixed(1)) : null,
-    ownerCount: ownerRatings.length,
-    renterRating: renterAvg !== null ? Number(renterAvg.toFixed(1)) : null,
-    renterCount: renterRatings.length,
+    score: avg(scorePerRating),
+    count: ratings.length,
+    ratings,
   }
 }
 
-// Calculate house owner ratings for a specific home
-// This is used for broker-owned homes where ratings are associated with the house, not the broker
-export async function getHouseOwnerRatings(homeId: number) {
-  // Get all finalized inquiries for this home
-  const finalizedInquiries = await prisma.inquiry.findMany({
+// Broker score: average of all viewing_broker ratings received by this user
+export async function getBrokerScore(userId: number) {
+  const ratings = await prisma.rating.findMany({
+    where: { ratedUserId: userId, type: 'viewing_broker' },
+    include: { rater: { select: { id: true, name: true } } },
+  })
+
+  if (ratings.length === 0) return { score: null, count: 0, ratings: [] }
+
+  const scorePerRating = ratings.map(r => {
+    const s = r.scores as ViewingBrokerScores
+    return avg([s.punctual, s.helpful, s.listingMatch])!
+  })
+  return {
+    score: avg(scorePerRating),
+    count: ratings.length,
+    ratings,
+  }
+}
+
+// House scores: house score + owner score computed from movein_house + moveout_house ratings
+export async function getHomeRatingScores(homeId: number) {
+  const ratings = await prisma.rating.findMany({
     where: {
-      homeId: homeId,
-      finalized: true,
+      ratedHomeId: homeId,
+      type: { in: ['movein_house', 'moveout_house'] },
     },
-    select: {
-      id: true,
-      userId: true,
-      home: {
-        select: {
-          ownerId: true,
-        },
-      },
+    include: {
+      rater: { select: { id: true, name: true } },
+      finalization: { select: { id: true, moveInDate: true, moveOutDate: true } },
     },
-  })  // Get all ratings from users to owner for this home
-  const houseOwnerRatings = []
-  for (const inquiry of finalizedInquiries) {
-    const ratings = await prisma.rating.findMany({
-      where: {
-        raterId: inquiry.userId,
-        ratedUserId: inquiry.home.ownerId,
-        type: 'owner',
-      },
-    })
-    houseOwnerRatings.push(...ratings)
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const houseScores: number[] = []
+  const ownerScores: number[] = []
+  const reviewsWithComments: Array<{ comment: string; raterName: string | null; createdAt: Date; type: string }> = []
+
+  for (const r of ratings) {
+    if (r.type === 'movein_house') {
+      const s = r.scores as MoveinHouseScores
+      houseScores.push(avg([s.accuracy, s.condition])!)
+      ownerScores.push(s.handover)
+    } else if (r.type === 'moveout_house') {
+      const s = r.scores as MoveoutHouseScores
+      houseScores.push(avg([s.overallCondition, s.recommend])!)
+      ownerScores.push(avg([s.ownerFair, s.moveoutHandling])!)
+    }
+    if (r.comment) {
+      reviewsWithComments.push({
+        comment: r.comment,
+        raterName: r.rater.name,
+        createdAt: r.createdAt,
+        type: r.type,
+      })
+    }
   }
 
-  const avg = houseOwnerRatings.length > 0
-    ? houseOwnerRatings.reduce((sum, r) => sum + r.score, 0) / houseOwnerRatings.length
-    : null
-
   return {
-    houseOwnerRating: avg !== null ? Number(avg.toFixed(1)) : null,
-    houseOwnerCount: houseOwnerRatings.length,
+    houseScore: avg(houseScores),
+    ownerScore: avg(ownerScores),
+    combinedScore: avg([...houseScores, ...ownerScores]),
+    totalRatings: ratings.length,
+    reviews: reviewsWithComments,
+  }
+}
+
+// All ratings submitted by a user (for their rating dashboard pages)
+export async function getRatingsByRater(raterId: number, type: string) {
+  return prisma.rating.findMany({
+    where: { raterId, type },
+    include: {
+      ratedUser: { select: { id: true, name: true, email: true } },
+      ratedHome: { select: { id: true, key: true, title: true, titleGreek: true, city: true, country: true } },
+      finalization: { select: { id: true, moveInDate: true, moveOutDate: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// Check whether a user has already submitted a specific rating type for a finalization
+export async function hasRatedFinalization(raterId: number, finalizationId: number, type: string) {
+  const existing = await prisma.rating.findFirst({
+    where: { raterId, finalizationId, type },
+  })
+  return !!existing
+}
+
+// Check whether a user has already submitted a viewing rating for a booking
+export async function hasRatedBooking(raterId: number, bookingId: number, type: string) {
+  const existing = await prisma.rating.findFirst({
+    where: { raterId, bookingId, type },
+  })
+  return !!existing
+}
+
+// Legacy helper kept for any existing callers
+export async function getUserRatings(userId: number) {
+  const [userScore, brokerScore] = await Promise.all([
+    getUserScore(userId),
+    getBrokerScore(userId),
+  ])
+  return {
+    userScore: userScore.score,
+    userCount: userScore.count,
+    brokerScore: brokerScore.score,
+    brokerCount: brokerScore.count,
   }
 }

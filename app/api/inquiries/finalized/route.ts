@@ -122,10 +122,11 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const ratedUserIds = new Set(existingRatings.map(r => r.ratedUserId))
+    const ratedUserIds = new Set(existingRatings.map(r => r.ratedUserId).filter((id): id is number => id !== null))
     // Get the most recent rating for each user (for the re-rating button logic)
     const ratingMap = new Map<number, Date>()
     existingRatings.forEach(rating => {
+      if (rating.ratedUserId === null) return
       const existing = ratingMap.get(rating.ratedUserId)
       // Store the most recent rating date (createdAt, since we're creating new ratings now)
       if (!existing || new Date(rating.createdAt) > existing) {

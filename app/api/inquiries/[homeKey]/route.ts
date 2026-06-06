@@ -88,7 +88,7 @@ export async function GET(
             name: inquiry.user.name,
             email: inquiry.user.email,
             role: inquiry.user.role,
-            rating: ratings.renterRating, // Use renter rating for users who inquire (null if not rated)
+            rating: ratings.userScore,
           },
           approved: inquiry.approved,
           dismissed: inquiry.dismissed,

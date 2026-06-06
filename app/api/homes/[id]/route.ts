@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { getUserRatings } from '@/lib/ratings'
+import { getHomeRatingScores } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
 import { toEnglishValue } from '@/lib/translations'
 import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
@@ -62,33 +62,17 @@ export async function GET(
       // If user is not authenticated, continue normally
     }
 
-    // Check if owner is a broker - if so, use house owner ratings instead of broker ratings
     const isBroker = home.owner.role === 'broker'
-    
-    let ratings
-    if (isBroker) {
-      // For brokers, get house owner ratings (ratings for this specific home)
-      const { getHouseOwnerRatings } = await import('@/lib/ratings')
-      const houseRatings = await getHouseOwnerRatings(home.id)
-      ratings = {
-        ownerRating: houseRatings.houseOwnerRating,
-        ownerCount: houseRatings.houseOwnerCount,
-        renterRating: null,
-        renterCount: 0,
-      }
-    } else {
-      // For regular owners, get their personal ratings
-      ratings = await getUserRatings(home.owner.id)
-    }
+    const homeRatings = await getHomeRatingScores(home.id)
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       home: {
         ...home,
         owner: {
           ...home.owner,
-          ratings: ratings,
-          isBroker: isBroker,
-        }
+          isBroker,
+        },
+        ratings: homeRatings,
       }
     }, { status: 200 })
   } catch (error) {
