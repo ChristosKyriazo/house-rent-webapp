@@ -74,15 +74,12 @@ export default function ListingAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [homeTitle, setHomeTitle] = useState('')
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-
   const fetchAnalytics = useCallback(() => {
     return fetch(`/api/homes/${homeKey}/analytics`)
       .then(r => r.json())
       .then(analytics => {
         if (analytics.error) return
         setData(analytics)
-        setLastUpdated(new Date())
       })
       .catch(() => {})
   }, [homeKey])
@@ -100,7 +97,6 @@ export default function ListingAnalyticsPage() {
           return
         }
         setData(analytics)
-        setLastUpdated(new Date())
         setHomeTitle(homeData.home?.title || homeData.home?.titleGreek || '')
       })
       .catch(() => setError(isEl ? 'Κάτι πήγε στραβά.' : 'Something went wrong.'))
@@ -122,15 +118,10 @@ export default function ListingAnalyticsPage() {
     <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
 
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8">
           <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
             ← {isEl ? 'Αναλυτικά' : 'Analytics'}
           </Link>
-          {lastUpdated && (
-            <span className="text-xs text-[var(--text-muted)]">
-              {isEl ? 'Ενημ.' : 'Updated'} {lastUpdated.toLocaleTimeString(isEl ? 'el-GR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-          )}
         </div>
 
         <div className="mb-8">
