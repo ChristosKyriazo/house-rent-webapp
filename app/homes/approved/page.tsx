@@ -115,7 +115,12 @@ export default function ApprovedInquiriesPage() {
               return (
                 <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
                   <div className="flex items-start justify-between gap-4">
-                    <h2 className="text-2xl font-bold text-[var(--text)]">{getHomeTitle(language, inq.home)}</h2>
+                    <Link
+                      href={`/homes/${inq.home.key}?from=approved`}
+                      className="group"
+                    >
+                      <h2 className="text-2xl font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">{getHomeTitle(language, inq.home)}</h2>
+                    </Link>
                     <Link
                       href={`/homes/${inq.home.key}?from=approved`}
                       className="shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
@@ -140,60 +145,100 @@ export default function ApprovedInquiriesPage() {
                     </div>
                   )}
 
-                  {/* Next step banner */}
+                  {/* Next step banner + action button */}
                   {inq.status === 'awaiting_finalization' ? (
-                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
-                      <span className="text-xl">⚡</span>
-                      <div>
-                        <p className="text-sm font-semibold text-yellow-300">{language === 'el' ? 'Επόμενο βήμα: Οριστικοποίηση' : 'Next step: Finalize the deal'}</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Ένα αίτημα οριστικοποίησης εκκρεμεί.' : 'A finalization request is pending.'}</p>
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">⚡</span>
+                        <div>
+                          <p className="text-sm font-semibold text-yellow-300">{language === 'el' ? 'Οριστικοποίηση σε εξέλιξη' : 'Finalization in progress'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Αίτημα στάλθηκε στον ενοικιαστή — αναμένεται αποδοχή.' : 'Request sent to tenant — awaiting their acceptance.'}</p>
+                        </div>
                       </div>
+                      <Link
+                        href={`/homes/inquiries/${inq.home.key}`}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-sm font-semibold transition-colors border border-yellow-500/30"
+                      >
+                        {language === 'el' ? 'Προβολή →' : 'View →'}
+                      </Link>
                     </div>
                   ) : inq.status === 'pre_finalization' ? (
-                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-blue-500/15 border border-blue-500/40">
-                      <span className="text-xl">🤝</span>
-                      <div>
-                        <p className="text-sm font-semibold text-blue-300">{language === 'el' ? 'Επόμενο βήμα: Αποστολή προσφοράς' : 'Next step: Send a finalization offer'}</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Η επίσκεψη ολοκληρώθηκε. Μπορείτε τώρα να οριστικοποιήσετε.' : 'The viewing is done. You can now finalize the deal.'}</p>
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-blue-500/15 border border-blue-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">🤝</span>
+                        <div>
+                          <p className="text-sm font-semibold text-blue-300">{language === 'el' ? 'Επόμενο βήμα: Αποστολή προσφοράς' : 'Next step: Send finalization offer'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Η επίσκεψη ολοκληρώθηκε. Μπορείτε να οριστικοποιήσετε.' : 'Viewing done. Confirm the tenant to close the deal.'}</p>
+                        </div>
                       </div>
+                      <Link
+                        href={`/homes/inquiries/${inq.home.key}`}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
+                      >
+                        {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
+                      </Link>
                     </div>
                   ) : showScheduled ? (
-                    <div className="mt-4 text-green-300 text-sm bg-green-600/20 border border-green-500/50 rounded-xl p-3 space-y-1">
-                      {appointment ? (
-                        <>
-                          {appointment.status === 'completed' || (inq.status as string) === 'pre_finalization'
-                            ? `${getTranslation(language, 'completed')}: `
-                            : `${getTranslation(language, 'scheduled')}: `}
-                          {new Date(appointment.startTime).toLocaleString(language === 'el' ? 'el-GR' : 'en-US')}
-                        </>
-                      ) : (
-                        <>
-                          <p>{(inq.status as string) === 'pre_finalization' ? getTranslation(language, 'completed') : getTranslation(language, 'scheduled')}</p>
-                          <Link href="/homes/calendar" className="inline-block text-[var(--text)] underline font-medium hover:text-white">
-                            {getTranslation(language, 'scheduledBookings')}
-                          </Link>
-                        </>
-                      )}
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-green-600/15 border border-green-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">✅</span>
+                        <div className="text-sm text-green-300">
+                          {appointment ? (
+                            <>
+                              <p className="font-semibold">
+                                {appointment.status === 'completed' || (inq.status as string) === 'pre_finalization'
+                                  ? (language === 'el' ? 'Επίσκεψη ολοκληρώθηκε' : 'Viewing completed')
+                                  : (language === 'el' ? 'Επίσκεψη προγραμματισμένη' : 'Viewing scheduled')}
+                              </p>
+                              <p className="text-xs text-green-400/70 mt-0.5">{new Date(appointment.startTime).toLocaleString(language === 'el' ? 'el-GR' : 'en-US')}</p>
+                            </>
+                          ) : (
+                            <p className="font-semibold">
+                              {(inq.status as string) === 'pre_finalization'
+                                ? (language === 'el' ? 'Επίσκεψη ολοκληρώθηκε' : 'Viewing completed')
+                                : (language === 'el' ? 'Επίσκεψη προγραμματισμένη' : 'Viewing scheduled')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Link
+                        href="/homes/calendar"
+                        className="shrink-0 px-4 py-2 rounded-xl bg-green-600/20 text-green-300 hover:bg-green-600/30 text-sm font-semibold transition-colors border border-green-500/30"
+                      >
+                        {language === 'el' ? 'Ημερολόγιο →' : 'Calendar →'}
+                      </Link>
                     </div>
                   ) : isOwner && inq.status === 'approved' ? (
-                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
-                      <span className="text-xl">📅</span>
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Ορίστε διαθεσιμότητα' : 'Next step: Set your availability'}</p>
-                        <Link href={`/homes/${inq.home.key}/set-availability`} className="text-xs text-[var(--accent)] underline mt-0.5 inline-block">
-                          {language === 'el' ? 'Ορισμός χρόνων επίσκεψης →' : 'Add viewing slots →'}
-                        </Link>
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">📅</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Ορίστε διαθεσιμότητα' : 'Next step: Set availability'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Προσθέστε χρόνους επίσκεψης για τον ενδιαφερόμενο.' : 'Add viewing slots so the tenant can schedule.'}</p>
+                        </div>
                       </div>
+                      <Link
+                        href={`/homes/${inq.home.key}/set-availability`}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                      >
+                        {language === 'el' ? 'Ορισμός →' : 'Set slots →'}
+                      </Link>
                     </div>
                   ) : !isOwner && (
-                    <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
-                      <span className="text-xl">🏠</span>
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Book a viewing'}</p>
-                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="text-xs text-[var(--accent)] underline mt-0.5 inline-block">
-                          {language === 'el' ? 'Επιλογή ώρας →' : 'Choose a time slot →'}
-                        </Link>
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">🏠</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Schedule a viewing'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Επιλέξτε ώρα από τις διαθέσιμες θέσεις.' : 'Pick an available time slot from the owner.'}</p>
+                        </div>
                       </div>
+                      <Link
+                        href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                      >
+                        {language === 'el' ? 'Κράτηση →' : 'Book →'}
+                      </Link>
                     </div>
                   )}
                 </div>

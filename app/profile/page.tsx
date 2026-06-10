@@ -461,7 +461,7 @@ function ProfilePageInner() {
                     )}
                     {(user.subscriptionTier ?? 'free') === 'pro' && (
                       <span className="text-sm text-stone-300">
-                        ◆ Pro · {language === 'el' ? 'Όλα τα Plus + portfolio & branding' : 'Everything in Plus + portfolio & branding'}
+                        ◆ Pro
                       </span>
                     )}
                   </div>

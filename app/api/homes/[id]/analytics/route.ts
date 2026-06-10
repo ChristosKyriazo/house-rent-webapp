@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { checkTier } from '@/lib/subscription'
 import { unauthorized, forbidden, notFound } from '@/lib/api-utils'
 
-const MIN_VIEWS_FOR_DURATION = 10
+const MIN_VIEWS_FOR_DURATION = 3
 
 function startOf(unit: 'day' | 'week' | 'month'): Date {
   const now = new Date()

@@ -37,7 +37,14 @@ export async function GET(request: NextRequest) {
   if (tierBlock) return tierBlock
 
   const period = (request.nextUrl.searchParams.get('period') ?? 'month') as 'day' | 'week' | 'month'
-  const periodStart = period === 'day' ? startOf('day') : period === 'week' ? startOf('week') : startOf('month')
+  const dateParam = request.nextUrl.searchParams.get('date') // YYYY-MM-DD, used for drill-down
+  let periodStart: Date
+  if (period === 'day' && dateParam) {
+    const [y, m, d] = dateParam.split('-').map(Number)
+    periodStart = new Date(y, m - 1, d)
+  } else {
+    periodStart = period === 'day' ? startOf('day') : period === 'week' ? startOf('week') : startOf('month')
+  }
   const prevStart = prevPeriodStart(period, periodStart)
 
   const homes = await prisma.home.findMany({

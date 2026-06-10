@@ -123,14 +123,9 @@ export default function ListingAnalyticsPage() {
       <div className="max-w-3xl mx-auto">
 
         <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/homes/my-listings" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-              ← {isEl ? 'Οι αγγελίες μου' : 'My listings'}
-            </Link>
-            <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
-              Portfolio
-            </Link>
-          </div>
+          <Link href="/homes/analytics" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+            ← {isEl ? 'Αναλυτικά' : 'Analytics'}
+          </Link>
           {lastUpdated && (
             <span className="text-xs text-[var(--text-muted)]">
               {isEl ? 'Ενημ.' : 'Updated'} {lastUpdated.toLocaleTimeString(isEl ? 'el-GR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

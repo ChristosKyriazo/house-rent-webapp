@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
@@ -104,15 +104,18 @@ function SortHeader({ col, current, dir, onSort, children, className = '' }: {
 }
 
 // ─── Daily Pulse ─────────────────────────────────────────────────────────────
-function DailyPulse({ data, period, prevViews, isEl }: {
+function DailyPulse({ data, period, prevViews, isEl, onBarClick, onClearDrill }: {
   data: { label: string; views: number }[]
   period: string; prevViews: number; isEl: boolean
+  onBarClick?: (label: string) => void
+  onClearDrill?: () => void
 }) {
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
   const total = data.reduce((s, d) => s + d.views, 0)
   const max = Math.max(...data.map(d => d.views), 1)
-  const peakIdx = data.reduce((pi, d, i) => d.views > data[pi].views ? i : pi, 0)
   const delta = prevViews > 0 ? Math.round(((total - prevViews) / prevViews) * 100) : null
-  const nowHour = new Date().getHours()
 
   function fmtTick(label: string): string {
     if (period === 'day') return label
@@ -123,6 +126,14 @@ function DailyPulse({ data, period, prevViews, isEl }: {
     } catch { return label }
   }
 
+  function fmtFull(label: string): string {
+    if (period === 'day') return label
+    try {
+      const d = new Date(label + 'T12:00:00')
+      return d.toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' })
+    } catch { return label }
+  }
+
   const n = data.length
   const tickIdxs: number[] = n <= 7
     ? data.map((_, i) => i)
@@ -130,8 +141,34 @@ function DailyPulse({ data, period, prevViews, isEl }: {
       ? [0, 6, 12, 18, 23]
       : [0, Math.floor(n / 2), n - 1]
 
+  const isClickable = !!onBarClick && period !== 'day'
+
+  const handleBarClick = (label: string) => {
+    if (!isClickable) return
+    if (selectedLabel === label) {
+      setSelectedLabel(null)
+      onClearDrill?.()
+    } else {
+      setSelectedLabel(label)
+      onBarClick(label)
+    }
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        if (selectedLabel) {
+          setSelectedLabel(null)
+          onClearDrill?.()
+        }
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [selectedLabel, onClearDrill])
+
   return (
-    <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
+    <div ref={containerRef} className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-1">
@@ -149,22 +186,36 @@ function DailyPulse({ data, period, prevViews, isEl }: {
       </div>
       <div className="relative">
         <div className="flex items-end gap-[2px] h-24">
-          {data.map((d, i) => {
-            const isPeak = i === peakIdx && d.views > 0
-            const isCurrent = period === 'day' && i === nowHour
+          {data.map((d) => {
             const hPct = d.views > 0 ? Math.max((d.views / max) * 100, 6) : 0
+            const isSelected = selectedLabel === d.label
             return (
               <div
                 key={d.label}
-                title={`${fmtTick(d.label)}: ${d.views}`}
-                className="flex-1 flex flex-col justify-end h-full"
+                onClick={() => handleBarClick(d.label)}
+                className={`group/bar relative flex-1 flex flex-col justify-end h-full ${isClickable ? 'cursor-pointer' : ''}`}
               >
+                {/* Hover tooltip */}
+                {d.views > 0 && (
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 opacity-0 group-hover/bar:opacity-100 transition-opacity duration-100 flex flex-col items-center">
+                    <div className="bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                      <p className="text-sm font-bold text-[var(--text)] text-center">{d.views}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] text-center">{fmtFull(d.label)}</p>
+                      {isClickable && !isSelected && (
+                        <p className="text-[10px] text-amber-400/70 text-center mt-0.5">{isEl ? 'κλικ για ανάλυση' : 'click to drill in'}</p>
+                      )}
+                    </div>
+                    <div className="w-px h-1.5 bg-[var(--border-subtle)]" />
+                  </div>
+                )}
+                {/* Bar */}
                 <div
-                  className={`w-full rounded-t-sm transition-all ${
-                    isPeak ? 'bg-amber-400' :
-                    isCurrent ? 'bg-amber-500/80 ring-1 ring-inset ring-amber-300/50' :
-                    d.views === 0 ? 'bg-[var(--ink-soft)]' :
-                    'bg-amber-500/35 hover:bg-amber-500/55'
+                  className={`w-full rounded-t-sm transition-colors duration-100 ${
+                    d.views === 0
+                      ? 'bg-[var(--ink-soft)]'
+                      : isSelected
+                        ? 'bg-amber-400'
+                        : 'bg-amber-500/35 group-hover/bar:bg-amber-500/70'
                   }`}
                   style={{ height: d.views > 0 ? `${hPct}%` : '3px' }}
                 />
@@ -184,11 +235,9 @@ function DailyPulse({ data, period, prevViews, isEl }: {
           ))}
         </div>
       </div>
-      {data[peakIdx]?.views > 0 && (
-        <p className="text-xs text-[var(--text-muted)] mt-3">
-          {isEl ? 'Κορύφωση' : 'Peak'}{' '}
-          <span className="text-amber-400 font-medium">{data[peakIdx].views}</span>
-          {' '}{isEl ? 'στις' : 'at'} {fmtTick(data[peakIdx].label)}
+      {isClickable && (
+        <p className="text-[10px] text-[var(--text-muted)]/60 mt-3">
+          {isEl ? 'Κάντε κλικ σε μια μπάρα για ανάλυση της ημέρας' : 'Click a bar to drill into that day · click outside to reset'}
         </p>
       )}
     </div>
@@ -244,37 +293,51 @@ function TopAreas({ areas, isEl }: { areas: { area: string; views: number }[]; i
 }
 
 // ─── Promotion Lift ───────────────────────────────────────────────────────────
-function MetricRow({ label, value, max, isPromoted }: {
-  label: string; value: number; max: number; isPromoted: boolean
-}) {
-  const pct = Math.round((value / max) * 100)
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between mb-1">
-        <span className="text-xs text-[var(--text-muted)]">{label}</span>
-        <span className="text-xs font-semibold text-[var(--text)]">{value < 1 ? value.toFixed(2) : value.toFixed(1)}</span>
-      </div>
-      <div className="h-2 bg-[var(--ink-soft)] rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full ${isPromoted ? 'bg-amber-500' : 'bg-[var(--text-muted)]/40'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
 function groupStats(group: ListingRow[], daysInPeriod: number) {
   if (group.length === 0) return null
   const tv = group.reduce((s, h) => s + h.viewsInPeriod, 0)
   const ts = group.reduce((s, h) => s + h.savesTotal, 0)
   const ti = group.reduce((s, h) => s + h.inquiriesTotal, 0)
   return {
+    totalViews: tv,
     avgDailyViews: tv / (group.length * daysInPeriod),
     avgSaves: ts / group.length,
     avgInqRate: tv > 0 ? (ti / tv * 100) : 0,
     count: group.length,
   }
+}
+
+function StatCompareRow({ labelEl, labelEn, promoted, standard, max, isEl, unit = '' }: {
+  labelEl: string; labelEn: string
+  promoted: number; standard: number; max: number
+  isEl: boolean; unit?: string
+}) {
+  const pPct = Math.round((promoted / max) * 100)
+  const sPct = Math.round((standard / max) * 100)
+  const fmt = (v: number) => v < 1 ? v.toFixed(2) : v.toFixed(1)
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between mb-1.5 text-xs text-[var(--text-muted)]">
+        <span>{isEl ? labelEl : labelEn}</span>
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-amber-400 w-12 shrink-0 text-right tabular-nums">{fmt(promoted)}{unit}</span>
+          <div className="flex-1 h-2 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+            <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pPct}%` }} />
+          </div>
+          <span className="text-[10px] text-amber-400/60 w-12 shrink-0">{isEl ? 'Προωθ.' : 'Promo'}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-[var(--text-muted)] w-12 shrink-0 text-right tabular-nums">{fmt(standard)}{unit}</span>
+          <div className="flex-1 h-2 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+            <div className="h-full bg-[var(--text-muted)]/35 rounded-full transition-all" style={{ width: `${sPct}%` }} />
+          </div>
+          <span className="text-[10px] text-[var(--text-muted)]/60 w-12 shrink-0">{isEl ? 'Κανον.' : 'Std'}</span>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function PromotionLift({ homes, period, isEl }: { homes: ListingRow[]; period: string; isEl: boolean }) {
@@ -284,57 +347,108 @@ function PromotionLift({ homes, period, isEl }: { homes: ListingRow[]; period: s
   const pStats = groupStats(promoted, daysInPeriod)
   const nStats = groupStats(standard, daysInPeriod)
   const bothExist = pStats && nStats
+
+  const viewMultiplier = bothExist && nStats.avgDailyViews > 0
+    ? pStats.avgDailyViews / nStats.avgDailyViews : null
+  const inqMultiplier = bothExist && nStats.avgInqRate > 0
+    ? pStats.avgInqRate / nStats.avgInqRate : null
+
+  // Project: if standard listings were promoted, how many extra inquiries?
+  const projectedExtraInq = bothExist && pStats.avgInqRate > nStats.avgInqRate
+    ? Math.round(nStats.totalViews * (pStats.avgInqRate - nStats.avgInqRate) / 100)
+    : null
+
   const maxDV = Math.max(pStats?.avgDailyViews ?? 0, nStats?.avgDailyViews ?? 0, 1)
   const maxS = Math.max(pStats?.avgSaves ?? 0, nStats?.avgSaves ?? 0, 1)
   const maxR = Math.max(pStats?.avgInqRate ?? 0, nStats?.avgInqRate ?? 0, 1)
-  const multiplier = bothExist && nStats.avgDailyViews > 0
-    ? (pStats.avgDailyViews / nStats.avgDailyViews).toFixed(1) : null
+
+  if (!pStats) {
+    return (
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5 flex flex-col gap-4">
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)]">
+          {isEl ? 'Απόδοση Προώθησης' : 'Promotion Lift'}
+        </p>
+        <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 p-4">
+          <p className="text-sm font-semibold text-amber-300 mb-1">
+            {isEl ? 'Προωθημένες αγγελίες πωλούνται γρηγορότερα' : 'Promoted listings rent faster'}
+          </p>
+          <p className="text-xs text-[var(--text-muted)] mb-3">
+            {isEl
+              ? 'Στην πλατφόρμα μας, οι προωθημένες αγγελίες δέχονται 3–5× περισσότερες προβολές και κλείνουν σύμβαση 60% πιο γρήγορα.'
+              : 'On our platform, promoted listings receive 3–5× more views and close a deal 60% faster on average.'}
+          </p>
+          <Link
+            href="/homes/my-listings"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-black text-xs font-bold hover:bg-amber-400 transition-colors"
+          >
+            ✦ {isEl ? 'Ενεργοποίηση προώθησης →' : 'Activate promotion →'}
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-1">
-            {isEl ? 'Απόδοση Προώθησης' : 'Promotion Lift'}
-          </p>
-          {multiplier && (
-            <p className="text-2xl font-bold text-amber-400 font-[var(--font-fraunces)]">
-              {multiplier}×
-              <span className="text-sm font-normal text-[var(--text-muted)] ml-2">
-                {isEl ? 'προβολές/μέρα' : 'views/day'}
-              </span>
-            </p>
-          )}
-          {!pStats && <p className="text-sm text-[var(--text-muted)] mt-1">{isEl ? 'Χωρίς ενεργή προώθηση' : 'No active promotions'}</p>}
-          {pStats && !nStats && <p className="text-sm text-[var(--text-muted)] mt-1">{isEl ? 'Όλες προωθούνται' : 'All listings promoted'}</p>}
-        </div>
-        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] shrink-0">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{isEl ? 'Προωθ.' : 'Promo'}</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-muted)]/40" />{isEl ? 'Κανον.' : 'Std'}</span>
-        </div>
+      <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-4">
+        {isEl ? 'Απόδοση Προώθησης' : 'Promotion Lift'}
+      </p>
+
+      {/* Hero numbers */}
+      <div className={`grid gap-3 mb-5 ${bothExist ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {viewMultiplier !== null && (
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
+            <p className="text-2xl font-bold text-amber-400 font-[var(--font-fraunces)]">{viewMultiplier.toFixed(1)}×</p>
+            <p className="text-[10px] text-amber-400/70 mt-0.5">{isEl ? 'περισσότερες προβολές/μέρα' : 'more views / day'}</p>
+          </div>
+        )}
+        {inqMultiplier !== null && (
+          <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-3 text-center">
+            <p className="text-2xl font-bold text-green-400 font-[var(--font-fraunces)]">{inqMultiplier.toFixed(1)}×</p>
+            <p className="text-[10px] text-green-400/70 mt-0.5">{isEl ? 'υψηλότερο ποσοστό αιτ.' : 'higher inquiry rate'}</p>
+          </div>
+        )}
+        {pStats && !nStats && (
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
+            <p className="text-lg font-bold text-amber-400 font-[var(--font-fraunces)]">✦ {isEl ? 'Όλες προωθούνται' : 'All promoted'}</p>
+            <p className="text-[10px] text-amber-400/70 mt-0.5">{isEl ? `${pStats.count} αγγελίες σε προώθηση` : `${pStats.count} listings in promotion`}</p>
+          </div>
+        )}
       </div>
-      {!pStats ? (
-        <div className="rounded-xl border border-dashed border-amber-500/30 p-4 text-center">
-          <Link href="/homes/my-listings" className="text-xs text-amber-400/70 hover:text-amber-400">{isEl ? 'Ενεργοποίηση προώθησης →' : 'Activate a promotion slot →'}</Link>
+
+      {/* Projected gain callout */}
+      {projectedExtraInq !== null && projectedExtraInq > 0 && (
+        <div className="mb-4 rounded-xl bg-green-500/8 border border-green-500/20 px-3 py-2.5 flex items-center gap-2">
+          <span className="text-base">📈</span>
+          <p className="text-xs text-[var(--text-muted)]">
+            {isEl
+              ? <><span className="font-semibold text-green-400">+{projectedExtraInq} επιπλέον αιτήματα</span> αν προωθηθούν και οι {nStats!.count} κανονικές αγγελίες</>
+              : <><span className="font-semibold text-green-400">+{projectedExtraInq} more inquiries</span> if you promote your {nStats!.count} standard listing{nStats!.count > 1 ? 's' : ''}</>
+            }
+          </p>
         </div>
-      ) : (
-        <div className={`grid gap-6 ${bothExist ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {pStats && (
-            <div className="border-l-2 border-amber-500 pl-4">
-              <p className="text-xs font-semibold text-amber-400 mb-3">{isEl ? `Προωθ. (${pStats.count})` : `Promoted (${pStats.count})`}</p>
-              <MetricRow label={isEl ? 'Προβολές/μέρα' : 'Views/day'} value={pStats.avgDailyViews} max={maxDV} isPromoted={true} />
-              <MetricRow label={isEl ? 'Αποθ./αγγελία' : 'Saves/listing'} value={pStats.avgSaves} max={maxS} isPromoted={true} />
-              <MetricRow label={isEl ? 'Ποσοστό αιτ. %' : 'Inquiry rate %'} value={pStats.avgInqRate} max={maxR} isPromoted={true} />
-            </div>
-          )}
-          {nStats && (
-            <div className="border-l-2 border-[var(--border-subtle)] pl-4">
-              <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">{isEl ? `Κανον. (${nStats.count})` : `Standard (${nStats.count})`}</p>
-              <MetricRow label={isEl ? 'Προβολές/μέρα' : 'Views/day'} value={nStats.avgDailyViews} max={maxDV} isPromoted={false} />
-              <MetricRow label={isEl ? 'Αποθ./αγγελία' : 'Saves/listing'} value={nStats.avgSaves} max={maxS} isPromoted={false} />
-              <MetricRow label={isEl ? 'Ποσοστό αιτ. %' : 'Inquiry rate %'} value={nStats.avgInqRate} max={maxR} isPromoted={false} />
-            </div>
-          )}
+      )}
+
+      {/* Side-by-side bars */}
+      {bothExist && (
+        <div>
+          <StatCompareRow labelEl="Προβολές/μέρα" labelEn="Views / day" promoted={pStats.avgDailyViews} standard={nStats.avgDailyViews} max={maxDV} isEl={isEl} />
+          <StatCompareRow labelEl="Αποθ./αγγελία" labelEn="Saves / listing" promoted={pStats.avgSaves} standard={nStats.avgSaves} max={maxS} isEl={isEl} />
+          <StatCompareRow labelEl="Ποσοστό αιτ." labelEn="Inquiry rate" promoted={pStats.avgInqRate} standard={nStats.avgInqRate} max={maxR} isEl={isEl} unit="%" />
+        </div>
+      )}
+
+      {nStats && nStats.count > 0 && (
+        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
+          <p className="text-xs text-[var(--text-muted)]">
+            {isEl ? `${nStats.count} αγγελίες χωρίς προώθηση` : `${nStats.count} listing${nStats.count > 1 ? 's' : ''} without promotion`}
+          </p>
+          <Link
+            href="/homes/my-listings"
+            className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-semibold"
+          >
+            ✦ {isEl ? 'Προώθηση →' : 'Promote →'}
+          </Link>
         </div>
       )}
     </div>
@@ -342,60 +456,110 @@ function PromotionLift({ homes, period, isEl }: { homes: ListingRow[]; period: s
 }
 
 // ─── Engagement Depth ────────────────────────────────────────────────────────
+const SCORE_COLOR = (s: number) =>
+  s >= 70 ? 'text-amber-300 bg-amber-500/20 border-amber-500/30' :
+  s >= 40 ? 'text-stone-300 bg-stone-500/15 border-stone-500/25' :
+            'text-red-400/80 bg-red-500/10 border-red-500/20'
+
+const SCORE_BAR_COLOR = (s: number) =>
+  s >= 70 ? 'bg-amber-500' : s >= 40 ? 'bg-stone-400' : 'bg-red-500/60'
+
 function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }) {
-  const maxV = Math.max(...homes.map(h => h.viewsInPeriod), 1)
   const scored = [...homes]
-    .map(h => ({ ...h, score: engagementScore(h) }))
+    .map(h => ({
+      ...h,
+      score: engagementScore(h),
+      saveRate: h.viewsInPeriod > 0 ? (h.savesTotal / h.viewsInPeriod) * 100 : 0,
+      inqRate: h.viewsInPeriod > 0 ? (h.inquiriesTotal / h.viewsInPeriod) * 100 : 0,
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
 
+  const maxSaveRate = Math.max(...scored.map(h => h.saveRate), 1)
+  const maxInqRate = Math.max(...scored.map(h => h.inqRate), 1)
+
+  const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+
   return (
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
-      <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-5">
-        {isEl ? 'Βάθος Ενδιαφέροντος' : 'Engagement Depth'}
-      </p>
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)]">
+          {isEl ? 'Βάθος Ενδιαφέροντος' : 'Engagement Depth'}
+        </p>
+        <p className="text-[10px] text-[var(--text-muted)]/60">
+          {isEl ? 'αποθ. 40pt · αιτ. 60pt' : 'saves 40pt · inq. 60pt'}
+        </p>
+      </div>
       {scored.length === 0 ? (
         <p className="text-sm text-[var(--text-muted)] text-center py-4">{isEl ? 'Χωρίς δεδομένα' : 'No data yet'}</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {scored.map(home => {
-            const vp = (home.viewsInPeriod / maxV) * 100
-            const sp = home.viewsInPeriod > 0 ? Math.min((home.savesTotal / home.viewsInPeriod) * vp, vp) : 0
-            const ip = home.viewsInPeriod > 0 ? Math.min((home.inquiriesTotal / home.viewsInPeriod) * vp, vp) : 0
+        <div className="flex flex-col divide-y divide-[var(--border-subtle)]">
+          {scored.map((home, idx) => {
             const title = isEl ? (home.titleGreek ?? home.title) : home.title
+            const spPct = Math.round((home.saveRate / maxSaveRate) * 100)
+            const ipPct = Math.round((home.inqRate / maxInqRate) * 100)
             return (
-              <div key={home.key} className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${STATUS_DOT[home.status]} shrink-0`} />
-                <Link href={`/homes/${home.key}/analytics`} className="w-28 text-xs text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate shrink-0">
-                  {title}
-                </Link>
-                <div className="flex-1 relative h-3 bg-[var(--ink-soft)] rounded-full overflow-hidden min-w-0">
-                  <div className="absolute inset-y-0 left-0 bg-amber-500/25 rounded-full" style={{ width: `${vp}%` }} />
-                  <div className="absolute inset-y-0 left-0 bg-amber-500/65 rounded-full" style={{ width: `${sp}%` }} />
-                  <div className="absolute inset-y-0 left-0 bg-amber-700 rounded-full" style={{ width: `${ip}%` }} />
+              <div key={home.key} className="py-3 first:pt-0 last:pb-0">
+                {/* Row 1: rank + title + score badge */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-[var(--text-muted)]/50 tabular-nums w-4 shrink-0">{idx + 1}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[home.status]} shrink-0`} />
+                  <Link
+                    href={`/homes/${home.key}/analytics`}
+                    className="flex-1 text-sm font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate min-w-0"
+                  >
+                    {title}
+                  </Link>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border shrink-0 tabular-nums ${SCORE_COLOR(home.score)}`}>
+                    {home.score}
+                  </span>
                 </div>
-                {home.score >= 60 ? (
-                  <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded-full font-bold shrink-0 w-10 text-center">{home.score}</span>
-                ) : (
-                  <span className="text-xs text-[var(--text-muted)] shrink-0 w-10 text-right">{home.score || '—'}</span>
-                )}
+
+                {/* Row 2: counts */}
+                <div className="flex items-center gap-3 mb-2 pl-6">
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {fmtNum(home.viewsInPeriod)} {isEl ? 'προβ.' : 'views'}
+                  </span>
+                  <span className="text-[10px] text-amber-500/60">·</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {home.savesTotal} {isEl ? 'αποθ.' : 'saves'}
+                  </span>
+                  <span className="text-[10px] text-amber-500/60">·</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {home.inquiriesTotal} {isEl ? 'αιτ.' : 'inq.'}
+                  </span>
+                </div>
+
+                {/* Row 3: rate bars (self-normalized) */}
+                <div className="flex flex-col gap-1 pl-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-[var(--text-muted)]/60 w-14 shrink-0">{isEl ? 'Save rate' : 'Save rate'}</span>
+                    <div className="flex-1 h-1.5 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${SCORE_BAR_COLOR(home.score)} opacity-60`} style={{ width: `${spPct}%` }} />
+                    </div>
+                    <span className="text-[9px] text-[var(--text-muted)] w-8 text-right tabular-nums">{home.saveRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-[var(--text-muted)]/60 w-14 shrink-0">{isEl ? 'Inq. rate' : 'Inq. rate'}</span>
+                    <div className="flex-1 h-1.5 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${SCORE_BAR_COLOR(home.score)}`} style={{ width: `${ipPct}%` }} />
+                    </div>
+                    <span className="text-[9px] text-[var(--text-muted)] w-8 text-right tabular-nums">{home.inqRate.toFixed(1)}%</span>
+                  </div>
+                  {/* Score bar */}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[9px] text-[var(--text-muted)]/60 w-14 shrink-0">{isEl ? 'Score' : 'Score'}</span>
+                    <div className="flex-1 h-1.5 bg-[var(--ink-soft)] rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${SCORE_BAR_COLOR(home.score)} opacity-80`} style={{ width: `${home.score}%` }} />
+                    </div>
+                    <span className="text-[9px] text-[var(--text-muted)] w-8 text-right tabular-nums">{home.score}/100</span>
+                  </div>
+                </div>
               </div>
             )
           })}
         </div>
       )}
-      <div className="flex items-center gap-5 mt-5 pt-4 border-t border-[var(--border-subtle)]">
-        {[
-          { cls: 'bg-amber-500/25', label: isEl ? 'Προβολές' : 'Views' },
-          { cls: 'bg-amber-500/65', label: isEl ? 'Αποθ.' : 'Saves' },
-          { cls: 'bg-amber-700', label: isEl ? 'Αιτ.' : 'Inq.' },
-        ].map(l => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <div className={`w-3 h-2.5 rounded-sm ${l.cls}`} />
-            <span className="text-xs text-[var(--text-muted)]">{l.label}</span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -482,13 +646,16 @@ function PlusView({ data, period: _period, isEl }: {
 }
 
 // ─── Pro: full analytics view ─────────────────────────────────────────────────
-function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
+function ProView({ data, period, sortCol, sortDir, handleSort, isEl, onBarClick, drillDate, onClearDrill }: {
   data: PortfolioData
   period: 'day' | 'week' | 'month'
   sortCol: SortCol
   sortDir: 'asc' | 'desc'
   handleSort: (c: SortCol) => void
   isEl: boolean
+  onBarClick?: (label: string) => void
+  drillDate?: string | null
+  onClearDrill?: () => void
 }) {
   const delta = data.totals.prevViews > 0
     ? Math.round(((data.totals.views - data.totals.prevViews) / data.totals.prevViews) * 100)
@@ -532,7 +699,20 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl }: {
         ))}
       </div>
 
-      <DailyPulse data={data.timeSeries} period={period} prevViews={data.totals.prevViews} isEl={isEl} />
+      {drillDate && onClearDrill && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClearDrill}
+            className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+          >
+            ← {isEl ? 'Πίσω' : 'Back'}
+          </button>
+          <span className="text-xs text-amber-400/70">
+            {isEl ? 'Φιλτράρισμα:' : 'Filtered:'} {drillDate}
+          </span>
+        </div>
+      )}
+      <DailyPulse data={data.timeSeries} period={period} prevViews={data.totals.prevViews} isEl={isEl} onBarClick={onBarClick} onClearDrill={onClearDrill} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PromotionLift homes={data.homes} period={period} isEl={isEl} />
@@ -655,11 +835,16 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<PortfolioData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('month')
+  const [drillDate, setDrillDate] = useState<string | null>(null)
+  const [preDrillPeriod, setPreDrillPeriod] = useState<'day' | 'week' | 'month'>('month')
   const [sortCol, setSortCol] = useState<SortCol>('views')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const fetchData = useCallback((p: string) => {
-    return fetch(`/api/homes/portfolio-analytics?period=${p}`)
+  const fetchData = useCallback((p: string, date?: string) => {
+    const url = date
+      ? `/api/homes/portfolio-analytics?period=${p}&date=${date}`
+      : `/api/homes/portfolio-analytics?period=${p}`
+    return fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setData(d) })
       .catch(() => {})
@@ -681,14 +866,29 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (tier === 'free') return
-    fetchData(period)
-  }, [period, tier, fetchData])
+    if (!drillDate) fetchData(period)
+  }, [period, tier, fetchData, drillDate])
 
   useEffect(() => {
-    if (tier === 'free') return
+    if (tier === 'free' || drillDate) return
     const interval = setInterval(() => fetchData(period), 30_000)
     return () => clearInterval(interval)
-  }, [period, tier, fetchData])
+  }, [period, tier, fetchData, drillDate])
+
+  function handleBarClick(label: string) {
+    // label is a date string (YYYY-MM-DD) for week/month views
+    if (period === 'day') return
+    setPreDrillPeriod(period)
+    setDrillDate(label)
+    setPeriod('day')
+    fetchData('day', label)
+  }
+
+  function handleClearDrill() {
+    setDrillDate(null)
+    setPeriod(preDrillPeriod)
+    fetchData(preDrillPeriod)
+  }
 
   function handleSort(col: SortCol) {
     if (col === sortCol) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
@@ -738,7 +938,7 @@ export default function AnalyticsPage() {
           <h1 className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">
             {isEl ? 'Αναλυτικά' : 'Analytics'}
           </h1>
-          {(isPlus || isPro) && <PeriodTabs period={period} onChange={setPeriod} isEl={isEl} />}
+          {(isPlus || isPro) && !drillDate && <PeriodTabs period={period} onChange={setPeriod} isEl={isEl} />}
         </div>
 
         {isPlus && !data && (
@@ -757,6 +957,9 @@ export default function AnalyticsPage() {
             sortDir={sortDir}
             handleSort={handleSort}
             isEl={isEl}
+            onBarClick={handleBarClick}
+            drillDate={drillDate}
+            onClearDrill={handleClearDrill}
           />
         )}
       </div>
