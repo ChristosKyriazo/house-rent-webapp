@@ -33,6 +33,7 @@ interface Home {
   streetGreek?: string | null
   city: string
   country: string
+  finalized?: boolean
 }
 
 export default function HomeInquiriesPage() {
@@ -50,6 +51,7 @@ export default function HomeInquiriesPage() {
   const [moveInDate, setMoveInDate] = useState('')
   const [moveOutDate, setMoveOutDate] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+  const [backHref, setBackHref] = useState('/homes/inquiries')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,6 +63,9 @@ export default function HomeInquiriesPage() {
         const inquiryIdParam = searchParams.get('inquiryId')
         if (inquiryIdParam) {
           setHighlightedInquiryId(parseInt(inquiryIdParam))
+        }
+        if (searchParams.get('from') === 'approved') {
+          setBackHref('/homes/approved')
         }
         
         const response = await fetch(`/api/inquiries/${homeKey}`)
@@ -198,7 +203,7 @@ export default function HomeInquiriesPage() {
         {/* Header */}
         <div className="mb-8">
           <Link
-            href="/homes/inquiries"
+            href={backHref}
             className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
@@ -287,7 +292,7 @@ export default function HomeInquiriesPage() {
                     </div>
 
                     <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                      {isApproved && !inquiry.finalized && (
+                      {isApproved && !inquiry.finalized && !home.finalized && (
                         <button
                           onClick={() => setConfirmingInquiry(inquiry)}
                           className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all font-semibold text-sm"

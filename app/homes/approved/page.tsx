@@ -10,7 +10,7 @@ import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet }
 
 interface ApprovedInquiry {
   id: number
-  home: { key: string; title: string; titleGreek?: string | null; street: string | null; streetGreek?: string | null; city: string; country: string; area: string | null }
+  home: { key: string; title: string; titleGreek?: string | null; street: string | null; streetGreek?: string | null; city: string; country: string; area: string | null; finalized?: boolean }
   user?: { name: string | null; email: string }
   owner?: { name: string | null; email: string }
   contactInfo: { phone?: string; timeFrame?: string; appointmentThresholdMinutes?: number } | null
@@ -156,7 +156,7 @@ export default function ApprovedInquiriesPage() {
                         </div>
                       </div>
                       <Link
-                        href={`/homes/inquiries/${inq.home.key}`}
+                        href={`/homes/inquiries/${inq.home.key}?from=approved`}
                         className="shrink-0 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-sm font-semibold transition-colors border border-yellow-500/30"
                       >
                         {language === 'el' ? 'Προβολή →' : 'View →'}
@@ -171,12 +171,18 @@ export default function ApprovedInquiriesPage() {
                           <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Η επίσκεψη ολοκληρώθηκε. Μπορείτε να οριστικοποιήσετε.' : 'Viewing done. Confirm the tenant to close the deal.'}</p>
                         </div>
                       </div>
-                      <Link
-                        href={`/homes/inquiries/${inq.home.key}`}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
-                      >
-                        {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
-                      </Link>
+                      {inq.home.finalized ? (
+                        <span className="shrink-0 px-3 py-1.5 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold">
+                          {language === 'el' ? 'Ολοκληρώθηκε' : 'Deal closed'}
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/homes/inquiries/${inq.home.key}?from=approved`}
+                          className="shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
+                        >
+                          {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
+                        </Link>
+                      )}
                     </div>
                   ) : showScheduled ? (
                     <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-green-600/15 border border-green-500/40">

@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
               listingType: true,
               photos: true,
               ownerId: true,
+              finalized: true,
             },
           },
         },
@@ -230,6 +231,7 @@ export async function GET(request: NextRequest) {
             listingType: inquiry.home.listingType,
             photos: photos,
             ownerId: inquiry.home.ownerId,
+            finalized: inquiry.home.finalized,
           },
           user: {
             id: inquiry.user.id,
@@ -442,6 +444,7 @@ export async function GET(request: NextRequest) {
             listingType: home.listingType,
             photos: photos,
             ownerId: home.ownerId,
+            finalized: home.finalized,
           },
           owner: {
             id: home.owner.id,

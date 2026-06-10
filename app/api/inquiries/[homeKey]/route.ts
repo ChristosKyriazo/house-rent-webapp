@@ -44,6 +44,7 @@ export async function GET(
         city: true,
         country: true,
         ownerId: true,
+        finalized: true,
       },
     })
 
@@ -92,6 +93,7 @@ export async function GET(
           },
           approved: inquiry.approved,
           dismissed: inquiry.dismissed,
+          finalized: inquiry.finalized,
           contactInfo: inquiry.contactInfo,
           createdAt: inquiry.createdAt,
         }
@@ -107,6 +109,7 @@ export async function GET(
           street: home.street,
           city: home.city,
           country: home.country,
+          finalized: home.finalized,
         },
         inquiries: inquiriesWithRatings,
       },
