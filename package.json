@@ -17,6 +17,12 @@
     "test": "vitest run",
     "test:integration": "vitest run tests/api",
     "test:e2e": "playwright test",
+    "test:e2e:auth": "playwright test --project=owner --project=renter --project=broker --project=both",
+    "test:e2e:owner": "playwright test --project=owner",
+    "test:e2e:renter": "playwright test --project=renter",
+    "test:e2e:broker": "playwright test --project=broker",
+    "test:e2e:both": "playwright test --project=both",
+    "test:e2e:report": "playwright show-report",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
@@ -42,7 +48,7 @@
     "import-in-the-middle": "3.0.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "19.2.7",
