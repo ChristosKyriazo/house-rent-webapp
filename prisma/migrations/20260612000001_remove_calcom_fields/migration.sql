@@ -1,0 +1,4 @@
+ALTER TABLE "User" DROP COLUMN IF EXISTS "calComUsername";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "calComAccessToken";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "calComRefreshToken";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "calComTokenExpiresAt";

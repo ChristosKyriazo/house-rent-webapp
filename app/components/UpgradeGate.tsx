@@ -8,7 +8,7 @@ import { meetsMinimumTier } from '@/lib/subscription-utils'
 
 type Tier = 'plus' | 'pro'
 type Mode = 'drawer' | 'overlay' | 'replace'
-type Feature = 'bulk-upload' | 'analytics' | 'promote' | 'calcom-sync' | 'csv-export' | 'portfolio-analytics'
+type Feature = 'bulk-upload' | 'analytics' | 'promote' | 'csv-export' | 'portfolio-analytics'
 
 const FEATURE_COPY: Record<Feature, { en: string; el: string; descEn: string; descEl: string; tier: Tier }> = {
   'bulk-upload': {
@@ -30,13 +30,6 @@ const FEATURE_COPY: Record<Feature, { en: string; el: string; descEn: string; de
     el: 'Προώθηση αγγελίας',
     descEn: 'Boost your listing to the top of search results and reach more renters faster.',
     descEl: 'Ανεβάστε την αγγελία σας στην κορυφή των αποτελεσμάτων και φτάστε σε περισσότερους ενοικιαστές.',
-    tier: 'plus',
-  },
-  'calcom-sync': {
-    en: 'Calendar sync',
-    el: 'Συγχρονισμός ημερολογίου',
-    descEn: 'Let renters book viewings automatically via Cal.com — no back-and-forth.',
-    descEl: 'Αφήστε τους ενοικιαστές να κλείνουν επισκέψεις αυτόματα — χωρίς πηγαινέλα.',
     tier: 'plus',
   },
   'csv-export': {

@@ -37,7 +37,6 @@ const FEATURE_GROUPS: {
     items: [
       { en: 'Inquiry management', el: 'Διαχείριση αιτημάτων', tiers: ['free', 'plus', 'pro'] },
       { en: 'Booking & calendar', el: 'Κρατήσεις & ημερολόγιο', tiers: ['free', 'plus', 'pro'] },
-      { en: 'Cal.com booking sync', el: 'Συγχρονισμός Cal.com', tiers: ['plus', 'pro'] },
       { en: 'Lead quality signals', el: 'Δείκτες ποιότητας ενδιαφερόμενων', tiers: ['pro'] },
     ],
   },
@@ -117,7 +116,6 @@ function UpgradePageInner() {
             'bulk-upload': '/homes/new',
             'analytics': '/homes/my-listings',
             'promote': '/homes/my-listings',
-            'calcom-sync': '/profile',
             'csv-export': '/profile',
             'portfolio-analytics': '/profile',
           }

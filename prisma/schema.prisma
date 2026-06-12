@@ -21,10 +21,6 @@ model User {
   subscriptionTier String   @default("free") // "free" | "plus" | "pro"
   viberAlertsActive Boolean @default(false)  // paid Viber/SMS push alerts (renter one-time purchase)
   verified        Boolean   @default(false)  // verified owner/broker badge
-  calComUsername  String?   // Cal.com username (optional, for direct link)
-  calComAccessToken String? // Cal.com OAuth access token
-  calComRefreshToken String? // Cal.com OAuth refresh token
-  calComTokenExpiresAt DateTime? // When the access token expires
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]

@@ -43,7 +43,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
       }
       
-      // Fetch full user data including Cal.com info
       user = await prisma.user.findUnique({
         where: { id: currentUser.id },
         select: {
@@ -84,7 +83,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { name, dateOfBirth, occupation, role, calComUsername } = await request.json()
+    const { name, dateOfBirth, occupation, role } = await request.json()
     
     // If user is a broker, they cannot change their role or occupation
     if (user.role === 'broker') {
@@ -97,7 +96,6 @@ export async function PATCH(request: NextRequest) {
           dateOfBirth: null, // Brokers don't have date of birth
           occupation: 'Broker', // Always keep as "Broker" for brokers
           role: 'broker', // Keep broker role
-          calComUsername: calComUsername || null,
         },
         select: {
           id: true,
@@ -116,7 +114,7 @@ export async function PATCH(request: NextRequest) {
     // For non-broker users, only allow changing to user/owner/both (not broker)
     const validRoles = ['owner', 'user', 'both']
     const userRole = role && validRoles.includes(role.toLowerCase()) ? role.toLowerCase() : (user.role || 'user')
-    
+
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -124,7 +122,6 @@ export async function PATCH(request: NextRequest) {
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         occupation: occupation || null,
         role: userRole,
-        calComUsername: calComUsername || null,
       },
       select: {
         id: true,
@@ -133,7 +130,6 @@ export async function PATCH(request: NextRequest) {
         dateOfBirth: true,
         occupation: true,
         role: true,
-        calComUsername: true,
         subscriptionTier: true,
         createdAt: true,
       },
