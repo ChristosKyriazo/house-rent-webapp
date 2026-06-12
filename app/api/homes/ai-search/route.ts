@@ -121,7 +121,9 @@ export async function POST(request: NextRequest) {
         // Only check cache when results aren't user-specific (no exclusion filters)
         if (!excludeInquired && !excludeApproved) {
           // Try Redis cache first (shared across instances, survives restarts)
-          const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`
+          const { createHash } = await import('crypto')
+          const queryHash = createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16)
+          const redisCacheKey = `ai-search:${type || 'any'}:${queryHash}`
           const redisHit = await redisGet<{ homes: unknown[]; message: string }>(redisCacheKey)
           if (redisHit) {
             log.info('Serving AI search from Redis cache')

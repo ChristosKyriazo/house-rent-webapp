@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { getUserRatings } from '@/lib/ratings'
+import { getBatchUserRatings } from '@/lib/ratings'
 import { forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
 
@@ -77,28 +77,29 @@ export async function GET(
       },
     })
 
-    // Get ratings for each user
-    const inquiriesWithRatings = await Promise.all(
-      inquiries.map(async (inquiry) => {
-        const ratings = await getUserRatings(inquiry.user.id)
-        return {
-          id: inquiry.id,
-          key: inquiry.key,
-          user: {
-            id: inquiry.user.id,
-            name: inquiry.user.name,
-            email: inquiry.user.email,
-            role: inquiry.user.role,
-            rating: ratings.userScore,
-          },
-          approved: inquiry.approved,
-          dismissed: inquiry.dismissed,
-          finalized: inquiry.finalized,
-          contactInfo: inquiry.contactInfo,
-          createdAt: inquiry.createdAt,
-        }
-      })
-    )
+    // Batch-load all ratings in a single query (avoids N+1)
+    const userIds = inquiries.map(i => i.user.id)
+    const ratingsMap = await getBatchUserRatings(userIds)
+
+    const inquiriesWithRatings = inquiries.map((inquiry) => {
+      const ratings = ratingsMap.get(inquiry.user.id)
+      return {
+        id: inquiry.id,
+        key: inquiry.key,
+        user: {
+          id: inquiry.user.id,
+          name: inquiry.user.name,
+          email: inquiry.user.email,
+          role: inquiry.user.role,
+          rating: ratings?.userScore ?? null,
+        },
+        approved: inquiry.approved,
+        dismissed: inquiry.dismissed,
+        finalized: inquiry.finalized,
+        contactInfo: inquiry.contactInfo,
+        createdAt: inquiry.createdAt,
+      }
+    })
 
     return NextResponse.json(
       {

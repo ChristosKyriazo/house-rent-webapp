@@ -117,7 +117,8 @@ export async function GET(request: NextRequest) {
     const existingRatings = await prisma.rating.findMany({
       where: {
         raterId: user.id,
-        type: effectiveRole === 'owner' ? 'renter' : 'owner', // Owner rates renter, user rates owner
+        // Owner rates tenants (viewing_tenant / moveout_tenant); user rates the property (movein_house / moveout_house)
+        type: { in: effectiveRole === 'owner' ? ['viewing_tenant', 'moveout_tenant'] : ['movein_house', 'moveout_house'] },
       },
     })
 

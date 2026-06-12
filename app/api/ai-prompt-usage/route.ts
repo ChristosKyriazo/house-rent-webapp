@@ -81,17 +81,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'limit_reached', canSearch: false }, { status: 402 })
   }
 
-  const updateData: Record<string, unknown> = needsReset
-    ? { aiSearchMonthlyCount: 1, aiSearchMonthlyResetAt: nextReset }
-    : monthlyLeft > 0
-      ? { aiSearchMonthlyCount: { increment: 1 } }
-      : { aiSearchPackCount: { decrement: 1 } }
+  // Use atomic conditional updates to prevent race conditions (double-spending)
+  if (needsReset) {
+    // Reset period atomically: only one request wins the race to reset
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { aiSearchMonthlyCount: 1, aiSearchMonthlyResetAt: nextReset },
+      select: { aiSearchMonthlyCount: true, aiSearchPackCount: true },
+    })
+    const newLeft = Math.max(0, monthlyLimit - updated.aiSearchMonthlyCount)
+    return NextResponse.json({ ok: true, remaining: newLeft, packCredits: updated.aiSearchPackCount, canSearch: newLeft > 0 || updated.aiSearchPackCount > 0 })
+  }
 
-  const updated = await prisma.user.update({
+  if (monthlyLeft > 0) {
+    // Atomic: only increment if the current count is still within the limit
+    const atomicResult = await prisma.user.updateMany({
+      where: { id: user.id, aiSearchMonthlyCount: { lt: monthlyLimit } },
+      data: { aiSearchMonthlyCount: { increment: 1 } },
+    })
+    if (atomicResult.count === 0) {
+      // Monthly credits ran out between our read and write — try pack credits
+      const packResult = await prisma.user.updateMany({
+        where: { id: user.id, aiSearchPackCount: { gt: 0 } },
+        data: { aiSearchPackCount: { decrement: 1 } },
+      })
+      if (packResult.count === 0) {
+        return NextResponse.json({ error: 'limit_reached', canSearch: false }, { status: 402 })
+      }
+    }
+  } else {
+    // Pack credits path: atomic decrement only if count > 0
+    const packResult = await prisma.user.updateMany({
+      where: { id: user.id, aiSearchPackCount: { gt: 0 } },
+      data: { aiSearchPackCount: { decrement: 1 } },
+    })
+    if (packResult.count === 0) {
+      return NextResponse.json({ error: 'limit_reached', canSearch: false }, { status: 402 })
+    }
+  }
+
+  const updated = await prisma.user.findUnique({
     where: { id: user.id },
-    data: updateData,
     select: { aiSearchMonthlyCount: true, aiSearchPackCount: true },
   })
-  const newLeft = Math.max(0, monthlyLimit - updated.aiSearchMonthlyCount)
-  return NextResponse.json({ ok: true, remaining: newLeft, packCredits: updated.aiSearchPackCount, canSearch: newLeft > 0 || updated.aiSearchPackCount > 0 })
+  const newLeft = Math.max(0, monthlyLimit - (updated?.aiSearchMonthlyCount ?? monthlyLimit))
+  return NextResponse.json({ ok: true, remaining: newLeft, packCredits: updated?.aiSearchPackCount ?? 0, canSearch: newLeft > 0 || (updated?.aiSearchPackCount ?? 0) > 0 })
 }

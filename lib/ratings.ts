@@ -191,3 +191,45 @@ export async function getUserRatings(userId: number) {
     brokerCount: brokerScore.count,
   }
 }
+
+// Batch version — single DB round-trip for a list of user IDs (avoids N+1)
+export async function getBatchUserRatings(userIds: number[]): Promise<Map<number, { userScore: number | null; brokerScore: number | null }>> {
+  if (userIds.length === 0) return new Map()
+
+  const ratings = await prisma.rating.findMany({
+    where: {
+      ratedUserId: { in: userIds },
+      type: { in: ['viewing_tenant', 'moveout_tenant', 'viewing_broker'] },
+    },
+    select: { ratedUserId: true, type: true, scores: true },
+  })
+
+  const result = new Map<number, { userScore: number | null; brokerScore: number | null }>()
+
+  // Group by user
+  const byUser = new Map<number, { tenant: number[]; broker: number[] }>()
+  for (const r of ratings) {
+    if (r.ratedUserId == null) continue
+    if (!byUser.has(r.ratedUserId)) byUser.set(r.ratedUserId, { tenant: [], broker: [] })
+    const entry = byUser.get(r.ratedUserId)!
+    const s = r.scores as Record<string, number>
+    const rowAvg = Object.values(s).reduce((a, b) => a + b, 0) / Object.values(s).length
+    if (r.type === 'viewing_broker') {
+      entry.broker.push(rowAvg)
+    } else {
+      entry.tenant.push(rowAvg)
+    }
+  }
+
+  for (const uid of userIds) {
+    const entry = byUser.get(uid)
+    const tenantScores = entry?.tenant ?? []
+    const brokerScores = entry?.broker ?? []
+    result.set(uid, {
+      userScore: tenantScores.length > 0 ? Number((tenantScores.reduce((a, b) => a + b, 0) / tenantScores.length).toFixed(1)) : null,
+      brokerScore: brokerScores.length > 0 ? Number((brokerScores.reduce((a, b) => a + b, 0) / brokerScores.length).toFixed(1)) : null,
+    })
+  }
+
+  return result
+}

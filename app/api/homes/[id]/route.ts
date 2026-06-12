@@ -283,6 +283,17 @@ export async function PUT(
       data: updateData,
     })
 
+    // Re-queue embedding if any semantic field changed (title, description, city, area, price, etc.)
+    const semanticFields: Array<keyof typeof updateData> = ['title', 'description', 'city', 'country', 'area', 'listingType', 'bedrooms', 'bathrooms', 'pricePerMonth', 'sizeSqMeters', 'parking', 'heatingCategory', 'heatingAgent', 'energyClass', 'yearBuilt', 'yearRenovated']
+    const hasSemanticChange = semanticFields.some(f => f in updateData)
+    if (hasSemanticChange) {
+      prisma.embeddingQueue.upsert({
+        where: { homeId: existingHome.id },
+        create: { homeId: existingHome.id, status: 'pending' },
+        update: { status: 'pending', lastError: null },
+      }).catch((err) => log.error({ err, homeId: existingHome.id }, 'Failed to enqueue embedding update'))
+    }
+
     return NextResponse.json(
       { message: 'Home updated', home: updatedHome },
       { status: 200 }

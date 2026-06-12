@@ -47,6 +47,12 @@ export async function initiateFinalization(
   })
   if (!scheduledBooking) throw new InquiryFinalizationError('Can only finalize after a scheduled meeting', 400)
 
+  // Guard: meeting must have ended before finalization can be initiated
+  if (new Date(scheduledBooking.endTime) > new Date()) {
+    throw new InquiryFinalizationError('Cannot finalize before the scheduled meeting has ended', 400)
+  }
+
+  try {
   await prisma.$transaction(async tx => {
     await tx.finalization.create({
       data: {
@@ -72,6 +78,13 @@ export async function initiateFinalization(
       },
     })
   })
+  } catch (err: unknown) {
+    // P2002 = unique constraint violation — another request already created the finalization
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
+      throw new InquiryFinalizationError('Finalization already initiated', 409)
+    }
+    throw err
+  }
 }
 
 export async function respondToFinalization(inquiryId: number, userId: number, action: 'approve' | 'dismiss') {

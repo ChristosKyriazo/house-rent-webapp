@@ -34,13 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'type must be "rent" or "buy"' }, { status: 400 })
     }
 
-    let userId: number | null = null
-    try {
-      const user = await getCurrentUser()
-      if (user) userId = user.id
-    } catch {
-      // unauthenticated — allowed
+    const user = await getCurrentUser().catch(() => null)
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
+    const userId = user.id
 
     const result = await processAIChatTurn(
       conversationKey ?? null,
@@ -68,14 +66,25 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { getCurrentUser } = await import('@/lib/auth')
+    const user = await getCurrentUser().catch(() => null)
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { prisma } = await import('@/lib/prisma')
     const conversation = await prisma.searchConversation.findUnique({
       where: { key },
-      select: { key: true, messages: true, accumulatedFilters: true, listingMode: true, createdAt: true },
+      select: { key: true, userId: true, messages: true, accumulatedFilters: true, listingMode: true, createdAt: true },
     })
 
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    // Prevent users from reading each other's conversation history
+    if (conversation.userId !== null && conversation.userId !== user.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
     return NextResponse.json(conversation)
