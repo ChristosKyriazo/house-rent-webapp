@@ -233,11 +233,11 @@ function HomeDetailPage() {
           // Fetch approved inquiries for users in parallel with availability check
           const isRenterViewing = data.home.owner.id !== profileData.user.id
           const isUser = profileData.user.role === 'user' || (profileData.user.role === 'both' && displayRole === 'user')
-          const inquiryStatus = isRenterViewing ? 'approved' : null
+          const hasApprovedInquiry = isRenterViewing && status === 'approved'
 
           const parallelFetches: Promise<Response>[] = []
           if (isUser) parallelFetches.push(fetch(`/api/inquiries/approved?role=user`, fetchOpts()))
-          if (isRenterViewing && inquiryStatus === 'approved') {
+          if (hasApprovedInquiry) {
             parallelFetches.push(
               fetch(`/api/homes/${data.home.key}/availability`, fetchOpts()),
               fetch(`/api/bookings?inquiryId=${currentInquiryId}`, fetchOpts()),
@@ -257,7 +257,7 @@ function HomeDetailPage() {
             }
           }
 
-          if (isRenterViewing && inquiryStatus === 'approved') {
+          if (hasApprovedInquiry) {
             const avRes = parallelResults[idx++]
             const bookingsRes = parallelResults[idx++]
             if (bookingsRes?.ok) {
@@ -573,7 +573,16 @@ function HomeDetailPage() {
   }
 
   if (!home) {
-    return null
+    return (
+      <div className="min-h-screen bg-[var(--canvas)] flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-[var(--text)] text-xl font-semibold">
+          {language === 'el' ? 'Η αγγελία δεν βρέθηκε' : 'Listing not found'}
+        </p>
+        <Link href="/homes" className="px-4 py-2 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] text-sm font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
+          {language === 'el' ? '← Πίσω στις αγγελίες' : '← Back to listings'}
+        </Link>
+      </div>
+    )
   }
 
   const nextPhoto = () => {

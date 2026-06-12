@@ -53,13 +53,20 @@ function SetAvailabilityPage() {
         if (profileRes.ok) {
           const profileData = await profileRes.json()
           const u = profileData?.user
-          if (u) {
-            setOwnerDetails((prev) => ({
-              ...prev,
-              name: u.name || '',
-              email: u.email || '',
-            }))
+          if (!u) {
+            router.push('/login')
+            return
           }
+          const role = (u.role || 'user').toLowerCase()
+          if (role !== 'owner' && role !== 'broker' && role !== 'both') {
+            router.push('/homes')
+            return
+          }
+          setOwnerDetails((prev) => ({
+            ...prev,
+            name: u.name || '',
+            email: u.email || '',
+          }))
         }
       } catch (error) {
         console.error('Error fetching home:', error)

@@ -15,9 +15,14 @@ export async function POST(
 
     const home = await prisma.home.findFirst({
       where: { OR: [{ key: homeKey }, { id: isNaN(Number(homeKey)) ? -1 : Number(homeKey) }] },
-      select: { id: true },
+      select: { id: true, ownerId: true },
     })
     if (!home) return NextResponse.json({}, { status: 200 })
+
+    const user = await getCurrentUser().catch(() => null)
+
+    // Don't count owner self-views in analytics
+    if (user?.id === home.ownerId) return NextResponse.json({}, { status: 200 })
 
     let body: { source?: string; sessionId?: string } = {}
     try {
@@ -31,7 +36,6 @@ export async function POST(
       ? body.sessionId
       : null
 
-    const user = await getCurrentUser().catch(() => null)
     const userId = user?.id ?? null
 
     const windowStart = new Date(Date.now() - DEDUP_WINDOW_MS)

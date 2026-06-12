@@ -67,11 +67,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, slotPromoted: true, slotPromotedUntil: slotPromotedUntil.toISOString(), daysForTier })
     }
 
-    // mode === 'boost' — pay-per-boost
-    // TODO: gate behind Stripe payment before setting promotedUntil
-    const promotedUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    await prisma.home.update({ where: { id: home.id }, data: { promotedUntil } })
-    return NextResponse.json({ ok: true, promotedUntil: promotedUntil.toISOString() })
+    // mode === 'boost' — pay-per-boost (requires payment integration)
+    return NextResponse.json(
+      { error: 'payment_required', message: 'Listing boosts require payment. Payment integration coming soon.' },
+      { status: 503 }
+    )
 
   } catch (error) {
     log.error({ err: error }, 'Error promoting home')

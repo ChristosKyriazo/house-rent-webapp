@@ -29,12 +29,10 @@ export async function POST(request: NextRequest) {
   const isDowngrade = (TIER_RANK[newTier] ?? 0) < (TIER_RANK[currentTier] ?? 0)
 
   if (!isDowngrade) {
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: { subscriptionTier: newTier },
-      select: { email: true, subscriptionTier: true },
-    })
-    return NextResponse.json({ ok: true, user: updated, slotsRevoked: 0, listingsOverLimit: 0, newSlotLimit: getSlotLimit(newTier) })
+    return NextResponse.json(
+      { error: 'payment_required', message: 'Subscription upgrades require payment. Payment integration coming soon.' },
+      { status: 503 }
+    )
   }
 
   // Downgrade path — revoke excess promo slots atomically

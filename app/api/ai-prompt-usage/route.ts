@@ -60,16 +60,12 @@ export async function POST(request: NextRequest) {
   })
   if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  // Purchase pack (Stripe not yet live — grant immediately in test mode)
+  // Purchase pack (requires payment integration)
   if (action === 'purchase') {
-    const packSize = PACK_SIZES[String(body.pack ?? '10')]
-    if (!packSize) return NextResponse.json({ error: 'Invalid pack size' }, { status: 400 })
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: { aiSearchPackCount: { increment: packSize } },
-      select: { aiSearchPackCount: true },
-    })
-    return NextResponse.json({ ok: true, packCredits: updated.aiSearchPackCount })
+    return NextResponse.json(
+      { error: 'payment_required', message: 'Credit pack purchases require payment. Payment integration coming soon.' },
+      { status: 503 }
+    )
   }
 
   // Consume one search — same monthly mechanism for both free and paid users
