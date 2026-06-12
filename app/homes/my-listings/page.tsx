@@ -371,7 +371,7 @@ export default function MyListingsPage() {
                   {subscriptionTier !== 'free' && (
                     <div className="px-1 pt-2 pb-1">
                       <Link
-                        href={`/homes/${home.key}/analytics`}
+                        href={`/homes/analytics`}
                         className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
                         onClick={e => e.stopPropagation()}
                       >

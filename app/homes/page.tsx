@@ -82,7 +82,7 @@ function HomesPageInner() {
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
-  const [allAreas, _setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   
   // City autocomplete state
@@ -305,6 +305,7 @@ function HomesPageInner() {
       .then((res) => res.json())
       .then((data) => {
         setAreas(data.areas || [])
+        setAllAreas(data.areas || [])
       })
       .catch((error) => {
         console.error('Error fetching areas for translation:', error)

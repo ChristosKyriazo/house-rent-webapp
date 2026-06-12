@@ -395,7 +395,8 @@ function HomeDetailPage() {
       if (response.ok) {
         setIsFinalized(true)
         setPendingFinalization(false)
-        router.refresh()
+        setToast({ type: 'success', message: language === 'el' ? 'Η συμφωνία ολοκληρώθηκε! Ανακατεύθυνση...' : 'Deal finalized! Redirecting...' })
+        setTimeout(() => router.push('/homes/approved'), 1500)
       } else {
         const data = await response.json()
         setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
@@ -955,6 +956,18 @@ function HomeDetailPage() {
                   </Link>
                 </div>
           </div>
+
+          {/* Owner profile button — only for non-broker owners */}
+          {!home.owner.isBroker && !isOwner && (
+            <div className="mt-3">
+              <button
+                onClick={() => setShowOwnerModal(true)}
+                className="text-sm text-[var(--accent)] hover:text-[var(--accent-light)] transition-colors underline underline-offset-2"
+              >
+                {language === 'el' ? 'Προφίλ ιδιοκτήτη →' : 'Owner profile →'}
+              </button>
+            </div>
+          )}
 
               {/* Description - Below the row */}
           {translatedDescription && (

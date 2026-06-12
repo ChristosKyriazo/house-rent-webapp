@@ -171,7 +171,7 @@ export default function EditHomePage() {
     }
     
     checkAccess()
-  }, [params.id, router, language])
+  }, [params.id, router])
 
   // Fetch all areas on mount for similarity matching and set area display
   useEffect(() => {

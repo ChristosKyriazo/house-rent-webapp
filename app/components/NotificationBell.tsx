@@ -313,30 +313,32 @@ export default function NotificationBell() {
     }
   }
 
-  // Mark all notifications as viewed when bell is opened
-  const handleBellClick = async (e: React.MouseEvent) => {
+  // Mark all notifications as viewed when bell panel is CLOSED (after user has seen them)
+  const markAllViewedOnClose = async () => {
+    if (unviewedCount === 0) return
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllAsViewed: true }),
+      })
+      if (response.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, viewed: true })))
+        setUnviewedCount(0)
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const handleBellClick = (e: React.MouseEvent) => {
     // Do not preventDefault — breaks tap/click on Safari (especially iOS)
     e.stopPropagation()
-
-    const wasOpen = isOpen
+    const willClose = isOpen
     setIsOpen(!isOpen)
-    
-    // If opening the bell (not closing), mark all as viewed
-    if (!wasOpen && unviewedCount > 0) {
-      try {
-        const response = await fetch('/api/notifications', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ markAllAsViewed: true }),
-        })
-        if (response.ok) {
-          // Update local state to mark all as viewed
-          setNotifications(notifications.map(n => ({ ...n, viewed: true })))
-          setUnviewedCount(0)
-        }
-      } catch (error) {
-        console.error('Error marking notifications as viewed:', error)
-      }
+    // Mark as viewed only when the user closes the panel (they've seen the notifications)
+    if (willClose) {
+      markAllViewedOnClose()
     }
   }
 

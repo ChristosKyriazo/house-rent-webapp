@@ -20,6 +20,7 @@ html {
   --surface: rgba(20, 26, 36, 0.78);
   --glow-amber: rgba(227, 167, 95, 0.12);
   --glow-sage: rgba(120, 155, 140, 0.1);
+  --bg: var(--canvas);
   --background: var(--canvas);
   --foreground: var(--text);
   /* Graphics + buttons: one accent, solid fills — consistent Safari/Chrome */

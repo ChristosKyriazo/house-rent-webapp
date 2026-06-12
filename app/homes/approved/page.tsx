@@ -50,8 +50,9 @@ export default function ApprovedInquiriesPage() {
           return
         }
 
-        const role = (profileData.user.role || 'user').toLowerCase()
-        const ownerView = role === 'owner' || role === 'broker' || role === 'both'
+        // Use displayRole (respects selectedRole for 'both' users) rather than raw DB role
+        const ownerView = displayRole === 'owner' || displayRole === 'broker' ||
+          (displayRole === 'both' && (profileData.user.role === 'owner' || profileData.user.role === 'broker'))
         setIsOwner(ownerView)
 
         const approvedRes = await fetch(`/api/inquiries/approved?role=${ownerView ? 'owner' : 'user'}`, {
@@ -181,6 +182,32 @@ export default function ApprovedInquiriesPage() {
                           className="shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
                         >
                           {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
+                        </Link>
+                      )}
+                    </div>
+                  ) : inq.status === 'waiting_for_schedule' ? (
+                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">📅</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">
+                            {isOwner
+                              ? (language === 'el' ? 'Αναμονή κράτησης από ενοικιαστή' : 'Waiting for tenant to book')
+                              : (language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Book your viewing')}
+                          </p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {isOwner
+                              ? (language === 'el' ? 'Έχετε ορίσει διαθεσιμότητα. Αναμένετε κράτηση.' : 'Slots available — waiting for the tenant to pick one.')
+                              : (language === 'el' ? 'Ο ιδιοκτήτης έχει ορίσει θέσεις επίσκεψης.' : 'The owner has set available time slots.')}
+                          </p>
+                        </div>
+                      </div>
+                      {!isOwner && (
+                        <Link
+                          href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
+                          className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                        >
+                          {language === 'el' ? 'Κράτηση →' : 'Book →'}
                         </Link>
                       )}
                     </div>
