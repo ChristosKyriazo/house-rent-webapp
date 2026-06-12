@@ -28,7 +28,7 @@ export default defineConfig({
     {
       name: 'owner',
       use: { ...devices['Desktop Chrome'], storageState: './tests/e2e/.auth/owner.json' },
-      testMatch: '**/owner.spec.ts',
+      testMatch: ['**/owner.spec.ts', '**/role-checks/owner-*.spec.ts'],
     },
     {
       name: 'renter',
@@ -38,12 +38,18 @@ export default defineConfig({
     {
       name: 'broker',
       use: { ...devices['Desktop Chrome'], storageState: './tests/e2e/.auth/broker.json' },
-      testMatch: '**/broker.spec.ts',
+      testMatch: ['**/broker.spec.ts', '**/role-checks/broker-*.spec.ts'],
     },
     {
       name: 'both',
       use: { ...devices['Desktop Chrome'], storageState: './tests/e2e/.auth/both.json' },
-      testMatch: '**/both.spec.ts',
+      testMatch: ['**/both.spec.ts', '**/role-checks/both-*.spec.ts'],
+    },
+    // Sequential story: owner creates → renter inquires → owner approves → … → ratings
+    // Each spec file sets its own storageState via test.use()
+    {
+      name: 'flows',
+      testMatch: '**/flows/*.spec.ts',
     },
   ],
 })

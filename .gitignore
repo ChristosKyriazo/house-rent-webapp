@@ -37,8 +37,9 @@ yarn-error.log*
 !.env.production.example
 !.env.test.example
 
-# playwright auth sessions (contain session tokens)
+# playwright auth sessions and shared test state
 tests/e2e/.auth/
+tests/e2e/fixtures/state.json
 playwright-report/
 
 # database

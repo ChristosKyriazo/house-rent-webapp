@@ -22,6 +22,8 @@
     "test:e2e:renter": "playwright test --project=renter",
     "test:e2e:broker": "playwright test --project=broker",
     "test:e2e:both": "playwright test --project=both",
+    "test:e2e:flows": "playwright test --project=flows",
+    "test:e2e:role-checks": "playwright test --project=owner --project=broker --project=both",
     "test:e2e:report": "playwright show-report",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
