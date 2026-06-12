@@ -2,6 +2,17 @@
 dev.kaparro.com {
     tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
 
+    # Rate limiting — protect API endpoints from abuse
+    # Requires the caddy-ratelimit plugin; if not available this block is ignored
+    @api path /api/*
+    rate_limit @api {
+        zone api_zone {
+            key {remote_host}
+            events 120
+            window 1m
+        }
+    }
+
     # Serve uploaded files directly from volume
     handle /uploads/* {
         root * /srv
@@ -21,6 +32,8 @@ dev.kaparro.com {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        # Content-Security-Policy — tightened to only allow known origins
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kaparro.com https://*.clerk.accounts.dev https://maps.googleapis.com https://js.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://clerk.kaparro.com https://*.clerk.accounts.dev https://*.sentry.io https://maps.googleapis.com https://maps.gstatic.com wss:; frame-src https://clerk.kaparro.com https://*.clerk.accounts.dev; worker-src 'self' blob:; media-src 'self' blob:;"
         -Server
     }
 
@@ -42,6 +55,16 @@ kaparro.com, www.kaparro.com {
     @www host www.kaparro.com
     redir @www https://kaparro.com{uri} permanent
 
+    # Rate limiting — protect API endpoints from abuse
+    @api path /api/*
+    rate_limit @api {
+        zone api_zone {
+            key {remote_host}
+            events 120
+            window 1m
+        }
+    }
+
     handle /uploads/* {
         root * /srv
         file_server
@@ -58,6 +81,7 @@ kaparro.com, www.kaparro.com {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kaparro.com https://*.clerk.accounts.dev https://maps.googleapis.com https://js.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://clerk.kaparro.com https://*.clerk.accounts.dev https://*.sentry.io https://maps.googleapis.com https://maps.gstatic.com wss:; frame-src https://clerk.kaparro.com https://*.clerk.accounts.dev; worker-src 'self' blob:; media-src 'self' blob:;"
         -Server
     }
 

@@ -23,6 +23,35 @@ services:
       start_period: 30s
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_HOST: db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-house_rent}
+      PGBOUNCER_DATABASE: ${POSTGRES_DB:-house_rent}
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+      PGBOUNCER_MIN_POOL_SIZE: 5
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
   redis:
     image: redis:7-alpine
@@ -36,6 +65,10 @@ services:
       retries: 5
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   app:
     image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyria zo/house-rent-webapp:latest
@@ -45,18 +78,28 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
     env_file:
       - .env              # chmod 600 on the server; never committed to git
     environment:
+      # Route through PgBouncer instead of directly to Postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB:-house_rent}
       REDIS_URL: redis://redis:6379
     volumes:
       - uploads_data:/app/public/uploads
+    # prisma migrate deploy must run against Postgres directly (not via PgBouncer in transaction mode)
+    # so we keep a direct URL for migrations only
     command: >
-      sh -c "node node_modules/prisma/build/index.js migrate deploy && node server.js"
+      sh -c "DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-house_rent} node node_modules/prisma/build/index.js migrate deploy && node server.js"
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          memory: 768m
 
   caddy:
     image: caddy:2-alpine
@@ -75,6 +118,10 @@ services:
       - internal
     depends_on:
       - app
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
 networks:
   internal:
