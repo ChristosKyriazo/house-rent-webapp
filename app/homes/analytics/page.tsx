@@ -765,14 +765,14 @@ export default function AnalyticsPage() {
   const [sortCol, setSortCol] = useState<SortCol>('views')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  const fetchData = useCallback((p: string, date?: string) => {
+  const fetchData = useCallback((p: string, date?: string, signal?: AbortSignal) => {
     const url = date
       ? `/api/homes/portfolio-analytics?period=${p}&date=${date}`
       : `/api/homes/portfolio-analytics?period=${p}`
-    return fetch(url)
+    return fetch(url, signal ? { signal } : undefined)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setData(d) })
-      .catch(() => {})
+      .catch((e) => { if (e?.name !== 'AbortError') console.error(e) })
   }, [])
 
   useEffect(() => {
@@ -791,12 +791,18 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (tier === 'free') return
-    if (!drillDate) fetchData(period)
+    if (drillDate) return
+    const controller = new AbortController()
+    fetchData(period, undefined, controller.signal)
+    return () => controller.abort()
   }, [period, tier, fetchData, drillDate])
 
   useEffect(() => {
     if (tier === 'free' || drillDate) return
-    const interval = setInterval(() => fetchData(period), 30_000)
+    const interval = setInterval(() => {
+      const controller = new AbortController()
+      fetchData(period, undefined, controller.signal)
+    }, 30_000)
     return () => clearInterval(interval)
   }, [period, tier, fetchData, drillDate])
 

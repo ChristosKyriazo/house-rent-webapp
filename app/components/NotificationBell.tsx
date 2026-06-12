@@ -42,6 +42,10 @@ export default function NotificationBell() {
   const notificationRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const languageRef = useRef(language)
+
+  // Keep languageRef in sync so polling fetch always uses the current language without restarting the interval
+  languageRef.current = language
 
   // Determine display role
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -57,7 +61,7 @@ export default function NotificationBell() {
       if (inFlight) return
       inFlight = true
       try {
-        const response = await fetch(`/api/notifications?language=${language}`)
+        const response = await fetch(`/api/notifications?language=${languageRef.current}`)
         if (response && response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
@@ -125,7 +129,7 @@ export default function NotificationBell() {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)
     }
-  }, [language, isLoaded, isSignedIn])
+  }, [isLoaded, isSignedIn])
 
   // Position fixed panel under bell (portal) — avoids overflow:hidden on chrome dock clipping the dropdown
   useLayoutEffect(() => {
@@ -265,6 +269,11 @@ export default function NotificationBell() {
 
     if (notification.type === 'booking_created' && notification.homeKey) {
       router.push('/homes/approved')
+      return
+    }
+
+    if (notification.type === 'booking_reminder') {
+      router.push('/homes/calendar')
       return
     }
 

@@ -48,6 +48,7 @@ export default function MyListingsPage() {
   const [slotsUsed, setSlotsUsed] = useState(0)
   const [promotingKey, setPromotingKey] = useState<string | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const slotLimit = subscriptionTier === 'pro' ? 5 : subscriptionTier === 'plus' ? 2 : 0
 
@@ -131,6 +132,7 @@ export default function MyListingsPage() {
 
   const handleBulkDelete = async () => {
     setDeleting(true)
+    setDeleteError(null)
     try {
       const res = await fetch('/api/homes/bulk-delete', {
         method: 'POST',
@@ -140,10 +142,16 @@ export default function MyListingsPage() {
       if (res.ok) {
         setUserHomes(prev => prev.filter(h => !selectedKeys.includes(h.key)))
         setSelectedKeys([])
+        setConfirmOpen(false)
+      } else {
+        setDeleteError(language === 'el' ? 'Η διαγραφή απέτυχε. Δοκιμάστε ξανά.' : 'Delete failed. Please try again.')
+        setConfirmOpen(false)
       }
+    } catch {
+      setDeleteError(language === 'el' ? 'Η διαγραφή απέτυχε. Δοκιμάστε ξανά.' : 'Delete failed. Please try again.')
+      setConfirmOpen(false)
     } finally {
       setDeleting(false)
-      setConfirmOpen(false)
     }
   }
 
@@ -208,6 +216,12 @@ export default function MyListingsPage() {
           <div className="mb-4 px-4 py-3 rounded-2xl bg-[var(--status-error-bg)] border border-[var(--status-error)]/30 text-[var(--status-error)] text-sm flex items-center justify-between">
             <span>{promoteError}</span>
             <button type="button" onClick={() => setPromoteError(null)} className="ml-4 text-[var(--status-error)]/60 hover:text-[var(--status-error)] transition-colors">✕</button>
+          </div>
+        )}
+        {deleteError && (
+          <div className="mb-4 px-4 py-3 rounded-2xl bg-[var(--status-error-bg)] border border-[var(--status-error)]/30 text-[var(--status-error)] text-sm flex items-center justify-between">
+            <span>{deleteError}</span>
+            <button type="button" onClick={() => setDeleteError(null)} className="ml-4 text-[var(--status-error)]/60 hover:text-[var(--status-error)] transition-colors">✕</button>
           </div>
         )}
 

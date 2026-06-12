@@ -120,15 +120,15 @@ export default function RateOwnerPage() {
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
           <Link href="/homes/approved" className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors">
-            ← Back
+            ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">Rate your experience</h1>
-          <p className="text-[var(--text-muted)]">Your ratings help future tenants make informed decisions.</p>
+          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">{getTranslation(language, 'rateYourExperience')}</h1>
+          <p className="text-[var(--text-muted)]">{getTranslation(language, 'rateExperienceSubtitle')}</p>
         </div>
 
         {pending.length === 0 ? (
           <div className="bg-[var(--surface)] rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
-            <p className="text-xl text-[var(--text-muted)]">No pending ratings right now.</p>
+            <p className="text-xl text-[var(--text-muted)]">{getTranslation(language, 'noPendingRatings')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -138,7 +138,7 @@ export default function RateOwnerPage() {
                   <div>
                     <h3 className="text-xl font-bold text-[var(--text)]">{item.homeTitle}</h3>
                     <p className="text-sm text-[var(--text-muted)] mt-1">
-                      {item.actionType === 'movein_house' ? 'Move-in rating' : 'Move-out rating'}
+                      {item.actionType === 'movein_house' ? getTranslation(language, 'moveInRating') : getTranslation(language, 'moveOutRating')}
                     </p>
                   </div>
                   <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
@@ -146,14 +146,14 @@ export default function RateOwnerPage() {
                       ? 'bg-blue-500/20 text-blue-400'
                       : 'bg-orange-500/20 text-orange-400'
                   }`}>
-                    {item.actionType === 'movein_house' ? 'Move-in' : 'Move-out'}
+                    {item.actionType === 'movein_house' ? getTranslation(language, 'moveIn') : getTranslation(language, 'moveOut')}
                   </span>
                 </div>
                 <button
                   onClick={() => setSelected(item)}
                   className="w-full px-4 py-2.5 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold text-sm transition-all"
                 >
-                  Rate now
+                  {getTranslation(language, 'rateNow')}
                 </button>
               </div>
             ))}
@@ -168,7 +168,7 @@ export default function RateOwnerPage() {
                 <div>
                   <h2 className="text-xl font-bold text-[var(--text)]">{selected.homeTitle}</h2>
                   <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                    {selected.actionType === 'movein_house' ? 'Move-in experience' : 'Move-out experience'}
+                    {selected.actionType === 'movein_house' ? getTranslation(language, 'moveInExperience') : getTranslation(language, 'moveOutExperience')}
                   </p>
                 </div>
                 <button onClick={() => setSelected(null)} className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl ml-4">×</button>
@@ -176,10 +176,10 @@ export default function RateOwnerPage() {
               <RatingForm
                 sections={selected.actionType === 'movein_house' ? moveinSections : moveoutSections}
                 allowComment={selected.actionType === 'moveout_house'}
-                commentPlaceholder="Share your experience to help future tenants..."
+                commentPlaceholder={getTranslation(language, 'shareExperiencePlaceholder')}
                 onSubmit={handleSubmit}
                 onCancel={() => setSelected(null)}
-                submitLabel="Submit rating"
+                submitLabel={getTranslation(language, 'submitRating')}
               />
             </div>
           </div>

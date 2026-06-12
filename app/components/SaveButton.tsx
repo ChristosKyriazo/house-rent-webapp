@@ -27,18 +27,22 @@ export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md
     setLoading(true)
     try {
       if (saved) {
-        await fetch(`/api/homes/saved?homeKey=${homeKey}`, { method: 'DELETE' })
-        setSaved(false)
-        onToggle?.(false)
+        const res = await fetch(`/api/homes/saved?homeKey=${homeKey}`, { method: 'DELETE' })
+        if (res.ok) {
+          setSaved(false)
+          onToggle?.(false)
+        }
       } else {
-        await fetch('/api/homes/saved', {
+        const res = await fetch('/api/homes/saved', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ homeKey }),
         })
-        setSaved(true)
-        onToggle?.(true)
-        maybeShowViberOffer()
+        if (res.ok) {
+          setSaved(true)
+          onToggle?.(true)
+          maybeShowViberOffer()
+        }
       }
     } finally {
       setLoading(false)

@@ -343,7 +343,16 @@ function MapContent() {
     } else {
       window.initMap = initMapInstance
     }
-   
+
+    return () => {
+      document.querySelector('script[src*="maps.googleapis.com"]')?.remove()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).google
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).initMap
+      mapInstanceRef.current = null
+      scriptTaggedRef.current = false
+    }
   }, [apiKey, language])
 
   useEffect(() => { renderMarkers() }, [homes, language])  

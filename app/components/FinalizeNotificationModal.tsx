@@ -102,7 +102,7 @@ export default function FinalizeNotificationModal({
       })
 
       if (response.ok) {
-        onApprove()
+        await onApprove()
         router.push('/homes/approved')
       } else {
         const data = await response.json()
@@ -205,13 +205,13 @@ export default function FinalizeNotificationModal({
               {/* Move-in details */}
               {finalizationDetails?.moveInDate && (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-green-400 mb-2">Rental dates</h3>
+                  <h3 className="text-sm font-semibold text-green-400 mb-2">{getTranslation(language, 'rentalDates')}</h3>
                   <p className="text-[var(--text)]">
-                    Move-in: <span className="font-semibold">{new Date(finalizationDetails.moveInDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    {getTranslation(language, 'moveInLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveInDate).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                   </p>
                   {finalizationDetails.moveOutDate && (
                     <p className="text-[var(--text)] mt-1">
-                      Move-out: <span className="font-semibold">{new Date(finalizationDetails.moveOutDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                      {getTranslation(language, 'moveOutLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveOutDate).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </p>
                   )}
                 </div>

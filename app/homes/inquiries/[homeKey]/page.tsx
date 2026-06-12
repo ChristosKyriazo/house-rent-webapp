@@ -163,7 +163,7 @@ export default function HomeInquiriesPage() {
         }),
       })
       if (res.ok) {
-        setNotification({ type: 'success', message: 'Finalization request sent to tenant.' })
+        setNotification({ type: 'success', message: getTranslation(language, 'finalizationRequestSent') })
         setConfirmingInquiry(null)
         setMoveInDate('')
         setMoveOutDate('')
@@ -297,7 +297,7 @@ export default function HomeInquiriesPage() {
                           onClick={() => setConfirmingInquiry(inquiry)}
                           className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all font-semibold text-sm"
                         >
-                          Confirm tenant
+                          {getTranslation(language, 'confirmTenant')}
                         </button>
                       )}
                       {isApproved && inquiry.finalized && (
@@ -353,19 +353,19 @@ export default function HomeInquiriesPage() {
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmingInquiry(null)}>
           <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-[var(--text)]">Confirm this tenant</h2>
+              <h2 className="text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'confirmThisTenant')}</h2>
               <button onClick={() => setConfirmingInquiry(null)} className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl">×</button>
             </div>
 
             <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)] mb-6">
-              <p className="text-sm text-[var(--text-muted)] mb-1">Tenant</p>
+              <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'tenantLabel')}</p>
               <p className="font-semibold text-[var(--text)]">{confirmingInquiry.user.name || confirmingInquiry.user.email.split('@')[0]}</p>
               <p className="text-sm text-[var(--text-muted)]">{confirmingInquiry.user.email}</p>
             </div>
 
             <div className="space-y-4 mb-6">
               <div>
-                <label htmlFor="move-in-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-in date <span className="text-red-400">*</span></label>
+                <label htmlFor="move-in-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'moveInDate')} <span className="text-red-400">*</span></label>
                 <input
                   id="move-in-date"
                   type="date"
@@ -376,7 +376,7 @@ export default function HomeInquiriesPage() {
                 />
               </div>
               <div>
-                <label htmlFor="move-out-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">Move-out date <span className="text-[var(--text-muted)] font-normal">(optional)</span></label>
+                <label htmlFor="move-out-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'moveOutDate')} <span className="text-[var(--text-muted)] font-normal">({getTranslation(language, 'optional')})</span></label>
                 <input
                   id="move-out-date"
                   type="date"
@@ -389,7 +389,7 @@ export default function HomeInquiriesPage() {
             </div>
 
             <p className="text-xs text-[var(--text-muted)] mb-6">
-              A notification will be sent to the tenant to accept or decline. Once accepted, the deal is confirmed and ratings will unlock on schedule.
+              {getTranslation(language, 'confirmTenantDescription')}
             </p>
 
             <div className="flex gap-3">
@@ -398,14 +398,14 @@ export default function HomeInquiriesPage() {
                 disabled={finalizing}
                 className="flex-1 px-4 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl font-semibold transition-all disabled:opacity-50"
               >
-                Cancel
+                {getTranslation(language, 'cancel')}
               </button>
               <button
                 onClick={handleConfirmTenant}
                 disabled={finalizing || !moveInDate}
                 className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50"
               >
-                {finalizing ? 'Sending...' : 'Send to tenant'}
+                {finalizing ? getTranslation(language, 'sending') : getTranslation(language, 'sendToTenant')}
               </button>
             </div>
           </div>

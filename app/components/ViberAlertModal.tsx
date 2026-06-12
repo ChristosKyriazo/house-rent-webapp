@@ -13,16 +13,24 @@ export default function ViberAlertModal({ onClose }: ViberAlertModalProps) {
   const isEl = language === 'el'
   const [activating, setActivating] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
   async function activate() {
     setActivating(true)
+    setError(false)
     try {
-      await fetch('/api/subscription/viber-alerts', { method: 'POST' })
-      setDone(true)
-      setTimeout(onClose, 1800)
+      const res = await fetch('/api/subscription/viber-alerts', { method: 'POST' })
+      if (res.ok) {
+        setDone(true)
+        setTimeout(onClose, 1800)
+      } else {
+        setError(true)
+      }
+    } catch {
+      setError(true)
     } finally {
       setActivating(false)
     }
@@ -97,6 +105,22 @@ export default function ViberAlertModal({ onClose }: ViberAlertModalProps) {
               <span className="text-green-400 font-semibold">
                 ✓ {isEl ? 'Ειδοποιήσεις ενεργοποιήθηκαν!' : 'Alerts activated!'}
               </span>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-center text-sm text-red-400">
+                {isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Please try again.'}
+              </p>
+              <button
+                onClick={activate}
+                className="w-full py-3.5 rounded-2xl font-bold text-sm text-stone-950 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 20px rgba(245,158,11,0.35)' }}
+              >
+                {isEl ? 'Επανάληψη' : 'Retry'}
+              </button>
+              <button onClick={onClose} className="w-full py-2.5 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                {isEl ? 'Ίσως αργότερα' : 'Maybe later'}
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-2">

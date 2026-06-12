@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 
 interface ChatMessage {
+  id: string
   role: 'user' | 'assistant'
   content: string
 }
@@ -36,18 +37,21 @@ function AIChatPanel(
   const [monthlyRemaining, setMonthlyRemaining] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const isEl = language === 'el'
 
   // Load server-side prompt state on mount
   useEffect(() => {
-    fetch('/api/ai-prompt-usage')
+    const controller = new AbortController()
+    fetch('/api/ai-prompt-usage', { signal: controller.signal })
       .then(r => r.json())
       .then(d => {
         if (d.isPaid) { setIsPaid(true); setMonthlyRemaining(d.remaining) }
         if (d.packCredits) setPackCredits(d.packCredits)
       })
-      .catch(() => {})
+      .catch((e) => { if (e?.name !== 'AbortError') console.error(e) })
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -127,11 +131,16 @@ function AIChatPanel(
     if (!msg || loading) return
     if (atLocalLimit) { setShowPurchaseModal(true); return }
 
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const signal = controller.signal
+
     setInput('')
     setError(null)
     const newCount = promptCount + 1
     setPromptCount(newCount)
-    setMessages(prev => [...prev, { role: 'user', content: msg }])
+    setMessages(prev => [...prev, { id: `${Date.now()}-user`, role: 'user', content: msg }])
     setLoading(true)
 
     try {
@@ -140,6 +149,7 @@ function AIChatPanel(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, conversationKey, type: searchType }),
+        signal,
       })
       const chatData = await chatRes.json()
       if (!chatRes.ok) throw new Error(chatData.error || 'Chat error')
@@ -147,7 +157,7 @@ function AIChatPanel(
 
       // Show AI follow-up / summary message
       const aiMsg = chatData.followUpQuestion || chatData.assistantMessage || ''
-      if (aiMsg) setMessages(prev => [...prev, { role: 'assistant', content: aiMsg }])
+      if (aiMsg) setMessages(prev => [...prev, { id: `${Date.now()}-ai`, role: 'assistant', content: aiMsg }])
 
       // Consume one credit and immediately search with accumulated filters
       const { ok, remaining: newRemaining, pack: newPack } = await consumeSearchCredit()
@@ -157,18 +167,18 @@ function AIChatPanel(
       const resultMsg = homes.length > 0
         ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}`
         : t.noResults
-      setMessages(prev => [...prev, { role: 'assistant', content: resultMsg }])
+      setMessages(prev => [...prev, { id: `${Date.now()}-result`, role: 'assistant', content: resultMsg }])
       onResultsFound(homes)
 
       // If this was the last available search, tell the user the result is final
       if (newRemaining === 0 && newPack === 0) {
         const limitMsg = isEl
-          ? 'Αυτό είναι το τελικό αποτέλεσμα με τις διαθέσιμες αναζητήσεις σας. Αγοράστε περισσότερες παρακάτω αν θέλετε να συνεχίσετε να βελτιώνετε.'
+          ? 'Αυτό είναι το τελευταίο αποτέλεσμα με τις διαθέσιμες αναζητήσεις σας. Αγοράστε περισσότερες παρακάτω αν θέλετε να συνεχίσετε να βελτιώνετε.'
           : 'This is your final result with your current searches. Purchase more below if you want to keep refining.'
-        setMessages(prev => [...prev, { role: 'assistant', content: limitMsg }])
+        setMessages(prev => [...prev, { id: `${Date.now()}-limit`, role: 'assistant', content: limitMsg }])
       }
-    } catch {
-      setError(t.errorMsg)
+    } catch (e) {
+      if ((e as { name?: string })?.name !== 'AbortError') setError(t.errorMsg)
     } finally {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 50)
@@ -256,8 +266,8 @@ function AIChatPanel(
         {/* Chat messages */}
         {!isEmpty && (
           <div className="px-6 py-4 space-y-4 max-h-96 overflow-y-auto">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.role === 'assistant' && (
                   <div className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-base mt-1">🏡</div>
                 )}

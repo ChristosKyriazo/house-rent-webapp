@@ -641,7 +641,7 @@ function BookPage() {
 
 export default function BookPageWrapper() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] animate-spin" /></div>}>
       <BookPage />
     </Suspense>
   )

@@ -223,7 +223,7 @@ function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="owner-phone" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Phone</label>
+                  <label htmlFor="owner-phone" className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'phone')}</label>
                   <input
                     id="owner-phone"
                     type="text"
@@ -233,17 +233,16 @@ function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="owner-appt-duration" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Appointment Duration</label>
+                  <label htmlFor="owner-appt-duration" className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'appointmentDuration')}</label>
                   <select
                     id="owner-appt-duration"
                     value={ownerDetails.appointmentThresholdMinutes}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, appointmentThresholdMinutes: Number(e.target.value) })}
                     className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   >
-                    <option value={15}>15 minutes</option>
-                    <option value={30}>30 minutes</option>
-                    <option value={45}>45 minutes</option>
-                    <option value={60}>60 minutes</option>
+                    {[15, 30, 45, 60].map(m => (
+                      <option key={m} value={m}>{m} {getTranslation(language, 'minutes')}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="md:col-span-2">
@@ -391,7 +390,7 @@ function SetAvailabilityPage() {
 
 export default function SetAvailabilityPageWrapper() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] animate-spin" /></div>}>
       <SetAvailabilityPage />
     </Suspense>
   )

@@ -33,17 +33,21 @@ export default function SavedHomesPage() {
   const [saved, setSaved] = useState<SavedEntry[]>([])
   const [areas, setAreas] = useState<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const isEl = language === 'el'
 
   useEffect(() => {
+    setLoading(true)
+    setFetchError(false)
     Promise.all([
       fetch('/api/homes/saved').then(r => r.json()),
       fetch('/api/areas').then(r => r.json()),
     ]).then(([savedData, areasData]) => {
       setSaved(savedData.saved ?? [])
       setAreas(areasData.areas ?? [])
-    }).finally(() => setLoading(false))
-  }, [])
+    }).catch(() => setFetchError(true)).finally(() => setLoading(false))
+  }, [retryCount])
 
   const handleUnsave = (homeKey: string) => {
     setSaved(prev => prev.filter(s => s.home.key !== homeKey))
@@ -60,6 +64,21 @@ export default function SavedHomesPage() {
         <div className="max-w-5xl mx-auto">
           <div className="mb-8 h-10 w-48 rounded-xl bg-[var(--surface)] animate-pulse" />
           <SkeletonList count={3} />
+        </div>
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
+        <div className="max-w-5xl mx-auto text-center">
+          <p className="text-[var(--text-muted)] mb-4">
+            {isEl ? 'Σφάλμα φόρτωσης. Δοκιμάστε ξανά.' : 'Failed to load saved properties. Please try again.'}
+          </p>
+          <button onClick={() => setRetryCount(c => c + 1)} className="btn-primary">
+            {isEl ? 'Επανάληψη' : 'Retry'}
+          </button>
         </div>
       </div>
     )

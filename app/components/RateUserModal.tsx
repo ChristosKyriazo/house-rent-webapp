@@ -18,7 +18,7 @@ export default function RateUserModal({
   userId,
   userName,
   userEmail,
-  inquiryId: _inquiryId,
+  inquiryId,
   onClose,
   onSuccess,
 }: RateUserModalProps) {
@@ -38,6 +38,7 @@ export default function RateUserModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ratedUserId: userId,
+          inquiryId,
           type: 'renter',
           score: rating,
           comment: comment.trim() || null,

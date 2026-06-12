@@ -88,22 +88,23 @@ function CompareContent() {
     </div>
   )
 
-  const rows: Array<{ label: string; values: (home: Home) => string }> = [
-    { label: isEl ? 'Τιμή' : 'Price', values: h => `€${h.pricePerMonth.toLocaleString()}${h.listingType === 'rent' ? '/μήνα' : ''}` },
-    { label: isEl ? 'Τύπος' : 'Type', values: h => h.listingType === 'rent' ? (isEl ? 'Ενοικίαση' : 'Rent') : (isEl ? 'Πώληση' : 'Sale') },
-    { label: isEl ? 'Υπνοδωμάτια' : 'Bedrooms', values: h => fmt(h.bedrooms) },
-    { label: isEl ? 'Μπάνια' : 'Bathrooms', values: h => fmt(h.bathrooms) },
-    { label: isEl ? 'Εμβαδόν' : 'Size', values: h => fmt(h.sizeSqMeters, ' m²') },
-    { label: isEl ? 'Όροφος' : 'Floor', values: h => fmt(h.floor) },
-    { label: isEl ? 'Έτος κατασκευής' : 'Year built', values: h => fmt(h.yearBuilt) },
-    { label: isEl ? 'Ανακαίνιση' : 'Renovated', values: h => fmt(h.yearRenovated) },
-    { label: isEl ? 'Ενεργειακή κλάση' : 'Energy class', values: h => h.energyClass ?? '—' },
-    { label: isEl ? 'Θέρμανση' : 'Heating', values: h => [h.heatingCategory, h.heatingAgent].filter(Boolean).join(' / ') || '—' },
-    { label: isEl ? 'Parking' : 'Parking', values: h => fmtBool(h.parking, language) },
-    { label: isEl ? 'Μετρό (km)' : 'Metro (km)', values: h => fmt(h.closestMetro) },
-    { label: isEl ? 'Σχολείο (km)' : 'School (km)', values: h => fmt(h.closestSchool) },
-    { label: isEl ? 'Νοσοκομείο (km)' : 'Hospital (km)', values: h => fmt(h.closestHospital) },
-    { label: isEl ? 'Πάρκο (km)' : 'Park (km)', values: h => fmt(h.closestPark) },
+  // bestIs: 'min' = lower value is better, 'max' = higher is better, null = no highlight
+  const rows: Array<{ label: string; values: (home: Home) => string; numericValue?: (home: Home) => number | null; bestIs: 'min' | 'max' | null }> = [
+    { label: isEl ? 'Τιμή' : 'Price', values: h => `€${h.pricePerMonth.toLocaleString()}${h.listingType === 'rent' ? '/μήνα' : ''}`, numericValue: h => h.pricePerMonth, bestIs: 'min' },
+    { label: isEl ? 'Τύπος' : 'Type', values: h => h.listingType === 'rent' ? (isEl ? 'Ενοικίαση' : 'Rent') : (isEl ? 'Πώληση' : 'Sale'), bestIs: null },
+    { label: isEl ? 'Υπνοδωμάτια' : 'Bedrooms', values: h => fmt(h.bedrooms), numericValue: h => h.bedrooms, bestIs: 'max' },
+    { label: isEl ? 'Μπάνια' : 'Bathrooms', values: h => fmt(h.bathrooms), numericValue: h => h.bathrooms, bestIs: 'max' },
+    { label: isEl ? 'Εμβαδόν' : 'Size', values: h => fmt(h.sizeSqMeters, ' m²'), numericValue: h => h.sizeSqMeters, bestIs: 'max' },
+    { label: isEl ? 'Όροφος' : 'Floor', values: h => fmt(h.floor), bestIs: null },
+    { label: isEl ? 'Έτος κατασκευής' : 'Year built', values: h => fmt(h.yearBuilt), numericValue: h => h.yearBuilt, bestIs: 'max' },
+    { label: isEl ? 'Ανακαίνιση' : 'Renovated', values: h => fmt(h.yearRenovated), numericValue: h => h.yearRenovated, bestIs: 'max' },
+    { label: isEl ? 'Ενεργειακή κλάση' : 'Energy class', values: h => h.energyClass ?? '—', bestIs: null },
+    { label: isEl ? 'Θέρμανση' : 'Heating', values: h => [h.heatingCategory, h.heatingAgent].filter(Boolean).join(' / ') || '—', bestIs: null },
+    { label: isEl ? 'Parking' : 'Parking', values: h => fmtBool(h.parking, language), numericValue: h => h.parking == null ? null : h.parking ? 1 : 0, bestIs: 'max' },
+    { label: isEl ? 'Μετρό (km)' : 'Metro (km)', values: h => fmt(h.closestMetro), numericValue: h => h.closestMetro, bestIs: 'min' },
+    { label: isEl ? 'Σχολείο (km)' : 'School (km)', values: h => fmt(h.closestSchool), numericValue: h => h.closestSchool, bestIs: 'min' },
+    { label: isEl ? 'Νοσοκομείο (km)' : 'Hospital (km)', values: h => fmt(h.closestHospital), numericValue: h => h.closestHospital, bestIs: 'min' },
+    { label: isEl ? 'Πάρκο (km)' : 'Park (km)', values: h => fmt(h.closestPark), numericValue: h => h.closestPark, bestIs: 'min' },
   ]
 
   return (
@@ -156,8 +157,15 @@ function CompareContent() {
                   </td>
                   {homes.map(home => {
                     const val = row.values(home)
-                    const allVals = homes.map(h => row.values(h))
-                    const isBest = homes.length > 1 && allVals.filter(v => v === val).length < homes.length
+                    let isBest = false
+                    if (homes.length > 1 && row.bestIs && row.numericValue) {
+                      const numericValues = homes.map(h => row.numericValue!(h)).filter((v): v is number => v != null)
+                      const thisVal = row.numericValue(home)
+                      if (thisVal != null && numericValues.length > 1) {
+                        const bestVal = row.bestIs === 'min' ? Math.min(...numericValues) : Math.max(...numericValues)
+                        isBest = thisVal === bestVal
+                      }
+                    }
                     return (
                       <td key={home.key} className={`px-4 py-3 text-sm text-[var(--text)] ${i === homes.length - 1 ? 'rounded-r-xl' : ''} ${isBest && val !== '—' ? 'font-semibold text-[var(--accent)]' : ''}`}>
                         {val}

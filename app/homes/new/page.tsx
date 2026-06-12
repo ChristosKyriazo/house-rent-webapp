@@ -995,7 +995,7 @@ export default function NewHomePage() {
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder={getTranslation(language, 'placeholderBedrooms')}
+                  placeholder={getTranslation(language, 'placeholderFloor')}
                 />
               </div>
               <div>

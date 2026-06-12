@@ -137,7 +137,7 @@ export default function HomeRatingsPage() {
                           ? 'bg-blue-500/20 text-blue-400'
                           : 'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {review.type === 'movein_house' ? 'Move-in' : 'Move-out'}
+                        {review.type === 'movein_house' ? getTranslation(language, 'moveIn') : getTranslation(language, 'moveOut')}
                       </span>
                       <p className="text-sm text-[var(--text-muted)]">
                         {new Date(review.createdAt).toLocaleDateString(
