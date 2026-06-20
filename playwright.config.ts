@@ -13,9 +13,14 @@ export default defineConfig({
   reporter: [['html', { open: 'on-failure' }], ['list']],
   use: {
     baseURL: BASE_URL,
-    screenshot: 'only-on-failure',
+    screenshot: 'on',
     video: 'retain-on-failure',
     trace: 'on-first-retry',
+    extraHTTPHeaders: {
+      ...(process.env.CF_ACCESS_CLIENT_ID && process.env.CF_ACCESS_CLIENT_SECRET
+        ? { 'CF-Access-Client-Id': process.env.CF_ACCESS_CLIENT_ID, 'CF-Access-Client-Secret': process.env.CF_ACCESS_CLIENT_SECRET }
+        : {}),
+    },
   },
   globalSetup: './tests/e2e/global-setup.ts',
   projects: [

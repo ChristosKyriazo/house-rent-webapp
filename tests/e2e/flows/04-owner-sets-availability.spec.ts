@@ -2,48 +2,52 @@ import { test, expect } from '@playwright/test'
 import path from 'path'
 import { readState } from './helpers/state'
 
-test.use({ storageState: path.join(__dirname, '../.auth/owner.json') })
+// Renter books a slot that the owner set in step 03
+test.use({ storageState: path.join(__dirname, '../.auth/renter.json') })
 
-test('04 — owner sets viewing availability', async ({ page }) => {
+test('04 — renter books a viewing slot', async ({ page }) => {
   const { listingKey } = readState()
   expect(listingKey, 'listingKey missing — run steps 01–03 first').toBeTruthy()
 
-  await page.goto(`/homes/${listingKey}/set-availability`)
+  // Navigate first to activate the renter's Clerk session in the browser
+  await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  // Add a slot — tomorrow's date
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const dateStr = tomorrow.toISOString().split('T')[0] // YYYY-MM-DD
+  // Cancel any stale future scheduled bookings left over from previous test runs.
+  // Deleting a listing sets booking.homeId to null (SetNull) but the booking row stays
+  // as 'scheduled', causing USER_CONFLICT errors on subsequent runs.
+  await page.evaluate(async () => {
+    const res = await fetch('/api/bookings')
+    if (!res.ok) return
+    const { bookings } = await res.json()
+    const future = (bookings ?? []).filter(
+      (b: { status: string; endTime: string }) =>
+        b.status === 'scheduled' && new Date(b.endTime) > new Date()
+    )
+    for (const b of future as Array<{ id: number }>) {
+      await fetch(`/api/bookings/${b.id}`, { method: 'DELETE' })
+    }
+  })
 
-  // Click "Add Availability Slot"
-  const addSlotBtn = page.getByRole('button', { name: /Add Availability Slot|Προσθήκη Διαστήματος/i })
-  await expect(addSlotBtn).toBeVisible({ timeout: 8_000 })
-  await addSlotBtn.click()
+  await page.goto(`/homes/${listingKey}/book`)
+  await page.waitForLoadState('networkidle')
 
-  // Fill date
-  const dateInput = page.locator('input[type="date"]').last()
-  await dateInput.fill(dateStr)
+  // Time slots are rendered as <select> dropdowns, one per availability date
+  const slotSelect = page.locator('select').first()
+  await expect(slotSelect).toBeVisible({ timeout: 15_000 })
 
-  // Fill start time (10:00)
-  const timeInputs = page.locator('input[type="time"]')
-  await timeInputs.nth(0).fill('10:00')
+  // First option is always the placeholder (""), index 1 is the first real slot
+  await slotSelect.selectOption({ index: 1 })
 
-  // Fill end time (11:00)
-  await timeInputs.nth(1).fill('11:00')
+  // After selecting a slot, the "Confirm Booking" section appears below
+  const confirmBtn = page.getByRole('button', { name: /Confirm Booking|Επιβεβαίωση Κράτησης/i })
+  await expect(confirmBtn).toBeVisible({ timeout: 10_000 })
+  await confirmBtn.click()
 
-  // Save
-  const saveBtn = page.getByRole('button', { name: /Save Availability|Αποθήκευση Διαθεσιμότητας/i })
-  await expect(saveBtn).toBeVisible({ timeout: 5_000 })
-  await saveBtn.click()
-
-  await page.waitForTimeout(2_000)
-  await expect(page.getByText(/something went wrong/i)).not.toBeVisible()
-
-  // Success toast or confirmation
+  // Success toast: "Booking confirmed! You can view it in your calendar."
   await expect(
-    page.getByText(/saved|αποθηκεύτηκε|success|επιτυχία/i).first()
-  ).toBeVisible({ timeout: 8_000 })
+    page.getByText(/Booking confirmed|Η κράτηση επιβεβαιώθηκε/i).first()
+  ).toBeVisible({ timeout: 10_000 })
 
-  console.log(`  ✓ Availability slot set for ${dateStr} 10:00–11:00`)
+  console.log('  ✓ Viewing slot booked')
 })

@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.36.5",
+    "@clerk/testing": "^2.1.5",
     "@prisma/client": "^5.18.0",
     "@sentry/nextjs": "^10.53.1",
     "ioredis": "^5.11.0",

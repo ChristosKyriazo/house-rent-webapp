@@ -156,65 +156,77 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Get all valid availabilityIds that exist
+    // Separate orphan bookings (listing deleted → availabilityId set to null via SetNull cascade)
+    const orphanBookingIds = allBookings
+      .filter(b => b.availabilityId === null)
+      .map(b => b.id)
+
+    // Get valid availabilityIds for non-orphan bookings
     const availabilityIds = allBookings
       .map(b => b.availabilityId)
       .filter((id): id is number => id !== null)
-    
-    if (availabilityIds.length === 0) {
+
+    let validAvailabilityIds = new Set<number>()
+
+    if (availabilityIds.length > 0) {
+      // Resolve availabilities → homes to exclude stale availability records
+      const allAvailabilities = await prisma.availability.findMany({
+        where: { id: { in: availabilityIds } },
+        select: { id: true, homeId: true },
+      })
+
+      const homeIds = allAvailabilities
+        .map(a => a.homeId)
+        .filter((id): id is number => id !== null)
+
+      const validHomes = await prisma.home.findMany({
+        where: { id: { in: homeIds } },
+        select: { id: true },
+      })
+
+      const validHomeIds = new Set(validHomes.map(h => h.id))
+
+      validAvailabilityIds = new Set(
+        allAvailabilities
+          .filter(a => a.homeId !== null && validHomeIds.has(a.homeId))
+          .map(a => a.id)
+      )
+    }
+
+    if (validAvailabilityIds.size === 0 && orphanBookingIds.length === 0) {
       return NextResponse.json({ bookings: [] }, { status: 200 })
     }
 
-    // First, get all availabilities to find their homeIds
-    const allAvailabilities = await prisma.availability.findMany({
-      where: {
-        id: { in: availabilityIds },
-      },
-      select: {
-        id: true,
-        homeId: true,
-      },
-    })
-
-    // Get all valid homeIds that exist
-    const homeIds = allAvailabilities
-      .map(a => a.homeId)
-      .filter((id): id is number => id !== null)
-    
-    const validHomes = await prisma.home.findMany({
-      where: {
-        id: { in: homeIds },
-      },
-      select: { id: true },
-    })
-    
-    const validHomeIds = new Set(validHomes.map(h => h.id))
-    
-    // Filter availabilities to only those with valid homes
-    const validAvailabilityIds = new Set(
-      allAvailabilities
-        .filter(a => a.homeId !== null && validHomeIds.has(a.homeId))
-        .map(a => a.id)
-    )
+    // Build availability filter — include both valid-home bookings and orphan (null) bookings
+    const availabilityOrClauses: Record<string, unknown>[] = []
+    if (validAvailabilityIds.size > 0) {
+      availabilityOrClauses.push({ availabilityId: { in: Array.from(validAvailabilityIds) } })
+    }
+    if (orphanBookingIds.length > 0) {
+      availabilityOrClauses.push({ id: { in: orphanBookingIds } })
+    }
 
     // Build where clause for final booking query
+    const userOrClauses = [
+      { userId: user.id },
+      { ownerId: user.id },
+    ]
     const finalWhereClause: Record<string, unknown> = {
-      OR: [
-        { userId: user.id }, // Bookings where user is the attendee
-        { ownerId: user.id }, // Bookings where user is the owner
+      AND: [
+        { OR: userOrClauses },
+        { OR: availabilityOrClauses },
       ],
-      availabilityId: { in: Array.from(validAvailabilityIds) },
     }
-    
+
     // Add inquiryId filter if provided
     if (inquiryIdParam) {
       const inquiryId = parseInt(inquiryIdParam)
       if (!isNaN(inquiryId)) {
-        finalWhereClause.inquiryId = inquiryId
+        (finalWhereClause.AND as Record<string, unknown>[]).push({ inquiryId })
       }
     }
-    
-    // Now fetch bookings only for valid availabilities
+
+    // Now fetch bookings with full details
     const bookings = await prisma.booking.findMany({
       where: finalWhereClause,
       include: {
@@ -254,13 +266,11 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Transform bookings to include home at the top level for easier access
-    // Filter out any bookings with null availability or null home (safety check)
+    // Orphan bookings (availability=null) have no home reference — surface them without one
     const transformedBookings = bookings
-      .filter(booking => booking.availability !== null && booking.availability.home !== null)
       .map(booking => ({
         ...booking,
-        home: booking.availability!.home!,
+        home: booking.availability?.home ?? null,
         availabilityId: booking.availabilityId,
         inquiryId: booking.inquiryId,
         userId: booking.userId,

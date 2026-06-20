@@ -2,33 +2,28 @@ import { test, expect } from '@playwright/test'
 import path from 'path'
 import { readState } from './helpers/state'
 
-test.use({ storageState: path.join(__dirname, '../.auth/owner.json') })
+// Renter accepts the finalization offer on the listing detail page
+test.use({ storageState: path.join(__dirname, '../.auth/renter.json') })
 
-test('06 — owner sends finalization offer to renter', async ({ page }) => {
+test('06 — renter accepts the finalization offer', async ({ page }) => {
   const { listingKey } = readState()
   expect(listingKey, 'listingKey missing — run steps 01–05 first').toBeTruthy()
 
-  await page.goto(`/homes/inquiries/${listingKey}`)
+  // "Approve Finalization" button appears on the listing page when the renter has
+  // a pending 'finalize' notification (sent by the owner in step 05)
+  await page.goto(`/homes/${listingKey}`)
   await page.waitForLoadState('networkidle')
 
-  // Find the approved inquiry and click Finalize
-  const finalizeBtn = page.getByRole('button', { name: /^Finalize$|^Οριστικοποίηση$/i }).first()
-  await expect(finalizeBtn).toBeVisible({ timeout: 10_000 })
-  await finalizeBtn.click()
+  const approveBtn = page.getByRole('button', {
+    name: /Approve Finalization|Επιβεβαίωση Οριστικοποίησης/i,
+  })
+  await expect(approveBtn).toBeVisible({ timeout: 15_000 })
+  await approveBtn.click()
 
-  // Confirmation dialog may appear
-  const confirmBtn = page.getByRole('button', { name: /Confirm|Yes|Ναι|Επιβεβαίωση/i }).first()
-  if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await confirmBtn.click()
-  }
-
-  await page.waitForTimeout(2_000)
-  await expect(page.getByText(/something went wrong/i)).not.toBeVisible()
-
-  // Status should update to "finalization sent" or similar
+  // Toast: "Deal finalized! Redirecting..." before redirect to /homes/approved
   await expect(
-    page.getByText(/finali|sent|στάλθηκε|αίτημα/i).first()
-  ).toBeVisible({ timeout: 8_000 })
+    page.getByText(/Deal finalized|Η συμφωνία ολοκληρώθηκε/i).first()
+  ).toBeVisible({ timeout: 10_000 })
 
-  console.log(`  ✓ Finalization offer sent for listing ${listingKey}`)
+  console.log('  ✓ Renter accepted finalization — deal complete')
 })

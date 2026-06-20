@@ -44,6 +44,7 @@ export async function initiateFinalization(
 
   const scheduledBooking = await prisma.booking.findFirst({
     where: { inquiryId: inquiry.id, status: 'scheduled' },
+    orderBy: { id: 'asc' },
   })
   if (!scheduledBooking) throw new InquiryFinalizationError('Can only finalize after a scheduled meeting', 400)
 
