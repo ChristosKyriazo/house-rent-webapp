@@ -42,18 +42,20 @@ describe('GET /api/bookings', () => {
     expect(body.bookings).toEqual([])
   })
 
-  it('returns empty bookings when no valid availabilities exist', async () => {
+  it('returns orphan bookings (availabilityId=null) even when no valid availabilities exist', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 1, role: 'user' })
-    mockPrisma.booking.findMany.mockResolvedValue([
-      { id: 1, availabilityId: null, inquiryId: null, status: 'scheduled' },
-    ])
+    const orphan = { id: 1, availabilityId: null, inquiryId: null, status: 'scheduled' }
+    // First call: allBookings (select); second call: final query with includes
+    mockPrisma.booking.findMany
+      .mockResolvedValueOnce([orphan])
+      .mockResolvedValueOnce([orphan])
 
     const { GET } = await import('@/app/api/bookings/route')
     const res = await GET(makeGetRequest())
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body.bookings).toEqual([])
+    expect(body.bookings).toEqual([{ ...orphan, home: null }])
   })
 
   it('filters bookings to those with valid homes', async () => {
