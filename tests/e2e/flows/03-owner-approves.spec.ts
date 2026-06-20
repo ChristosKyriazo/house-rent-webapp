@@ -66,9 +66,10 @@ test('03 — owner approves inquiry and sets viewing slots', async ({ page }) =>
       .find(i => i.approved)
     if (!approvedInq) return { ok: false, error: 'no approved inquiry' }
 
-    // Create a past booking (3–1 minutes ago) so the finalization time-check passes.
-    // The 2-minute window is short enough that runs >2 min apart won't conflict.
-    const now = Date.now()
+    // Create a past booking using the inquiry ID as an epoch-millisecond offset.
+    // Each inquiry has a unique auto-incremented ID so these times (in 1970) never
+    // overlap between test runs, and they're always in the past (endTime < now).
+    const epochMs = approvedInq.id * 3600 * 1000 // 1 hour per inquiry ID
     const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -76,8 +77,8 @@ test('03 — owner approves inquiry and sets viewing slots', async ({ page }) =>
         ownerId: home.owner.id,
         inquiryId: approvedInq.id,
         title: 'E2E Past Meeting',
-        startTime: new Date(now - 3 * 60 * 1000).toISOString(),
-        endTime:   new Date(now - 1 * 60 * 1000).toISOString(),
+        startTime: new Date(epochMs).toISOString(),
+        endTime:   new Date(epochMs + 3600 * 1000).toISOString(),
         location: 'Property',
       }),
     })
