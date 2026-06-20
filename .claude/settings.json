@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx playwright *)",
+      "Bash(npm run test:e2e*)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
