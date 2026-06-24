@@ -14,7 +14,7 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     screenshot: 'on',
-    video: 'retain-on-failure',
+    video: 'on',
     trace: 'on-first-retry',
     extraHTTPHeaders: {
       ...(process.env.CF_ACCESS_CLIENT_ID && process.env.CF_ACCESS_CLIENT_SECRET
@@ -23,6 +23,7 @@ export default defineConfig({
     },
   },
   globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   projects: [
     // Unauthenticated — public smoke + feature tests
     {
