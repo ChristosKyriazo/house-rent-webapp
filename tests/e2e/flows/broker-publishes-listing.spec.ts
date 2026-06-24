@@ -8,25 +8,9 @@ test('broker publishes a new home listing', async ({ page }) => {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  // Clean up any previous E2E listings created by this broker so we don't hit the subscription limit
-  const myListings = await page.evaluate(async () => {
-    const resp = await fetch('/api/homes/my-listings')
-    if (!resp.ok) return []
-    const data = await resp.json()
-    return (data.homes ?? []) as Array<{ id: string; title: string }>
-  })
-  for (const listing of myListings) {
-    if (listing.title?.startsWith('E2E Test Listing')) {
-      await page.evaluate(async (id) => {
-        await fetch(`/api/homes/${id}`, { method: 'DELETE' })
-      }, listing.id)
-    }
-  }
-
   const template = pickListingTemplate()
   const title = `E2E Test Listing ${Date.now()}`
 
-  // Create listing via API using the broker's authenticated session
   const result = await page.evaluate(async (data) => {
     const resp = await fetch('/api/homes', {
       method: 'POST',
@@ -63,12 +47,12 @@ test('broker publishes a new home listing', async ({ page }) => {
   const listingKey = result.body.home?.key
   expect(listingKey, 'API did not return a listing key').toBeTruthy()
 
-  // Navigate to the new listing so the recording shows the published page
+  // Navigate to the published listing page
   await page.goto(`/homes/${listingKey}`)
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 })
 
-  // Also show the broker's listing dashboard
+  // Show the broker's listing dashboard
   await page.goto('/homes/my-listings')
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 })
