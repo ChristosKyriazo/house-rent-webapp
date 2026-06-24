@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 import { findBestMatch, matchParkingValue, getUniqueFieldValues } from '@/lib/value-matcher'
-import { toEnglishValue } from '@/lib/translations'
+import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { analyzePhotosForTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
@@ -147,14 +147,18 @@ export async function processBulkUploadJob(jobId: string) {
         const floor = floorInput !== null && floorInput !== undefined && String(floorInput).trim() !== '' ? Number(floorInput) : null
 
         const heatingCategoryInput = row['Heating Category'] ? String(row['Heating Category']).trim() : null
-        const heatingCategory = heatingCategoryInput
-          ? findBestMatch(toEnglishValue(heatingCategoryInput), validHeatingCategories) || toEnglishValue(heatingCategoryInput)
-          : null
+        const heatingCategory = normalizeHeatingCategory(
+          heatingCategoryInput
+            ? findBestMatch(toEnglishValue(heatingCategoryInput), validHeatingCategories) || heatingCategoryInput
+            : null
+        )
 
         const heatingAgentInput = row['Heating Agent'] ? String(row['Heating Agent']).trim() : null
-        const heatingAgent = heatingAgentInput
-          ? findBestMatch(toEnglishValue(heatingAgentInput), validHeatingAgents) || toEnglishValue(heatingAgentInput)
-          : null
+        const heatingAgent = normalizeHeatingAgent(
+          heatingAgentInput
+            ? findBestMatch(toEnglishValue(heatingAgentInput), validHeatingAgents) || heatingAgentInput
+            : null
+        )
 
         const parking = matchParkingValue(row['Parking'] ? String(row['Parking']).trim() : null)
         const sizeSqMeters = Number(row['Size (sq meters)'])

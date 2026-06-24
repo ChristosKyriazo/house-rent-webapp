@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getHomeRatingScores } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
-import { toEnglishValue } from '@/lib/translations'
+import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
 import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { requestLogger } from '@/lib/logger'
 
@@ -234,8 +234,8 @@ export async function PUT(
       // Allow 0 and negative numbers for ground floor and basement
       floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
       // Convert heating values to English before storing
-      heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-      heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+      heatingCategory: normalizeHeatingCategory(heatingCategory),
+      heatingAgent: normalizeHeatingAgent(heatingAgent),
       parking: parking === undefined || parking === null 
         ? null 
         : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),

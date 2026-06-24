@@ -24,6 +24,7 @@ export const createBookingSchema = z.object({
 export const createHomeSchema = z.object({
   title: nonEmptyString.max(200),
   description: z.string().optional(),
+  descriptionGreek: z.string().optional(),
   street: z.string().optional(),
   city: nonEmptyString,
   country: nonEmptyString,

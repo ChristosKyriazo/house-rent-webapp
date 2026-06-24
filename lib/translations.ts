@@ -483,7 +483,9 @@ export const translations = {
     autonomous: 'Αυτόνομη',
     oil: 'Πετρέλαιο',
     'natural gas': 'Φυσικό Αέριο',
+    'Natural gas': 'Φυσικό Αέριο',
     electricity: 'Ηλεκτρική',
+    power: 'Ηλεκτρική',
     other: 'Άλλο',
     
     // Vibe values – all canonical system vibes (Title Case = DB-stored value, lowercase = alias)
@@ -1007,8 +1009,10 @@ export const translations = {
     central: 'Central',
     autonomous: 'Autonomous',
     oil: 'Oil',
-    'natural gas': 'Natural Gas',
-    electricity: 'Electricity',
+    'natural gas': 'Natural gas',
+    'Natural gas': 'Natural gas',
+    electricity: 'Power',
+    power: 'Power',
     other: 'Other',
     
     // Vibe values – all canonical system vibes (Title Case = DB-stored value, lowercase = alias)
@@ -1169,6 +1173,28 @@ function _levenshteinSimilarity(a: string, b: string): number {
     }
   }
   return 1 - row[lb] / Math.max(la, lb)
+}
+
+/** Canonical stored form: Title Case, with "electricity" mapped to "Power". */
+export function normalizeHeatingCategory(value: string | null | undefined): string | null {
+  if (!value || value.trim() === '') return null
+  const eng = (toEnglishValue(value) ?? value).trim().toLowerCase()
+  if (eng === 'central') return 'Central'
+  if (eng === 'autonomous') return 'Autonomous'
+  const raw = value.trim()
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
+}
+
+/** Canonical stored form: Title Case, with all electricity synonyms mapped to "Power". */
+export function normalizeHeatingAgent(value: string | null | undefined): string | null {
+  if (!value || value.trim() === '') return null
+  const eng = (toEnglishValue(value) ?? value).trim().toLowerCase()
+  if (eng === 'oil') return 'Oil'
+  if (eng === 'natural gas') return 'Natural gas'
+  if (eng === 'electricity' || eng === 'electric' || eng === 'power') return 'Power'
+  if (eng === 'other') return 'Other'
+  const raw = value.trim()
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
 }
 
 export function toEnglishValue(value: string | null | undefined): string | null {

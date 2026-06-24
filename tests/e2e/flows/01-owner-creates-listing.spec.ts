@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 import { clearState, writeState } from './helpers/state'
+import { pickListingTemplate } from '../fixtures/listing-templates'
 
 test.use({ storageState: path.join(__dirname, '../.auth/owner.json') })
 
@@ -11,21 +12,7 @@ test('01 — owner creates a listing', async ({ page }) => {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  // Delete stale E2E listings from previous runs to avoid hitting the free-tier listing limit
-  const staleListings = await page.evaluate(async () => {
-    const resp = await fetch('/api/homes/my-listings')
-    if (!resp.ok) return []
-    const { homes } = await resp.json()
-    return (homes ?? []).filter((h: { title: string }) => h.title?.startsWith('E2E Test Listing'))
-  })
-
-  for (const listing of staleListings as Array<{ key: string; title: string }>) {
-    await page.evaluate(async (key) => {
-      await fetch(`/api/homes/${key}`, { method: 'DELETE' })
-    }, listing.key)
-    console.log(`  🗑 Deleted stale listing: ${listing.title}`)
-  }
-
+  const template = pickListingTemplate()
   const title = `E2E Test Listing ${Date.now()}`
 
   // Create listing via API through the browser (so Clerk auth cookies are included)
@@ -39,13 +26,25 @@ test('01 — owner creates a listing', async ({ page }) => {
     return { ok: resp.ok, status: resp.status, body }
   }, {
     title,
-    city: 'Athens',
-    country: 'Greece',
-    pricePerMonth: '750',
-    sizeSqMeters: '65',
-    listingType: 'rent',
-    bedrooms: '1',
-    bathrooms: '1',
+    description: template.description,
+    descriptionGreek: template.descriptionGreek,
+    street: template.street,
+    city: template.city,
+    country: template.country,
+    area: template.area,
+    listingType: template.listingType,
+    pricePerMonth: template.pricePerMonth,
+    sizeSqMeters: template.sizeSqMeters,
+    bedrooms: template.bedrooms,
+    bathrooms: template.bathrooms,
+    floor: template.floor,
+    heatingCategory: template.heatingCategory,
+    heatingAgent: template.heatingAgent,
+    parking: template.parking,
+    yearBuilt: template.yearBuilt,
+    yearRenovated: template.yearRenovated,
+    energyClass: template.energyClass,
+    availableFrom: template.availableFrom,
   })
 
   expect(result.ok, `Create listing API failed (${result.status}): ${JSON.stringify(result.body)}`).toBeTruthy()
@@ -60,5 +59,5 @@ test('01 — owner creates a listing', async ({ page }) => {
   await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 })
 
   writeState({ listingKey, listingTitle: title })
-  console.log(`  ✓ Listing created: key=${listingKey}`)
+  console.log(`  ✓ Listing created: key=${listingKey}, area=${template.area}, price=${template.pricePerMonth}€`)
 })

@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 import { removeGreekAccents, resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
-import { toEnglishValue } from '@/lib/translations'
+import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
 import { validateBody } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
 import { getListingLimit, checkTier } from '@/lib/subscription'
@@ -500,6 +500,7 @@ export async function POST(request: NextRequest) {
     const {
       title,
       description,
+      descriptionGreek,
       street,
       city,
       country,
@@ -632,7 +633,7 @@ export async function POST(request: NextRequest) {
 
     // Generate descriptions using AI only if useAIDescription is explicitly checked
     let finalDescription = description?.trim() || null
-    let finalDescriptionGreek: string | null = null
+    let finalDescriptionGreek: string | null = descriptionGreek?.trim() || null
 
     if (useAIDescription) {
       const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
@@ -655,8 +656,8 @@ export async function POST(request: NextRequest) {
         sizeSqMeters: sizeSqMeters ? Number(sizeSqMeters) : null,
         yearBuilt: resolveYear(yearBuilt),
         yearRenovated: resolveYear(yearRenovated),
-        heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-        heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+        heatingCategory: normalizeHeatingCategory(heatingCategory),
+        heatingAgent: normalizeHeatingAgent(heatingAgent),
         parking: resolveParking(parking),
         energyClass: resolveEnergyClass(energyClass),
         closestMetro: distances.closestMetro,
@@ -702,9 +703,8 @@ export async function POST(request: NextRequest) {
         bathrooms: Number(bathrooms || 0),
         // Allow 0 and negative numbers for ground floor and basement
         floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
-              // Convert heating values to English before storing
-              heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-              heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+              heatingCategory: normalizeHeatingCategory(heatingCategory),
+              heatingAgent: normalizeHeatingAgent(heatingAgent),
               parking: parking === undefined || parking === null 
                 ? null 
                 : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
