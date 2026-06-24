@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | L-1 | Owner creates a listing | 🏠 | ✅ `flows/01-owner-creates-listing` | Listing appears on `/homes/my-listings` with all fields correctly populated |
 | L-2 | Owner edits a listing | 🏠 | 🔲 | Navigate to edit form; change title, price, description; confirm changes are saved and visible on the listing page |
-| L-3 | Owner deletes a listing | 🏠 | 🔲 | Listing disappears from `/homes/my-listings` and returns 404 on its detail page |
+| L-3 | Owner deletes a listing | 🏠 | ✅ `flows/owner-deletes-listing` | Listing disappears from `/homes/my-listings` and returns 404 on its detail page |
 | L-4 | Broker creates a listing | 🏢 | ✅ `flows/broker-publishes-listing` | Listing appears on broker's `/homes/my-listings` with all fields correct |
 | L-5 | Broker deletes a listing | 🏢 | ✅ `flows/broker-deletes-listing` | Listing disappears from broker's `/homes/my-listings` |
 | L-6 | Owner views their listings dashboard | 🏠 | 🔲 | `/homes/my-listings` loads; shows listing count, inquiry badge, promotion status |
@@ -199,7 +199,7 @@ These run as a sequence: each spec depends on the previous one having run.
 
 | Area | Total | ✅ Implemented | 🔲 To build |
 |---|---|---|---|
-| L Listings | 15 | 5 | 10 |
+| L Listings | 15 | 6 | 9 |
 | S Search | 15 | 0 | 15 |
 | I Inquiries | 10 | 5 | 5 |
 | V Viewings | 8 | 2 | 6 |
@@ -210,4 +210,4 @@ These run as a sequence: each spec depends on the previous one having run.
 | N Notifications | 6 | 0 | 6 |
 | T Translation/AI | 3 | 2 | 1 |
 | F Full Flows | 8 | 3 | 5 |
-| **Total** | **93** | **24** | **69** |
+| **Total** | **93** | **25** | **68** |
