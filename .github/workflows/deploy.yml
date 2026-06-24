@@ -125,6 +125,12 @@ jobs:
             GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
             CALCOM_TOKEN_ENCRYPTION_KEY=${{ secrets.CALCOM_TOKEN_ENCRYPTION_KEY }}
 
+            # ── Stripe ───────────────────────────────────────────────────────
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+            STRIPE_PRICE_ID_PLUS=${{ secrets.STRIPE_PRICE_ID_PLUS }}
+            STRIPE_PRICE_ID_PRO=${{ secrets.STRIPE_PRICE_ID_PRO }}
+
             # ── App config ────────────────────────────────────────────────────
             LOG_LEVEL=info
             GITHUB_ACTIONS_ENV_EOF
