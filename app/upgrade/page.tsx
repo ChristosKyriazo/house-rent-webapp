@@ -81,6 +81,15 @@ function UpgradePageInner() {
   const [downgradeResult, setDowngradeResult] = useState<{ slotsRevoked: number; listingsOverLimit: number } | null>(null)
   const [error, setError] = useState('')
 
+  // success=true  → returned from Stripe after payment
+  // canceled=true → user closed Stripe checkout
+  const returnStatus = searchParams.get('success') === 'true'
+    ? 'success'
+    : searchParams.get('canceled') === 'true'
+      ? 'canceled'
+      : null
+  const returnedTier = (searchParams.get('tier') ?? null) as Tier | null
+
   useEffect(() => {
     fetch('/api/profile')
       .then(r => r.json())
@@ -102,6 +111,14 @@ function UpgradePageInner() {
       })
       if (!res.ok) { setError(isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.'); return }
       const data = await res.json()
+
+      // Upgrade → Stripe returned a checkout URL; redirect there
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+        return
+      }
+
+      // Downgrade → applied immediately
       setCurrentTier(tier)
       setJustChanged(tier)
       setLastChangeWasDowngrade(isDowngrade)
@@ -169,6 +186,26 @@ function UpgradePageInner() {
             {isEl ? 'Δοκιμαστική λειτουργία — η κάρτα σας δεν θα χρεωθεί.' : "Test mode — your card won't be charged."}
           </p>
         </div>
+
+        {returnStatus === 'success' && (
+          <div className="max-w-lg mx-auto mb-8 flex items-center gap-3 px-5 py-4 rounded-2xl bg-green-500/10 border border-green-500/30">
+            <span className="text-green-400 text-lg shrink-0">✓</span>
+            <p className="text-sm text-green-300 font-[var(--font-outfit)]">
+              {isEl
+                ? `Η αναβάθμισή σας σε ${returnedTier ?? 'Plus'} ολοκληρώθηκε!`
+                : `Your upgrade to ${returnedTier ?? 'Plus'} is complete!`}
+            </p>
+          </div>
+        )}
+
+        {returnStatus === 'canceled' && (
+          <div className="max-w-lg mx-auto mb-8 flex items-center gap-3 px-5 py-4 rounded-2xl bg-stone-500/10 border border-stone-500/20">
+            <span className="text-stone-400 text-lg shrink-0">✕</span>
+            <p className="text-sm text-stone-400 font-[var(--font-outfit)]">
+              {isEl ? 'Η πληρωμή ακυρώθηκε. Μπορείτε να δοκιμάσετε ξανά οποτεδήποτε.' : 'Payment canceled. You can try again any time.'}
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center text-[var(--text-muted)] py-12">{isEl ? 'Φόρτωση...' : 'Loading...'}</div>
