@@ -51,10 +51,10 @@ export default async function globalTeardown() {
  * Output: "01-owner-creates-listing — 01-owner-creates-a-listing"
  */
 function humanReadableName(dirName: string): string {
-  // Strip the trailing project name (last hyphen-separated word is usually the project)
-  // e.g. "…-flows" or "…-owner" — remove if it's a known project tag
   const projects = ['flows', 'owner', 'renter', 'broker', 'both', 'public']
   let name = dirName
+
+  // Strip trailing project suffix, e.g. "…-flows"
   for (const p of projects) {
     if (name.endsWith(`-${p}`)) {
       name = name.slice(0, -(p.length + 1))
@@ -62,19 +62,24 @@ function humanReadableName(dirName: string): string {
     }
   }
 
-  // Replace the em-dash placeholder (Playwright encodes — as multiple chars)
-  // Playwright slugifies "—" as "-—-" or similar — collapse to " — "
+  // Strip leading project prefix, e.g. "flows-…"
+  for (const p of projects) {
+    if (name.startsWith(`${p}-`)) {
+      name = name.slice(p.length + 1)
+      break
+    }
+  }
+
+  // Restore em-dash (Playwright slugifies "—" as "-—-")
   name = name.replace(/-?—-?/g, ' — ')
 
-  // Replace remaining hyphens used as word separators with spaces, but keep " — "
-  const parts = name.split(' — ')
-  const cleaned = parts
-    .map(part =>
-      part
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-    )
-    .join(' — ')
+  // Playwright inserts a 5-char hex hash when the name is too long.
+  // Pattern: {spec-truncated}-{5hex}-{title-truncated}
+  // Merge both halves around the hash so the hash disappears.
+  name = name.replace(/-([0-9a-f]{5})-/, '-')
 
-  return cleaned.slice(0, 120)
+  // Normalize dashes and trim
+  name = name.replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+  return name.slice(0, 120)
 }
