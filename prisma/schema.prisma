@@ -34,6 +34,7 @@ model User {
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
   bulkUploadJobs  BulkUploadJob[]
   savedHomes      SavedHome[]
+  savedSearches   SavedSearch[]
   aiSearchCount          Int       @default(0)
   aiSearchMonthlyCount   Int       @default(0)
   aiSearchMonthlyResetAt DateTime?
@@ -417,4 +418,25 @@ model SavedHome {
   @@index([userId])
   @@index([homeId])
   @@map("saved_homes")
+}
+
+model SavedSearch {
+  id                   Int       @id @default(autoincrement())
+  key                  String    @unique @default(cuid())
+  userId               Int
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String?
+  type                 String    // "filter" | "ai"
+  filterParams         Json?     // snapshot of manual filter criteria
+  queryText            String?   // original AI query (for display)
+  queryEmbedding       Json?     // text-embedding-3-small vector snapshot
+  minMatchPercent      Int?      // AI threshold 0–100 (default 70)
+  notificationsEnabled Boolean   @default(true)
+  lastNotifiedAt       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([notificationsEnabled])
+  @@map("saved_searches")
 }

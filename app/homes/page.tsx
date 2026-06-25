@@ -11,6 +11,7 @@ import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
 import { ManualFiltersPanel } from '@/app/homes/components/ManualFiltersPanel'
 import { HomeCard } from '@/app/components/HomeCard'
+import SaveSearchModal from '@/app/components/SaveSearchModal'
 
 const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
 
@@ -99,6 +100,9 @@ function HomesPageInner() {
   const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
   const [compareKeys, setCompareKeys] = useState<string[]>([])
+  const [conversationKey, setConversationKey] = useState<string | null>(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [savedSearchOk, setSavedSearchOk] = useState(false)
   const isInitialized = useRef(false)
   const homesRef = useRef(homes)
   
@@ -703,11 +707,17 @@ function HomesPageInner() {
               setAiQuery('')
               setHomes([])
               setShowFilters(true)
+              setConversationKey(null)
+              setSavedSearchOk(false)
               sessionStorage.removeItem('homesSearchResults')
               sessionStorage.removeItem('homesSearchFilters')
               sessionStorage.removeItem('homesSearchType')
               sessionStorage.removeItem('homesFilterType')
               sessionStorage.removeItem('homesAiQuery')
+            }}
+            onConversationKeyChange={(key) => {
+              setConversationKey(key)
+              setSavedSearchOk(false)
             }}
           />
         )}
@@ -827,6 +837,27 @@ function HomesPageInner() {
               )}
             </div>
             <div className="flex items-center gap-3">
+              {/* Save this search */}
+              {userRole === 'user' || userRole === 'both' ? (
+                savedSearchOk ? (
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-green-50 text-green-700 border border-green-200">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {language === 'el' ? 'Αποθηκεύτηκε' : 'Saved'}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowSaveModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    {language === 'el' ? 'Αποθήκευση' : 'Save search'}
+                  </button>
+                )
+              ) : null}
               {/* Map view button — carries current filters to the map page */}
               <Link
                 href={(() => {
@@ -961,6 +992,21 @@ function HomesPageInner() {
           {language === 'el' ? 'Ακύρωση' : 'Clear'}
         </button>
       </div>
+    )}
+
+    {/* Save Search Modal */}
+    {showSaveModal && filterType && (
+      <SaveSearchModal
+        type={filterType === 'ai' ? 'ai' : 'filter'}
+        filterParams={filterType === 'manual' ? { ...manualFilters, areas: selectedAreas } : undefined}
+        conversationKey={filterType === 'ai' ? (conversationKey ?? undefined) : undefined}
+        language={language}
+        onClose={() => setShowSaveModal(false)}
+        onSaved={() => {
+          setShowSaveModal(false)
+          setSavedSearchOk(true)
+        }}
+      />
     )}
     </>
   )

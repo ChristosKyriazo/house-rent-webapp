@@ -16,13 +16,14 @@ interface AIChatPanelProps {
   onResultsFound: (homes: any[]) => void
   onBack: () => void
   language: string
+  onConversationKeyChange?: (key: string | null) => void
 }
 
 const FREE_PROMPTS = 10
 const MSG_MAX_LENGTH = 200
 
 function AIChatPanel(
-  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language }: AIChatPanelProps
+  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language, onConversationKeyChange }: AIChatPanelProps
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -154,6 +155,7 @@ function AIChatPanel(
       const chatData = await chatRes.json()
       if (!chatRes.ok) throw new Error(chatData.error || 'Chat error')
       setConversationKey(chatData.conversationKey)
+      onConversationKeyChange?.(chatData.conversationKey ?? null)
 
       // Show AI follow-up / summary message
       const aiMsg = chatData.followUpQuestion || chatData.assistantMessage || ''

@@ -11,6 +11,8 @@ import { getListingLimit, checkTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
 import { processEmbeddingQueue } from '@/lib/bulk-upload-processor'
+import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import { matchSavedSearches } from '@/lib/saved-search-matcher'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 
@@ -728,16 +730,29 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Enqueue embedding for reliable generation with retries
+    // Enqueue embedding record so the queue retry system can pick it up on failure
     await prisma.embeddingQueue.upsert({
       where: { homeId: home.id },
       create: { homeId: home.id, status: 'pending' },
       update: { status: 'pending', failCount: 0, lastError: null },
     })
+
     if (openai) {
-      processEmbeddingQueue(home.id, openai, prisma).catch((err) =>
-        log.error({ err }, 'Background embedding failed')
-      )
+      // Generate embedding inline in background (fast: ~200ms) then match saved searches.
+      // Fire-and-forget so the HTTP response is not delayed.
+      ;(async () => {
+        try {
+          const embedding = await generateEmbedding(buildHomeText(home), openai)
+          await prisma.home.update({ where: { id: home.id }, data: { embedding } })
+          await prisma.embeddingQueue.update({ where: { homeId: home.id }, data: { status: 'completed' } })
+          await matchSavedSearches(home, embedding, prisma)
+        } catch (err) {
+          log.error({ err }, 'Inline embedding failed — falling back to queue')
+          processEmbeddingQueue(home.id, openai, prisma).catch((e) =>
+            log.error({ e }, 'Queue retry also failed')
+          )
+        }
+      })()
     }
 
     return NextResponse.json({ message: 'Home created', home }, { status: 201 })
