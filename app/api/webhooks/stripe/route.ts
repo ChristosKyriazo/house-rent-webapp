@@ -30,14 +30,32 @@ export async function POST(request: NextRequest) {
     const targetTier = session.metadata?.targetTier
 
     if (!userId || !targetTier) {
-      // Not a subscription upgrade session — ignore
       return NextResponse.json({ received: true })
     }
 
-    await prisma.user.update({
-      where: { id: parseInt(userId, 10) },
-      data: { subscriptionTier: targetTier },
-    })
+    const userIdInt = parseInt(userId, 10)
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userIdInt },
+        data: { subscriptionTier: targetTier },
+      }),
+      prisma.transaction.upsert({
+        where: { stripeEventId: event.id },
+        create: {
+          userId: userIdInt,
+          stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+          stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
+          stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+          stripeEventId: event.id,
+          amount: session.amount_total ?? 0,
+          currency: session.currency ?? 'eur',
+          status: session.payment_status === 'paid' ? 'succeeded' : session.payment_status ?? 'unknown',
+          subscriptionTier: targetTier,
+        },
+        update: {},
+      }),
+    ])
   }
 
   return NextResponse.json({ received: true })

@@ -35,6 +35,7 @@ model User {
   bulkUploadJobs  BulkUploadJob[]
   savedHomes      SavedHome[]
   savedSearches   SavedSearch[]
+  transactions    Transaction[]
   aiSearchCount          Int       @default(0)
   aiSearchMonthlyCount   Int       @default(0)
   aiSearchMonthlyResetAt DateTime?
@@ -406,6 +407,26 @@ model SearchConversation {
   @@index([createdAt])
   @@map("search_conversations")
 }
+model Transaction {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique @default(cuid())
+  userId                Int
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripePaymentIntentId String?  @unique
+  stripeSubscriptionId  String?
+  stripeCustomerId      String?
+  stripeEventId         String?  @unique  // for webhook deduplication
+  amount                Int      // in cents
+  currency              String   @default("eur")
+  status                String   // "succeeded" | "failed" | "refunded"
+  subscriptionTier      String?  // tier granted by this payment
+  createdAt             DateTime @default(now())
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@map("transactions")
+}
+
 model SavedHome {
   id        Int      @id @default(autoincrement())
   userId    Int
