@@ -15,6 +15,7 @@ export default clerkMiddleware((_auth, request: NextRequest) => {
 export const config = {
   matcher: [
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
+    // Exclude Stripe webhook — signature verification requires the raw unmodified body
+    '/(api(?!/webhooks/stripe)|trpc)(.*)',
   ],
 }
