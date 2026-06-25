@@ -59,7 +59,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ checkoutUrl: session.url })
   }
 
-  // ── Downgrade: apply immediately ──────────────────────────────────────────
+  // ── Downgrade: cancel Stripe subscription then apply immediately ─────────
+  const activeTransaction = await prisma.transaction.findFirst({
+    where: { userId: user.id, stripeSubscriptionId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    select: { stripeSubscriptionId: true },
+  })
+  if (activeTransaction?.stripeSubscriptionId) {
+    try {
+      await getStripe().subscriptions.cancel(activeTransaction.stripeSubscriptionId)
+    } catch (err) {
+      console.error('Failed to cancel Stripe subscription on downgrade:', err)
+      // Non-fatal: DB tier updated regardless; Stripe retains until period end.
+    }
+  }
+
   const newSlotLimit = getSlotLimit(newTier)
   const newListingLimit = getListingLimit(newTier)
 

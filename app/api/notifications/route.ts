@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const users = userIds.length > 0
       ? await prisma.user.findMany({
           where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true },
         })
       : []
 
@@ -115,12 +115,12 @@ export async function GET(request: NextRequest) {
           where: { id: { in: inquiryIds } },
           include: {
             user: {
-              select: { id: true, name: true, email: true },
+              select: { id: true, name: true },
             },
             home: {
               select: {
                 owner: {
-                  select: { id: true, name: true, email: true },
+                  select: { id: true, name: true },
                 },
               },
             },
@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
         // For owners: show who inquired
         if (notif.userId) {
           const inquiryUser = userMap.get(notif.userId)
-          const userName = inquiryUser?.name || inquiryUser?.email.split('@')[0] || t.aUser
+          const userName = inquiryUser?.name || t.aUser
           message = t.notificationInquiry.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
         } else {
           message = t.notificationInquiryGeneric.replace('{propertyTitle}', propertyTitle)
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
       } else if (notif.type === 'rejected') {
         if (notif.role === 'owner') {
           const rejUser = notif.userId ? userMap.get(notif.userId) : null
-          const userName = rejUser?.name || rejUser?.email.split('@')[0] || t.aUser
+          const userName = rejUser?.name || t.aUser
           message = t.notificationRejectedOwner.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
         } else {
           message = t.notificationRejected.replace('{propertyTitle}', propertyTitle)
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
           if (inquiry) {
             // Determine sender: if recipient is owner, sender is user; if recipient is user, sender is owner
             const sender = notif.role === 'owner' ? inquiry.user : inquiry.home.owner
-            const senderName = sender.name || sender.email.split('@')[0] || t.someone
+            const senderName = sender.name || t.someone
             message = t.notificationFinalize.replace('{senderName}', senderName).replace('{propertyTitle}', propertyTitle)
           } else {
             message = t.notificationFinalizeGeneric.replace('{propertyTitle}', propertyTitle)
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
           if (inquiry) {
             // Determine who to rate: if recipient is owner, rate the user; if recipient is user, rate the owner
             const toRate = notif.role === 'owner' ? inquiry.user : inquiry.home.owner
-            const toRateName = toRate.name || toRate.email.split('@')[0] || t.someone
+            const toRateName = toRate.name || t.someone
             message = t.notificationRate.replace('{userName}', toRateName).replace('{propertyTitle}', propertyTitle)
           } else {
             // Fallback based on role
@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
         // For owners: show that a user has booked a slot
         if (notif.userId) {
           const bookingUser = userMap.get(notif.userId)
-          const userName = bookingUser?.name || bookingUser?.email.split('@')[0] || t.aUser
+          const userName = bookingUser?.name || t.aUser
           message = t.notificationBookingCreated.replace('{userName}', userName).replace('{propertyTitle}', propertyTitle)
         } else {
           message = t.notificationBookingCreatedGeneric.replace('{propertyTitle}', propertyTitle)

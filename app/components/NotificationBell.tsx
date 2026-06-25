@@ -57,12 +57,14 @@ export default function NotificationBell() {
     if (!isLoaded || !isSignedIn) return
 
     let inFlight = false
+    let abortController: AbortController | null = null
 
     const fetchNotifications = async () => {
       if (inFlight) return
       inFlight = true
+      abortController = new AbortController()
       try {
-        const response = await fetch(`/api/notifications?language=${languageRef.current}`)
+        const response = await fetch(`/api/notifications?language=${languageRef.current}`, { signal: abortController.signal })
         if (response && response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
@@ -77,11 +79,13 @@ export default function NotificationBell() {
           setNotifications([])
           setUnviewedCount(0)
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
         setNotifications([])
         setUnviewedCount(0)
       } finally {
         inFlight = false
+        abortController = null
         setLoading(false)
       }
     }
@@ -126,6 +130,7 @@ export default function NotificationBell() {
 
     return () => {
       if (intervalId !== null) clearInterval(intervalId)
+      abortController?.abort()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)

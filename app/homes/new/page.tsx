@@ -432,7 +432,11 @@ export default function NewHomePage() {
 
       if (!response.ok) {
         if (response.status === 402) {
-          router.push('/upgrade')
+          const limitMsg = data?.message
+            ? `${data.message} ${language === 'el' ? 'Αναβαθμίστε για να δημοσιεύσετε περισσότερες αγγελίες.' : 'Upgrade to publish more listings.'}`
+            : (language === 'el' ? 'Έχετε φτάσει το όριο αγγελιών. Αναβαθμίστε για να συνεχίσετε.' : 'You\'ve reached your listing limit. Upgrade to continue.')
+          setError(limitMsg)
+          setTimeout(() => router.push('/upgrade'), 3000)
           return
         }
         const errorMsg = data.details

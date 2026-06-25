@@ -283,9 +283,13 @@ export async function PUT(
       data: updateData,
     })
 
-    // Re-queue embedding if any semantic field changed (title, description, city, area, price, etc.)
-    const semanticFields: Array<keyof typeof updateData> = ['title', 'description', 'city', 'country', 'area', 'listingType', 'bedrooms', 'bathrooms', 'pricePerMonth', 'sizeSqMeters', 'parking', 'heatingCategory', 'heatingAgent', 'energyClass', 'yearBuilt', 'yearRenovated']
-    const hasSemanticChange = semanticFields.some(f => f in updateData)
+    // Re-queue embedding only when a field that affects the text representation actually changed
+    const semanticFields = ['title', 'description', 'city', 'country', 'area', 'listingType', 'bedrooms', 'bathrooms', 'pricePerMonth', 'sizeSqMeters', 'parking', 'heatingCategory', 'heatingAgent', 'energyClass', 'yearBuilt', 'yearRenovated'] as const
+    const hasSemanticChange = semanticFields.some(f => {
+      const prev = (existingHome as Record<string, unknown>)[f]
+      const next = updateData[f]
+      return String(prev ?? '') !== String(next ?? '')
+    })
     if (hasSemanticChange) {
       prisma.embeddingQueue.upsert({
         where: { homeId: existingHome.id },

@@ -106,6 +106,15 @@ export async function POST(request: NextRequest) {
       return badRequest('Owners cannot create inquiries on their own properties')
     }
 
+    // Check if any inquiry for this home is already finalized (rented/sold)
+    const finalizedExists = await prisma.inquiry.findFirst({
+      where: { homeId: parsedHomeId, finalized: true },
+      select: { id: true },
+    })
+    if (finalizedExists) {
+      return NextResponse.json({ error: 'This property is no longer available' }, { status: 409 })
+    }
+
     const inquiry = await prisma.inquiry.create({
       data: {
         userId: user.id,
