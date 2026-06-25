@@ -210,6 +210,7 @@ function AIChatPanel(
     setMessages([])
     setInput('')
     setConversationKey(null)
+    onConversationKeyChange?.(null)
     setPromptCount(0)
     setError(null)
     setShowPurchaseModal(false)

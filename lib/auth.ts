@@ -64,11 +64,13 @@ export async function getCurrentUser() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const meta = (createError as any)?.meta as { target?: string[] }
         if (meta?.target?.includes('email')) {
-          // User with this email already exists - try to link it to Clerk
+          // User with this email already exists - only link if the incoming Clerk
+          // account has a verified email matching the DB row, preventing account takeover.
+          const isVerified = cUser?.primaryEmailAddress?.verification?.status === 'verified' ||
+            cUser?.emailAddresses?.some(e => e.emailAddress === email && e.verification?.status === 'verified')
           user = await prisma.user.findUnique({ where: { email } })
           if (user) {
-            // Update existing user to link with Clerk if not already linked
-            if (!user.clerkUserId) {
+            if (!user.clerkUserId && isVerified) {
               user = await prisma.user.update({
                 where: { id: user.id },
                 data: { clerkUserId: userId },

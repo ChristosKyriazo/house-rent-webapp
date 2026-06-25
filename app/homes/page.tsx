@@ -168,9 +168,9 @@ function HomesPageInner() {
         setFilterType(storedFilterType)
         if (storedFilterType === 'ai') {
           setIsAISearchActive(true)
-          if (storedAiQuery) {
-            setAiQuery(storedAiQuery)
-          }
+          if (storedAiQuery) setAiQuery(storedAiQuery)
+          const storedConversationKey = sessionStorage.getItem('homesConversationKey')
+          if (storedConversationKey) setConversationKey(storedConversationKey)
         }
       }
     } catch (error) {
@@ -548,6 +548,7 @@ function HomesPageInner() {
 
   const handleManualFilter = async () => {
     setLoading(true)
+    setSavedSearchOk(false)
     try {
       const params = new URLSearchParams()
       if (searchType) params.append('listingType', searchType)
@@ -714,10 +715,13 @@ function HomesPageInner() {
               sessionStorage.removeItem('homesSearchType')
               sessionStorage.removeItem('homesFilterType')
               sessionStorage.removeItem('homesAiQuery')
+              sessionStorage.removeItem('homesConversationKey')
             }}
             onConversationKeyChange={(key) => {
               setConversationKey(key)
               setSavedSearchOk(false)
+              if (key) sessionStorage.setItem('homesConversationKey', key)
+              else sessionStorage.removeItem('homesConversationKey')
             }}
           />
         )}
@@ -840,12 +844,12 @@ function HomesPageInner() {
               {/* Save this search */}
               {userRole === 'user' || userRole === 'both' ? (
                 savedSearchOk ? (
-                  <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-green-50 text-green-700 border border-green-200">
+                  <Link href="/homes/saved-searches" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30 hover:bg-[var(--accent)]/20 transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {language === 'el' ? 'Αποθηκεύτηκε' : 'Saved'}
-                  </span>
+                  </Link>
                 ) : (
                   <button
                     onClick={() => setShowSaveModal(true)}
@@ -922,7 +926,16 @@ function HomesPageInner() {
                 </button>
               )}
               <button
-                onClick={() => { setSearchType(null); setFilterType(null); setHomes([]) }}
+                onClick={() => {
+                  setSearchType(null); setFilterType(null); setHomes([])
+                  setConversationKey(null); setSavedSearchOk(false)
+                  sessionStorage.removeItem('homesSearchResults')
+                  sessionStorage.removeItem('homesSearchFilters')
+                  sessionStorage.removeItem('homesSearchType')
+                  sessionStorage.removeItem('homesFilterType')
+                  sessionStorage.removeItem('homesAiQuery')
+                  sessionStorage.removeItem('homesConversationKey')
+                }}
                 className="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
               >
                 {language === 'el' ? 'Νέα αναζήτηση' : 'Start new search'}

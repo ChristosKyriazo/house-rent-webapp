@@ -147,6 +147,7 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
     { href: '/homes/search', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
     { href: '/homes/map', labelKey: 'mapView', icon: '🗺️', roles: ['user', 'both'] },
     { href: '/homes/saved', labelKey: 'savedProperties', icon: '♥', roles: ['user', 'both'] },
+    { href: '/homes/saved-searches', labelKey: 'savedSearches', icon: '🔔', roles: ['user', 'both'] },
     { href: '/homes/calendar', labelKey: 'calendar', icon: '📅', roles: ['owner', 'user', 'both', 'broker'] },
   ]
 

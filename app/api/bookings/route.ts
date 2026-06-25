@@ -365,6 +365,23 @@ export async function POST(request: NextRequest) {
       return badRequest('Owner ID is required')
     }
 
+    // Verify the current user has an approved, non-finalized inquiry for this home
+    if (finalHomeId) {
+      const approvedInquiry = await prisma.inquiry.findFirst({
+        where: {
+          userId: user.id,
+          homeId: finalHomeId,
+          approved: true,
+          finalized: false,
+          dismissed: false,
+        },
+        select: { id: true },
+      })
+      if (!approvedInquiry) {
+        return NextResponse.json({ error: 'You must have an approved inquiry to book a viewing' }, { status: 403 })
+      }
+    }
+
     // inquiryId is already validated by Zod as number | null | undefined
     let finalInquiryId: number | null = body.inquiryId ?? null
 

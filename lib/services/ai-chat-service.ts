@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { CONVERSATIONAL_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-prompts'
+import { generateEmbedding } from '@/lib/embeddings'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -162,6 +163,17 @@ export async function processAIChatTurn(
       select: { key: true },
     })
     savedKey = created.key
+  }
+
+  // Persist query embedding so AI saved-search matching can use it.
+  // Fire-and-forget: doesn't block the chat response.
+  if (aiResponse.action === 'search') {
+    generateEmbedding(userMessage, openai)
+      .then(vec => prisma.searchConversation.update({
+        where: { key: savedKey },
+        data: { embedding: vec as unknown as never },
+      }))
+      .catch(() => { /* non-critical — saved search can still be created without embedding */ })
   }
 
   return {

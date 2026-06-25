@@ -21,6 +21,7 @@ interface Notification {
     | 'booking_reminder'
     | 'rate'
     | 'rejected'
+    | 'new_listing_match'
   message: string
   homeKey: string
   inquiryId: number | null
@@ -283,6 +284,12 @@ export default function NotificationBell() {
       } else {
         router.push('/homes/rate-owner')
       }
+      return
+    }
+
+    if (notification.type === 'new_listing_match') {
+      router.push(notification.homeKey ? `/homes/${notification.homeKey}` : '/homes/saved-searches')
+      return
     }
   }
 

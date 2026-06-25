@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 
 export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0
   let dot = 0, magA = 0, magB = 0
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i]

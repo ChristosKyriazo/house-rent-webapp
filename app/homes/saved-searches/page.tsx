@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 
@@ -21,7 +21,9 @@ export default function SavedSearchesPage() {
   const [searches, setSearches] = useState<SavedSearch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toastError, setToastError] = useState<string | null>(null)
   const isEl = language === 'el'
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   async function load() {
     try {
@@ -39,26 +41,51 @@ export default function SavedSearchesPage() {
   useEffect(() => { load() }, [])
 
   async function toggleNotifications(key: string, current: boolean) {
-    setSearches(prev => prev.map(s => s.key === key ? { ...s, notificationsEnabled: !current } : s))
-    await fetch(`/api/saved-searches/${key}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notificationsEnabled: !current }),
-    })
+    const prev = searches
+    setSearches(s => s.map(x => x.key === key ? { ...x, notificationsEnabled: !current } : x))
+    try {
+      const res = await fetch(`/api/saved-searches/${key}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationsEnabled: !current }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setSearches(prev)
+      setToastError(isEl ? 'Αποτυχία ενημέρωσης' : 'Failed to update')
+      setTimeout(() => setToastError(null), 3000)
+    }
   }
 
-  async function updateThreshold(key: string, value: number) {
-    setSearches(prev => prev.map(s => s.key === key ? { ...s, minMatchPercent: value } : s))
-    await fetch(`/api/saved-searches/${key}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ minMatchPercent: value }),
-    })
+  function updateThresholdLocal(key: string, value: number) {
+    setSearches(s => s.map(x => x.key === key ? { ...x, minMatchPercent: value } : x))
+    if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key])
+    debounceTimers.current[key] = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/saved-searches/${key}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ minMatchPercent: value }),
+        })
+        if (!res.ok) throw new Error()
+      } catch {
+        setToastError(isEl ? 'Αποτυχία αποθήκευσης' : 'Failed to save')
+        setTimeout(() => setToastError(null), 3000)
+      }
+    }, 400)
   }
 
   async function deleteSearch(key: string) {
-    setSearches(prev => prev.filter(s => s.key !== key))
-    await fetch(`/api/saved-searches/${key}`, { method: 'DELETE' })
+    const prev = searches
+    setSearches(s => s.filter(x => x.key !== key))
+    try {
+      const res = await fetch(`/api/saved-searches/${key}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+    } catch {
+      setSearches(prev)
+      setToastError(isEl ? 'Αποτυχία διαγραφής' : 'Failed to delete')
+      setTimeout(() => setToastError(null), 3000)
+    }
   }
 
   function describeSavedFilters(search: SavedSearch): string {
@@ -76,7 +103,7 @@ export default function SavedSearchesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] py-12 px-4">
+    <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
           <Link href="/homes" className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
@@ -94,10 +121,16 @@ export default function SavedSearchesPage() {
           </div>
         </div>
 
+        {toastError && (
+          <div className="mb-4 px-4 py-3 rounded-2xl bg-[var(--status-error-bg,#3d1a1a)] text-[var(--status-error)] border border-[var(--status-error)]/30 text-sm">
+            {toastError}
+          </div>
+        )}
+
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-[var(--surface)] rounded-2xl p-5 border border-[var(--border-subtle)] animate-pulse">
+              <div key={i} className="bg-[var(--surface)] rounded-3xl p-5 border border-[var(--border-subtle)] animate-pulse">
                 <div className="h-4 bg-[var(--ink-soft)] rounded w-1/2 mb-3" />
                 <div className="h-3 bg-[var(--ink-soft)] rounded w-3/4" />
               </div>
@@ -106,7 +139,7 @@ export default function SavedSearchesPage() {
         )}
 
         {!loading && error && (
-          <div className="bg-red-50 text-red-700 rounded-2xl p-5 border border-red-200">
+          <div className="bg-[var(--status-error-bg,#3d1a1a)] text-[var(--status-error)] rounded-2xl p-5 border border-[var(--status-error)]/30">
             {error}
           </div>
         )}
@@ -131,13 +164,13 @@ export default function SavedSearchesPage() {
             {searches.map(search => (
               <div
                 key={search.key}
-                className="bg-[var(--surface)] rounded-2xl p-5 border border-[var(--border-subtle)] transition-opacity"
+                className="bg-[var(--surface)] rounded-3xl p-5 border border-[var(--border-subtle)] transition-opacity"
                 style={{ opacity: search.notificationsEnabled ? 1 : 0.6 }}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${search.type === 'ai' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${search.type === 'ai' ? 'bg-[var(--accent)]/15 text-[var(--accent)]' : 'bg-[var(--ink-soft)] text-[var(--text-muted)]'}`}>
                         {search.type === 'ai' ? 'AI' : (isEl ? 'Φίλτρα' : 'Filter')}
                       </span>
                       {!search.notificationsEnabled && (
@@ -154,10 +187,11 @@ export default function SavedSearchesPage() {
                         {describeSavedFilters(search)}
                       </p>
                     )}
-                    {search.type === 'ai' && search.minMatchPercent && (
+                    {search.type === 'ai' && search.minMatchPercent !== null && (
                       <div className="mt-3">
                         <label className="text-xs text-[var(--text-muted)]">
-                          {isEl ? `Ελάχιστη ομοιότητα: ${search.minMatchPercent}%` : `Min match: ${search.minMatchPercent}%`}
+                          {isEl ? `Ελάχιστη ομοιότητα: ` : `Min match: `}
+                          <span className="font-bold text-[var(--accent)]">{search.minMatchPercent}%</span>
                         </label>
                         <input
                           type="range"
@@ -165,9 +199,13 @@ export default function SavedSearchesPage() {
                           max={95}
                           step={5}
                           value={search.minMatchPercent}
-                          onChange={e => updateThreshold(search.key, Number(e.target.value))}
+                          onChange={e => updateThresholdLocal(search.key, Number(e.target.value))}
                           className="w-full mt-1 accent-[var(--accent)]"
                         />
+                        <div className="flex justify-between text-xs text-[var(--text-muted)] mt-0.5">
+                          <span>30%</span>
+                          <span>95%</span>
+                        </div>
                       </div>
                     )}
                     {search.lastNotifiedAt && (
@@ -179,7 +217,6 @@ export default function SavedSearchesPage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Notifications toggle */}
                     <button
                       onClick={() => toggleNotifications(search.key, search.notificationsEnabled)}
                       title={search.notificationsEnabled ? (isEl ? 'Παύση ειδοποιήσεων' : 'Pause notifications') : (isEl ? 'Ενεργοποίηση ειδοποιήσεων' : 'Resume notifications')}
@@ -190,11 +227,10 @@ export default function SavedSearchesPage() {
                       </svg>
                     </button>
 
-                    {/* Delete */}
                     <button
                       onClick={() => deleteSearch(search.key)}
                       title={isEl ? 'Διαγραφή' : 'Delete'}
-                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-red-500 hover:bg-red-50 transition-colors"
+                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--status-error)] hover:bg-[var(--status-error-bg,#3d1a1a)] transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

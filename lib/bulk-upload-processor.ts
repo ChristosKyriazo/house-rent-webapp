@@ -5,6 +5,7 @@ import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from 
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { analyzePhotosForTags } from '@/lib/photo-vision'
 import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import { matchSavedSearches } from '@/lib/saved-search-matcher'
 import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
 import OpenAI from 'openai'
 import * as XLSX from 'xlsx'
@@ -356,6 +357,8 @@ export async function processEmbeddingQueue(
       homeId
     ).catch(() => {}) // silently skip if extension not yet installed
     await db.embeddingQueue.update({ where: { homeId }, data: { status: 'completed' } })
+    // Trigger saved-search matching now that embedding is ready
+    await matchSavedSearches(home, embedding, db)
   } catch (err: unknown) {
     const current = await db.embeddingQueue.findUnique({ where: { homeId } })
     const failCount = (current?.failCount ?? 0) + 1

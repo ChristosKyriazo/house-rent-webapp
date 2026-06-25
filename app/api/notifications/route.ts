@@ -287,6 +287,8 @@ export async function GET(request: NextRequest) {
         } else {
           message = t.notificationBookingReminder.replace('{title}', '').replace('{time}', '')
         }
+      } else if (notif.type === 'new_listing_match') {
+        message = (t as Record<string, string>).notificationNewListingMatch?.replace('{propertyTitle}', propertyTitle) ?? `New listing: ${propertyTitle}`
       }
 
       return {

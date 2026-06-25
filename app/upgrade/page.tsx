@@ -97,6 +97,23 @@ function UpgradePageInner() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Re-fetch tier after returning from Stripe so the UI reflects the webhook update
+  useEffect(() => {
+    if (returnStatus !== 'success') return
+    const poll = setInterval(() => {
+      fetch('/api/profile')
+        .then(r => r.json())
+        .then(d => {
+          const tier = (d.user?.subscriptionTier ?? 'free') as Tier
+          setCurrentTier(tier)
+          if (returnedTier && tier === returnedTier) clearInterval(poll)
+        })
+        .catch(() => {})
+    }, 2000)
+    const timeout = setTimeout(() => clearInterval(poll), 30000)
+    return () => { clearInterval(poll); clearTimeout(timeout) }
+  }, [returnStatus, returnedTier])
+
   async function selectTier(tier: Tier) {
     if (tier === currentTier || upgrading) return
     const isDowngrade = TIER_RANK[tier] < TIER_RANK[currentTier]

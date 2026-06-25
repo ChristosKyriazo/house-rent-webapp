@@ -63,11 +63,11 @@ export default function SaveSearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-[var(--surface)] rounded-3xl p-8 w-full max-w-md shadow-2xl border border-[var(--border-subtle)]">
+      <div className="bg-[var(--surface)] rounded-3xl p-8 w-full max-w-md shadow-2xl border border-[var(--border-subtle)] animate-scaleIn">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-[var(--text)]">
             {isEl ? 'Αποθήκευση αναζήτησης' : 'Save this search'}
@@ -125,7 +125,7 @@ export default function SaveSearchModal({
           )}
 
           {error && (
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[var(--status-error)]">{error}</p>
           )}
 
           <div className="flex gap-3 pt-2">

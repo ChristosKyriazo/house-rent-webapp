@@ -425,7 +425,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200)
     const skip = Math.max(parseInt(searchParams.get('skip') || '0', 10), 0)
     const total = homes.length
-    const paginatedHomes = homes.slice(skip, skip + limit)
+    // Strip the 1536-float embedding vector from the response — clients don't need it
+    const paginatedHomes = homes.slice(skip, skip + limit).map(({ embedding: _e, ...h }) => h)
 
     // Log search for analytics (fire-and-forget)
     const searchLogUser = await getCurrentUser().catch(() => null)
