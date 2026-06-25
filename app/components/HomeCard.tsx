@@ -45,15 +45,17 @@ interface CardBodyProps {
   allAreas: HomeCardProps['allAreas']
   areas: HomeCardProps['areas']
   textColor: string
+  hasMatchBadge?: boolean
 }
 
-function CardBody({ home, language, allAreas, areas, textColor }: CardBodyProps) {
+function CardBody({ home, language, allAreas, areas, textColor, hasMatchBadge }: CardBodyProps) {
   return (
     <>
       <div className="mb-4">
-        <div className="flex items-start justify-between mb-2">
+        {/* When the AI match badge occupies the top-right, add right padding so the listing type tag doesn't overlap it */}
+        <div className={`flex items-start justify-between mb-2 ${hasMatchBadge ? 'pr-28' : ''}`}>
           <h2 className={`text-2xl font-bold flex-1 ${textColor}`}>{getHomeTitle(language, home)}</h2>
-          <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
+          <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 shrink-0 ${
             home.listingType === 'rent'
               ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
               : 'border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] text-[var(--text)]'
@@ -198,11 +200,11 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
 
       {isDismissed ? (
         <div className="block cursor-not-allowed pointer-events-none">
-          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={home.matchPercentage !== undefined} />
         </div>
       ) : (
         <Link href={`/homes/${home.key}?from=browse`} className="block">
-          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={home.matchPercentage !== undefined} />
         </Link>
       )}
 
