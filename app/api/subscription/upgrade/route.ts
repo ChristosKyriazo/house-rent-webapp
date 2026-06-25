@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { unauthorized, badRequest } from '@/lib/api-utils'
 import { getSlotLimit, getListingLimit, TIER_RANK } from '@/lib/subscription'
-import { stripe, STRIPE_PRICES } from '@/lib/stripe'
+import { getStripe, STRIPE_PRICES } from '@/lib/stripe'
 
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
 type Tier = (typeof VALID_TIERS)[number]
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],

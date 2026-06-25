@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import type Stripe from 'stripe'
 
 // Raw body required for Stripe signature verification — do not parse as JSON
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event
   try {
     const rawBody = await request.text()
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+    event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: `Webhook signature invalid: ${message}` }, { status: 400 })
