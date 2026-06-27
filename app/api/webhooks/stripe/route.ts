@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getStripe } from '@/lib/stripe'
+import { getListingLimit } from '@/lib/subscription'
 import type Stripe from 'stripe'
 
 // Raw body required for Stripe signature verification — do not parse as JSON
@@ -34,13 +35,15 @@ export async function POST(request: NextRequest) {
     }
 
     const userIdInt = parseInt(userId, 10)
+    const newLimit = getListingLimit(targetTier)
 
-    await prisma.$transaction([
-      prisma.user.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { id: userIdInt },
         data: { subscriptionTier: targetTier },
-      }),
-      prisma.transaction.upsert({
+      })
+
+      await tx.transaction.upsert({
         where: { stripeEventId: event.id },
         create: {
           userId: userIdInt,
@@ -54,8 +57,35 @@ export async function POST(request: NextRequest) {
           subscriptionTier: targetTier,
         },
         update: {},
-      }),
-    ])
+      })
+
+      // Restore hidden listings up to the new tier's limit.
+      // Pro is unlimited (Number.MAX_SAFE_INTEGER), so all hidden listings are restored.
+      // For Plus (10), restore as many as fit alongside currently visible listings.
+      const currentlyVisible = await tx.home.count({
+        where: { ownerId: userIdInt, overlimitHiddenAt: null },
+      })
+
+      const slotsAvailable = newLimit === Number.MAX_SAFE_INTEGER
+        ? Number.MAX_SAFE_INTEGER
+        : Math.max(0, newLimit - currentlyVisible)
+
+      if (slotsAvailable > 0) {
+        const toRestore = await tx.home.findMany({
+          where: { ownerId: userIdInt, overlimitHiddenAt: { not: null } },
+          orderBy: { overlimitHiddenAt: 'desc' }, // restore most-recently-hidden first
+          take: slotsAvailable === Number.MAX_SAFE_INTEGER ? undefined : slotsAvailable,
+          select: { id: true },
+        })
+
+        if (toRestore.length > 0) {
+          await tx.home.updateMany({
+            where: { id: { in: toRestore.map(h => h.id) } },
+            data: { overlimitHiddenAt: null },
+          })
+        }
+      }
+    })
   }
 
   return NextResponse.json({ received: true })

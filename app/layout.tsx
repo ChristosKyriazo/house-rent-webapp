@@ -5,6 +5,7 @@ import NavBar from "./components/NavBar";
 import LanguageProviderWrapper from "./components/LanguageProviderWrapper";
 import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
 import NavBarWrapper from "./components/NavBarWrapper";
+import OverlimitBanner from "./components/OverlimitBanner";
 import OTPCursorFix from "./components/OTPCursorFix";
 import AtmosphereBackground from "./components/visual/AtmosphereBackground";
 import AppFooter from "./components/AppFooter";
@@ -58,6 +59,7 @@ export default function RootLayout({
               <NavBarWrapper>
                 <NavBar />
               </NavBarWrapper>
+              <OverlimitBanner />
               {/* z-0 keeps page layers below --z-chrome nav (stacking contexts from transforms would otherwise hide the burger) */}
               <main className="relative z-0 min-h-screen">{children}</main>
               <AppFooter />

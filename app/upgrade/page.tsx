@@ -81,6 +81,16 @@ function UpgradePageInner() {
   const [downgradeResult, setDowngradeResult] = useState<{ slotsRevoked: number; listingsOverLimit: number } | null>(null)
   const [error, setError] = useState('')
 
+  // Listing-selection modal (shown when downgrade would exceed tier limit)
+  type SelectionListing = { key: string; title: string | null; titleGreek?: string | null; city: string; pricePerMonth: number; inquiryCount: number }
+  const [selectionModal, setSelectionModal] = useState<{
+    pendingTier: Tier
+    listings: SelectionListing[]
+    newLimit: number
+    excess: number
+    keepKeys: string[]
+  } | null>(null)
+
   // success=true  → returned from Stripe after payment
   // canceled=true → user closed Stripe checkout
   const returnStatus = searchParams.get('success') === 'true'
@@ -114,34 +124,51 @@ function UpgradePageInner() {
     return () => { clearInterval(poll); clearTimeout(timeout) }
   }, [returnStatus, returnedTier])
 
-  async function selectTier(tier: Tier) {
-    if (tier === currentTier || upgrading) return
-    const isDowngrade = TIER_RANK[tier] < TIER_RANK[currentTier]
+  async function applyTier(tier: Tier, keepKeys?: string[]) {
     setUpgrading(tier)
     setError('')
     setDowngradeResult(null)
+    const isDowngrade = TIER_RANK[tier] < TIER_RANK[currentTier]
     try {
+      const body: Record<string, unknown> = { tier }
+      if (keepKeys) body.keepKeys = keepKeys
       const res = await fetch('/api/subscription/upgrade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) { setError(isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Try again.'); return }
       const data = await res.json()
 
-      // Upgrade → Stripe returned a checkout URL; redirect there
+      // Upgrade → redirect to Stripe Checkout
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl
         return
       }
 
-      // Downgrade → applied immediately
+      // API wants the user to select which listings to keep
+      if (data.needsSelection) {
+        // Pre-select the most-engaged listings up to the new limit
+        const sorted = [...data.listings].sort((a, b) => (b.inquiryCount ?? 0) - (a.inquiryCount ?? 0))
+        const preSelected = sorted.slice(0, data.newLimit).map((l: { key: string }) => l.key)
+        setSelectionModal({
+          pendingTier: tier,
+          listings: data.listings,
+          newLimit: data.newLimit,
+          excess: data.excess,
+          keepKeys: preSelected,
+        })
+        return
+      }
+
+      // Downgrade applied
+      setSelectionModal(null)
       setCurrentTier(tier)
       setJustChanged(tier)
       setLastChangeWasDowngrade(isDowngrade)
       setConfirmingDowngrade(null)
-      if (isDowngrade && (data.slotsRevoked > 0 || data.listingsOverLimit > 0)) {
-        setDowngradeResult({ slotsRevoked: data.slotsRevoked, listingsOverLimit: data.listingsOverLimit })
+      if (isDowngrade && (data.slotsRevoked > 0 || data.listingsHidden > 0)) {
+        setDowngradeResult({ slotsRevoked: data.slotsRevoked, listingsOverLimit: data.listingsHidden })
       }
       setTimeout(() => {
         setJustChanged(null)
@@ -164,6 +191,11 @@ function UpgradePageInner() {
     } finally {
       setUpgrading(null)
     }
+  }
+
+  function selectTier(tier: Tier) {
+    if (tier === currentTier || upgrading) return
+    applyTier(tier)
   }
 
   function handleCardClick(tierId: Tier) {
@@ -412,6 +444,98 @@ function UpgradePageInner() {
           </>
         )}
       </div>
+
+      {/* Listing selection modal — shown when downgrade would exceed new tier limit */}
+      {selectionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-[var(--surface-high)] rounded-3xl shadow-2xl border border-[var(--border-default)] overflow-hidden">
+            <div className="px-6 pt-6 pb-4 border-b border-[var(--border-subtle)]">
+              <h2 className="text-xl font-bold text-[var(--text)] mb-1">
+                {isEl ? 'Ποιες αγγελίες να κρατήσουμε;' : 'Which listings should we keep?'}
+              </h2>
+              <p className="text-sm text-[var(--text-muted)]">
+                {isEl
+                  ? `Το πλάνο ${selectionModal.pendingTier.toUpperCase()} επιτρέπει ${selectionModal.newLimit} αγγελί${selectionModal.newLimit === 1 ? 'α' : 'ες'}. Επιλέξτε αυτές που θέλετε να παραμείνουν ενεργές — οι υπόλοιπες θα αποκρυφτούν (δεν θα διαγραφούν).`
+                  : `${selectionModal.pendingTier.toUpperCase()} allows ${selectionModal.newLimit} listing${selectionModal.newLimit === 1 ? '' : 's'}. Pick which to keep active — the rest will be hidden, not deleted.`}
+              </p>
+              <p className="mt-2 text-xs text-amber-300/70">
+                {isEl
+                  ? `Επιλέξτε ακριβώς ${selectionModal.newLimit} (${selectionModal.keepKeys.length}/${selectionModal.newLimit} επιλεγμένα)`
+                  : `Select exactly ${selectionModal.newLimit} (${selectionModal.keepKeys.length}/${selectionModal.newLimit} selected)`}
+              </p>
+            </div>
+
+            <div className="overflow-y-auto max-h-[50vh] px-6 py-4 space-y-2">
+              {selectionModal.listings.map(l => {
+                const checked = selectionModal.keepKeys.includes(l.key)
+                const canSelect = checked || selectionModal.keepKeys.length < selectionModal.newLimit
+                const inputId = `keep-${l.key}`
+                const labelText = (isEl && l.titleGreek) ? l.titleGreek : (l.title ?? l.city)
+                return (
+                  <label
+                    key={l.key}
+                    htmlFor={inputId}
+                    aria-label={labelText}
+                    className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                      checked
+                        ? 'border-[var(--accent)]/50 bg-[var(--accent)]/8'
+                        : canSelect
+                          ? 'border-[var(--border-subtle)] hover:border-[var(--accent)]/30'
+                          : 'border-[var(--border-subtle)] opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    <input
+                      id={inputId}
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!canSelect && !checked}
+                      onChange={() => {
+                        setSelectionModal(prev => {
+                          if (!prev) return prev
+                          const next = checked
+                            ? prev.keepKeys.filter(k => k !== l.key)
+                            : [...prev.keepKeys, l.key]
+                          return { ...prev, keepKeys: next }
+                        })
+                      }}
+                      className="mt-0.5 accent-[var(--accent)]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[var(--text)] truncate">{labelText}</p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {l.city} · €{l.pricePerMonth.toLocaleString()}
+                        {l.inquiryCount > 0 && (
+                          <span className="ml-2 text-[var(--status-info)]">
+                            {l.inquiryCount} {isEl ? 'ενδιαφ.' : 'inquir.'}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+
+            <div className="px-6 py-4 border-t border-[var(--border-subtle)] flex items-center justify-between gap-3">
+              <button
+                onClick={() => { setSelectionModal(null); setConfirmingDowngrade(null) }}
+                className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                {isEl ? 'Ακύρωση' : 'Cancel'}
+              </button>
+              <button
+                disabled={selectionModal.keepKeys.length !== selectionModal.newLimit || !!upgrading}
+                onClick={() => applyTier(selectionModal.pendingTier, selectionModal.keepKeys)}
+                className="px-6 py-3 rounded-2xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--btn-primary-hover-bg)] transition-colors"
+              >
+                {upgrading
+                  ? (isEl ? 'Εφαρμογή...' : 'Applying...')
+                  : (isEl ? 'Επιβεβαίωση υποβάθμισης' : 'Confirm downgrade')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

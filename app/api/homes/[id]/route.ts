@@ -39,27 +39,54 @@ export async function GET(
       return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    // Check if user has a rejected (dismissed) inquiry for this home
+    // Check visibility and user context
     try {
       const currentUser = await getCurrentUser()
+
       if (currentUser) {
-        const rejectedInquiry = await prisma.inquiry.findFirst({
-          where: {
-            userId: currentUser.id,
-            homeId: home.id,
-            dismissed: true,
-          },
-        })
-        
-        if (rejectedInquiry) {
+        // Owner always sees their own listing (even if hidden)
+        const isOwner = home.ownerId === currentUser.id
+
+        if (!isOwner) {
+          // Renter: block if the listing is hidden due to tier downgrade
+          if (home.overlimitHiddenAt) {
+            // Allow access if the renter has an active inquiry or booking (so
+            // existing threads and finalizations remain accessible).
+            const hasRelationship = await prisma.inquiry.findFirst({
+              where: { userId: currentUser.id, homeId: home.id },
+              select: { id: true },
+            })
+            if (!hasRelationship) {
+              return NextResponse.json(
+                { error: 'This listing is temporarily unavailable', overlimitHidden: true },
+                { status: 410 }
+              )
+            }
+          }
+
+          // Block renters with a dismissed inquiry
+          const rejectedInquiry = await prisma.inquiry.findFirst({
+            where: { userId: currentUser.id, homeId: home.id, dismissed: true },
+            select: { id: true },
+          })
+          if (rejectedInquiry) {
+            return NextResponse.json(
+              { error: 'This property is no longer available' },
+              { status: 403 }
+            )
+          }
+        }
+      } else {
+        // Unauthenticated: never serve a hidden listing
+        if (home.overlimitHiddenAt) {
           return NextResponse.json(
-            { error: 'This property is no longer available' },
-            { status: 403 }
+            { error: 'This listing is temporarily unavailable', overlimitHidden: true },
+            { status: 410 }
           )
         }
       }
     } catch {
-      // If user is not authenticated, continue normally
+      // If auth check fails, fall through and serve the listing
     }
 
     const isBroker = home.owner.role === 'broker'

@@ -57,9 +57,18 @@ export async function GET(request: NextRequest) {
           createdAt: true,
         },
       })
-      
+
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      }
+
+      // Include hidden listing count for owners/brokers so the banner can display it
+      const role = (user.role ?? '').toLowerCase()
+      if (role === 'owner' || role === 'both' || role === 'broker') {
+        const overlimitHiddenCount = await prisma.home.count({
+          where: { ownerId: currentUser.id, overlimitHiddenAt: { not: null } },
+        })
+        return NextResponse.json({ user: { ...user, overlimitHiddenCount } }, { status: 200 })
       }
     }
 

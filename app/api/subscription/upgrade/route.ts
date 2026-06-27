@@ -12,14 +12,14 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return unauthorized()
 
-  let body: { tier?: string }
+  let body: { tier?: string; keepKeys?: string[] }
   try {
     body = await request.json()
   } catch {
     return badRequest('Invalid JSON')
   }
 
-  const { tier } = body
+  const { tier, keepKeys } = body
   if (!tier || !VALID_TIERS.includes(tier as Tier)) {
     return badRequest(`tier must be one of: ${VALID_TIERS.join(', ')}`)
   }
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const currentTier = (user.subscriptionTier ?? 'free') as Tier
   const isDowngrade = (TIER_RANK[newTier] ?? 0) < (TIER_RANK[currentTier] ?? 0)
 
-  // ── Upgrade: redirect to Stripe Checkout ──────────────────────────────────
+  // ── Upgrade: restore hidden listings then redirect to Stripe Checkout ───────
   if (!isDowngrade) {
     if (newTier === 'free') {
       return badRequest('Cannot upgrade to free tier')
@@ -59,7 +59,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ checkoutUrl: session.url })
   }
 
-  // ── Downgrade: cancel Stripe subscription then apply immediately ─────────
+  // ── Downgrade: check if listing selection is required ────────────────────────
+  const newListingLimit = getListingLimit(newTier)
+  const newSlotLimit = getSlotLimit(newTier)
+
+  // Count currently visible (non-hidden) listings
+  const visibleListings = await prisma.home.findMany({
+    where: { ownerId: user.id, overlimitHiddenAt: null },
+    orderBy: [
+      // Sort by inquiry activity descending — most-engaged listings pre-selected
+      { updatedAt: 'desc' },
+    ],
+    select: {
+      id: true,
+      key: true,
+      title: true,
+      titleGreek: true,
+      city: true,
+      area: true,
+      pricePerMonth: true,
+      listingType: true,
+      bedrooms: true,
+      _count: { select: { inquiries: { where: { dismissed: false } } } },
+    },
+  })
+
+  const excess = Math.max(0, visibleListings.length - newListingLimit)
+
+  // If there are excess listings and the caller has not supplied a keepKeys selection,
+  // ask the UI to show the selection modal before we apply the downgrade.
+  if (excess > 0 && !keepKeys) {
+    return NextResponse.json({
+      needsSelection: true,
+      listings: visibleListings.map(l => ({
+        ...l,
+        inquiryCount: l._count.inquiries,
+        _count: undefined,
+      })),
+      newLimit: newListingLimit,
+      excess,
+    })
+  }
+
+  // ── Cancel active Stripe subscription ────────────────────────────────────────
   const activeTransaction = await prisma.transaction.findFirst({
     where: { userId: user.id, stripeSubscriptionId: { not: null } },
     orderBy: { createdAt: 'desc' },
@@ -70,31 +112,26 @@ export async function POST(request: NextRequest) {
       await getStripe().subscriptions.cancel(activeTransaction.stripeSubscriptionId)
     } catch (err) {
       console.error('Failed to cancel Stripe subscription on downgrade:', err)
-      // Non-fatal: DB tier updated regardless; Stripe retains until period end.
     }
   }
 
-  const newSlotLimit = getSlotLimit(newTier)
-  const newListingLimit = getListingLimit(newTier)
-
+  // ── Apply downgrade in a single transaction ───────────────────────────────────
   const now = new Date()
-  const [activeSlots, listingCount] = await Promise.all([
-    prisma.home.findMany({
-      where: {
-        ownerId: user.id,
-        slotPromoted: true,
-        OR: [{ slotPromotedUntil: null }, { slotPromotedUntil: { gt: now } }],
-      },
-      orderBy: { updatedAt: 'asc' },
-      select: { id: true },
-    }),
-    prisma.home.count({ where: { ownerId: user.id } }),
-  ])
+  const activeSlots = await prisma.home.findMany({
+    where: {
+      ownerId: user.id,
+      slotPromoted: true,
+      OR: [{ slotPromotedUntil: null }, { slotPromotedUntil: { gt: now } }],
+    },
+    orderBy: { updatedAt: 'asc' },
+    select: { id: true },
+  })
 
-  const listingsOverLimit = Math.max(0, listingCount - newListingLimit)
   let slotsRevoked = 0
+  let listingsHidden = 0
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Revoke excess promotion slots
     if (activeSlots.length > newSlotLimit) {
       const toRevoke = activeSlots.slice(newSlotLimit).map(h => h.id)
       await tx.home.updateMany({
@@ -103,6 +140,25 @@ export async function POST(request: NextRequest) {
       })
       slotsRevoked = toRevoke.length
     }
+
+    // Hide listings that the user did not select to keep
+    if (excess > 0 && keepKeys && keepKeys.length > 0) {
+      const toHide = visibleListings
+        .filter(l => !keepKeys.includes(l.key))
+        .map(l => l.id)
+
+      if (toHide.length > 0) {
+        await tx.home.updateMany({
+          where: { id: { in: toHide } },
+          data: {
+            overlimitHiddenAt: now,
+            slotPromoted: false, // always un-promote hidden listings
+          },
+        })
+        listingsHidden = toHide.length
+      }
+    }
+
     return tx.user.update({
       where: { id: user.id },
       data: { subscriptionTier: newTier },
@@ -110,5 +166,11 @@ export async function POST(request: NextRequest) {
     })
   })
 
-  return NextResponse.json({ ok: true, user: updated, slotsRevoked, listingsOverLimit, newSlotLimit })
+  return NextResponse.json({
+    ok: true,
+    user: updated,
+    slotsRevoked,
+    listingsHidden,
+    newSlotLimit,
+  })
 }

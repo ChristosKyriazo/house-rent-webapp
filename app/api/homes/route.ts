@@ -127,15 +127,15 @@ export async function GET(request: NextRequest) {
       where.area = { in: areas }
     }
 
-    // Exclude finalized houses from search results (owners may see their own listings when browsing)
+    // Exclude finalized and overlimit-hidden houses from renter search results
     let currentUser = null
     try {
       currentUser = await getCurrentUser()
-      // Always exclude finalized houses from search
       where.finalized = false
+      where.overlimitHiddenAt = null
     } catch {
-      // If getCurrentUser fails (user not logged in), still exclude finalized houses
       where.finalized = false
+      where.overlimitHiddenAt = null
     }
 
     // Always exclude homes where user has dismissed (rejected) inquiries
