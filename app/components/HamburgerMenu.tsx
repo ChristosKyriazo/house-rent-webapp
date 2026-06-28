@@ -111,8 +111,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
                       : undefined
                   }
                 >
-                  <span className="text-2xl">{item.icon}</span>
-                  <span className="text-lg">{item.label}</span>
+                  <span className="text-2xl shrink-0">{item.icon}</span>
+                  <span className="text-lg truncate">{item.label}</span>
                 </Link>
               ))}
             </nav>
@@ -264,7 +264,16 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
         }`}
       >
         <div className="flex h-full flex-col p-6 pt-20">
-          <h2 className="mb-4 text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'menu')}</h2>
+            <button
+              onClick={closeMenu}
+              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--ink)] transition-colors"
+              aria-label="Close menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
 
           {/* Role switcher — only visible for users with "both" role */}
           {actualRole === 'both' && (
@@ -326,8 +335,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
                       : undefined
                   }
                 >
-                  <span className="text-2xl">{item.icon}</span>
-                  <span className="text-lg">{item.label}</span>
+                  <span className="text-2xl shrink-0">{item.icon}</span>
+                  <span className="text-lg truncate">{item.label}</span>
                 </Link>
               )
             })}

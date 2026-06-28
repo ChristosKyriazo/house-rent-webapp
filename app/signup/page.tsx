@@ -129,7 +129,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="signup-page relative flex min-h-screen flex-col items-center justify-center px-4 py-12 lg:flex-row lg:gap-12">
+    <div className="signup-page relative flex min-h-screen flex-col items-center justify-center px-4 py-12 md:flex-row md:gap-12">
       <AppLogo className="fixed left-4 top-4 z-[10000]" />
       <div className="mb-10 hidden max-w-sm animate-fade-up lg:mb-0 lg:block lg:self-stretch">
         <div className="surface-dock relative flex h-full min-h-[320px] flex-col items-center justify-center overflow-hidden rounded-3xl border border-[var(--border-subtle)] p-8 shadow-xl">

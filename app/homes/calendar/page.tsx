@@ -191,16 +191,16 @@ export default function CalendarPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-4">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-4">
             {getTranslation(language, 'calendar')}
           </h1>
-          
+
           {/* View Toggle */}
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="flex gap-2 bg-[var(--surface)] rounded-xl p-1">
               <button
                 onClick={() => setView('day')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'day'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -210,7 +210,7 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={() => setView('week')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'week'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -220,7 +220,7 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={() => setView('month')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'month'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -254,7 +254,7 @@ export default function CalendarPage() {
               >
                 ←
               </button>
-              <h2 className="text-2xl font-bold text-[var(--text)]">
+              <h2 className="text-base sm:text-2xl font-bold text-[var(--text)] text-center flex-1 mx-2 truncate">
                 {selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
                   weekday: 'long',
                   year: 'numeric',
@@ -355,7 +355,8 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-2">
+            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="grid grid-cols-7 gap-2 min-w-[560px]">
               {getWeekDays(selectedDate).map((day, index) => {
                 const dayBookings = getBookingsForDate(day)
                 const isToday = day.toDateString() === new Date().toDateString()
@@ -363,7 +364,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`border border-[var(--border-subtle)] rounded-xl p-3 min-h-[200px] ${
+                    className={`border border-[var(--border-subtle)] rounded-xl p-3 min-h-[80px] sm:min-h-[200px] ${
                       isToday ? 'bg-[var(--btn-primary-bg)]/10 border-[var(--border-subtle)]' : 'bg-[var(--ink-soft)]/50'
                     }`}
                   >
@@ -389,6 +390,7 @@ export default function CalendarPage() {
                 )
               })}
             </div>
+            </div>
           </div>
         )}
 
@@ -413,7 +415,8 @@ export default function CalendarPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="grid grid-cols-7 gap-1 min-w-[320px]">
               {/* Week Day Headers */}
               {weekDays.map(day => (
                 <div key={day} className="text-center text-sm font-semibold text-[var(--text-muted)] py-2">
@@ -460,6 +463,7 @@ export default function CalendarPage() {
                   </div>
                 )
               })}
+            </div>
             </div>
           </div>
         )}

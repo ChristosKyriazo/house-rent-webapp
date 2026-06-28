@@ -212,7 +212,7 @@ export default function HomeInquiriesPage() {
             href={`/homes/${home.key}?from=inquiries`}
             className="block group"
           >
-            <h1 className="text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+            <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
               {getHomeTitle(language, home)}
             </h1>
           </Link>
@@ -260,9 +260,9 @@ export default function HomeInquiriesPage() {
                       : 'border-[var(--border-subtle)]'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-3 mb-3">
                         <Link
                           href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
                           className="text-xl font-bold text-[var(--text)] hover:text-[var(--accent)] underline transition-colors cursor-pointer"
@@ -291,7 +291,7 @@ export default function HomeInquiriesPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
                       {isApproved && !inquiry.finalized && !home.finalized && (
                         <button
                           onClick={() => setConfirmingInquiry(inquiry)}

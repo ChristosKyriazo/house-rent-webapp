@@ -112,7 +112,7 @@ export default function HomeRatingsPage() {
         </div>
 
         {/* Score cards */}
-        <div className="flex gap-4 mb-10">
+        <div className="flex flex-col sm:flex-row gap-4 mb-10">
           <ScoreCard label="Property" score={data.houseScore} />
           <ScoreCard label="Owner" score={data.ownerScore} />
         </div>
@@ -127,11 +127,11 @@ export default function HomeRatingsPage() {
                   key={i}
                   className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)] shadow-xl"
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-1">
                     <p className="font-semibold text-[var(--text)]">
                       {review.raterName ?? 'Anonymous'}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                         review.type === 'movein_house'
                           ? 'bg-blue-500/20 text-blue-400'

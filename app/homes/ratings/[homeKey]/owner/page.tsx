@@ -129,9 +129,9 @@ export default function OwnerRatingsPage() {
         </div>
 
         {/* Overall score */}
-        <div className="bg-[var(--surface)] rounded-3xl p-8 border border-[var(--border-subtle)] shadow-xl mb-6 flex items-center gap-8">
-          <div className="text-center">
-            <p className="text-6xl font-bold text-[var(--text)] mb-2">
+        <div className="bg-[var(--surface)] rounded-3xl p-8 border border-[var(--border-subtle)] shadow-xl mb-6 flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-8">
+          <div className="text-center shrink-0">
+            <p className="text-5xl sm:text-6xl font-bold text-[var(--text)] mb-2">
               {data.ownerScore != null ? data.ownerScore.toFixed(1) : '—'}
             </p>
             <StarRating rating={data.ownerScore ?? 0} size="lg" />
@@ -160,11 +160,11 @@ export default function OwnerRatingsPage() {
                   key={i}
                   className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)] shadow-xl"
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-1">
                     <p className="font-semibold text-[var(--text)]">
                       {review.raterName ?? 'Anonymous'}
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                         review.type === 'movein_house'
                           ? 'bg-blue-500/20 text-blue-400'

@@ -634,7 +634,7 @@ function HomeDetailPage() {
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Back Button and Edit Button */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           {fromMap ? (
             <button
               onClick={() => router.back()}
@@ -663,9 +663,9 @@ function HomeDetailPage() {
         {/* Photo Gallery - Full Width */}
         <div>
             {photos.length > 0 ? (
-              <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)]">
+              <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl shadow-xl border border-[var(--border-subtle)]">
                 {/* Main featured photo */}
-                <div className="relative aspect-video group cursor-pointer" onClick={() => openLightbox(currentPhotoIndex)}>
+                <div className="relative aspect-video group cursor-pointer overflow-hidden rounded-3xl" onClick={() => openLightbox(currentPhotoIndex)}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={photos[currentPhotoIndex]}
@@ -850,10 +850,10 @@ function HomeDetailPage() {
         </div>
 
         {/* House Details Card - Full width, aligned with photos */}
-        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-4 sm:p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-6">
               <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
-              <h1 className="text-4xl font-bold text-[var(--text)]">{getHomeTitle(language, home)}</h1>
+              <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] break-words min-w-0">{getHomeTitle(language, home)}</h1>
                 
                 {/* Listing Type Badge - Outside owner box, top right */}
               <span className={`px-4 py-2 rounded-xl font-semibold text-sm ${
@@ -865,10 +865,10 @@ function HomeDetailPage() {
               </span>
             </div>
               
-              {/* Location and Owner Info in same row */}
-              <div className="flex items-start gap-4 mb-4">
-                {/* Location Info - Left side */}
-                <div className="flex-1 text-[var(--text-muted)] flex flex-col gap-1 text-lg">
+              {/* Location and Owner Info - stacks on mobile, side-by-side on sm+ */}
+              <div className="flex flex-col sm:flex-row items-start gap-4 mb-4">
+                {/* Location Info */}
+                <div className="flex-1 min-w-0 text-[var(--text-muted)] flex flex-col gap-1 text-lg">
               {getHomeStreet(language, home) && (
                 <p className="flex items-center gap-1">
                   <span>📍</span>
@@ -921,11 +921,11 @@ function HomeDetailPage() {
                 </div>
                 
                 {/* Rating scores — House + Owner, side by side */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 shrink-0">
                   {/* House score */}
                   <Link
                     href={`/homes/ratings/${home.key}`}
-                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between"
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 shrink-0 flex flex-col items-center justify-between"
                   >
                     <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">Property</h2>
                     <div className="flex flex-col items-center justify-center flex-1">
@@ -941,7 +941,7 @@ function HomeDetailPage() {
                   {/* Owner score */}
                   <Link
                     href={`/homes/ratings/${home.key}/owner`}
-                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 flex flex-col items-center justify-between"
+                    className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 shrink-0 flex flex-col items-center justify-between"
                   >
                     <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
                       {home.owner.isBroker ? 'House Owner' : (home.owner.name || 'Owner')}
@@ -988,19 +988,19 @@ function HomeDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
             <div>
                 <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'price')}</p>
-              <p className="text-3xl font-bold text-[var(--text)]">
+              <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
                 €{home.pricePerMonth.toLocaleString()}
               </p>
               </div>
               <div>
                 <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
-                <p className="text-3xl font-bold text-[var(--text)]">
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
                   {home.sizeSqMeters !== null && home.sizeSqMeters !== undefined ? `${home.sizeSqMeters} m²` : '-'}
               </p>
             </div>
             <div>
                 <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'floor')}</p>
-                <p className="text-3xl font-bold text-[var(--text)]">
+                <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
                   {home.floor !== null && home.floor !== undefined ? home.floor : '-'}
                 </p>
               </div>
@@ -1152,18 +1152,18 @@ function HomeDetailPage() {
                     {getTranslation(language, 'finalizationRequestReceived') || 'Finalization Request Received'}
                   </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={handleApproveFinalization}
                     disabled={finalizing}
-                    className="flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                    className="w-full sm:flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold text-base sm:text-lg transition-all disabled:opacity-50"
                   >
                     {finalizing ? getTranslation(language, 'loading') : getTranslation(language, 'approveFinalization')}
                   </button>
                   <button
                     onClick={handleRejectFinalization}
                     disabled={dismissingFinalization}
-                    className="flex-1 px-6 py-4 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl font-semibold text-lg transition-all disabled:opacity-50"
+                    className="w-full sm:flex-1 px-6 py-4 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl font-semibold text-base sm:text-lg transition-all disabled:opacity-50"
                   >
                     {dismissingFinalization ? getTranslation(language, 'loading') : getTranslation(language, 'reject')}
                   </button>
@@ -1282,7 +1282,7 @@ function HomeDetailPage() {
         </div>
 
                     {/* Thumbnail strip at bottom */}
-                    <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 pb-2">
+                    <div className="absolute bottom-16 left-0 right-0 flex gap-2 overflow-x-auto px-4 pb-2 justify-center">
                       {photos.map((photo, index) => (
                         <button
                           key={photo}

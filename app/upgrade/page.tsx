@@ -209,7 +209,7 @@ function UpgradePageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--canvas)] py-16 px-4">
+    <div className="min-h-screen bg-[var(--canvas)] pt-20 pb-16 px-4">
       <div className="max-w-5xl mx-auto">
 
         <div className="mb-10">
@@ -465,7 +465,7 @@ function UpgradePageInner() {
               </p>
             </div>
 
-            <div className="overflow-y-auto max-h-[50vh] px-6 py-4 space-y-2">
+            <div className="overflow-y-auto max-h-[50dvh] px-6 py-4 space-y-2">
               {selectionModal.listings.map(l => {
                 const checked = selectionModal.keepKeys.includes(l.key)
                 const canSelect = checked || selectionModal.keepKeys.length < selectionModal.newLimit

@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
   const isEl = language === 'el'
 
   return (
-    <div className="min-h-screen bg-[var(--canvas)] py-16 px-4">
+    <div className="min-h-screen bg-[var(--canvas)] pt-20 pb-16 px-4">
       <div className="max-w-3xl mx-auto">
 
         <div className="mb-10">

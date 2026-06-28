@@ -865,8 +865,8 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-[var(--canvas)] py-12 px-4">
       <div className="max-w-4xl mx-auto">
 
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text)] font-[var(--font-fraunces)]">
             {isEl ? 'Αναλυτικά' : 'Analytics'}
           </h1>
           {(isPlus || isPro) && !drillDate && <PeriodTabs period={period} onChange={setPeriod} isEl={isEl} />}

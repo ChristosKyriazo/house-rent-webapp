@@ -53,8 +53,8 @@ function CardBody({ home, language, allAreas, areas, textColor, hasMatchBadge }:
     <>
       <div className="mb-4">
         {/* When the AI match badge occupies the top-right, add right padding so the listing type tag doesn't overlap it */}
-        <div className={`flex items-start justify-between mb-2 ${hasMatchBadge ? 'pr-28' : ''}`}>
-          <h2 className={`text-2xl font-bold flex-1 ${textColor}`}>{getHomeTitle(language, home)}</h2>
+        <div className={`flex items-start justify-between mb-2 ${hasMatchBadge ? 'pr-24 sm:pr-28' : ''}`}>
+          <h2 className={`text-xl lg:text-2xl font-bold flex-1 min-w-0 ${textColor}`}>{getHomeTitle(language, home)}</h2>
           <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 shrink-0 ${
             home.listingType === 'rent'
               ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
@@ -80,7 +80,7 @@ function CardBody({ home, language, allAreas, areas, textColor, hasMatchBadge }:
 
       <div className="flex items-center justify-between mb-4 pt-4 border-t border-[var(--border-subtle)]">
         <div>
-          <p className={`text-3xl font-bold ${textColor}`}>€{home.pricePerMonth.toLocaleString()}</p>
+          <p className={`text-2xl sm:text-3xl font-bold ${textColor}`}>€{home.pricePerMonth.toLocaleString()}</p>
           <p className="text-sm text-[var(--text-muted)]">
             {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
           </p>

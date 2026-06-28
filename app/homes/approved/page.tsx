@@ -99,7 +99,7 @@ export default function ApprovedInquiriesPage() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold text-[var(--text)] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
+        <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
         {approvedInquiries.length === 0 ? (
           <div className="bg-[var(--surface)] rounded-3xl p-10 border border-[var(--border-subtle)] text-center text-[var(--text-muted)]">
             {getTranslation(language, 'noApprovedInquiries')}
@@ -115,16 +115,16 @@ export default function ApprovedInquiriesPage() {
               const showScheduled = appointment !== null || serverSaysScheduled
               return (
                 <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <Link
                       href={`/homes/${inq.home.key}?from=approved`}
-                      className="group"
+                      className="group min-w-0"
                     >
-                      <h2 className="text-2xl font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">{getHomeTitle(language, inq.home)}</h2>
+                      <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors break-words">{getHomeTitle(language, inq.home)}</h2>
                     </Link>
                     <Link
                       href={`/homes/${inq.home.key}?from=approved`}
-                      className="shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
+                      className="self-start shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
                     >
                       {getTranslation(language, 'viewProperty') || 'View Property'}
                     </Link>
@@ -148,7 +148,7 @@ export default function ApprovedInquiriesPage() {
 
                   {/* Next step banner + action button */}
                   {inq.status === 'awaiting_finalization' ? (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">⚡</span>
                         <div>
@@ -158,13 +158,13 @@ export default function ApprovedInquiriesPage() {
                       </div>
                       <Link
                         href={`/homes/inquiries/${inq.home.key}?from=approved`}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-sm font-semibold transition-colors border border-yellow-500/30"
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-sm font-semibold transition-colors border border-yellow-500/30"
                       >
                         {language === 'el' ? 'Προβολή →' : 'View →'}
                       </Link>
                     </div>
                   ) : inq.status === 'pre_finalization' ? (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-blue-500/15 border border-blue-500/40">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-blue-500/15 border border-blue-500/40">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">🤝</span>
                         <div>
@@ -173,20 +173,20 @@ export default function ApprovedInquiriesPage() {
                         </div>
                       </div>
                       {inq.home.finalized ? (
-                        <span className="shrink-0 px-3 py-1.5 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold">
+                        <span className="self-start shrink-0 px-3 py-1.5 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold">
                           {language === 'el' ? 'Ολοκληρώθηκε' : 'Deal closed'}
                         </span>
                       ) : (
                         <Link
                           href={`/homes/inquiries/${inq.home.key}?from=approved`}
-                          className="shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
+                          className="self-start shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
                         >
                           {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
                         </Link>
                       )}
                     </div>
                   ) : inq.status === 'waiting_for_schedule' ? (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">📅</span>
                         <div>
@@ -205,14 +205,14 @@ export default function ApprovedInquiriesPage() {
                       {!isOwner && (
                         <Link
                           href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
-                          className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                          className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
                         >
                           {language === 'el' ? 'Κράτηση →' : 'Book →'}
                         </Link>
                       )}
                     </div>
                   ) : showScheduled ? (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-green-600/15 border border-green-500/40">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-green-600/15 border border-green-500/40">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">✅</span>
                         <div className="text-sm text-green-300">
@@ -236,13 +236,13 @@ export default function ApprovedInquiriesPage() {
                       </div>
                       <Link
                         href="/homes/calendar"
-                        className="shrink-0 px-4 py-2 rounded-xl bg-green-600/20 text-green-300 hover:bg-green-600/30 text-sm font-semibold transition-colors border border-green-500/30"
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-green-600/20 text-green-300 hover:bg-green-600/30 text-sm font-semibold transition-colors border border-green-500/30"
                       >
                         {language === 'el' ? 'Ημερολόγιο →' : 'Calendar →'}
                       </Link>
                     </div>
                   ) : isOwner && inq.status === 'approved' ? (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">📅</span>
                         <div>
@@ -252,13 +252,13 @@ export default function ApprovedInquiriesPage() {
                       </div>
                       <Link
                         href={`/homes/${inq.home.key}/set-availability`}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
                       >
                         {language === 'el' ? 'Ορισμός →' : 'Set slots →'}
                       </Link>
                     </div>
                   ) : !isOwner && (
-                    <div className="mt-4 flex items-start justify-between gap-4 p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
                       <div className="flex items-start gap-3">
                         <span className="text-xl">🏠</span>
                         <div>
@@ -268,7 +268,7 @@ export default function ApprovedInquiriesPage() {
                       </div>
                       <Link
                         href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
-                        className="shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
                       >
                         {language === 'el' ? 'Κράτηση →' : 'Book →'}
                       </Link>

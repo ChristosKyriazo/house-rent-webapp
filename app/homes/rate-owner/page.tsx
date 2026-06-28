@@ -122,7 +122,7 @@ export default function RateOwnerPage() {
           <Link href="/homes/approved" className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors">
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">{getTranslation(language, 'rateYourExperience')}</h1>
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">{getTranslation(language, 'rateYourExperience')}</h1>
           <p className="text-[var(--text-muted)]">{getTranslation(language, 'rateExperienceSubtitle')}</p>
         </div>
 
@@ -134,14 +134,14 @@ export default function RateOwnerPage() {
           <div className="space-y-4">
             {pending.map((item, i) => (
               <div key={i} className="bg-[var(--surface)] rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-xl font-bold text-[var(--text)]">{item.homeTitle}</h3>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-bold text-[var(--text)] break-words">{item.homeTitle}</h3>
                     <p className="text-sm text-[var(--text-muted)] mt-1">
                       {item.actionType === 'movein_house' ? getTranslation(language, 'moveInRating') : getTranslation(language, 'moveOutRating')}
                     </p>
                   </div>
-                  <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                  <span className={`self-start shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${
                     item.actionType === 'movein_house'
                       ? 'bg-blue-500/20 text-blue-400'
                       : 'bg-orange-500/20 text-orange-400'

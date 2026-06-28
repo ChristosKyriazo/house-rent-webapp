@@ -418,7 +418,7 @@ function BookPage() {
               {getTranslation(language, 'upcomingAppointments')}
             </Link>
           </div>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'bookViewing')}
           </h1>
           {home && (
@@ -535,7 +535,7 @@ function BookPage() {
                   key={date}
                   className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
                 >
-                  <h2 className="text-2xl font-bold text-[var(--text)] mb-4">
+                  <h2 className="text-lg sm:text-2xl font-bold text-[var(--text)] mb-4">
                     {new Date(date).toLocaleDateString(
                       language === 'el' ? 'el-GR' : 'en-US',
                       {
@@ -547,8 +547,8 @@ function BookPage() {
                     )}
                   </h2>
                   
-                  <div className="flex items-center gap-4">
-                    <label className="text-[var(--text-muted)] font-medium min-w-[120px]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                    <label className="text-[var(--text-muted)] font-medium sm:min-w-[120px]">
                       {getTranslation(language, 'selectTime')}:
                     </label>
                     <select

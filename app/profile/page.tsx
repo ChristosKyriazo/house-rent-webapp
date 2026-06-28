@@ -212,7 +212,7 @@ function ProfilePageInner() {
   }
 
   return (
-    <div className="min-h-screen py-12 px-4">
+    <div className="min-h-screen pt-20 pb-12 px-4">
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50">
           <GraphicProfile className="h-12 w-full sm:h-14" />
@@ -252,7 +252,7 @@ function ProfilePageInner() {
           </div>
         )}
 
-        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-8 shadow-xl backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-[var(--accent)]/8">
+        <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 sm:p-8 shadow-xl backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-[var(--accent)]/8">
           {/* Avatar and Basic Info */}
           <div className="mb-8 flex flex-col items-center">
             {/* Genderless Avatar */}

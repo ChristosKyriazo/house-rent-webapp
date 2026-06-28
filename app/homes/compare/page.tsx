@@ -114,7 +114,7 @@ function CompareContent() {
           <button onClick={() => router.back()} className="text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
             ← {isEl ? 'Πίσω' : 'Back'}
           </button>
-          <h1 className="text-3xl font-bold text-[var(--text)]">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
             {isEl ? 'Σύγκριση ακινήτων' : 'Compare Properties'}
           </h1>
         </div>
@@ -124,7 +124,7 @@ function CompareContent() {
             {/* Header row with photo + title */}
             <thead>
               <tr>
-                <th className="w-40 p-3 text-left text-sm text-[var(--text-muted)] font-medium" />
+                <th className="w-40 p-3 text-left text-sm text-[var(--text-muted)] font-medium sticky left-0 z-10 bg-[var(--ink-soft)]" />
                 {homes.map(home => {
                   const photos = parsePhotos(home.photos)
                   return (
@@ -152,7 +152,7 @@ function CompareContent() {
             <tbody>
               {rows.map((row, i) => (
                 <tr key={row.label} className={i % 2 === 0 ? 'bg-[var(--surface)]' : 'bg-[var(--ink-soft)]'}>
-                  <td className="rounded-l-xl px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">
+                  <td className={`sticky left-0 z-10 rounded-l-xl px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide ${i % 2 === 0 ? 'bg-[var(--surface)]' : 'bg-[var(--ink-soft)]'}`}>
                     {row.label}
                   </td>
                   {homes.map(home => {

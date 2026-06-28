@@ -116,7 +116,7 @@ export default function UserInquiriesPage() {
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'inquiries')}
           </h1>
           <p className="text-[var(--text-muted)]">

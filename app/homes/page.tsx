@@ -747,7 +747,7 @@ function HomesPageInner() {
                 {getTranslation(language, 'order') || 'Order'}
               </button>
               {showOrderDropdown && (
-                <div className="absolute z-50 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl overflow-hidden">
+                <div className="absolute right-0 z-50 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl overflow-hidden">
                   <button
                     onClick={() => {
                       setSortOrder('price-asc')
@@ -828,9 +828,9 @@ function HomesPageInner() {
 
         {/* Results Header */}
         {(filterType && homes.length > 0) && (
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-[var(--text)]">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'availableProperties')} {searchType === 'rent' ? `(${getTranslation(language, 'rent')})` : `(${getTranslation(language, 'buy')})`}
               </h1>
               <p className="text-[var(--text-muted)] mt-2">
@@ -840,7 +840,7 @@ function HomesPageInner() {
                 <p className="text-sm text-amber-600 mt-1">{aiSearchError}</p>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Save this search */}
               {userRole === 'user' || userRole === 'both' ? (
                 savedSearchOk ? (
@@ -988,7 +988,7 @@ function HomesPageInner() {
     {/* Compare bar — appears when 2+ homes are selected */}
 
     {compareKeys.length >= 2 && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[var(--z-fixed)] flex items-center gap-3 rounded-2xl border border-[var(--accent)]/40 bg-[var(--ink-soft)] px-5 py-3 shadow-2xl backdrop-blur-xl">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[var(--z-fixed)] flex items-center gap-3 rounded-2xl border border-[var(--accent)]/40 bg-[var(--ink-soft)] px-5 py-3 shadow-2xl backdrop-blur-xl max-w-[calc(100vw-2rem)]">
         <span className="text-sm font-semibold text-[var(--text)]">
           ⚖ {compareKeys.length} {language === 'el' ? 'επιλεγμένα' : 'selected'}
         </span>

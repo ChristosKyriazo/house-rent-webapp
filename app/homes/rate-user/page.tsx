@@ -127,9 +127,9 @@ export default function RateUserPage() {
           <div className="space-y-4">
             {pending.map((item, i) => (
               <div key={i} className="bg-[var(--surface)] rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-xl font-bold text-[var(--text)]">{item.homeTitle}</h3>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3">
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-bold text-[var(--text)] break-words">{item.homeTitle}</h3>
                     <p className="text-sm text-[var(--text-muted)] mt-1">
                       {getTranslation(language, 'tenantLabel')}: <span className="font-semibold text-[var(--text)]">{item.counterpartName ?? getTranslation(language, 'unknownTenant')}</span>
                     </p>
@@ -137,7 +137,7 @@ export default function RateUserPage() {
                       {item.actionType === 'viewing_tenant' ? getTranslation(language, 'postViewingRating') : getTranslation(language, 'moveOutRating')}
                     </p>
                   </div>
-                  <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                  <span className={`self-start shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${
                     item.actionType === 'viewing_tenant'
                       ? 'bg-purple-500/20 text-purple-400'
                       : 'bg-orange-500/20 text-orange-400'

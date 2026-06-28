@@ -24,7 +24,7 @@ export default function StarRating({ rating, size = 'base', showNumber = false }
   const partialStarFill = hasPartialStar ? (clampedRating % 1) * 100 : 0
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 shrink-0">
       {[...Array(5)].map((_, i) => {
         if (i < fullStars) {
           // Fully filled star

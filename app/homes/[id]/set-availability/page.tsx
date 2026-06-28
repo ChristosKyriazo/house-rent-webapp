@@ -184,7 +184,7 @@ function SetAvailabilityPage() {
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'setAvailability')}
           </h1>
           {home && (
@@ -329,8 +329,8 @@ function SetAvailabilityPage() {
                     key={slot.date + slot.startTime}
                     className="flex items-center justify-between p-3 bg-[var(--ink-soft)]/50 rounded-xl border border-[var(--border-subtle)]"
                   >
-                    <div className="flex items-center gap-4 text-[var(--text)]">
-                      <span className="font-semibold">
+                    <div className="flex items-center gap-2 sm:gap-4 text-[var(--text)] min-w-0">
+                      <span className="font-semibold truncate">
                         {new Date(slot.date).toLocaleDateString(
                           language === 'el' ? 'el-GR' : 'en-US',
                           {

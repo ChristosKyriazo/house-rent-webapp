@@ -376,7 +376,7 @@ function MapContent() {
   )
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-[100dvh] flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--ink-soft)] px-4 py-3 pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
         <button onClick={() => router.back()} className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
@@ -407,7 +407,7 @@ function MapContent() {
 
         {/* Filter panel */}
         {panelOpen && (
-          <div className="absolute top-3 left-16 z-10 w-72 md:w-80 rounded-2xl bg-[var(--surface)]/90 backdrop-blur-md border border-white/10 shadow-2xl p-4 flex flex-col gap-3 max-h-[calc(100vh-8rem)] overflow-y-auto">
+          <div className="absolute top-3 left-16 z-10 w-[calc(100vw-5.5rem)] max-w-[20rem] rounded-2xl bg-[var(--surface)]/90 backdrop-blur-md border border-white/10 shadow-2xl p-4 flex flex-col gap-3 max-h-[calc(100vh-8rem)] overflow-y-auto">
 
             {/* Mode toggle */}
             <div className="flex rounded-full bg-[var(--canvas)] p-1 shrink-0">

@@ -19,7 +19,7 @@ export default function AppFooter() {
           </Link>
           <a
             href="mailto:privacy@kaparro.gr"
-            className="hover:text-[var(--text)] transition-colors"
+            className="hover:text-[var(--text)] transition-colors break-all"
           >
             privacy@kaparro.gr
           </a>

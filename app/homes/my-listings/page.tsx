@@ -177,9 +177,9 @@ function MyListingsInner() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{getTranslation(language, 'myListings')}</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-1">{getTranslation(language, 'myListings')}</h1>
             <p className="text-[var(--text-muted)]">{getTranslation(language, 'manageListings')}</p>
           </div>
 
