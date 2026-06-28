@@ -150,6 +150,13 @@ model Rating {
   finalizationId  Int?          // context for movein/moveout ratings
   scores          Json          // dimension scores, shape depends on type
   comment         String?       // only for moveout_house and moveout_tenant
+  // Mutual-blind reveal: null = always visible; future timestamp = hidden until then.
+  // Set on moveout_* ratings — cleared to now() when the paired rating is also submitted.
+  revealAt        DateTime?
+  // Dispute flag: rated party can flag a suspicious or retaliatory rating for review
+  flagged         Boolean       @default(false)
+  flagReason      String?
+  flaggedAt       DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   rater           User          @relation("RatingGiven", fields: [raterId], references: [id], onDelete: Cascade)
@@ -164,6 +171,8 @@ model Rating {
   @@index([type])
   @@index([bookingId])
   @@index([finalizationId])
+  @@index([revealAt])
+  @@index([flagged])
   @@map("ratings")
 }
 

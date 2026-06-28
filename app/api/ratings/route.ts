@@ -6,6 +6,27 @@ import { createRatingSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
 import { hasRatedBooking, hasRatedFinalization } from '@/lib/ratings'
 
+// moveout ratings are revealed once both sides have submitted, or after 7 days
+const REVEAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function moveoutRevealAt(): Date {
+  return new Date(Date.now() + REVEAL_WINDOW_MS)
+}
+
+// When the paired moveout rating already exists, reveal both immediately
+async function revealPair(finalizationId: number, partnerType: string, newRatingId: number) {
+  const partner = await prisma.rating.findFirst({
+    where: { finalizationId, type: partnerType },
+    select: { id: true },
+  })
+  if (!partner) return
+  const now = new Date()
+  await prisma.rating.updateMany({
+    where: { id: { in: [partner.id, newRatingId] } },
+    data: { revealAt: now },
+  })
+}
+
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
@@ -67,7 +88,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ rating }, { status: 201 })
     }
 
-    // ── Move-out: tenant rates house ────────────────────────────────────────
+    // ── Move-out: tenant rates house (blind until partner submits or 7 days) ─
     if (type === 'moveout_house') {
       const fin = await prisma.finalization.findFirst({
         where: { id: body.finalizationId, tenantId: user.id, status: 'confirmed' },
@@ -78,12 +99,19 @@ export async function POST(request: NextRequest) {
         return forbidden('You have already submitted a move-out rating for this finalization')
       }
       const rating = await prisma.rating.create({
-        data: { type, raterId: user.id, ratedHomeId: body.ratedHomeId, finalizationId: body.finalizationId, scores: body.scores, comment: body.comment ?? null },
+        data: {
+          type, raterId: user.id, ratedHomeId: body.ratedHomeId,
+          finalizationId: body.finalizationId, scores: body.scores,
+          comment: body.comment ?? null,
+          revealAt: moveoutRevealAt(),
+        },
       })
+      // If the owner has already rated the tenant, reveal both now
+      await revealPair(body.finalizationId, 'moveout_tenant', rating.id)
       return NextResponse.json({ rating }, { status: 201 })
     }
 
-    // ── Move-out: owner rates tenant ────────────────────────────────────────
+    // ── Move-out: owner rates tenant (blind until partner submits or 7 days) ─
     if (type === 'moveout_tenant') {
       const fin = await prisma.finalization.findFirst({
         where: { id: body.finalizationId, landlordId: user.id, tenantId: body.ratedUserId, status: 'confirmed' },
@@ -93,8 +121,15 @@ export async function POST(request: NextRequest) {
         return forbidden('You have already rated this tenant for this finalization')
       }
       const rating = await prisma.rating.create({
-        data: { type, raterId: user.id, ratedUserId: body.ratedUserId, finalizationId: body.finalizationId, scores: body.scores, comment: body.comment ?? null },
+        data: {
+          type, raterId: user.id, ratedUserId: body.ratedUserId,
+          finalizationId: body.finalizationId, scores: body.scores,
+          comment: body.comment ?? null,
+          revealAt: moveoutRevealAt(),
+        },
       })
+      // If the tenant has already rated the house, reveal both now
+      await revealPair(body.finalizationId, 'moveout_house', rating.id)
       return NextResponse.json({ rating }, { status: 201 })
     }
 
