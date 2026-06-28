@@ -984,90 +984,128 @@ function HomeDetailPage() {
           )}
             </div>
 
-            {/* Price, Size, Floor Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
-            <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'price')}</p>
-              <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
-                €{home.pricePerMonth.toLocaleString()}
+            {/* Space — Price, Beds, Baths, Size, Floor, Available From */}
+            <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-4">
+                {language === 'el' ? 'Βασικά στοιχεία' : 'Essentials'}
               </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'price')}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
+                    €{home.pricePerMonth.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bedrooms')}</p>
+                  <p className="text-2xl font-bold text-[var(--text)]">{home.bedrooms}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bathrooms')}</p>
+                  <p className="text-2xl font-bold text-[var(--text)]">{home.bathrooms}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
+                  <p className="text-2xl font-bold text-[var(--text)]">
+                    {home.sizeSqMeters != null ? `${home.sizeSqMeters} m²` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'floor')}</p>
+                  <p className="text-2xl font-bold text-[var(--text)]">
+                    {home.floor != null ? home.floor : '—'}
+                  </p>
+                </div>
+                {home.availableFrom && (
+                  <div>
+                    <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'availableFrom')}</p>
+                    <p className="text-lg font-bold text-[var(--text)]">
+                      {new Date(home.availableFrom).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'sizeSqMeters')}</p>
-                <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
-                  {home.sizeSqMeters !== null && home.sizeSqMeters !== undefined ? `${home.sizeSqMeters} m²` : '-'}
-              </p>
-            </div>
-            <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'floor')}</p>
-                <p className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
-                  {home.floor !== null && home.floor !== undefined ? home.floor : '-'}
-                </p>
-              </div>
             </div>
 
-            {/* Heating Category, Bedrooms, Year Built Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
-            <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'heatingCategory')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">
-                  {home.heatingCategory ? translateValue(language, home.heatingCategory) : '-'}
-                </p>
-            </div>
-              <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bedrooms')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">{home.bedrooms}</p>
-          </div>
-                <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearBuilt')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">
-                  {home.yearBuilt !== null && home.yearBuilt !== undefined ? home.yearBuilt : '-'}
-                </p>
-                </div>
-                </div>
-
-            {/* Heating Agent, Bathrooms, Year Renovated Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 pb-6 border-b border-[var(--border-subtle)]">
-                <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'heatingAgent')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">
-                  {home.heatingAgent ? translateValue(language, home.heatingAgent) : '-'}
-                </p>
-                </div>
-                <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'bathrooms')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">{home.bathrooms}</p>
-                </div>
-                <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearRenovated')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">
-                  {home.yearRenovated !== null && home.yearRenovated !== undefined ? home.yearRenovated : '-'}
-                </p>
-                </div>
-            </div>
-
-            {/* Energy Class and Parking - Together */}
-            {(home.energyClass || (home.parking !== null && home.parking !== undefined)) && (
+            {/* Heating */}
+            {(home.heatingCategory || home.heatingAgent) && (
               <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
-                {home.energyClass && (
-                  <p className="text-sm text-[var(--text-muted)] mb-1">
-                    {getTranslation(language, 'energyClass')}: {home.energyClass}
+                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-4">
+                  {language === 'el' ? 'Θέρμανση' : 'Heating'}
+                </p>
+                <div>
+                  <p className="text-2xl font-bold text-[var(--text)]">
+                    {[home.heatingCategory, home.heatingAgent]
+                      .filter(Boolean)
+                      .map(v => translateValue(language, v!))
+                      .join(' · ')}
                   </p>
-                )}
-                {home.parking !== null && home.parking !== undefined && (
-                  <p className="text-sm text-[var(--text-muted)]">
-                    {getTranslation(language, 'parking')}: {home.parking === true ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
-                  </p>
-                )}
+                </div>
               </div>
             )}
 
-            {/* Distance Information */}
+            {/* Building */}
+            {(home.yearBuilt != null || home.yearRenovated != null || home.energyClass || home.parking != null) && (
+              <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
+                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-4">
+                  {language === 'el' ? 'Κτίριο' : 'Building'}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                  {home.yearBuilt != null && (
+                    <div>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearBuilt')}</p>
+                      <p className="text-2xl font-bold text-[var(--text)]">{home.yearBuilt}</p>
+                    </div>
+                  )}
+                  {home.yearRenovated != null && (
+                    <div>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'yearRenovated')}</p>
+                      <p className="text-2xl font-bold text-[var(--text)]">{home.yearRenovated}</p>
+                    </div>
+                  )}
+                  {home.energyClass && (
+                    <div>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'energyClass')}</p>
+                      <span className={`inline-flex items-center justify-center w-11 h-11 rounded-xl text-xl font-bold text-white ${
+                        /^A/.test(home.energyClass) ? 'bg-green-600' :
+                        home.energyClass === 'B' ? 'bg-green-500' :
+                        home.energyClass === 'C' ? 'bg-lime-500' :
+                        home.energyClass === 'D' ? 'bg-yellow-500' :
+                        home.energyClass === 'E' ? 'bg-orange-500' :
+                        'bg-red-500'
+                      }`}>
+                        {home.energyClass}
+                      </span>
+                    </div>
+                  )}
+                  {home.parking != null && (
+                    <div>
+                      <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'parking')}</p>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
+                        home.parking
+                          ? 'bg-[var(--status-success-bg)] text-[var(--status-success)] border border-[var(--status-success)]/30'
+                          : 'bg-[var(--ink-soft)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
+                      }`}>
+                        {home.parking ? '✓' : '✕'} {home.parking ? getTranslation(language, 'available') : getTranslation(language, 'notAvailable')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Distances */}
             {(home.closestMetro != null || home.closestSchool != null ||
               home.closestHospital != null || home.closestPark != null ||
               home.closestUniversity != null) && (
               <div className="mb-6 pb-6 border-b border-[var(--border-subtle)]">
-                <h2 className="text-lg font-semibold text-[var(--text)] mb-4">{getTranslation(language, 'distances')}</h2>
+                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-4">
+                  {language === 'el' ? 'Κοντινές αποστάσεις' : 'Nearby'}
+                </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {home.closestMetro != null && (
                     <div>
@@ -1102,20 +1140,6 @@ function HomeDetailPage() {
                 </div>
               </div>
             )}
-
-            {/* Available From */}
-          {home.availableFrom && (
-              <div>
-                <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'availableFrom')}</p>
-                <p className="text-2xl font-bold text-[var(--text)]">
-                  {new Date(home.availableFrom).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
-            </div>
-          )}
 
             {/* Finalize Button - Only show for owners/brokers when inquiry is approved */}
             {home && inquiryStatus === 'approved' && !isFinalized && inquiryId && isOwner && isOwnerOrBroker && !pendingFinalization && (
