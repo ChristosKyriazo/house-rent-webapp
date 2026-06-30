@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 
-const EFFECTIVE_DATE = '3 June 2026'
-const EFFECTIVE_DATE_GR = '3 Ιουνίου 2026'
+const EFFECTIVE_DATE = '30 June 2026'
+const EFFECTIVE_DATE_GR = '30 Ιουνίου 2026'
 const CONTACT_EMAIL = 'privacy@kaparro.gr'
 
 export default function PrivacyPolicyPage() {
@@ -59,9 +59,9 @@ export default function PrivacyPolicyPage() {
             </h3>
             <ul className="list-disc list-inside text-[var(--text-muted)] leading-relaxed space-y-1 mb-4">
               <li>{isEl ? 'Όνομα και διεύθυνση email' : 'Name and email address'}</li>
-              <li>{isEl ? 'Ρόλος (ενοικιαστής, ιδιοκτήτης, ή και τα δύο)' : 'Role (renter, owner, or both)'}</li>
+              <li>{isEl ? 'Ρόλος (ενοικιαστής, ιδιοκτήτης, μεσίτης ή συνδυασμός)' : 'Role (renter, owner, broker, or a combination)'}</li>
               <li>{isEl ? 'Προαιρετικά: ημερομηνία γέννησης, επάγγελμα, τίτλος' : 'Optionally: date of birth, occupation, title'}</li>
-              <li>{isEl ? 'Ιστορικό αιτημάτων ενοικίασης και κρατήσεων' : 'Rental inquiry and booking history'}</li>
+              <li>{isEl ? 'Ιστορικό αιτημάτων ενοικίασης, κρατήσεων και οριστικοποιήσεων' : 'Rental inquiry, booking, and finalization history'}</li>
               <li>{isEl ? 'Αξιολογήσεις που λάβατε ή δώσατε' : 'Ratings you gave or received'}</li>
             </ul>
 
@@ -84,10 +84,37 @@ export default function PrivacyPolicyPage() {
             <h3 className="font-medium mb-2 text-[var(--text)]">
               {isEl ? 'Κατά την περιήγηση χωρίς σύνδεση (ανώνυμοι επισκέπτες)' : 'When you browse without logging in (anonymous visitors)'}
             </h3>
-            <p className="text-[var(--text-muted)] leading-relaxed">
+            <p className="text-[var(--text-muted)] leading-relaxed mb-4">
               {isEl
                 ? 'Δημιουργούμε ένα τυχαίο αναγνωριστικό συνεδρίας (UUID) αποθηκευμένο στο sessionStorage του προγράμματος περιήγησής σας. Αυτό διαγράφεται αυτόματα όταν κλείσετε την καρτέλα ή το παράθυρο. Δεν είναι cookie, δεν παραμένει μεταξύ συνεδριών και δεν μπορεί να συνδεθεί με εσάς ως φυσικό πρόσωπο. Στα πλαίσια του GDPR, αυτά τα δεδομένα δεν θεωρούνται προσωπικά δεδομένα.'
                 : 'We create a random session identifier (UUID) stored in your browser\'s sessionStorage. This is deleted automatically when you close the tab or window. It is not a cookie, does not persist between sessions, and cannot be linked to you as an individual. Under GDPR, this data is not considered personal data.'}
+            </p>
+
+            <h3 className="font-medium mb-2 text-[var(--text)]">
+              {isEl ? 'Κατά τη χρήση AI αναζήτησης ή AI συνομιλίας' : 'When you use AI search or AI chat'}
+            </h3>
+            <ul className="list-disc list-inside text-[var(--text-muted)] leading-relaxed space-y-1 mb-4">
+              <li>{isEl ? 'Το κείμενο της αναζήτησής σας (ερώτημα σε φυσική γλώσσα)' : 'Your search query text (natural-language input)'}</li>
+              <li>{isEl ? 'Μηνύματα AI συνομιλίας και τα αποτελέσματα που επέστρεψε το σύστημα' : 'AI chat messages and the results the system returned'}</li>
+              <li>{isEl ? 'Συγκεντρωτικά φίλτρα που εξήχθησαν από τα ερωτήματά σας' : 'Aggregated filters extracted from your queries'}</li>
+            </ul>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-4 italic">
+              {isEl
+                ? 'Τα ερωτήματα AI αναζήτησης και οι συνομιλίες διαβιβάζονται στο OpenAI για επεξεργασία (βλ. Ενότητα 4). Δεν χρησιμοποιούμε τα δεδομένα σας για εκπαίδευση μοντέλων.'
+                : 'AI search queries and conversations are transmitted to OpenAI for processing (see Section 4). We do not use your data to train AI models.'}
+            </p>
+
+            <h3 className="font-medium mb-2 text-[var(--text)]">
+              {isEl ? 'Κατά την πληρωμή συνδρομής' : 'When you subscribe'}
+            </h3>
+            <ul className="list-disc list-inside text-[var(--text-muted)] leading-relaxed space-y-1 mb-4">
+              <li>{isEl ? 'Επίπεδο συνδρομής και ιστορικό πληρωμών (ποσό, νόμισμα, κατάσταση)' : 'Subscription tier and payment history (amount, currency, status)'}</li>
+              <li>{isEl ? 'Αναγνωριστικά συναλλαγής Stripe για σκοπούς συμφιλίωσης' : 'Stripe transaction identifiers for reconciliation purposes'}</li>
+            </ul>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed italic">
+              {isEl
+                ? 'Τα στοιχεία κάρτας υποβάλλονται σε επεξεργασία αποκλειστικά από την Stripe και δεν αποθηκεύονται ποτέ στους διακομιστές μας.'
+                : 'Card details are processed solely by Stripe and are never stored on our servers.'}
             </p>
           </section>
 
@@ -111,7 +138,15 @@ export default function PrivacyPolicyPage() {
                 <tbody className="space-y-2">
                   <tr className="border-b border-[var(--border-subtle)]/50">
                     <td className="py-3 pr-4 leading-relaxed">
-                      {isEl ? 'Παροχή υπηρεσιών πλατφόρμας (εγγραφή, αγγελίες, αιτήματα, κρατήσεις)' : 'Providing platform services (registration, listings, inquiries, bookings)'}
+                      {isEl ? 'Παροχή υπηρεσιών πλατφόρμας (εγγραφή, αγγελίες, αιτήματα, κρατήσεις, οριστικοποιήσεις)' : 'Providing platform services (registration, listings, inquiries, bookings, finalizations)'}
+                    </td>
+                    <td className="py-3 leading-relaxed">
+                      {isEl ? 'Εκτέλεση σύμβασης (Άρθρο 6(1)(β) GDPR)' : 'Contract performance (Art. 6(1)(b) GDPR)'}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[var(--border-subtle)]/50">
+                    <td className="py-3 pr-4 leading-relaxed">
+                      {isEl ? 'Παροχή λειτουργιών AI αναζήτησης και AI συνομιλίας' : 'Providing AI search and AI chat features'}
                     </td>
                     <td className="py-3 leading-relaxed">
                       {isEl ? 'Εκτέλεση σύμβασης (Άρθρο 6(1)(β) GDPR)' : 'Contract performance (Art. 6(1)(b) GDPR)'}
@@ -128,6 +163,14 @@ export default function PrivacyPolicyPage() {
                   <tr className="border-b border-[var(--border-subtle)]/50">
                     <td className="py-3 pr-4 leading-relaxed">
                       {isEl ? 'Αποστολή ειδοποιήσεων εντός εφαρμογής (νέο αίτημα, έγκριση, κ.λπ.)' : 'Sending in-app notifications (new inquiry, approval, etc.)'}
+                    </td>
+                    <td className="py-3 leading-relaxed">
+                      {isEl ? 'Εκτέλεση σύμβασης (Άρθρο 6(1)(β) GDPR)' : 'Contract performance (Art. 6(1)(b) GDPR)'}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[var(--border-subtle)]/50">
+                    <td className="py-3 pr-4 leading-relaxed">
+                      {isEl ? 'Επεξεργασία πληρωμών συνδρομής' : 'Subscription payment processing'}
                     </td>
                     <td className="py-3 leading-relaxed">
                       {isEl ? 'Εκτέλεση σύμβασης (Άρθρο 6(1)(β) GDPR)' : 'Contract performance (Art. 6(1)(b) GDPR)'}
@@ -153,27 +196,45 @@ export default function PrivacyPolicyPage() {
             </h2>
             <p className="text-[var(--text-muted)] leading-relaxed mb-3">
               {isEl
-                ? 'Δεν πουλάμε ή μοιραζόμαστε τα προσωπικά σας δεδομένα με τρίτους για σκοπούς μάρκετινγκ.'
-                : 'We do not sell or share your personal data with third parties for marketing purposes.'}
+                ? 'Δεν πουλάμε ή μοιραζόμαστε τα προσωπικά σας δεδομένα με τρίτους για σκοπούς μάρκετινγκ. Οι παρακάτω τρίτοι επεξεργάζονται δεδομένα αποκλειστικά για λογαριασμό μας ή ως ανεξάρτητοι υπεύθυνοι επεξεργασίας για τους αναφερόμενους σκοπούς.'
+                : 'We do not sell or share your personal data with third parties for marketing purposes. The following third parties process data solely on our behalf or as independent controllers for the stated purposes.'}
             </p>
-            <ul className="list-disc list-inside text-[var(--text-muted)] leading-relaxed space-y-2">
+            <ul className="list-disc list-inside text-[var(--text-muted)] leading-relaxed space-y-3">
               <li>
-                <strong className="text-[var(--text)]">{isEl ? 'Ιδιοκτήτες ακινήτων:' : 'Listing owners:'}</strong>{' '}
+                <strong className="text-[var(--text)]">{isEl ? 'Ιδιοκτήτες και μεσίτες ακινήτων:' : 'Listing owners and brokers:'}</strong>{' '}
                 {isEl
-                  ? 'Βλέπουν μόνο συγκεντρωτικά στατιστικά (π.χ. "42 επισκέψεις αυτή την εβδομάδα"). Δεν αποκαλύπτεται καμία ατομική ταυτότητα επισκέπτη.'
-                  : 'See only aggregated statistics (e.g. "42 views this week"). No individual visitor identity is ever disclosed.'}
+                  ? 'Βλέπουν μόνο συγκεντρωτικά στατιστικά για τις δικές τους αγγελίες (π.χ. "42 επισκέψεις αυτή την εβδομάδα"). Δεν αποκαλύπτεται καμία ατομική ταυτότητα επισκέπτη.'
+                  : 'See only aggregated statistics for their own listings (e.g. "42 views this week"). No individual visitor identity is ever disclosed.'}
               </li>
               <li>
                 <strong className="text-[var(--text)]">Clerk:</strong>{' '}
                 {isEl
-                  ? 'Ο πάροχος ταυτοποίησής μας. Επεξεργάζεται email και κωδικό πρόσβασης για λογαριασμό μας.'
-                  : 'Our authentication provider. Processes your email and password on our behalf.'}
+                  ? 'Ο πάροχος ταυτοποίησής μας. Επεξεργάζεται email και κωδικό πρόσβασης για λογαριασμό μας. Δεδομένα εντός ΕΕ/ΕΟΧ.'
+                  : 'Our authentication provider. Processes your email and password on our behalf. Data within EU/EEA.'}
               </li>
               <li>
-                <strong className="text-[var(--text)]">Cal.com:</strong>{' '}
+                <strong className="text-[var(--text)]">OpenAI:</strong>{' '}
                 {isEl
-                  ? 'Εάν επιλέξετε να συνδέσετε το Cal.com για κρατήσεις, μοιραζόμαστε μόνο τα δεδομένα που απαιτούνται για τον συγχρονισμό ραντεβού.'
-                  : 'If you choose to connect Cal.com for bookings, we share only the data required for appointment sync.'}
+                  ? 'Επεξεργάζεται τα ερωτήματα AI αναζήτησης, τα μηνύματα AI συνομιλίας και το περιεχόμενο αγγελιών (περιγραφές, φωτογραφίες) για τη λειτουργία των χαρακτηριστικών AI. Η OpenAI δεν χρησιμοποιεί δεδομένα API για εκπαίδευση μοντέλων βάσει της πολιτικής χρήσης API της.'
+                  : 'Processes AI search queries, AI chat messages, and listing content (descriptions, photos) to power AI features. OpenAI does not use API data to train models per its API usage policy.'}
+              </li>
+              <li>
+                <strong className="text-[var(--text)]">Google Maps:</strong>{' '}
+                {isEl
+                  ? 'Χρησιμοποιείται στο backend για τον γεωγραφικό εντοπισμό διευθύνσεων αγγελιών και τον υπολογισμό αποστάσεων από σημεία ενδιαφέροντος. Χρησιμοποιείται επίσης για την εμφάνιση του χάρτη στην εφαρμογή, κατά την οποία το πρόγραμμα περιήγησής σας συνδέεται με τους διακομιστές της Google.'
+                  : 'Used on the backend to geocode listing addresses and calculate distances to points of interest. Also used to display the map in the app, during which your browser connects to Google\'s servers.'}
+              </li>
+              <li>
+                <strong className="text-[var(--text)]">Stripe:</strong>{' '}
+                {isEl
+                  ? 'Ο πάροχος επεξεργασίας πληρωμών μας. Τα στοιχεία κάρτας υποβάλλονται σε επεξεργασία αποκλειστικά από την Stripe και δεν αποθηκεύονται ποτέ στους διακομιστές μας. Αποθηκεύουμε μόνο αναγνωριστικά συναλλαγών για σκοπούς συμφιλίωσης.'
+                  : 'Our payment processing provider. Card details are processed solely by Stripe and never stored on our servers. We retain only transaction identifiers for reconciliation purposes.'}
+              </li>
+              <li>
+                <strong className="text-[var(--text)]">Sentry:</strong>{' '}
+                {isEl
+                  ? 'Χρησιμοποιείται για την παρακολούθηση σφαλμάτων. Σε περίπτωση σφάλματος της εφαρμογής, το Sentry μπορεί να καταγράψει περιορισμένο πλαίσιο αιτήματος (π.χ. τη διαδρομή URL) για σκοπούς διόρθωσης. Δεν αποστέλλονται δεδομένα φόρμας ή κωδικοί πρόσβασης.'
+                  : 'Used for error monitoring. When an application error occurs, Sentry may capture limited request context (e.g. the URL path) for debugging purposes. No form data or passwords are sent.'}
               </li>
             </ul>
           </section>
@@ -195,10 +256,26 @@ export default function PrivacyPolicyPage() {
                   : 'Raw view records are automatically deleted after 90 days. Aggregated statistics (containing no personal data) are retained indefinitely.'}
               </li>
               <li>
+                <strong className="text-[var(--text)]">{isEl ? 'Ιστορικό AI αναζήτησης και συνομιλιών:' : 'AI search and conversation history:'}</strong>{' '}
+                {isEl
+                  ? 'Διατηρείται όσο ο λογαριασμός σας είναι ενεργός. Μπορείτε να ζητήσετε τη διαγραφή του ανά πάσα στιγμή μέσω του '
+                  : 'Retained for as long as your account is active. You may request deletion at any time by contacting '}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="text-[var(--accent)] underline underline-offset-2">
+                  {CONTACT_EMAIL}
+                </a>
+                {isEl ? '.' : '.'}
+              </li>
+              <li>
                 <strong className="text-[var(--text)]">{isEl ? 'Αξιολογήσεις και ιστορικό συναλλαγών:' : 'Ratings and transaction history:'}</strong>{' '}
                 {isEl
                   ? 'Διατηρούνται για τη λειτουργία της πλατφόρμας (αξιοπιστία, ασφάλεια).'
                   : 'Retained for platform integrity and trust purposes.'}
+              </li>
+              <li>
+                <strong className="text-[var(--text)]">{isEl ? 'Αρχεία πληρωμών (Stripe):' : 'Payment records (Stripe):'}</strong>{' '}
+                {isEl
+                  ? 'Τα αρχεία συναλλαγών διατηρούνται για 7 έτη για λόγους φορολογικής συμμόρφωσης σύμφωνα με την ελληνική νομοθεσία.'
+                  : 'Transaction records are retained for 7 years for tax compliance purposes under Greek law.'}
               </li>
             </ul>
           </section>
@@ -250,6 +327,12 @@ export default function PrivacyPolicyPage() {
                 {isEl
                   ? 'Για ανώνυμους επισκέπτες, αποθηκεύουμε ένα τυχαίο αναγνωριστικό συνεδρίας στο sessionStorage (όχι cookie). Διαγράφεται αυτόματα όταν κλείσετε την καρτέλα. Δεν απαιτείται συγκατάθεση.'
                   : 'For anonymous visitors, we store a random session identifier in sessionStorage (not a cookie). It is deleted automatically when you close the tab. No consent is required.'}
+              </li>
+              <li>
+                <strong className="text-[var(--text)]">{isEl ? 'Cookies τρίτων (Google Maps):' : 'Third-party cookies (Google Maps):'}</strong>{' '}
+                {isEl
+                  ? 'Κατά τη χρήση του χάρτη, το Google Maps ενδέχεται να ορίσει cookies στον browser σας. Αυτά υπόκεινται στην Πολιτική Απορρήτου της Google.'
+                  : 'When you use the map, Google Maps may set cookies in your browser. These are subject to Google\'s Privacy Policy.'}
               </li>
             </ul>
           </section>
