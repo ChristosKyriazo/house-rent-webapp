@@ -21,11 +21,25 @@ function makePostRequest(body: object) {
   })
 }
 
+// A booking must resolve to a home via availabilityId (or inquiryId) — the
+// owner is derived server-side from that, never from a client-sent ownerId.
 const validBody = {
-  ownerId: 22,
+  availabilityId: 33,
   title: 'Viewing',
   startTime: '2026-06-01T10:00:00.000Z',
   endTime: '2026-06-01T11:00:00.000Z',
+}
+
+const availabilityWithHome = {
+  id: 33,
+  homeId: 5,
+  home: { id: 5, ownerId: 22, key: 'home-key-5', owner: { key: 'owner-key-22' } },
+}
+
+function mockResolvedHomeContext() {
+  mockPrisma.availability.findUnique.mockResolvedValue(availabilityWithHome)
+  // Approved-inquiry gate + inquiry auto-match both resolve
+  mockPrisma.inquiry.findFirst.mockResolvedValue({ id: 77 })
 }
 
 describe('POST /api/bookings — conflict and auth cases', () => {
@@ -59,8 +73,37 @@ describe('POST /api/bookings — conflict and auth cases', () => {
     expect(body.error).toContain('Owner ID')
   })
 
+  it('returns 400 when only ownerId is sent (no availability or inquiry) — booking cannot target arbitrary owners', async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+
+    const { POST } = await import('@/app/api/bookings/route')
+    const res = await POST(makePostRequest({
+      ownerId: 22,
+      title: 'Viewing',
+      startTime: '2026-06-01T10:00:00.000Z',
+      endTime: '2026-06-01T11:00:00.000Z',
+    }))
+
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toContain('valid availability or inquiry')
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when the user has no approved inquiry for the home', async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    mockPrisma.availability.findUnique.mockResolvedValue(availabilityWithHome)
+    mockPrisma.inquiry.findFirst.mockResolvedValue(null)
+
+    const { POST } = await import('@/app/api/bookings/route')
+    const res = await POST(makePostRequest(validBody))
+
+    expect(res.status).toBe(403)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('returns 400 on user booking conflict', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    mockResolvedHomeContext()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.$transaction.mockImplementation(async (fn: any) => {
       return fn({
@@ -81,6 +124,7 @@ describe('POST /api/bookings — conflict and auth cases', () => {
 
   it('returns 400 on owner booking conflict', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    mockResolvedHomeContext()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockPrisma.$transaction.mockImplementation(async (fn: any) => {
       return fn({
@@ -101,6 +145,7 @@ describe('POST /api/bookings — conflict and auth cases', () => {
 
   it('returns 500 on unexpected error', async () => {
     mockGetCurrentUser.mockResolvedValue({ id: 11, role: 'user' })
+    mockResolvedHomeContext()
     mockPrisma.$transaction.mockRejectedValue(new Error('DB crash'))
 
     const { POST } = await import('@/app/api/bookings/route')

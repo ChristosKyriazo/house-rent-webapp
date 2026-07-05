@@ -31,6 +31,18 @@ export async function register() {
     if (deletedViews.count > 0) {
       console.info(`[startup] Purged ${deletedViews.count} ListingView record(s) older than 1 year`)
     }
+
+    // Loud startup warning for the AI-description bug class: without this key,
+    // bulk-upload descriptions silently fall back to raw text and embeddings
+    // are never generated.
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('[startup] OPENAI_API_KEY is NOT set — AI descriptions, embeddings, and AI search are disabled')
+    }
+
+    // Drain pending/abandoned EmbeddingQueue rows on an interval (edits enqueue
+    // rows but have no inline processor; inline calls also die on restart)
+    const { startEmbeddingQueueWorker } = await import('./lib/embedding-queue-worker')
+    startEmbeddingQueueWorker()
   }
   if (process.env.NEXT_RUNTIME === 'edge') {
     await import('./sentry.edge.config')

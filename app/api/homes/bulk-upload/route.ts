@@ -8,6 +8,11 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { requestLogger } from '@/lib/logger'
 import { detectImageType } from '@/lib/image-validation'
+import { checkRateLimit } from '@/lib/rate-limit'
+
+// Each row fans out to ~10 paid API calls (OpenAI normalization/vision/description,
+// Google Maps, embeddings) — the cap bounds the cost of a single job.
+const MAX_BULK_ROWS = 200
 
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
@@ -24,6 +29,14 @@ export async function POST(request: NextRequest) {
 
     const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
     if (tierBlock) return tierBlock
+
+    const allowed = await checkRateLimit(`${user.id}:bulk-upload`, 3, 60 * 60 * 1000)
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many bulk uploads. Please wait before starting another job.' },
+        { status: 429 }
+      )
+    }
 
     const formData = await request.formData()
     const excelFile = formData.get('excelFile') as File
@@ -48,6 +61,13 @@ export async function POST(request: NextRequest) {
 
     if (data.length === 0) {
       return NextResponse.json({ error: 'Excel file is empty' }, { status: 400 })
+    }
+
+    if (data.length > MAX_BULK_ROWS) {
+      return NextResponse.json(
+        { error: `Bulk uploads are limited to ${MAX_BULK_ROWS} listings per file. Your file has ${data.length} rows — please split it into smaller files.` },
+        { status: 400 }
+      )
     }
 
     // Create the job record first so we get its ID for the directory name
@@ -122,9 +142,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ jobId: job.id })
   } catch (error: unknown) {
     log.error({ err: error }, 'Bulk upload error')
-    return NextResponse.json(
-      { error: (error as Error).message || 'Failed to start bulk upload' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to start bulk upload' }, { status: 500 })
   }
 }

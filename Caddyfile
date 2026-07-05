@@ -32,8 +32,9 @@ dev.kaparro.com {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        # Content-Security-Policy — tightened to only allow known origins
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kaparro.com https://*.clerk.accounts.dev https://maps.googleapis.com https://js.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://clerk.kaparro.com https://*.clerk.accounts.dev https://*.sentry.io https://maps.googleapis.com https://maps.gstatic.com wss:; frame-src https://clerk.kaparro.com https://*.clerk.accounts.dev; worker-src 'self' blob:; media-src 'self' blob:;"
+        # Content-Security-Policy is set by the Next.js app (next.config.ts) —
+        # do NOT also set it here: two CSP headers make browsers enforce the
+        # intersection of both policies.
         -Server
     }
 
@@ -81,7 +82,9 @@ kaparro.com, www.kaparro.com {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kaparro.com https://*.clerk.accounts.dev https://maps.googleapis.com https://js.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://clerk.kaparro.com https://*.clerk.accounts.dev https://*.sentry.io https://maps.googleapis.com https://maps.gstatic.com wss:; frame-src https://clerk.kaparro.com https://*.clerk.accounts.dev; worker-src 'self' blob:; media-src 'self' blob:;"
+        # Content-Security-Policy is set by the Next.js app (next.config.ts) —
+        # do NOT also set it here: two CSP headers make browsers enforce the
+        # intersection of both policies.
         -Server
     }
 

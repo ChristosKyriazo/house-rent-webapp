@@ -233,9 +233,16 @@ export async function GET(request: NextRequest) {
     // Note: We'll apply exclude filters in JavaScript after city/country filtering
     // to ensure they work correctly with the JavaScript-based filtering
 
+    // Bounded scan: the 1536-float embedding column is omitted (it dominated
+    // per-row memory), and the row count is capped so a single request can't
+    // load the whole table. City/country matching still happens in JS below —
+    // beyond MAX_SCAN rows, only the newest MAX_SCAN listings are searchable.
+    const MAX_SCAN = 2000
     let homes = await prisma.home.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      take: MAX_SCAN,
+      omit: { embedding: true },
       include: {
         owner: {
           select: { id: true, name: true, createdAt: true, subscriptionTier: true },
@@ -425,8 +432,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200)
     const skip = Math.max(parseInt(searchParams.get('skip') || '0', 10), 0)
     const total = homes.length
-    // Strip the 1536-float embedding vector from the response — clients don't need it
-    const paginatedHomes = homes.slice(skip, skip + limit).map(({ embedding: _e, ...h }) => h)
+    // Embedding vector is already omitted at the query level
+    const paginatedHomes = homes.slice(skip, skip + limit)
 
     // Log search for analytics (fire-and-forget)
     const searchLogUser = await getCurrentUser().catch(() => null)

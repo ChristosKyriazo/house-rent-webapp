@@ -310,7 +310,6 @@ export async function POST(request: NextRequest) {
     let ownerKey: string | null = null
 
     const parsedAvailabilityId = availabilityId ? parsePositiveInt(availabilityId) : null
-    const parsedOwnerId = ownerId ? parsePositiveInt(ownerId) : null
     const parsedStartTime = parseValidDate(startTime)
     const parsedEndTime = parseValidDate(endTime)
 
@@ -318,9 +317,13 @@ export async function POST(request: NextRequest) {
       return badRequest('Invalid appointment time range')
     }
 
-    if (availabilityId && !parsedOwnerId) {
+    // Resolve the home and owner server-side from the availability or inquiry.
+    // The client-sent ownerId is never trusted when home context exists — otherwise
+    // a caller could pair their own inquiry with someone else's ownerId and poison
+    // that owner's calendar.
+    if (parsedAvailabilityId) {
       const availability = await prisma.availability.findUnique({
-        where: { id: parsedAvailabilityId ?? -1 },
+        where: { id: parsedAvailabilityId },
         include: {
           home: {
             select: {
@@ -338,26 +341,25 @@ export async function POST(request: NextRequest) {
         homeKey = availability.home.key
         ownerKey = availability.home.owner.key
       }
-    } else if (finalOwnerId) {
-      // If ownerId is provided but we don't have homeKey, try to get it from inquiryId
-      if (inquiryId) {
-        const inquiry = await prisma.inquiry.findUnique({
-          where: { id: inquiryId },
-          include: {
-            home: {
-              select: {
-                id: true,
-                key: true,
-                owner: { select: { key: true } },
-              },
+    } else if (inquiryId) {
+      const inquiry = await prisma.inquiry.findUnique({
+        where: { id: inquiryId },
+        include: {
+          home: {
+            select: {
+              id: true,
+              ownerId: true,
+              key: true,
+              owner: { select: { key: true } },
             },
           },
-        })
-        if (inquiry) {
-          finalHomeId = inquiry.home.id
-          homeKey = inquiry.home.key
-          ownerKey = inquiry.home.owner.key
-        }
+        },
+      })
+      if (inquiry) {
+        finalOwnerId = inquiry.home.ownerId
+        finalHomeId = inquiry.home.id
+        homeKey = inquiry.home.key
+        ownerKey = inquiry.home.owner.key
       }
     }
 
@@ -365,21 +367,25 @@ export async function POST(request: NextRequest) {
       return badRequest('Owner ID is required')
     }
 
+    // Every booking must resolve to a home via a valid availability or inquiry —
+    // otherwise a client could create bookings against arbitrary owners.
+    if (!finalHomeId) {
+      return badRequest('Booking must reference a valid availability or inquiry')
+    }
+
     // Verify the current user has an approved, non-finalized inquiry for this home
-    if (finalHomeId) {
-      const approvedInquiry = await prisma.inquiry.findFirst({
-        where: {
-          userId: user.id,
-          homeId: finalHomeId,
-          approved: true,
-          finalized: false,
-          dismissed: false,
-        },
-        select: { id: true },
-      })
-      if (!approvedInquiry) {
-        return NextResponse.json({ error: 'You must have an approved inquiry to book a viewing' }, { status: 403 })
-      }
+    const approvedInquiry = await prisma.inquiry.findFirst({
+      where: {
+        userId: user.id,
+        homeId: finalHomeId,
+        approved: true,
+        finalized: false,
+        dismissed: false,
+      },
+      select: { id: true },
+    })
+    if (!approvedInquiry) {
+      return NextResponse.json({ error: 'You must have an approved inquiry to book a viewing' }, { status: 403 })
     }
 
     // inquiryId is already validated by Zod as number | null | undefined

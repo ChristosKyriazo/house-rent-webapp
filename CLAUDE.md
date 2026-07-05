@@ -60,6 +60,6 @@ Migrations run **automatically on container startup** via the production compose
 - **Prisma binary targets** include `linux-musl-openssl-3.0.x` for Alpine/Docker. Don't remove it from the schema.
 - **Uploads** are served directly by Caddy from the `uploads_data` volume (`/srv/uploads`), not via Next.js. File writes go to `public/uploads/` locally but the Docker volume maps to `/srv/uploads` in production.
 - **Background jobs** (e.g. `BulkUploadJob`) use fire-and-forget async functions. This works because the app runs as a persistent Node.js process, not serverless. Don't move it to Vercel without adding a proper queue.
-- **In-memory caching** (OpenAI descriptions, Google Maps results) is per-process. There is no Redis. Fine for single-instance deploys.
+- **Redis is deployed in production** (`docker-compose.prod.yml`) and used by `lib/redis.ts` + `lib/rate-limit.ts` for cross-process rate limiting and AI-search caching when `REDIS_URL` is set; both fall back to per-process in-memory when it isn't. Some caches (OpenAI descriptions, Google Maps geocoding) are still in-memory per-process — fine for single-instance deploys.
 - **Tests use SQLite** (`DATABASE_URL=file:./test.db`). The tunnel is not needed to run tests.
 - **Cal.com token encryption** requires a stable 32-byte hex `CALCOM_TOKEN_ENCRYPTION_KEY`. Rotating it invalidates all stored tokens.

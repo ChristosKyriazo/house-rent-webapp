@@ -1,10 +1,11 @@
 name: CI
 
+# Runs standalone on PRs; on pushes to main/dev it is invoked by deploy.yml
+# via workflow_call so the deploy is blocked when lint/typecheck/tests fail.
 on:
-  push:
-    branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  workflow_call:
 
 jobs:
   ci:
