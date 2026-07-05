@@ -459,6 +459,7 @@ export async function GET(request: NextRequest) {
 // POST /api/homes - create a new home listing for the logged-in user
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
+  let subscriptionTier: string | null = null
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -467,6 +468,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    subscriptionTier = user.subscriptionTier
 
     // Check if user has owner role (brokers are treated like owners)
     const userRole = user.role || 'user'
@@ -688,7 +690,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const home = await prisma.home.create({
+    // Re-check the listing limit atomically with the create — the early check
+    // above is a fast-fail only; two parallel POSTs could both pass it.
+    const home = await prisma.$transaction(async (tx) => {
+      if (listingLimit < Number.MAX_SAFE_INTEGER) {
+        const activeCount = await tx.home.count({ where: { ownerId: user.id } })
+        if (activeCount >= listingLimit) throw new Error('LISTING_LIMIT')
+      }
+      return tx.home.create({
       data: {
         title: title.trim(),
         description: finalDescription,
@@ -736,7 +745,8 @@ export async function POST(request: NextRequest) {
               energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
         ownerId: user.id,
       },
-    })
+      })
+    }, { isolationLevel: 'Serializable' })
 
     // Enqueue embedding record so the queue retry system can pick it up on failure
     await prisma.embeddingQueue.upsert({
@@ -765,6 +775,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'Home created', home }, { status: 201 })
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'LISTING_LIMIT') {
+      const listingLimit = getListingLimit(subscriptionTier ?? 'free')
+      const requiredTier = (subscriptionTier ?? 'free') === 'free' ? 'plus' : 'pro'
+      return NextResponse.json(
+        { error: 'subscription_required', requiredTier, message: `Your plan allows up to ${listingLimit} listing${listingLimit === 1 ? '' : 's'}.` },
+        { status: 402 }
+      )
+    }
+    // Serializable isolation can abort one of two concurrent creates — ask the client to retry
+    if (error instanceof Error && 'code' in error && (error as { code?: string }).code === 'P2034') {
+      return NextResponse.json({ error: 'Please try again' }, { status: 409 })
+    }
     log.error({ err: error }, 'Create home error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

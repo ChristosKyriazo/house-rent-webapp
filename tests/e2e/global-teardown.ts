@@ -1,5 +1,71 @@
 import fs from 'fs'
 import path from 'path'
+import { config } from 'dotenv'
+
+config({ path: path.resolve(__dirname, '../../.env.test') })
+
+/**
+ * Deletes data created by the four E2E test accounts so runs against the
+ * shared staging DB don't accumulate junk listings/inquiries/bookings.
+ *
+ * Requires E2E_DATABASE_URL in .env.test (point it at the staging tunnel,
+ * postgresql://…@localhost:5433/house_rent). Deliberately a separate var from
+ * DATABASE_URL so cleanup never runs against an unintended database.
+ * Scope is limited to rows owned by the TEST_*_EMAIL accounts.
+ */
+async function cleanupTestData() {
+  if (process.env.E2E_SKIP_CLEANUP === '1') return
+
+  const dbUrl = process.env.E2E_DATABASE_URL
+  if (!dbUrl) {
+    console.warn('[teardown] E2E_DATABASE_URL not set — skipping staging data cleanup')
+    return
+  }
+
+  const emails = [
+    process.env.TEST_OWNER_EMAIL,
+    process.env.TEST_RENTER_EMAIL,
+    process.env.TEST_BROKER_EMAIL,
+    process.env.TEST_BOTH_EMAIL,
+  ].filter((e): e is string => !!e)
+  if (emails.length === 0) return
+
+  const { PrismaClient } = await import('@prisma/client')
+  const prisma = new PrismaClient({ datasources: { db: { url: dbUrl } } })
+
+  try {
+    const users = await prisma.user.findMany({
+      where: { email: { in: emails } },
+      select: { id: true },
+    })
+    const ids = users.map((u) => u.id)
+    if (ids.length === 0) return
+
+    // Order matters for FK constraints; Home deletion cascades to
+    // availability, inquiries, finalizations, ratings, views, embedding queue.
+    const ratings = await prisma.rating.deleteMany({
+      where: { OR: [{ raterId: { in: ids } }, { ratedUserId: { in: ids } }] },
+    })
+    const bookings = await prisma.booking.deleteMany({
+      where: { OR: [{ userId: { in: ids } }, { ownerId: { in: ids } }] },
+    })
+    const inquiries = await prisma.inquiry.deleteMany({ where: { userId: { in: ids } } })
+    const homes = await prisma.home.deleteMany({ where: { ownerId: { in: ids } } })
+    await prisma.notification.deleteMany({ where: { recipientId: { in: ids } } })
+    await prisma.savedHome.deleteMany({ where: { userId: { in: ids } } })
+    await prisma.savedSearch.deleteMany({ where: { userId: { in: ids } } })
+    await prisma.bulkUploadJob.deleteMany({ where: { userId: { in: ids } } })
+
+    console.log(
+      `[teardown] Cleaned staging data for ${ids.length} test account(s): ` +
+        `${homes.count} homes, ${inquiries.count} inquiries, ${bookings.count} bookings, ${ratings.count} ratings`
+    )
+  } catch (err) {
+    console.warn('[teardown] Staging data cleanup failed (non-fatal):', err)
+  } finally {
+    await prisma.$disconnect()
+  }
+}
 
 /**
  * After every Playwright run, walk test-results/ and copy each video.webm
@@ -11,6 +77,8 @@ import path from 'path'
  *   → test-results/videos/01-owner-creates-listing — 01-owner-creates-a-listing.webm
  */
 export default async function globalTeardown() {
+  await cleanupTestData()
+
   const resultsDir = path.join(process.cwd(), 'test-results')
   const videosDir = path.join(resultsDir, 'videos')
 

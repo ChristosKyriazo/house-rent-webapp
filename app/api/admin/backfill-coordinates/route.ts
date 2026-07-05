@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth'
-import { unauthorized } from '@/lib/api-utils'
+import { requireAdmin } from '@/lib/admin'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 
 export async function POST() {
-  const user = await getCurrentUser()
-  if (!user) return unauthorized()
-
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)
-  if (!adminEmails.includes(user.email)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const { error: adminError } = await requireAdmin()
+  if (adminError) return adminError
 
   const homes = await prisma.home.findMany({
     where: { latitude: null },

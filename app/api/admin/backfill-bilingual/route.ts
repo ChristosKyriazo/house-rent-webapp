@@ -3,19 +3,14 @@ import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import { normalizeBulkTextFields } from '@/lib/bulk-upload-normalizer'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { getCurrentUser } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin'
 
 // POST /api/admin/backfill-bilingual
 // Backfills titleGreek, streetGreek, descriptionGreek for existing homes that are missing them.
 // Protected by Clerk auth. Processes in batches of 20 to avoid timeouts.
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)
-  if (!adminEmails.includes(user.email)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const { error: adminError } = await requireAdmin()
+  if (adminError) return adminError
 
   // Rate limit: max 10 calls per minute globally to prevent abuse if secret leaks
   if (!(await checkRateLimit('admin:backfill-bilingual', 10, 60_000))) {
