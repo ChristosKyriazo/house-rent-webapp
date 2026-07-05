@@ -694,6 +694,7 @@ function HomesPageInner() {
             excludeInquired={excludeInquired}
             excludeApproved={excludeApproved}
             language={language}
+            initialConversationKey={conversationKey}
             onResultsFound={(results) => {
               setHomes(results)
               setIsAISearchActive(true)

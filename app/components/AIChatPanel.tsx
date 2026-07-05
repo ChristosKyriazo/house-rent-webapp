@@ -17,13 +17,16 @@ interface AIChatPanelProps {
   onBack: () => void
   language: string
   onConversationKeyChange?: (key: string | null) => void
+  // When returning from a listing detail page, the parent passes the restored
+  // conversation key so the transcript can be rehydrated from the server
+  initialConversationKey?: string | null
 }
 
 const FREE_PROMPTS = 10
 const MSG_MAX_LENGTH = 200
 
 function AIChatPanel(
-  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language, onConversationKeyChange }: AIChatPanelProps
+  { searchType, excludeInquired, excludeApproved, onResultsFound, onBack, language, onConversationKeyChange, initialConversationKey }: AIChatPanelProps
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -39,8 +42,30 @@ function AIChatPanel(
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const hydratedRef = useRef(false)
 
   const isEl = language === 'el'
+
+  // Rehydrate the transcript from the server when returning with a saved
+  // conversation key (e.g. after viewing a listing detail page)
+  useEffect(() => {
+    if (!initialConversationKey || hydratedRef.current) return
+    hydratedRef.current = true
+    const controller = new AbortController()
+    fetch(`/api/homes/ai-chat?key=${encodeURIComponent(initialConversationKey)}`, { signal: controller.signal })
+      .then(r => (r.ok ? r.json() : null))
+      .then(conv => {
+        const history = (conv?.messages ?? []) as Array<{ role: 'user' | 'assistant'; content: string }>
+        if (history.length === 0) return
+        const restored: ChatMessage[] = history.map((m, i) => ({ id: `restored-${i}`, role: m.role, content: m.content }))
+        // Never clobber a conversation the user has already started typing in
+        setMessages(prev => (prev.length > 0 ? prev : restored))
+        setConversationKey(initialConversationKey)
+        setPromptCount(restored.filter(m => m.role === 'user').length)
+      })
+      .catch(() => { /* hydration is best-effort */ })
+    return () => controller.abort()
+  }, [initialConversationKey])
 
   // Load server-side prompt state on mount
   useEffect(() => {

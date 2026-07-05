@@ -59,6 +59,10 @@ function MapContent() {
   const languageRef = useRef(language)
   const scriptTaggedRef = useRef(false)
   const loadedLangRef = useRef<string | null>(null)
+  // Set synchronously by the AI-session restore effect so the manual-mode
+  // fetch effect (which still sees the stale mode === 'manual' on this mount
+  // pass) doesn't clobber the restored AI results with the full listing set.
+  const aiSessionRestoredRef = useRef(false)
 
   const [homes, setHomes] = useState<Home[]>([])
   const [selected, setSelected] = useState<Home | null>(null)
@@ -125,6 +129,7 @@ function MapContent() {
           setConversationKey(saved.conversationKey ?? null)
           setAiPromptCount(saved.promptCount ?? 0)
           if (saved.homes?.length) {
+            aiSessionRestoredRef.current = true
             setHomes(saved.homes)
             setMode('ai')
             setLoading(false)
@@ -152,8 +157,16 @@ function MapContent() {
   }, [type])
 
   useEffect(() => {
-    if (mode === 'manual') fetchHomes(filters)
+    // aiSessionRestoredRef guards the mount pass where mode is still the
+    // stale 'manual' default while a saved AI session is being restored
+    if (mode === 'manual' && !aiSessionRestoredRef.current) fetchHomes(filters)
   }, [type]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once the restored AI mode has landed, the guard has served its purpose —
+  // clear it so later type changes in manual mode fetch normally
+  useEffect(() => {
+    if (mode === 'ai') aiSessionRestoredRef.current = false
+  }, [mode])
 
   // Save AI session to sessionStorage before navigating to a listing
   const saveAISession = useCallback(() => {

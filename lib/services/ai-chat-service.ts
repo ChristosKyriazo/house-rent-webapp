@@ -89,9 +89,9 @@ export async function processAIChatTurn(
 
   const modeHint =
     listingMode === 'buy'
-      ? '\n\n[Search mode: FOR SALE. minPrice/maxPrice are total purchase price in EUR.]'
+      ? '\n\n[Search mode: FOR SALE — the user already chose this in the app. NEVER ask whether they want to rent or buy. minPrice/maxPrice are total purchase price in EUR.]'
       : listingMode === 'rent'
-        ? '\n\n[Search mode: FOR RENT. minPrice/maxPrice are monthly rent in EUR.]'
+        ? '\n\n[Search mode: FOR RENT — the user already chose this in the app. NEVER ask whether they want to rent or buy. minPrice/maxPrice are monthly rent in EUR.]'
         : ''
 
   const accumulatedContext =
@@ -137,6 +137,12 @@ export async function processAIChatTurn(
   clearTimeout(timeoutId)
 
   const mergedFilters: ConversationalFilters = mergeFilters(accumulated, aiResponse.filters ?? {})
+
+  // The UI mode is authoritative for rent-vs-buy — the model never asks for it
+  // and must not be able to override it.
+  if (listingMode) {
+    mergedFilters.listingType = listingMode === 'buy' ? 'sale' : 'rent'
+  }
 
   const updatedHistory: ChatMessage[] = [
     ...fullHistory,
@@ -185,26 +191,34 @@ export async function processAIChatTurn(
   }
 }
 
-function mergeFilters(
+// Exported for unit tests — the null-vs-CLEAR semantics caused a real bug
+// (accumulated answers were wiped every turn) and must not regress.
+export function mergeFilters(
   accumulated: ConversationalFilters,
   incoming: ConversationalFilters
 ): ConversationalFilters {
   const merged = { ...accumulated }
   for (const [k, v] of Object.entries(incoming)) {
     const key = k as keyof ConversationalFilters
-    if (v === undefined) continue
-    // Discard noise values — treat as "not set"
+    // The model emits null/"Not mentioned"/empty for fields it didn't extract
+    // this turn — that means "no new information", NOT "clear". Deleting here
+    // wiped previously-given answers ("I told you I have a kid" bug).
     if (
+      v === undefined ||
       v === null ||
       v === 'Not mentioned' ||
       v === '' ||
       (Array.isArray(v) && v.length === 0)
     ) {
-      delete (merged as Record<string, unknown>)[key]
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(merged as any)[key] = v
+      continue
     }
+    // Explicit user mind-change: the model sets the field to "CLEAR"
+    if (v === 'CLEAR') {
+      delete (merged as Record<string, unknown>)[key]
+      continue
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(merged as any)[key] = v
   }
   return merged
 }
