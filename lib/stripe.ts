@@ -22,3 +22,14 @@ export const STRIPE_PRICES: Record<'plus' | 'pro', string | undefined> = {
   plus: process.env.STRIPE_PRICE_ID_PLUS,
   pro:  process.env.STRIPE_PRICE_ID_PRO,
 }
+
+// One-off AI search credit packs. Amounts live here, never on the client — the
+// checkout session is priced from this table so a tampered request body cannot
+// buy 50 credits for €2.99.
+export const AI_PACKS = {
+  '10': { credits: 10, amountCents: 299 },
+  '25': { credits: 25, amountCents: 599 },
+  '50': { credits: 50, amountCents: 999 },
+} as const
+
+export type AiPackSize = keyof typeof AI_PACKS

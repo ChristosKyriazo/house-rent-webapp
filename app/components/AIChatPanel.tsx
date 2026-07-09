@@ -36,6 +36,7 @@ function AIChatPanel(
   const [error, setError] = useState<string | null>(null)
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
   const [purchaseLoading, setPurchaseLoading] = useState(false)
+  const [purchaseError, setPurchaseError] = useState<string | null>(null)
   const [packCredits, setPackCredits] = useState(0)
   const [isPaid, setIsPaid] = useState(false)
   const [monthlyRemaining, setMonthlyRemaining] = useState<number | null>(null)
@@ -214,19 +215,22 @@ function AIChatPanel(
 
   const handlePurchase = async (size: '10' | '25' | '50') => {
     setPurchaseLoading(true)
+    setPurchaseError(null)
     try {
       const res = await fetch('/api/ai-prompt-usage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'purchase', pack: size }),
+        body: JSON.stringify({ action: 'purchase', pack: size, returnPath: window.location.pathname }),
       })
       const data = await res.json()
-      if (data.ok) {
-        setPackCredits(data.packCredits)
-        setShowPurchaseModal(false)
-        setTimeout(() => inputRef.current?.focus(), 80)
+      if (res.ok && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+        return // navigating away; keep the spinner up
       }
-    } catch { /* silent */ } finally {
+      setPurchaseError(isEl ? 'Δεν ήταν δυνατή η έναρξη της πληρωμής. Δοκιμάστε ξανά.' : "Couldn't start checkout. Please try again.")
+    } catch {
+      setPurchaseError(isEl ? 'Δεν ήταν δυνατή η έναρξη της πληρωμής. Δοκιμάστε ξανά.' : "Couldn't start checkout. Please try again.")
+    } finally {
       setPurchaseLoading(false)
     }
   }
@@ -373,7 +377,7 @@ function AIChatPanel(
                   {loading ? '...' : t.send}
                 </button>
               </div>
-              <span className="text-right text-[10px] text-[var(--text-muted)]/50">{input.length}/{MSG_MAX_LENGTH}</span>
+              <span className="text-right text-[11px] text-[var(--text-muted)]">{input.length}/{MSG_MAX_LENGTH}</span>
             </div>
           )}
         </div>
@@ -404,6 +408,9 @@ function AIChatPanel(
                 </button>
               ))}
             </div>
+            {purchaseError && (
+              <p className="text-xs text-red-400 text-center" role="alert">{purchaseError}</p>
+            )}
             <p className="text-xs text-white/30 text-center">
               {isEl ? 'Χωρίς συνδρομή. Δικά σας για πάντα.' : 'No subscription. Yours to keep.'}
             </p>

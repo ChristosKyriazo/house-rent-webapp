@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { TIER_RANK } from '@/lib/subscription'
+import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
 
 const FREE_MONTHLY_LIMIT = 10
 const PAID_MONTHLY_LIMIT = 20
-const PACK_SIZES: Record<string, number> = { '10': 10, '25': 25, '50': 50 }
 
 function isPaidTier(tier: string | null) {
   return (TIER_RANK[tier ?? 'free'] ?? 0) > 0
@@ -60,12 +60,59 @@ export async function POST(request: NextRequest) {
   })
   if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  // Purchase pack (requires payment integration)
+  // Purchase pack — redirect to Stripe Checkout. Credits are granted by the
+  // checkout.session.completed webhook, never here: the user has not paid yet.
   if (action === 'purchase') {
-    return NextResponse.json(
-      { error: 'payment_required', message: 'Credit pack purchases require payment. Payment integration coming soon.' },
-      { status: 503 }
-    )
+    const size = String(body.pack ?? '')
+    const pack = AI_PACKS[size as AiPackSize]
+    if (!pack) {
+      return NextResponse.json(
+        { error: 'invalid_pack', message: `pack must be one of: ${Object.keys(AI_PACKS).join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'stripe_not_configured', message: 'STRIPE_SECRET_KEY is not set on this server.' },
+        { status: 503 }
+      )
+    }
+
+    const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
+
+    // Resolve the caller's path against our own origin and keep it only if it
+    // stayed there. A bare prefix check would pass "//evil.com" and "/\evil.com",
+    // turning Stripe's post-payment redirect into an open redirect.
+    const rawReturn = typeof body.returnPath === 'string' ? body.returnPath : ''
+    let returnPath = '/homes/search'
+    if (rawReturn) {
+      try {
+        const resolved = new URL(rawReturn, origin)
+        if (resolved.origin === origin) returnPath = resolved.pathname
+      } catch { /* keep default */ }
+    }
+
+    const session = await getStripe().checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: pack.amountCents,
+          product_data: { name: `${pack.credits} AI searches` },
+        },
+      }],
+      metadata: {
+        userId: user.id.toString(),
+        aiPackSize: size,
+      },
+      success_url: `${origin}${returnPath}?pack=success`,
+      cancel_url: `${origin}${returnPath}?pack=canceled`,
+    })
+
+    return NextResponse.json({ checkoutUrl: session.url })
   }
 
   // Consume one search — same monthly mechanism for both free and paid users

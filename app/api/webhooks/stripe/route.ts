@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
 import { getListingLimit } from '@/lib/subscription'
 import type Stripe from 'stripe'
 
@@ -28,13 +28,53 @@ export async function POST(request: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session
 
     const userId = session.metadata?.userId
-    const targetTier = session.metadata?.targetTier
+    if (!userId) {
+      return NextResponse.json({ received: true })
+    }
+    const userIdInt = parseInt(userId, 10)
 
-    if (!userId || !targetTier) {
+    // ── One-off AI credit pack ────────────────────────────────────────────────
+    const aiPackSize = session.metadata?.aiPackSize
+    if (aiPackSize) {
+      const pack = AI_PACKS[aiPackSize as AiPackSize]
+      if (!pack) {
+        return NextResponse.json({ received: true })
+      }
+
+      // The unique constraint on stripeEventId is what makes this idempotent:
+      // a redelivered event fails the create and rolls back the increment, so
+      // credits are never granted twice for one payment.
+      await prisma.$transaction(async (tx) => {
+        const seen = await tx.transaction.findUnique({ where: { stripeEventId: event.id } })
+        if (seen) return
+
+        await tx.transaction.create({
+          data: {
+            userId: userIdInt,
+            stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+            stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+            stripeEventId: event.id,
+            amount: session.amount_total ?? pack.amountCents,
+            currency: session.currency ?? 'eur',
+            status: session.payment_status === 'paid' ? 'succeeded' : session.payment_status ?? 'unknown',
+          },
+        })
+
+        await tx.user.update({
+          where: { id: userIdInt },
+          data: { aiSearchPackCount: { increment: pack.credits } },
+        })
+      })
+
       return NextResponse.json({ received: true })
     }
 
-    const userIdInt = parseInt(userId, 10)
+    // ── Subscription tier upgrade ─────────────────────────────────────────────
+    const targetTier = session.metadata?.targetTier
+    if (!targetTier) {
+      return NextResponse.json({ received: true })
+    }
+
     const newLimit = getListingLimit(targetTier)
 
     await prisma.$transaction(async (tx) => {

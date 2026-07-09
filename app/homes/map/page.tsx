@@ -89,6 +89,7 @@ function MapContent() {
   const [promptState, setPromptState] = useState<PromptState>({ used: 0, limit: FREE_LIMIT, remaining: FREE_LIMIT, packCredits: 0, canSearch: true })
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
   const [purchaseLoading, setPurchaseLoading] = useState(false)
+  const [purchaseError, setPurchaseError] = useState<string | null>(null)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -254,15 +255,26 @@ function MapContent() {
     }
   }
 
-  // Purchase pack
+  // Purchase pack — hand off to Stripe Checkout. Credits are granted by the
+  // webhook after payment, so nothing about prompt state is updated here.
   async function purchasePack(size: '10' | '25' | '50') {
     setPurchaseLoading(true)
+    setPurchaseError(null)
     try {
-      const res = await fetch('/api/ai-prompt-usage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'purchase', pack: size }) })
+      const res = await fetch('/api/ai-prompt-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'purchase', pack: size, returnPath: window.location.pathname }),
+      })
       const data = await res.json()
-      setPromptState(p => ({ ...p, packCredits: data.packCredits, canSearch: true }))
-      setShowPurchaseModal(false)
-    } catch { /* silent */ } finally {
+      if (res.ok && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+        return // navigating away; keep the spinner up
+      }
+      setPurchaseError(isEl ? 'Δεν ήταν δυνατή η έναρξη της πληρωμής. Δοκιμάστε ξανά.' : "Couldn't start checkout. Please try again.")
+    } catch {
+      setPurchaseError(isEl ? 'Δεν ήταν δυνατή η έναρξη της πληρωμής. Δοκιμάστε ξανά.' : "Couldn't start checkout. Please try again.")
+    } finally {
       setPurchaseLoading(false)
     }
   }
@@ -585,6 +597,9 @@ function MapContent() {
                   </button>
                 ))}
               </div>
+              {purchaseError && (
+                <p className="text-xs text-red-400 text-center" role="alert">{purchaseError}</p>
+              )}
               <p className="text-xs text-white/30 text-center">{isEl ? 'Χωρίς συνδρομή. Δικά σας για πάντα.' : 'No subscription. Yours to keep.'}</p>
               <button onClick={() => setShowPurchaseModal(false)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-center">
                 {isEl ? 'Ακύρωση' : 'Cancel'}
