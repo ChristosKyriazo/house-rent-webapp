@@ -194,7 +194,7 @@ function MyListingsInner() {
                 ))}
               </div>
               <span className="text-xs text-amber-300/80 font-medium">
-                {slotsUsed}/{slotLimit} {isEl ? 'θέσεις' : 'slots'}
+                {slotsUsed}/{slotLimit} {isEl ? 'προωθημένες' : 'promoted'}
               </span>
             </div>
           )}
@@ -411,7 +411,7 @@ function MyListingsInner() {
                             disabled={promotingKey === home.key}
                             className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-all font-semibold disabled:opacity-50"
                           >
-                            ⭐ {isEl ? 'Θέση ✓' : 'Slot ✓'}
+                            ⭐ {isEl ? 'Προωθείται ✓' : 'Promoted ✓'}
                           </button>
                         ) : slotsUsed < slotLimit ? (
                           <button
@@ -419,11 +419,11 @@ function MyListingsInner() {
                             disabled={promotingKey === home.key}
                             className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all disabled:opacity-50"
                           >
-                            ⭐ {isEl ? 'Προσθήκη σε θέση' : 'Add to slot'}
+                            ⭐ {isEl ? 'Προώθηση' : 'Promote'}
                           </button>
                         ) : home.promotedUntil && new Date(home.promotedUntil) > new Date() ? (
                           <span className="text-xs text-[var(--text-muted)]">
-                            {isEl ? 'Boost έως ' : 'Boosted until '}
+                            {isEl ? 'Προωθείται έως ' : 'Promoted until '}
                             {new Date(home.promotedUntil).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
                           </span>
                         ) : (
@@ -432,7 +432,7 @@ function MyListingsInner() {
                             disabled={promotingKey === home.key}
                             className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-amber-500/30 hover:text-amber-400 transition-all disabled:opacity-50"
                           >
-                            ⚡ {isEl ? 'Boost €4.99 / 30μ.' : 'Boost €4.99 / 30d'}
+                            ⚡ {isEl ? 'Προώθηση €4.99 / 30 μέρες' : 'Promote €4.99 / 30d'}
                           </button>
                         )}
                       </div>
@@ -449,7 +449,7 @@ function MyListingsInner() {
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        {isEl ? `Διαχείριση ενοίκων (${home.inquiryCount})` : `Manage tenants (${home.inquiryCount})`}
+                        {isEl ? `Διαχείριση αιτημάτων (${home.inquiryCount})` : `Manage inquiries (${home.inquiryCount})`}
                       </Link>
                     </div>
                   )}

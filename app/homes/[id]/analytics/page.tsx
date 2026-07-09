@@ -160,7 +160,7 @@ export default function ListingAnalyticsPage() {
                 <span className="text-xl">🔥</span>
                 <div>
                   <p className="text-sm font-semibold text-amber-300">
-                    {isEl ? 'Υψηλό ενδιαφέρον' : 'High interest signal'}
+                    {isEl ? 'Υψηλό ενδιαφέρον' : 'High interest'}
                   </p>
                   <p className="text-xs text-amber-400/70 mt-0.5">
                     {isEl
@@ -216,15 +216,12 @@ export default function ListingAnalyticsPage() {
                 <StatCard
                   label={isEl ? 'Μέσος χρόνος' : 'Avg time on page'}
                   value={formatDuration(data.avgDurationSeconds, isEl)}
-                  sub={data.avgDurationSeconds !== null
-                    ? (isEl ? `από ${data.durationCaptureRate}% επισκέψεων` : `from ${data.durationCaptureRate}% of visits`)
-                    : undefined}
                 />
                 <StatCard label={isEl ? 'Αποθηκεύσεις' : 'Saves'} value={data.saves} />
                 <StatCard
-                  label={isEl ? 'Επαναλαμβ.' : 'Repeat visitors'}
+                  label={isEl ? 'Επιστροφές' : 'Return visits'}
                   value={data.repeatVisitors}
-                  sub={isEl ? 'επισκέψεις 2+ φορές / 30μ.' : '2+ visits in 30d'}
+                  sub={isEl ? '2+ επισκέψεις σε 30 μέρες' : '2+ visits in 30 days'}
                 />
                 <StatCard
                   label={isEl ? 'Μέρες ενεργή' : 'Days active'}
@@ -238,7 +235,7 @@ export default function ListingAnalyticsPage() {
             {totalInquiries > 0 && pipeline && (
               <section>
                 <h2 className="text-xs uppercase tracking-widest text-[var(--text-muted)] mb-3 font-[var(--font-outfit)]">
-                  {isEl ? 'Αιτήματα' : 'Inquiry pipeline'}
+                  {isEl ? 'Αιτήματα' : 'Inquiries'}
                 </h2>
                 <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
                   <div className="flex items-center justify-between mb-4">

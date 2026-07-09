@@ -41,6 +41,23 @@ const STATUS_DOT: Record<string, string> = {
   green: 'bg-green-400',
 }
 
+// Status is otherwise conveyed by hue alone — unusable when colour-blind or
+// read aloud. The dot carries its own accessible name.
+const STATUS_LABEL: Record<'en' | 'el', Record<string, string>> = {
+  en: { red: 'Low interest', yellow: 'Some interest', green: 'High interest' },
+  el: { red: 'Χαμηλό ενδιαφέρον', yellow: 'Μέτριο ενδιαφέρον', green: 'Υψηλό ενδιαφέρον' },
+}
+
+function StatusDot({ status, isEl, className = 'w-1.5 h-1.5' }: { status: string; isEl: boolean; className?: string }) {
+  return (
+    <div
+      role="img"
+      aria-label={STATUS_LABEL[isEl ? 'el' : 'en'][status] ?? status}
+      className={`${className} rounded-full ${STATUS_DOT[status]} shrink-0`}
+    />
+  )
+}
+
 function fmtDur(s: number | null): string {
   if (s === null) return '—'
   if (s < 60) return `${s}s`
@@ -98,7 +115,7 @@ function SortHeader({ col, current, dir, onSort, children, className = '' }: {
       } ${className}`}
     >
       {children}
-      <span className="text-[9px] opacity-50">{active ? (dir === 'desc' ? '↓' : '↑') : '↕'}</span>
+      <span className="text-[11px] opacity-70" aria-hidden="true">{active ? (dir === 'desc' ? '↓' : '↑') : '↕'}</span>
     </button>
   )
 }
@@ -202,7 +219,7 @@ function DailyPulse({ data, period, prevViews, isEl, onBarClick, onClearDrill }:
                       <p className="text-sm font-bold text-[var(--text)] text-center">{d.views}</p>
                       <p className="text-[11px] text-[var(--text-muted)] text-center">{fmtFull(d.label)}</p>
                       {isClickable && !isSelected && (
-                        <p className="text-[10px] text-amber-400/70 text-center mt-0.5">{isEl ? 'κλικ για ανάλυση' : 'click to drill in'}</p>
+                        <p className="text-[11px] text-amber-400/90 text-center mt-0.5">{isEl ? 'κλικ για την ημέρα' : 'click to see that day'}</p>
                       )}
                     </div>
                     <div className="w-px h-1.5 bg-[var(--border-subtle)]" />
@@ -236,8 +253,10 @@ function DailyPulse({ data, period, prevViews, isEl, onBarClick, onClearDrill }:
         </div>
       </div>
       {isClickable && (
-        <p className="text-[10px] text-[var(--text-muted)]/60 mt-3">
-          {isEl ? 'Κάντε κλικ σε μια μπάρα για ανάλυση της ημέρας' : 'Click a bar to drill into that day · click outside to reset'}
+        <p className="text-[11px] text-[var(--text-muted)] mt-3">
+          {isEl
+            ? 'Κάντε κλικ σε μια μπάρα για να δείτε την ημέρα · κλικ εκτός για επιστροφή'
+            : 'Click a bar to see that day · click outside to go back'}
         </p>
       )}
     </div>
@@ -249,9 +268,9 @@ function TopAreas({ areas, isEl }: { areas: { area: string; views: number }[]; i
   if (!areas.length) return (
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
       <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-3">
-        {isEl ? 'Κορυφαίες Περιοχές' : 'Top Areas'}
+        {isEl ? 'Δημοφιλείς περιοχές στην πλατφόρμα' : 'Popular areas on Kaparro'}
       </p>
-      <p className="text-sm text-[var(--text-muted)]">{isEl ? 'Δεν υπάρχουν δεδομένα ακόμα' : 'No data yet'}</p>
+      <p className="text-sm text-[var(--text-muted)]">{isEl ? 'Καμία προβολή ακόμα σε αυτή την περίοδο' : 'No views yet this period'}</p>
     </div>
   )
   const maxV = areas[0].views
@@ -260,7 +279,7 @@ function TopAreas({ areas, isEl }: { areas: { area: string; views: number }[]; i
   return (
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
       <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-5">
-        {isEl ? 'Κορυφαίες Περιοχές — Πλατφόρμα' : 'Top Areas — Platform Wide'}
+        {isEl ? 'Δημοφιλείς περιοχές στην πλατφόρμα' : 'Popular areas on Kaparro'}
       </p>
       <div className="flex flex-col gap-4">
         {areas.map((a, i) => (
@@ -283,10 +302,10 @@ function TopAreas({ areas, isEl }: { areas: { area: string; views: number }[]; i
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-[var(--text-muted)] mt-4 leading-relaxed">
+      <p className="text-[11px] text-[var(--text-muted)] mt-4 leading-relaxed">
         {isEl
-          ? 'Συνολικές all-time προβολές αγγελιών ανά περιοχή στην πλατφόρμα'
-          : 'All-time listing views per area across the entire platform'}
+          ? 'Συνολικές προβολές αγγελιών ανά περιοχή, σε όλη την πλατφόρμα — όχι μόνο στις δικές σας'
+          : 'Total listing views per area across the whole platform — not just your listings'}
       </p>
     </div>
   )
@@ -428,14 +447,11 @@ function PromotionLift({ homes, period, isEl }: { homes: ListingRow[]; period: s
   )
 }
 
-// ─── Engagement Depth ────────────────────────────────────────────────────────
-const SCORE_COLOR = (s: number) =>
-  s >= 70 ? 'text-amber-300 bg-amber-500/20 border-amber-500/30' :
-  s >= 40 ? 'text-stone-300 bg-stone-500/15 border-stone-500/25' :
-            'text-red-400/80 bg-red-500/10 border-red-500/20'
-
-
-function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }) {
+// ─── Most Interest ───────────────────────────────────────────────────────────
+// Listings are still ranked by engagementScore, but the score itself is not
+// shown: the views/saves/inquiries it is derived from are printed on each row,
+// so a 0-100 composite only added a number that needed a legend to decode.
+function MostInterest({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }) {
   const scored = [...homes]
     .map(h => ({ ...h, score: engagementScore(h) }))
     .sort((a, b) => b.score - a.score)
@@ -447,14 +463,13 @@ function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }
     <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
       <div className="flex items-center justify-between mb-5">
         <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)]">
-          {isEl ? 'Βάθος Ενδιαφέροντος' : 'Engagement Depth'}
-        </p>
-        <p className="text-[10px] text-[var(--text-muted)]/60">
-          {isEl ? 'αποθ. 40pt · αιτ. 60pt' : 'saves 40pt · inq. 60pt'}
+          {isEl ? 'Μεγαλύτερο ενδιαφέρον' : 'Most interest'}
         </p>
       </div>
       {scored.length === 0 ? (
-        <p className="text-sm text-[var(--text-muted)] text-center py-4">{isEl ? 'Χωρίς δεδομένα' : 'No data yet'}</p>
+        <p className="text-sm text-[var(--text-muted)] text-center py-4">
+          {isEl ? 'Καμία προβολή ακόμα σε αυτή την περίοδο' : 'No views yet this period'}
+        </p>
       ) : (
         <div className="flex flex-col divide-y divide-[var(--border-subtle)]">
           {scored.map((home, idx) => {
@@ -462,24 +477,21 @@ function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }
             return (
               <div key={home.key} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-[var(--text-muted)]/50 tabular-nums w-4 shrink-0">{idx + 1}</span>
-                  <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[home.status]} shrink-0`} />
+                  <span className="text-xs text-[var(--text-muted)] tabular-nums w-4 shrink-0">{idx + 1}</span>
+                  <StatusDot status={home.status} isEl={isEl} />
                   <Link
                     href={`/homes/${home.key}/analytics`}
                     className="flex-1 text-sm font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate min-w-0"
                   >
                     {title}
                   </Link>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border shrink-0 tabular-nums ${SCORE_COLOR(home.score)}`}>
-                    {home.score}
-                  </span>
                 </div>
-                <div className="flex items-center gap-3 mt-1.5 pl-6">
-                  <span className="text-[10px] text-[var(--text-muted)]">{fmtNum(home.viewsInPeriod)} {isEl ? 'προβ.' : 'views'}</span>
-                  <span className="text-[10px] text-amber-500/40">·</span>
-                  <span className="text-[10px] text-[var(--text-muted)]">{home.savesTotal} {isEl ? 'αποθ.' : 'saves'}</span>
-                  <span className="text-[10px] text-amber-500/40">·</span>
-                  <span className="text-[10px] text-[var(--text-muted)]">{home.inquiriesTotal} {isEl ? 'αιτ.' : 'inq.'}</span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 pl-6">
+                  <span className="text-[11px] text-[var(--text-muted)]">{fmtNum(home.viewsInPeriod)} {isEl ? 'προβολές' : 'views'}</span>
+                  <span className="text-[11px] text-amber-500/40" aria-hidden="true">·</span>
+                  <span className="text-[11px] text-[var(--text-muted)]">{home.savesTotal} {isEl ? 'αποθηκεύσεις' : 'saves'}</span>
+                  <span className="text-[11px] text-amber-500/40" aria-hidden="true">·</span>
+                  <span className="text-[11px] text-[var(--text-muted)]">{home.inquiriesTotal} {isEl ? 'αιτήματα' : 'inquiries'}</span>
                 </div>
               </div>
             )
@@ -491,17 +503,16 @@ function EngagementDepth({ homes, isEl }: { homes: ListingRow[]; isEl: boolean }
 }
 
 // ─── Plus: basic view + blurred Pro teaser ────────────────────────────────────
-function PlusView({ data, period: _period, isEl }: {
-  data: PortfolioData; period: 'day' | 'week' | 'month'; isEl: boolean
+function PlusView({ data, isEl }: {
+  data: PortfolioData; isEl: boolean
 }) {
-  const isEl_ = isEl
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: isEl_ ? 'Αποθηκεύσεις' : 'Saves', value: data.funnel.saves },
-          { label: isEl_ ? 'Νέα αιτήματα' : 'New inquiries', value: data.totals.inquiries },
-          { label: isEl_ ? 'Νέα ραντεβού' : 'New schedules', value: data.totals.schedules },
+          { label: isEl ? 'Αποθηκεύσεις' : 'Saves', value: data.funnel.saves },
+          { label: isEl ? 'Νέα αιτήματα' : 'New inquiries', value: data.totals.inquiries },
+          { label: isEl ? 'Νέα ραντεβού' : 'New schedules', value: data.totals.schedules },
         ].map(s => (
           <div key={s.label} className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] p-5">
             <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-[var(--font-outfit)] mb-2">{s.label}</p>
@@ -512,20 +523,20 @@ function PlusView({ data, period: _period, isEl }: {
 
       <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
         <div className="grid grid-cols-[1fr_4rem_4rem_4rem] gap-3 px-5 py-3 border-b border-[var(--border-subtle)]">
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)]">{isEl_ ? 'Αγγελία' : 'Listing'}</span>
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl_ ? 'Αποθ.' : 'Saves'}</span>
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl_ ? 'Αιτ.' : 'Inq.'}</span>
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl_ ? 'Ραντ.' : 'Sched.'}</span>
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)]">{isEl ? 'Αγγελία' : 'Listing'}</span>
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl ? 'Αποθ.' : 'Saves'}</span>
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl ? 'Αιτ.' : 'Inq.'}</span>
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)] text-right">{isEl ? 'Ραντ.' : 'Sched.'}</span>
         </div>
         {data.homes.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-[var(--text-muted)] text-center">{isEl_ ? 'Δεν υπάρχουν αγγελίες.' : 'No listings yet.'}</p>
+          <p className="px-5 py-8 text-sm text-[var(--text-muted)] text-center">{isEl ? 'Δεν υπάρχουν αγγελίες.' : 'No listings yet.'}</p>
         ) : (
           data.homes.map(home => {
-            const title = isEl_ ? (home.titleGreek ?? home.title) : home.title
+            const title = isEl ? (home.titleGreek ?? home.title) : home.title
             return (
               <div key={home.key} className="grid grid-cols-[1fr_4rem_4rem_4rem] gap-3 px-5 py-4 border-b border-[var(--border-subtle)] last:border-0 items-center hover:bg-[var(--ink-soft)]/40 transition-colors">
                 <div className="min-w-0 flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${STATUS_DOT[home.status]} shrink-0`} />
+                  <StatusDot status={home.status} isEl={isEl} className="w-2 h-2" />
                   <Link href={`/homes/${home.key}/analytics`} className="text-sm font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate">
                     {title}
                   </Link>
@@ -555,15 +566,15 @@ function PlusView({ data, period: _period, isEl }: {
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[var(--canvas)]/70 backdrop-blur-[1px] p-8">
           <p className="text-lg font-bold text-[var(--text)] font-[var(--font-fraunces)] text-center">
-            {isEl_ ? 'Περισσότερα με το Pro' : 'More with Pro'}
+            {isEl ? 'Περισσότερα με το Pro' : 'More with Pro'}
           </p>
           <p className="text-sm text-[var(--text-muted)] text-center max-w-xs">
-            {isEl_
+            {isEl
               ? 'Ζωντανές προβολές, τάσεις, σύγκριση προωθήσεων και βαθμολογία ενδιαφέροντος.'
               : 'Live view tracking, trends, promotion comparison, and engagement scores.'}
           </p>
           <Link href="/upgrade" className="px-5 py-2.5 bg-amber-500 text-black rounded-xl font-semibold hover:bg-amber-400 transition-colors text-sm">
-            {isEl_ ? 'Αναβάθμιση σε Pro →' : 'Upgrade to Pro →'}
+            {isEl ? 'Αναβάθμιση σε Pro →' : 'Upgrade to Pro →'}
           </Link>
         </div>
       </div>
@@ -645,7 +656,7 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl, onBarClick,
           <PromotionLift homes={data.homes} period={period} isEl={isEl} />
           {data.topAreas?.length > 0 && <TopAreas areas={data.topAreas} isEl={isEl} />}
         </div>
-        <EngagementDepth homes={data.homes} isEl={isEl} />
+        <MostInterest homes={data.homes} isEl={isEl} />
       </div>
 
       {/* Listings table */}
@@ -654,11 +665,11 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl, onBarClick,
         <div className="grid grid-cols-[1.5rem_1rem_1fr_4.5rem_5rem_4rem_4rem_4.5rem_4rem] gap-3 px-5 py-3 border-b border-[var(--border-subtle)]">
           <span /><span />
           <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-[var(--font-outfit)]">{isEl ? 'Αγγελία' : 'Listing'}</span>
-          <SortHeader col="views" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Επισκ.' : 'Views'}</SortHeader>
+          <SortHeader col="views" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Προβ.' : 'Views'}</SortHeader>
           <SortHeader col="avgTime" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Χρόνος' : 'Time'}</SortHeader>
           <SortHeader col="saves" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Αποθ.' : 'Saves'}</SortHeader>
           <SortHeader col="inquiries" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Αιτ.' : 'Inq.'}</SortHeader>
-          <SortHeader col="rate" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Ποσ.' : 'Rate'}</SortHeader>
+          <SortHeader col="rate" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Αιτ. %' : 'Inq. %'}</SortHeader>
           <SortHeader col="days" current={sortCol} dir={sortDir} onSort={handleSort} className="justify-end">{isEl ? 'Ημέρες' : 'Days'}</SortHeader>
         </div>
         {sorted.length === 0 ? (
@@ -670,7 +681,7 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl, onBarClick,
               key={home.key}
               className="grid grid-cols-[1.5rem_1rem_1fr_4.5rem_5rem_4rem_4rem_4.5rem_4rem] gap-3 px-5 py-4 border-b border-[var(--border-subtle)] last:border-0 items-center hover:bg-[var(--ink-soft)]/40 transition-colors"
             >
-              <div className="flex justify-center"><div className={`w-2 h-2 rounded-full ${STATUS_DOT[home.status]}`} /></div>
+              <div className="flex justify-center"><StatusDot status={home.status} isEl={isEl} className="w-2 h-2" /></div>
               <div className="flex justify-center">{home.isPromoted && <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />}</div>
               <div className="min-w-0">
                 <Link href={`/homes/${home.key}/analytics`} className="text-sm font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate block">{title}</Link>
@@ -875,7 +886,7 @@ export default function AnalyticsPage() {
         {isPlus && !data && (
           <p className="text-sm text-[var(--text-muted)] text-center py-12">{isEl ? 'Φόρτωση...' : 'Loading…'}</p>
         )}
-        {isPlus && data && <PlusView data={data} period={period} isEl={isEl} />}
+        {isPlus && data && <PlusView data={data} isEl={isEl} />}
 
         {isPro && !data && (
           <p className="text-sm text-[var(--text-muted)] text-center py-12">{isEl ? 'Φόρτωση...' : 'Loading…'}</p>

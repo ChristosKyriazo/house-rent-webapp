@@ -302,7 +302,7 @@ export default function HomeInquiriesPage() {
                       )}
                       {isApproved && inquiry.finalized && (
                         <span className="bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-full text-sm font-semibold">
-                          Deal closed
+                          {getTranslation(language, 'dealClosed')}
                         </span>
                       )}
                       {!isApproved && (
