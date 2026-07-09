@@ -100,6 +100,9 @@ function UpgradePageInner() {
       : null
   const returnedTier = (searchParams.get('tier') ?? null) as Tier | null
 
+  const [upgradeConfirmed, setUpgradeConfirmed] = useState(false)
+  const [upgradeTimedOut, setUpgradeTimedOut] = useState(false)
+
   useEffect(() => {
     fetch('/api/profile')
       .then(r => r.json())
@@ -107,7 +110,9 @@ function UpgradePageInner() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Re-fetch tier after returning from Stripe so the UI reflects the webhook update
+  // Re-fetch tier after returning from Stripe so the UI reflects the webhook update.
+  // Until the webhook lands the user is still on their old tier, so success is
+  // confirmed against the persisted tier — never against the success=true param.
   useEffect(() => {
     if (returnStatus !== 'success') return
     const poll = setInterval(() => {
@@ -116,11 +121,17 @@ function UpgradePageInner() {
         .then(d => {
           const tier = (d.user?.subscriptionTier ?? 'free') as Tier
           setCurrentTier(tier)
-          if (returnedTier && tier === returnedTier) clearInterval(poll)
+          if (returnedTier && tier === returnedTier) {
+            setUpgradeConfirmed(true)
+            clearInterval(poll)
+          }
         })
         .catch(() => {})
     }, 2000)
-    const timeout = setTimeout(() => clearInterval(poll), 30000)
+    const timeout = setTimeout(() => {
+      clearInterval(poll)
+      setUpgradeTimedOut(true)
+    }, 30000)
     return () => { clearInterval(poll); clearTimeout(timeout) }
   }, [returnStatus, returnedTier])
 
@@ -236,13 +247,35 @@ function UpgradePageInner() {
           </p>
         </div>
 
-        {returnStatus === 'success' && (
+        {returnStatus === 'success' && upgradeConfirmed && (
           <div className="max-w-lg mx-auto mb-8 flex items-center gap-3 px-5 py-4 rounded-2xl bg-green-500/10 border border-green-500/30">
             <span className="text-green-400 text-lg shrink-0">✓</span>
             <p className="text-sm text-green-300 font-[var(--font-outfit)]">
               {isEl
                 ? `Η αναβάθμισή σας σε ${returnedTier ?? 'Plus'} ολοκληρώθηκε!`
                 : `Your upgrade to ${returnedTier ?? 'Plus'} is complete!`}
+            </p>
+          </div>
+        )}
+
+        {returnStatus === 'success' && !upgradeConfirmed && !upgradeTimedOut && (
+          <div className="max-w-lg mx-auto mb-8 flex items-center gap-3 px-5 py-4 rounded-2xl bg-sky-500/10 border border-sky-500/30">
+            <span className="text-sky-400 text-lg shrink-0 animate-pulse">●</span>
+            <p className="text-sm text-sky-300 font-[var(--font-outfit)]">
+              {isEl
+                ? 'Η πληρωμή ελήφθη. Επιβεβαιώνουμε την αναβάθμισή σας…'
+                : 'Payment received. Confirming your upgrade…'}
+            </p>
+          </div>
+        )}
+
+        {returnStatus === 'success' && !upgradeConfirmed && upgradeTimedOut && (
+          <div className="max-w-lg mx-auto mb-8 flex items-center gap-3 px-5 py-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+            <span className="text-amber-400 text-lg shrink-0">!</span>
+            <p className="text-sm text-amber-300 font-[var(--font-outfit)]">
+              {isEl
+                ? 'Η πληρωμή σας ελήφθη, αλλά η αναβάθμιση δεν έχει ενεργοποιηθεί ακόμη. Ανανεώστε τη σελίδα σε λίγο ή επικοινωνήστε μαζί μας αν επιμείνει.'
+                : "Your payment went through, but the upgrade hasn't activated yet. Refresh in a moment, or contact us if it persists."}
             </p>
           </div>
         )}

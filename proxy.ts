@@ -9,6 +9,7 @@ import type { NextRequest } from 'next/server'
 const isPublicApi = createRouteMatcher([
   '/api/healthz',
   '/api/readyz',
+  '/api/webhooks/stripe', // protected internally by Stripe signature verification
   '/api/bookings/reminders', // protected internally by x-cron-secret
   '/api/areas/search',
   '/api/cities/search',
@@ -54,8 +55,10 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
 
 export const config = {
   matcher: [
+    // Catch-all: matches every non-asset path, including all of /api. Any
+    // exclusion written into a later entry is defeated by this one — matcher
+    // entries are OR'd. Route-level exemptions belong in isPublicApi above.
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Exclude Stripe webhook — signature verification requires the raw unmodified body
-    '/(api(?!/webhooks/stripe)|trpc)(.*)',
+    '/(api|trpc)(.*)',
   ],
 }
