@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
 import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
@@ -188,6 +188,59 @@ export async function POST(request: NextRequest) {
     // Capture filter extraction data for logging
     filterExtractionPrompt = (extractedFiltersResult as Record<string, unknown>).filterExtractionPrompt as string | null || null
     filterExtractionResponse = (extractedFiltersResult as Record<string, unknown>).filterExtractionResponse as string | null || null
+
+    // Canonicalize locations before anything else reads them. The model echoes the
+    // user's own spelling ("Nea Smirni", "νεα σμυρνη", "Halandri") but every filter
+    // below compares against the DB by exact, accent-folded string.
+    const allAreas = await prisma.area.findMany({
+      select: {
+        name: true,
+        nameGreek: true,
+        city: true,
+        cityGreek: true,
+        country: true,
+        countryGreek: true,
+        district: true,
+      },
+    })
+    const locationResolver = createLocationResolver(allAreas)
+
+    if (typeof extractedFilters.city === 'string') {
+      const resolvedCity = locationResolver.resolveCity(extractedFilters.city)
+      if (resolvedCity) {
+        extractedFilters.city = resolvedCity
+      } else if (!extractedFilters.area) {
+        // Not a known city — the model often puts an area name here ("Nea Smirni")
+        const resolvedAsArea = locationResolver.resolveArea(extractedFilters.city)
+        if (resolvedAsArea) {
+          extractedFilters.area = resolvedAsArea
+          extractedFilters.city = null
+        }
+      }
+    }
+
+    // The city (resolved just above) disambiguates areas whose name two cities share
+    const cityHint = typeof extractedFilters.city === 'string' ? extractedFilters.city : null
+
+    if (typeof extractedFilters.area === 'string') {
+      extractedFilters.area = locationResolver.resolveArea(extractedFilters.area, cityHint) ?? extractedFilters.area
+    }
+
+    if (typeof extractedFilters.country === 'string') {
+      extractedFilters.country = locationResolver.resolveCountry(extractedFilters.country) ?? extractedFilters.country
+    }
+
+    if (Array.isArray(extractedFilters.preferredAreas)) {
+      extractedFilters.preferredAreas = extractedFilters.preferredAreas.map(
+        (name: string) => locationResolver.resolveArea(name, cityHint) ?? name
+      )
+    }
+
+    if (Array.isArray(extractedFilters.districts)) {
+      extractedFilters.districts = extractedFilters.districts.map(
+        (name: string) => locationResolver.resolveDistrict(name) ?? name
+      )
+    }
 
     // Separate filters into hard filters, soft filters, and distances for logging
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -378,19 +431,6 @@ export async function POST(request: NextRequest) {
     homesCountBeforeFilter = homes.length
 
     // Step 4: Apply city/area/country filters with Greek/English matching
-    // Always fetch areas for matching (needed for Greek/English translation and district filtering)
-    const allAreas = await prisma.area.findMany({
-      select: {
-        name: true,
-        nameGreek: true,
-        city: true,
-        cityGreek: true,
-        country: true,
-        countryGreek: true,
-        district: true,
-      },
-    })
-
     // Create bidirectional maps for matching (English <-> Greek)
     const { cityMap, countryMap, areaNameMap } = createLocationMaps(allAreas)
 
@@ -940,10 +980,9 @@ export async function POST(request: NextRequest) {
       const preferredAreas = extractedFilters.preferredAreas
       
       if (preferredAreas && Array.isArray(preferredAreas) && preferredAreas.length > 0) {
-        // Get area name map for Greek/English matching
-        const allAreas = await prisma.area.findMany()
+        // Get area name map for Greek/English matching (reuses the areas fetched above)
         const areaNameMap = new Map<string, Set<string>>()
-        
+
         allAreas.forEach(area => {
           if (area.name) {
             const nameLower = area.name.toLowerCase()

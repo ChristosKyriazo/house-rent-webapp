@@ -10,7 +10,7 @@
  */
 export const FILTER_EXTRACTION_SYSTEM_PROMPT = `Extract filters from real estate search query. Return JSON only.
 
-Structure: {"filters": {"city": "Athens" or null, "country": "Greece" or null, "area": "Nea Smirni" or null, "districts": ["Central Athens", "Northern Suburbs"] or null, "listingtype": "Rent" or "Buy" or null, "minPrice": 400 or null, "maxPrice": 600 or null, "minBedrooms": 2 or null, "maxBedrooms": 3 or null, "minSize": 50 or null, "maxSize": 100 or null, "parking": true or false or null, "parkingSoftPreference": true or false or null, "heatingCategory": "central" or "autonomous" or null, "heatingAgent": "natural gas" or "oil" or "electricity" or null, "minFloor": 1 or null, "maxFloor": 5 or null, "minYearBuilt": 2000 or null, "maxYearBuilt": 2020 or null, "minYearRenovated": 2010 or null, "maxYearRenovated": 2023 or null, "minBathrooms": 1 or null, "maxBathrooms": 3 or null, "Metro": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Bus": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "School": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Hospital": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Park": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "University": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Safety": "Essential" or "Strong" or "Not important" or "Not mentioned", "preferredAreas": ["Filothei", "Psychiko"] or null, "vibePreference": "waterfront" or "urban" or "central" or "family-friendly" or "quiet" or "upscale" or "working-class" or "rural" or "suburban" or null, "hasLocationPreference": true or false}}
+Structure: {"filters": {"city": "Athens" or null, "country": "Greece" or null, "area": "Nea Smyrni" or null, "districts": ["Central Athens", "Northern Suburbs"] or null, "listingtype": "Rent" or "Buy" or null, "minPrice": 400 or null, "maxPrice": 600 or null, "minBedrooms": 2 or null, "maxBedrooms": 3 or null, "minSize": 50 or null, "maxSize": 100 or null, "parking": true or false or null, "parkingSoftPreference": true or false or null, "heatingCategory": "central" or "autonomous" or null, "heatingAgent": "natural gas" or "oil" or "electricity" or null, "minFloor": 1 or null, "maxFloor": 5 or null, "minYearBuilt": 2000 or null, "maxYearBuilt": 2020 or null, "minYearRenovated": 2010 or null, "maxYearRenovated": 2023 or null, "minBathrooms": 1 or null, "maxBathrooms": 3 or null, "Metro": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Bus": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "School": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Hospital": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Park": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "University": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Safety": "Essential" or "Strong" or "Not important" or "Not mentioned", "preferredAreas": ["Filothei", "Psychiko"] or null, "vibePreference": "waterfront" or "urban" or "central" or "family-friendly" or "quiet" or "upscale" or "working-class" or "rural" or "suburban" or null, "hasLocationPreference": true or false}}
 
 RULES:
 - HARD FILTERS (filter DB): city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (unless soft preference), floor, yearBuilt, yearRenovated
@@ -21,7 +21,9 @@ RULES:
 - Soft preference phrases: "not a deal breaker", "not that important", "nice to have", "would be good but not essential" → set parkingSoftPreference: true
 - Location: Convert Greek to English ("Αθήνα" → "Athens"). Hard filter area: "in X" → area: "X". Preferred areas: "like X, Y" → area: null, preferredAreas: ["X", "Y"]
 - Districts: If user mentions a district (e.g., "Central Athens", "Northern Suburbs", "Southern Suburbs"), extract as districts: ["District Name"]. If multiple districts mentioned, extract all: districts: ["District1", "District2"]. Districts are hard filters and work like areas. If user mentions a district but no city, still extract the district (it will be filtered by available districts in DB per city if city is provided, otherwise all districts will be searched). Match district names flexibly (handle misspellings, Greek/English variations, partial names).
-- MISSING CHARACTERS & TYPOS: Be flexible with misspellings and alternative spellings. Common examples:
+- MISSING CHARACTERS & TYPOS: Be flexible with misspellings, Greeklish, and alternative spellings. Always output the standard English spelling of a place, never the user's spelling. Common examples:
+  * "nea smirni", "nea smyrnh", "νεα σμυρνη" → "Nea Smyrni"
+  * "halandri", "χαλανδρι" → "Chalandri"
   * "athns", "athens", "αθνα", "αθήνα" → "Athens"
   * "θεσ/νικη", "θεσσαλονικη", "θεσσαλονίκη", "saloniak", "thessaloniki", "thessalonica" → "Thessaloniki"
   * "praking", "parking", "παρκινγκ" → parking: true
@@ -163,5 +165,9 @@ CRITICAL RULES
   answered in the conversation history. Never ask rent-vs-buy.
 • After the 3rd "ask" turn, always set action: "search" regardless of
   completeness; in refinement turns, always "search" (never "ask").
-• Same-turn extraction rules (price semantics, Greek/English, spelling tolerance) apply as in single-turn mode.`
+• Same-turn extraction rules (price semantics, Greek/English, spelling tolerance) apply as in single-turn mode.
+• Place names: accept any spelling the user gives (Greeklish, typos, Greek script)
+  but always write the standard English spelling in BOTH filters and
+  assistantMessage — "nea smirni" → "Nea Smyrni", "halandri" → "Chalandri".
+  Never echo the user's misspelling back to them.`
 

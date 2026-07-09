@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { CONVERSATIONAL_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-prompts'
 import { generateEmbedding } from '@/lib/embeddings'
+import { createLocationResolver } from '@/lib/search/fuzzy-location'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -144,10 +145,23 @@ export async function processAIChatTurn(
     mergedFilters.listingType = listingMode === 'buy' ? 'sale' : 'rent'
   }
 
+  // The model echoes the user's spelling ("Nea Smirni"). Pin the accumulated
+  // filters to the canonical area names so later turns and the assistant's own
+  // prose stay consistent with the DB.
+  const areas = await prisma.area.findMany({
+    select: { name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
+  })
+  const rewrites = canonicalizeFilterLocations(mergedFilters, createLocationResolver(areas))
+
+  const assistantMessage = applyLocationRewrites(aiResponse.assistantMessage, rewrites)
+  const followUpQuestion = aiResponse.followUpQuestion
+    ? applyLocationRewrites(aiResponse.followUpQuestion, rewrites)
+    : undefined
+
   const updatedHistory: ChatMessage[] = [
     ...fullHistory,
     { role: 'user', content: userMessage },
-    { role: 'assistant', content: aiResponse.assistantMessage },
+    { role: 'assistant', content: assistantMessage },
   ]
 
   let savedKey: string
@@ -186,13 +200,94 @@ export async function processAIChatTurn(
     conversationKey: savedKey,
     action: aiResponse.action,
     filters: mergedFilters,
-    assistantMessage: aiResponse.assistantMessage,
-    followUpQuestion: aiResponse.followUpQuestion,
+    assistantMessage,
+    followUpQuestion,
   }
 }
 
 // Exported for unit tests — the null-vs-CLEAR semantics caused a real bug
 // (accumulated answers were wiped every turn) and must not regress.
+const GREEK_SCRIPT = /[Ͱ-Ͽἀ-῿]/
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** A location name the model spelled differently from the DB's canonical form. */
+interface Rewrite {
+  raw: string
+  canonical: string
+}
+
+/**
+ * Rewrite the model's spelling of a place to the canonical one in prose it wrote
+ * ("Great choice with Nea Smirni!" → "…with Nea Smyrni!").
+ *
+ * Only Latin-script spellings are rewritten. If the user is conversing in Greek
+ * the model answers in Greek, and substituting the English canonical mid-sentence
+ * would mangle it — a wrong-looking echo beats a broken one.
+ */
+export function applyLocationRewrites(text: string, rewrites: Rewrite[]): string {
+  let result = text
+  for (const { raw, canonical } of rewrites) {
+    if (GREEK_SCRIPT.test(raw)) continue
+    result = result.replace(new RegExp(`\\b${escapeRegExp(raw)}\\b`, 'gi'), canonical)
+  }
+  return result
+}
+
+type LocationResolver = ReturnType<typeof createLocationResolver>
+
+/**
+ * Map the model's free-text city/area/country onto canonical `areas` rows, in
+ * place. Returns the substitutions made so the assistant's prose can follow suit.
+ */
+export function canonicalizeFilterLocations(
+  filters: ConversationalFilters,
+  resolver: LocationResolver
+): Rewrite[] {
+  const rewrites: Rewrite[] = []
+
+  const track = (raw: string, canonical: string | null): string => {
+    if (!canonical || canonical === raw) return raw
+    rewrites.push({ raw, canonical })
+    return canonical
+  }
+
+  if (typeof filters.city === 'string') {
+    const resolvedCity = resolver.resolveCity(filters.city)
+    if (resolvedCity) {
+      filters.city = track(filters.city, resolvedCity)
+    } else if (!filters.area) {
+      // Not a known city — the model often puts an area name here ("Nea Smirni")
+      const resolvedAsArea = resolver.resolveArea(filters.city)
+      if (resolvedAsArea) {
+        filters.area = track(filters.city, resolvedAsArea)
+        filters.city = null
+      }
+    }
+  }
+
+  // The city (resolved just above) disambiguates areas whose name two cities share
+  const cityHint = typeof filters.city === 'string' ? filters.city : null
+
+  if (typeof filters.area === 'string') {
+    filters.area = track(filters.area, resolver.resolveArea(filters.area, cityHint))
+  }
+
+  if (typeof filters.country === 'string') {
+    filters.country = track(filters.country, resolver.resolveCountry(filters.country))
+  }
+
+  if (Array.isArray(filters.preferredAreas)) {
+    filters.preferredAreas = filters.preferredAreas.map((name) =>
+      track(name, resolver.resolveArea(name, cityHint))
+    )
+  }
+
+  return rewrites
+}
+
 export function mergeFilters(
   accumulated: ConversationalFilters,
   incoming: ConversationalFilters
