@@ -17,6 +17,8 @@ interface User {
   occupation: string | null
   role: string
   subscriptionTier?: 'free' | 'plus' | 'pro'
+  brokerCategory?: string
+  parentBrokerId?: number | null
   verified?: boolean
   createdAt: string
 }
@@ -269,6 +271,30 @@ function ProfilePageInner() {
 
                     <div className="flex flex-col items-center gap-3">
                       <h1 className="text-3xl font-bold text-[var(--text)]">{displayName}</h1>
+
+                      {/* Broker team membership chip */}
+                      {isOwnProfile && isBroker && user.brokerCategory === 'child' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-3 py-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)]">
+                            🏢 {language === 'el' ? 'Μέλος ομάδας μεσιτών' : 'Part of a broker team'}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(language === 'el' ? 'Αποχώρηση από την ομάδα; Οι αγγελίες σας θα μεταφερθούν στον επικεφαλής.' : 'Leave the team? Your listings will transfer to your team lead.')) return
+                              await fetch('/api/team/leave', { method: 'POST' })
+                              window.location.reload()
+                            }}
+                            className="text-xs px-3 py-1.5 rounded-full border border-[var(--status-error)]/30 text-[var(--status-error)] hover:bg-[var(--status-error-bg)] transition-colors"
+                          >
+                            {language === 'el' ? 'Αποχώρηση' : 'Leave team'}
+                          </button>
+                        </div>
+                      )}
+                      {isOwnProfile && isBroker && user.brokerCategory === 'parent' && (
+                        <Link href="/homes/agency" className="text-xs px-3 py-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
+                          🏢 {language === 'el' ? 'Επικεφαλής ομάδας' : 'Team lead'} →
+                        </Link>
+                      )}
 
                       {/* Tier badge + CTA — owners/brokers only */}
                       {isOwnerOrBroker && (

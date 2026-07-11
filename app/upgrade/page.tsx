@@ -73,6 +73,7 @@ function UpgradePageInner() {
   const fromParam = searchParams.get('from')
 
   const [currentTier, setCurrentTier] = useState<Tier>('free')
+  const [brokerCategory, setBrokerCategory] = useState<string>('standalone')
   const [loading, setLoading] = useState(true)
   const [upgrading, setUpgrading] = useState<Tier | null>(null)
   const [justChanged, setJustChanged] = useState<Tier | null>(null)
@@ -106,7 +107,10 @@ function UpgradePageInner() {
   useEffect(() => {
     fetch('/api/profile')
       .then(r => r.json())
-      .then(d => { setCurrentTier((d.user?.subscriptionTier ?? 'free') as Tier) })
+      .then(d => {
+        setCurrentTier((d.user?.subscriptionTier ?? 'free') as Tier)
+        setBrokerCategory(d.user?.brokerCategory ?? 'standalone')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -217,6 +221,28 @@ function UpgradePageInner() {
       return
     }
     selectTier(tierId)
+  }
+
+  // Default (child) brokers cannot change their own plan — it's managed by their Main broker.
+  if (!loading && brokerCategory === 'child') {
+    return (
+      <div className="min-h-screen bg-[var(--canvas)] pt-20 pb-16 px-4">
+        <div className="max-w-lg mx-auto text-center">
+          <div className="mb-8">
+            <Link href="/profile" className="text-sm text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+              ← {isEl ? 'Προφίλ' : 'Profile'}
+            </Link>
+          </div>
+          <div className="text-5xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-[var(--text)] mb-2">{isEl ? 'Το πλάνο σας το διαχειρίζεται η ομάδα σας' : 'Your plan is managed by your team'}</h1>
+          <p className="text-[var(--text-muted)]">
+            {isEl
+              ? 'Ως μέλος ομάδας μεσιτών, η συνδρομή σας καλύπτεται από τον επικεφαλής της ομάδας σας. Για αλλαγές, επικοινωνήστε μαζί του.'
+              : 'As part of a broker team, your subscription is covered by your team lead. Contact them to make changes.'}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

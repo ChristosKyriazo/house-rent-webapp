@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { unauthorized, badRequest } from '@/lib/api-utils'
 import { getSlotLimit, getListingLimit, TIER_RANK } from '@/lib/subscription'
 import { getStripe, STRIPE_PRICES } from '@/lib/stripe'
+import { getChildCount } from '@/lib/broker-hierarchy'
 
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
 type Tier = (typeof VALID_TIERS)[number]
@@ -57,6 +58,21 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ checkoutUrl: session.url })
+  }
+
+  // ── Block downgrade for a Main broker who still has team members ──────────────
+  if (user.brokerCategory === 'parent') {
+    const childCount = await getChildCount(user.id)
+    if (childCount > 0) {
+      return NextResponse.json(
+        {
+          error: 'team_members_present',
+          childCount,
+          message: `You have ${childCount} broker${childCount === 1 ? '' : 's'} on your team. Remove them before downgrading.`,
+        },
+        { status: 409 }
+      )
+    }
   }
 
   // ── Downgrade: check if listing selection is required ────────────────────────

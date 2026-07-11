@@ -90,8 +90,9 @@ export async function GET(request: NextRequest) {
     const homeMap = new Map(homes.map(h => [h.key, h.title]))
 
     // Get user information for owner notifications (inquiry type) and finalize notifications
+    const teamTypes = new Set(['boost_request', 'boost_approved', 'boost_declined', 'team_invite', 'team_invite_accepted', 'team_removed', 'team_left'])
     const userIds = notifications
-      .filter(n => (n.type === 'inquiry' || n.type === 'finalize' || n.type === 'rejected') && n.userId)
+      .filter(n => (n.type === 'inquiry' || n.type === 'finalize' || n.type === 'rejected' || teamTypes.has(n.type)) && n.userId)
       .map(n => n.userId!)
       .filter((id, index, self) => self.indexOf(id) === index) // Unique IDs
 
@@ -289,6 +290,24 @@ export async function GET(request: NextRequest) {
         }
       } else if (notif.type === 'new_listing_match') {
         message = (t as Record<string, string>).notificationNewListingMatch?.replace('{propertyTitle}', propertyTitle) ?? `New listing: ${propertyTitle}`
+      } else if (notif.type === 'boost_request') {
+        const actor = (notif.userId ? userMap.get(notif.userId)?.name : null) || t.aUser
+        message = language === 'el' ? `${actor} ζήτησε προώθηση για «${propertyTitle}»` : `${actor} requested a boost for “${propertyTitle}”`
+      } else if (notif.type === 'boost_approved') {
+        message = language === 'el' ? `Η προώθηση για «${propertyTitle}» εγκρίθηκε ✓` : `Your boost for “${propertyTitle}” was approved ✓`
+      } else if (notif.type === 'boost_declined') {
+        message = language === 'el' ? `Η προώθηση για «${propertyTitle}» απορρίφθηκε` : `Your boost for “${propertyTitle}” was declined`
+      } else if (notif.type === 'team_invite') {
+        const actor = (notif.userId ? userMap.get(notif.userId)?.name : null) || t.aUser
+        message = language === 'el' ? `${actor} σας προσκάλεσε στην ομάδα του` : `${actor} invited you to their broker team`
+      } else if (notif.type === 'team_invite_accepted') {
+        const actor = (notif.userId ? userMap.get(notif.userId)?.name : null) || t.aUser
+        message = language === 'el' ? `${actor} εντάχθηκε στην ομάδα σας` : `${actor} joined your team`
+      } else if (notif.type === 'team_removed') {
+        message = language === 'el' ? 'Αφαιρεθήκατε από την ομάδα σας' : 'You were removed from your team'
+      } else if (notif.type === 'team_left') {
+        const actor = (notif.userId ? userMap.get(notif.userId)?.name : null) || t.aUser
+        message = language === 'el' ? `${actor} αποχώρησε από την ομάδα σας` : `${actor} left your team`
       }
 
       return {

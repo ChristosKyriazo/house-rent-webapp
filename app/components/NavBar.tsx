@@ -16,10 +16,11 @@ export default async function NavBar() {
 
     const userRole = (user.role || 'user').toLowerCase()
     const subscriptionTier = (user.subscriptionTier ?? 'free') as string
+    const brokerCategory = (user.brokerCategory ?? 'standalone') as string
     return (
       <>
-        <RoleInitializer userRole={userRole} />
-        <HamburgerMenu userRole={userRole} subscriptionTier={subscriptionTier} />
+        <RoleInitializer userRole={userRole} brokerCategory={brokerCategory} />
+        <HamburgerMenu userRole={userRole} subscriptionTier={subscriptionTier} brokerCategory={brokerCategory} />
       </>
     )
   } catch (error) {

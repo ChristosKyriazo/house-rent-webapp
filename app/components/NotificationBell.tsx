@@ -22,6 +22,13 @@ interface Notification {
     | 'rate'
     | 'rejected'
     | 'new_listing_match'
+    | 'boost_request'
+    | 'boost_approved'
+    | 'boost_declined'
+    | 'team_invite'
+    | 'team_invite_accepted'
+    | 'team_removed'
+    | 'team_left'
   message: string
   homeKey: string
   inquiryId: number | null
@@ -294,6 +301,24 @@ export default function NotificationBell() {
 
     if (notification.type === 'new_listing_match') {
       router.push(notification.homeKey ? `/homes/${notification.homeKey}` : '/homes/saved-searches')
+      return
+    }
+
+    // Broker team notifications
+    if (notification.type === 'boost_request') {
+      router.push('/homes/agency/requests')
+      return
+    }
+    if (notification.type === 'boost_approved' || notification.type === 'boost_declined' || notification.type === 'team_removed') {
+      router.push('/homes/agency/requests')
+      return
+    }
+    if (notification.type === 'team_invite') {
+      router.push('/profile')
+      return
+    }
+    if (notification.type === 'team_invite_accepted' || notification.type === 'team_left') {
+      router.push('/homes/agency')
       return
     }
   }

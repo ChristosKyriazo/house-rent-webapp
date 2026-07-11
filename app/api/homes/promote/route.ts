@@ -67,7 +67,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, slotPromoted: true, slotPromotedUntil: slotPromotedUntil.toISOString(), daysForTier })
     }
 
-    // mode === 'boost' — pay-per-boost (requires payment integration)
+    // mode === 'boost' — Default (child) brokers cannot pay directly; they request from their Main broker.
+    if (user.brokerCategory === 'child' && user.parentBrokerId != null) {
+      return NextResponse.json(
+        { error: 'boost_requires_team_approval', message: 'Boosts for your listings are paid by your team. Send a request from your listing instead.' },
+        { status: 403 }
+      )
+    }
+
+    // Standalone / Main brokers: pay-per-boost (requires payment integration)
     return NextResponse.json(
       { error: 'payment_required', message: 'Listing boosts require payment. Payment integration coming soon.' },
       { status: 503 }

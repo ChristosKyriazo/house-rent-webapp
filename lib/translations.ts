@@ -21,6 +21,8 @@ export const translations = {
     // Navigation
     menu: 'Μενού',
     profile: 'Προφίλ',
+    myTeam: 'Η Ομάδα μου',
+    myRequests: 'Τα Αιτήματά μου',
     myListings: 'Οι Αγγελίες μου',
     manageListings: 'Διαχειριστείτε τις αγγελίες σας',
     noListings: 'Δεν έχετε δημοσιεύσει αγγελίες ακόμα',
@@ -574,6 +576,8 @@ export const translations = {
     // Navigation
     menu: 'Menu',
     profile: 'Profile',
+    myTeam: 'My Team',
+    myRequests: 'My Requests',
     myListings: 'My Listings',
     manageListings: 'Manage your listings',
     noListings: 'You have not published any listings yet',

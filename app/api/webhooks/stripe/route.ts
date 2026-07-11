@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
 import { getListingLimit } from '@/lib/subscription'
+import { applyBoost } from '@/lib/broker-hierarchy'
 import type Stripe from 'stripe'
 
 // Raw body required for Stripe signature verification — do not parse as JSON
@@ -32,6 +33,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
     const userIdInt = parseInt(userId, 10)
+
+    // ── Broker team boost (approved request or proactive) ─────────────────────
+    const boostRequestKey = session.metadata?.boostRequestKey
+    if (boostRequestKey) {
+      await prisma.$transaction(async (tx) => {
+        const seen = await tx.transaction.findUnique({ where: { stripeEventId: event.id } })
+        if (seen) return
+
+        const boostRequest = await tx.boostRequest.findUnique({
+          where: { key: boostRequestKey },
+          select: { id: true, homeId: true, requesterId: true, days: true, status: true, home: { select: { key: true } } },
+        })
+        if (!boostRequest || boostRequest.status === 'paid') return
+
+        await tx.transaction.create({
+          data: {
+            userId: userIdInt,
+            stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+            stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
+            stripeEventId: event.id,
+            amount: session.amount_total ?? 0,
+            currency: session.currency ?? 'eur',
+            status: session.payment_status === 'paid' ? 'succeeded' : session.payment_status ?? 'unknown',
+          },
+        })
+
+        await applyBoost(boostRequest.homeId, boostRequest.days, tx)
+        await tx.boostRequest.update({
+          where: { id: boostRequest.id },
+          data: {
+            status: 'paid',
+            decidedAt: new Date(),
+            stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+          },
+        })
+
+        // Notify the Default (child) broker whose listing was boosted.
+        await tx.notification.create({
+          data: { recipientId: boostRequest.requesterId, role: 'broker', type: 'boost_approved', homeKey: boostRequest.home.key, userId: userIdInt },
+        })
+      })
+
+      return NextResponse.json({ received: true })
+    }
 
     // ── One-off AI credit pack ────────────────────────────────────────────────
     const aiPackSize = session.metadata?.aiPackSize
@@ -126,6 +171,26 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+  }
+
+  // ── Subscription cancelled externally: drop the user to free and cascade to their team ──
+  if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object as Stripe.Subscription
+    const txn = await prisma.transaction.findFirst({
+      where: { stripeSubscriptionId: subscription.id },
+      orderBy: { createdAt: 'desc' },
+      select: { userId: true },
+    })
+    if (txn?.userId) {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: txn.userId }, data: { subscriptionTier: 'free' } })
+        // A Main broker losing their subscription cascades free tier onto all their Default (child) brokers.
+        await tx.user.updateMany({
+          where: { parentBrokerId: txn.userId, brokerCategory: 'child' },
+          data: { subscriptionTier: 'free' },
+        })
+      })
+    }
   }
 
   return NextResponse.json({ received: true })

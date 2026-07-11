@@ -18,10 +18,19 @@ model User {
   clerkUserId     String?   @unique
   title           String?
   occupation      String?
-  role            String    @default("user") // "owner", "user", or "both"
+  role            String    @default("user") // "owner", "user", "both", or "broker"
   subscriptionTier String   @default("free") // "free" | "plus" | "pro"
   viberAlertsActive Boolean @default(false)  // paid Viber/SMS push alerts (renter one-time purchase)
   verified        Boolean   @default(false)  // verified owner/broker badge
+  // --- Broker hierarchy (Main / Default brokers) ---
+  brokerCategory  String    @default("standalone") // "standalone" | "parent" (Main) | "child" (Default under a Main). Only meaningful when role = "broker".
+  parentBrokerId  Int?      // set when this broker is a "child" under a Main broker
+  parentBroker    User?     @relation("BrokerHierarchy", fields: [parentBrokerId], references: [id], onDelete: SetNull)
+  childBrokers    User[]    @relation("BrokerHierarchy")
+  sentInvitations     TeamInvitation[] @relation("InvitationSender")
+  receivedInvitations TeamInvitation[] @relation("InvitationRecipient")
+  boostRequestsMade     BoostRequest[] @relation("BoostRequester")
+  boostRequestsApproved BoostRequest[] @relation("BoostApprover")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]
@@ -42,7 +51,58 @@ model User {
   aiSearchMonthlyResetAt DateTime?
   aiSearchPackCount      Int       @default(0)
 
+  @@index([parentBrokerId])
+  @@index([brokerCategory])
   @@map("users")
+}
+
+// Broker team invitations: a Main (parent) broker invites another broker to join as a "child" (Default) under them.
+model TeamInvitation {
+  id             Int      @id @default(autoincrement())
+  key            String   @unique @default(cuid())
+  inviterUserId  Int
+  inviteeEmail   String
+  inviteeUserId  Int?     // resolved once the invitee has an account
+  token          String   @unique // crypto.randomBytes(32).toString('hex') — used in the /join-team link
+  message        String?  // optional note from the inviter
+  status         String   @default("pending") // "pending" | "accepted" | "declined" | "expired" | "revoked"
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  decidedAt      DateTime?
+  inviter        User     @relation("InvitationSender",    fields: [inviterUserId], references: [id], onDelete: Cascade)
+  invitee        User?    @relation("InvitationRecipient", fields: [inviteeUserId],  references: [id], onDelete: SetNull)
+
+  @@index([inviterUserId, status])
+  @@index([inviteeEmail])
+  @@map("team_invitations")
+}
+
+// One-off paid boost that a Default (child) broker requests from their Main (parent) broker, who approves & pays or rejects.
+// Also used to record a Main broker's proactive boost of a child's listing (status starts "approved"/"paid", no request step).
+model BoostRequest {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique @default(cuid())
+  homeId                Int
+  requesterId           Int      // the child broker whose listing this is
+  approverId            Int      // the Main (parent) broker who pays
+  amountCents           Int
+  days                  Int      // boost duration in days (e.g. 30)
+  note                  String?  // child's note to the Main broker
+  status                String   @default("pending") // "pending" | "approved" | "rejected" | "expired" | "paid"
+  decisionNote          String?  // Main broker's reason on reject
+  proactive             Boolean  @default(false) // true when the Main broker initiated (push), not the child (pull)
+  stripePaymentIntentId String?
+  createdAt             DateTime @default(now())
+  decidedAt            DateTime?
+  home                  Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  requester             User     @relation("BoostRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  approver              User     @relation("BoostApprover",  fields: [approverId],  references: [id], onDelete: Cascade)
+
+  @@index([approverId, status])
+  @@index([requesterId, status])
+  @@index([homeId])
+  @@map("boost_requests")
 }
 
 model Home {
@@ -98,6 +158,7 @@ model Home {
   listingViews      ListingView[]
   ratings           Rating[]
   finalizations     Finalization[]
+  boostRequests     BoostRequest[]
 
   @@index([finalized])
   @@index([finalized, city, listingType])

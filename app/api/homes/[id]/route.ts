@@ -30,6 +30,8 @@ export async function GET(
             name: true,
             role: true,
             createdAt: true,
+            brokerCategory: true,
+            parentBroker: { select: { name: true } },
           },
         },
       },
@@ -90,6 +92,8 @@ export async function GET(
     }
 
     const isBroker = home.owner.role === 'broker'
+    // Public agency attribution: a Default (child) broker's listing shows their agency (Main broker's name).
+    const agencyName = home.owner.brokerCategory === 'child' ? (home.owner.parentBroker?.name ?? null) : null
     const homeRatings = await getHomeRatingScores(home.id)
 
     return NextResponse.json({
@@ -98,6 +102,7 @@ export async function GET(
         owner: {
           ...home.owner,
           isBroker,
+          agencyName,
         },
         ratings: homeRatings,
       }

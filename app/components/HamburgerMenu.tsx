@@ -12,11 +12,13 @@ import AppLogo from './AppLogo'
 interface HamburgerMenuProps {
   userRole: string // 'owner', 'user', 'both', 'broker', or 'guest'
   subscriptionTier?: string
+  brokerCategory?: string // 'standalone' | 'parent' (Main) | 'child' (Default under a Main)
 }
 
-export default function HamburgerMenu({ userRole: initialRole, subscriptionTier = 'free' }: HamburgerMenuProps) {
+export default function HamburgerMenu({ userRole: initialRole, subscriptionTier = 'free', brokerCategory: initialBrokerCategory = 'standalone' }: HamburgerMenuProps) {
   const { language } = useLanguage()
-  const { selectedRole, actualRole, setSelectedRole } = useRole()
+  const { selectedRole, actualRole, setSelectedRole, brokerCategory: ctxBrokerCategory } = useRole()
+  const brokerCategory = ctxBrokerCategory || initialBrokerCategory
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -142,6 +144,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
   const allMenuItems = [
     { href: '/profile', labelKey: 'profile', icon: '👤', roles: ['owner', 'user', 'both', 'broker'] },
     { href: '/homes/analytics', labelKey: 'analytics', icon: '📊', roles: ['owner', 'both', 'broker'] },
+    { href: '/homes/agency', labelKey: 'myTeam', icon: '🏢', roles: ['broker'], requiresParent: true },
+    { href: '/homes/agency/requests', labelKey: 'myRequests', icon: '🧾', roles: ['broker'], requiresChild: true },
     { href: '/homes/my-listings', labelKey: 'myListings', icon: '📋', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/new', labelKey: 'publishProperty', icon: '🏠', roles: ['owner', 'both', 'broker'] },
     { href: '/homes/search', labelKey: 'searchProperties', icon: '🔍', roles: ['user', 'both'] },
@@ -157,6 +161,9 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
   const menuItems = allMenuItems
     .filter(item => item.roles.includes(normalizedRole))
     .filter(item => item.href !== '/homes/analytics' || subscriptionTier !== 'free')
+    // Main-broker-only surfaces (My Team) and child-only surfaces (My Requests)
+    .filter(item => !('requiresParent' in item && item.requiresParent) || brokerCategory === 'parent')
+    .filter(item => !('requiresChild' in item && item.requiresChild) || brokerCategory === 'child')
     .map(item => ({
       ...item,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -342,8 +349,8 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
             })}
           </nav>
           
-          {/* Upgrade link — free → Plus, Plus → Pro; hidden for Pro */}
-          {(subscriptionTier === 'free' || subscriptionTier === 'plus') && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
+          {/* Upgrade link — free → Plus, Plus → Pro; hidden for Pro and for Default (child) brokers whose plan is managed by their Main broker */}
+          {(subscriptionTier === 'free' || subscriptionTier === 'plus') && brokerCategory !== 'child' && (normalizedRole === 'owner' || normalizedRole === 'broker' || normalizedRole === 'both') && (
             <div className="border-t border-[var(--border-subtle)] pt-4 mb-2">
               <Link
                 href="/upgrade"
@@ -370,6 +377,33 @@ export default function HamburgerMenu({ userRole: initialRole, subscriptionTier 
                   </p>
                 </div>
                 <span className="text-amber-400 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
+              </Link>
+            </div>
+          )}
+
+          {/* Pro standalone brokers: build a team CTA (Free→Plus→Pro→Build team) */}
+          {subscriptionTier === 'pro' && normalizedRole === 'broker' && brokerCategory === 'standalone' && (
+            <div className="border-t border-[var(--border-subtle)] pt-4 mb-2">
+              <Link
+                href="/homes/agency"
+                onClick={() => closeMenu()}
+                className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(59,130,246,0.22) 0%, rgba(37,99,235,0.14) 100%)',
+                  border: '1px solid rgba(59,130,246,0.4)',
+                  boxShadow: '0 0 20px rgba(59,130,246,0.12), inset 0 1px 0 rgba(255,255,255,0.05)',
+                }}
+              >
+                <span className="text-xl">🏢</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-blue-300 leading-none mb-0.5">
+                    {language === 'el' ? 'Χτίστε την ομάδα σας' : 'Build your team'}
+                  </p>
+                  <p className="text-xs text-blue-400/70">
+                    {language === 'el' ? 'Προσκαλέστε μεσίτες στην ομάδα σας' : 'Invite brokers to your agency'}
+                  </p>
+                </div>
+                <span className="text-blue-400 text-sm group-hover:translate-x-0.5 transition-transform">→</span>
               </Link>
             </div>
           )}

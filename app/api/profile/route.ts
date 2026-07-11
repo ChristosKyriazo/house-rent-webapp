@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
           role: true,
           verified: true,
           subscriptionTier: true,
+          brokerCategory: true,
+          parentBrokerId: true,
           createdAt: true,
         },
       })

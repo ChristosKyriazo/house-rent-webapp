@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import { getCityName, getCountryName, getAreaName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import TranslatedDescription from '@/app/components/TranslatedDescription'
@@ -43,9 +44,15 @@ function MyListingsInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { language } = useLanguage()
+  const { brokerCategory } = useRole()
   const isEl = language === 'el'
+  const agentId = searchParams.get('agent')
 
   const [allHomes, setAllHomes] = useState<Home[]>([])
+  const [readOnly, setReadOnly] = useState(false)
+  const [agentName, setAgentName] = useState<string | null>(null)
+  const [boostReqByHome, setBoostReqByHome] = useState<Record<string, string>>({})
+  const [requestingKey, setRequestingKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [areas, setAreas] = useState<Array<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
@@ -94,6 +101,45 @@ function MyListingsInner() {
     }
   }
 
+  // Default (child) broker: request a boost from the Main broker instead of paying directly.
+  async function requestBoost(homeKey: string) {
+    setRequestingKey(homeKey)
+    setPromoteError(null)
+    try {
+      const res = await fetch('/api/team/boost-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ homeKey }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setPromoteError(json.message || (isEl ? 'Το αίτημα απέτυχε.' : 'Request failed.'))
+        return
+      }
+      setBoostReqByHome(prev => ({ ...prev, [homeKey]: 'pending' }))
+    } finally {
+      setRequestingKey(null)
+    }
+  }
+
+  // Main broker viewing a team member's listings: proactively boost and pay via Stripe.
+  async function proactiveBoost(homeKey: string) {
+    setRequestingKey(homeKey)
+    setPromoteError(null)
+    try {
+      const res = await fetch('/api/team/boost-requests/proactive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ homeKey }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json.checkoutUrl) { window.location.href = json.checkoutUrl; return }
+      setPromoteError(json.message || (isEl ? 'Η προώθηση απέτυχε.' : 'Boost failed.'))
+    } finally {
+      setRequestingKey(null)
+    }
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -109,11 +155,27 @@ function MyListingsInner() {
         }
         setSubscriptionTier(profileData.user.subscriptionTier ?? 'free')
 
-        const homesResponse = await fetch('/api/homes/my-listings')
+        const homesResponse = await fetch(`/api/homes/my-listings${agentId ? `?agent=${agentId}` : ''}`)
         if (homesResponse.ok) {
           const homesData = await homesResponse.json()
           setAllHomes(homesData.homes || [])
           setSlotsUsed(homesData.slotsUsed ?? 0)
+          setReadOnly(!!homesData.readOnly)
+          setAgentName(homesData.agentName ?? null)
+        }
+
+        // Default (child) brokers: load existing boost-request states so the button reflects them.
+        if (profileData.user.brokerCategory === 'child' && !agentId) {
+          const brRes = await fetch('/api/team/boost-requests')
+          if (brRes.ok) {
+            const { requests } = await brRes.json()
+            const map: Record<string, string> = {}
+            for (const r of requests) {
+              // keep the most recent per home (list is newest-first)
+              if (!(r.home.key in map)) map[r.home.key] = r.status
+            }
+            setBoostReqByHome(map)
+          }
         }
       } catch {
         router.push('/login')
@@ -122,7 +184,7 @@ function MyListingsInner() {
       }
     }
     fetchData()
-  }, [router])
+  }, [router, agentId])
 
   useEffect(() => {
     fetch('/api/areas')
@@ -177,9 +239,20 @@ function MyListingsInner() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
+        {readOnly && (
+          <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-blue-500/30 bg-blue-500/10">
+            <span className="text-sm text-blue-300">
+              👁 {isEl ? 'Προβολή ομάδας — μόνο ανάγνωση' : 'Team view — read only'}
+              {agentName ? ` · ${agentName}` : ''}
+            </span>
+            <Link href="/homes/agency" className="text-xs text-blue-300 underline shrink-0">{isEl ? 'Πίσω στην ομάδα' : 'Back to team'}</Link>
+          </div>
+        )}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-1">{getTranslation(language, 'myListings')}</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-1">
+              {readOnly && agentName ? agentName : getTranslation(language, 'myListings')}
+            </h1>
             <p className="text-[var(--text-muted)]">{getTranslation(language, 'manageListings')}</p>
           </div>
 
@@ -399,7 +472,22 @@ function MyListingsInner() {
                             day: 'numeric',
                           })}
                         </p>
-                        {subscriptionTier === 'free' ? (
+                        {readOnly ? (
+                          home.promotedUntil && new Date(home.promotedUntil) > new Date() ? (
+                            <span className="text-xs text-emerald-300">
+                              ⭐ {isEl ? 'Προωθείται έως ' : 'Boosted until '}
+                              {new Date(home.promotedUntil).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => proactiveBoost(home.key)}
+                              disabled={requestingKey === home.key}
+                              className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all disabled:opacity-50"
+                            >
+                              ⚡ {isEl ? 'Προώθηση €4.99 / 30 μέρες' : 'Boost €4.99 / 30d'}
+                            </button>
+                          )
+                        ) : subscriptionTier === 'free' ? (
                           <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="promote" mode="replace">
                             <button className="text-xs px-3 py-1.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold">
                               ⭐ {isEl ? 'Προώθηση' : 'Promote'}
@@ -426,6 +514,20 @@ function MyListingsInner() {
                             {isEl ? 'Προωθείται έως ' : 'Promoted until '}
                             {new Date(home.promotedUntil).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
                           </span>
+                        ) : brokerCategory === 'child' ? (
+                          boostReqByHome[home.key] === 'pending' ? (
+                            <span className="text-xs text-amber-300">⏳ {isEl ? 'Ζητήθηκε προώθηση' : 'Boost requested'}</span>
+                          ) : (
+                            <button
+                              onClick={() => requestBoost(home.key)}
+                              disabled={requestingKey === home.key}
+                              className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-amber-500/30 hover:text-amber-400 transition-all disabled:opacity-50"
+                            >
+                              {boostReqByHome[home.key] === 'rejected'
+                                ? <>✕ {isEl ? 'Απορρίφθηκε · Ξανά' : 'Declined · Request again'}</>
+                                : <>⚡ {isEl ? 'Αίτημα προώθησης' : 'Request boost from team'}</>}
+                            </button>
+                          )
                         ) : (
                           <button
                             onClick={() => handlePromote(home.key, 'boost')}

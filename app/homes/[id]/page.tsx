@@ -50,6 +50,7 @@ interface Home {
     role: string
     createdAt: string
     isBroker?: boolean
+    agencyName?: string | null
   }
   ratings?: {
     houseScore: number | null
@@ -945,6 +946,9 @@ function HomeDetailPage() {
                   >
                     <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
                       {home.owner.isBroker ? 'House Owner' : (home.owner.name || 'Owner')}
+                      {home.owner.agencyName && (
+                        <span className="block text-[10px] text-[var(--text-muted)]/70 mt-0.5 truncate">🏢 {home.owner.agencyName}</span>
+                      )}
                     </h2>
                     <div className="flex flex-col items-center justify-center flex-1">
                       <span className="text-2xl font-bold text-[var(--text)]">

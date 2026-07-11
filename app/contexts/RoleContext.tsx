@@ -7,8 +7,10 @@ type SelectedRole = 'owner' | 'user'
 interface RoleContextType {
   selectedRole: SelectedRole | null
   setSelectedRole: (role: SelectedRole) => void
-  actualRole: string | null // 'owner', 'user', or 'both'
+  actualRole: string | null // 'owner', 'user', 'both', or 'broker'
   setActualRole: (role: string) => void
+  brokerCategory: string | null // 'standalone' | 'parent' (Main) | 'child' (Default under a Main)
+  setBrokerCategory: (category: string) => void
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined)
@@ -16,6 +18,7 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined)
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [selectedRole, setSelectedRoleState] = useState<SelectedRole | null>(null)
   const [actualRole, setActualRoleState] = useState<string | null>(null)
+  const [brokerCategory, setBrokerCategoryState] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -47,6 +50,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const setBrokerCategory = (category: string) => {
+    setBrokerCategoryState(category.toLowerCase())
+  }
+
   // Initialize selected role when actualRole becomes "both"
   useEffect(() => {
     if (mounted && actualRole === 'both' && !selectedRole) {
@@ -62,7 +69,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [mounted, actualRole, selectedRole])
 
   return (
-    <RoleContext.Provider value={{ selectedRole, setSelectedRole, actualRole, setActualRole }}>
+    <RoleContext.Provider value={{ selectedRole, setSelectedRole, actualRole, setActualRole, brokerCategory, setBrokerCategory }}>
       {children}
     </RoleContext.Provider>
   )

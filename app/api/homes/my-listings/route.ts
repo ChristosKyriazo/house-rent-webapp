@@ -19,8 +19,32 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // A Main broker can view a Default (child) broker's listings read-only via ?agent=<id>.
+    let targetUserId = user.id
+    let readOnly = false
+    let agentName: string | null = null
+    const agentParam = request.nextUrl.searchParams.get('agent')
+    if (agentParam) {
+      const agentId = parseInt(agentParam, 10)
+      if (Number.isInteger(agentId) && agentId !== user.id) {
+        if (user.brokerCategory !== 'parent') {
+          return NextResponse.json({ error: 'Not your team' }, { status: 403 })
+        }
+        const child = await prisma.user.findUnique({
+          where: { id: agentId },
+          select: { parentBrokerId: true, name: true },
+        })
+        if (!child || child.parentBrokerId !== user.id) {
+          return NextResponse.json({ error: 'Not your team member' }, { status: 403 })
+        }
+        targetUserId = agentId
+        readOnly = true
+        agentName = child.name
+      }
+    }
+
     const homes = await prisma.home.findMany({
-      where: { ownerId: user.id },
+      where: { ownerId: targetUserId },
       orderBy: [
         // Hidden listings float to the bottom so they're out of the way unless the owner switches tabs
         { overlimitHiddenAt: 'asc' },
@@ -61,7 +85,7 @@ export async function GET(request: NextRequest) {
     const slotsUsed = formattedHomes.filter(h => h.slotPromoted && !h.overlimitHiddenAt).length
     const hiddenCount = formattedHomes.filter(h => h.overlimitHiddenAt !== null).length
 
-    return NextResponse.json({ homes: formattedHomes, slotsUsed, hiddenCount }, { status: 200 })
+    return NextResponse.json({ homes: formattedHomes, slotsUsed, hiddenCount, readOnly, agentName }, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'Get my listings error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
