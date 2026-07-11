@@ -25,7 +25,11 @@ const isPublicApi = createRouteMatcher([
 
 // Read-only browse endpoints, public for GET/HEAD only. Named sub-paths that
 // also match ':id' (e.g. /api/homes/saved) keep their own internal 401s.
-const isPublicBrowse = createRouteMatcher(['/api/homes', '/api/homes/:id'])
+const isPublicBrowse = createRouteMatcher([
+  '/api/homes',
+  '/api/homes/:id',
+  '/api/team/invite/:token', // team invite details — keyed by a secret token, viewable before sign-in
+])
 
 const isApi = createRouteMatcher(['/api(.*)'])
 
