@@ -1,28 +1,78 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { SignUp } from '@clerk/nextjs'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateRole } from '@/lib/translations'
 import { GraphicAuth, GraphicOnboarding } from '@/app/components/visual/PageGraphics'
 import AppLogo from '@/app/components/AppLogo'
+import type { InvitationDetails } from '@/types/team'
 
-export default function SignupPage() {
+function SignupInner() {
   const { language } = useLanguage()
-  const [showRoleSelection, setShowRoleSelection] = useState(true)
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('invite')
+  const [showRoleSelection, setShowRoleSelection] = useState(!inviteToken)
+
+  // Invite flow: signup is locked to a specific email + the broker role.
+  const [inviteEmail, setInviteEmail] = useState<string | null>(null)
+  const [inviteAgency, setInviteAgency] = useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(!!inviteToken)
+  const [inviteInvalid, setInviteInvalid] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('signupRole')
     }
-    setShowRoleSelection(true)
-  }, [])
+    if (inviteToken) {
+      fetch(`/api/team/invite/${inviteToken}`)
+        .then((r) => r.json())
+        .then((d: InvitationDetails) => {
+          if (!d.valid || !d.inviteeEmail) { setInviteInvalid(true); return }
+          setInviteEmail(d.inviteeEmail)
+          setInviteAgency(d.agencyName || d.inviterName)
+          // Force the broker role — the invitee has no role choice.
+          if (typeof window !== 'undefined') localStorage.setItem('signupRole', 'broker')
+          setShowRoleSelection(false)
+        })
+        .catch(() => setInviteInvalid(true))
+        .finally(() => setInviteLoading(false))
+    } else {
+      setShowRoleSelection(true)
+    }
+  }, [inviteToken])
 
   const handleRoleSelect = (role: string) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('signupRole', role)
     }
     setShowRoleSelection(false)
+  }
+
+  // Invite flow: resolving the invited email / validity.
+  if (inviteToken && inviteLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="h-40 w-full max-w-md rounded-3xl bg-[var(--surface)] animate-pulse" />
+      </div>
+    )
+  }
+  if (inviteToken && inviteInvalid) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
+        <AppLogo className="fixed left-4 top-4 z-[10000]" />
+        <div className="text-5xl mb-4">🤝</div>
+        <h1 className="text-xl font-bold text-[var(--text)] mb-2">{language === 'el' ? 'Μη έγκυρη πρόσκληση' : 'Invitation not valid'}</h1>
+        <p className="text-[var(--text-muted)] mb-6 max-w-sm">
+          {language === 'el'
+            ? 'Αυτός ο σύνδεσμος πρόσκλησης δεν είναι πλέον έγκυρος. Ζητήστε νέα πρόσκληση.'
+            : 'This invitation link is no longer valid. Ask for a new invite.'}
+        </p>
+        <Link href="/" className="px-6 py-3 rounded-2xl border border-[var(--border-subtle)] text-[var(--text)]">{language === 'el' ? 'Αρχική' : 'Home'}</Link>
+      </div>
+    )
   }
 
   if (showRoleSelection) {
@@ -138,8 +188,35 @@ export default function SignupPage() {
         </div>
       </div>
       <div className="animate-fade-up w-full max-w-md">
-        <SignUp routing="hash" signInUrl="/login" fallbackRedirectUrl="/profile/set-role" forceRedirectUrl="/profile/set-role" />
+        {inviteToken && inviteEmail && (
+          <div className="mb-4 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-center">
+            <p className="text-sm font-semibold text-blue-300">
+              🏢 {language === 'el' ? 'Εγγραφή ως μεσίτης' : 'Signing up as a broker'}
+              {inviteAgency ? ` · ${inviteAgency}` : ''}
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {language === 'el' ? 'Κλειδωμένο στο email:' : 'Locked to email:'}{' '}
+              <span className="font-medium text-[var(--text)]">{inviteEmail}</span>
+            </p>
+          </div>
+        )}
+        <SignUp
+          routing="hash"
+          signInUrl={inviteToken ? `/login?redirect_url=${encodeURIComponent(`/join-team?token=${inviteToken}`)}` : '/login'}
+          fallbackRedirectUrl={inviteToken ? `/join-team?token=${inviteToken}` : '/profile/set-role'}
+          forceRedirectUrl={inviteToken ? `/join-team?token=${inviteToken}` : '/profile/set-role'}
+          initialValues={inviteEmail ? { emailAddress: inviteEmail } : undefined}
+          appearance={inviteEmail ? { elements: { formFieldInput__emailAddress: { pointerEvents: 'none', opacity: 0.6 } } } : undefined}
+        />
       </div>
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <SignupInner />
+    </Suspense>
   )
 }

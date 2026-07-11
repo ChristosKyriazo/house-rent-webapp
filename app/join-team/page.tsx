@@ -91,12 +91,20 @@ function JoinTeamInner() {
             {error && <p className="text-sm text-[var(--status-error)] mb-4">{error}</p>}
 
             {!isSignedIn ? (
-              <Link
-                href={`/login?redirect_url=${encodeURIComponent(`/join-team?token=${token}`)}`}
-                className="inline-block w-full px-6 py-3 rounded-2xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold"
-              >
-                {isEl ? 'Σύνδεση για συνέχεια' : 'Sign in to continue'}
-              </Link>
+              <div className="space-y-3">
+                <Link
+                  href={`/signup?invite=${token}`}
+                  className="inline-block w-full px-6 py-3 rounded-2xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold"
+                >
+                  {isEl ? 'Δημιουργία λογαριασμού μεσίτη' : 'Create your broker account'}
+                </Link>
+                <Link
+                  href={`/login?redirect_url=${encodeURIComponent(`/join-team?token=${token}`)}`}
+                  className="block text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                >
+                  {isEl ? 'Έχετε ήδη λογαριασμό; Σύνδεση' : 'Already have an account? Sign in'}
+                </Link>
+              </div>
             ) : (
               <div className="flex gap-3">
                 <button
