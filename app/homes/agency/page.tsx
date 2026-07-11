@@ -271,13 +271,23 @@ export default function AgencyPage() {
                   className="w-full rounded-xl bg-[var(--surface)] border border-[var(--border-subtle)] px-3 py-2.5 text-sm text-[var(--text)]"
                 />
                 {inviteError && <p className="text-sm text-[var(--status-error)]">{inviteError}</p>}
-                <button
-                  onClick={sendInvite}
-                  disabled={inviteBusy || !inviteEmail.trim()}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold disabled:opacity-50"
-                >
-                  {inviteBusy ? (isEl ? 'Αποστολή…' : 'Sending…') : (isEl ? 'Αποστολή πρόσκλησης →' : 'Send invite →')}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInviteOpen(false)}
+                    disabled={inviteBusy}
+                    className="px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] text-sm font-medium disabled:opacity-50"
+                  >
+                    {isEl ? 'Ακύρωση' : 'Cancel'}
+                  </button>
+                  <button
+                    onClick={sendInvite}
+                    disabled={inviteBusy || !inviteEmail.trim()}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold disabled:opacity-50"
+                  >
+                    {inviteBusy ? (isEl ? 'Αποστολή…' : 'Sending…') : (isEl ? 'Αποστολή πρόσκλησης →' : 'Send invite →')}
+                  </button>
+                </div>
               </div>
             )}
           </div>
