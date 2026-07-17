@@ -51,6 +51,7 @@ function JoinTeamInner() {
 
   const invalid = !token || !details?.valid
   const agency = details?.agencyName || details?.inviterName || (isEl ? 'μια ομάδα' : 'a team')
+  const tierLabel = { free: 'Free', plus: 'Plus', pro: 'Pro' }[details?.tier ?? 'pro']
 
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center px-4 py-12">
@@ -77,7 +78,9 @@ function JoinTeamInner() {
             </p>
 
             <ul className="text-left text-sm text-[var(--text-muted)] space-y-2 mb-5">
-              <li>✓ {isEl ? 'Αποκτάτε Pro χαρακτηριστικά, πληρωμένα από την ομάδα' : 'You get Pro features, paid by the team'}</li>
+              <li>✓ {isEl
+                ? `Αποκτάτε το πλάνο ${tierLabel}, πληρωμένο από την ομάδα`
+                : `You get the ${tierLabel} plan, paid by the team`}</li>
               <li>✓ {isEl ? 'Ο επικεφαλής βλέπει αγγελίες, ημερολόγιο & αξιολογήσεις σας' : 'The team lead sees your listings, calendar & ratings'}</li>
               <li>✓ {isEl ? 'Οι προωθήσεις χρειάζονται την έγκρισή του' : 'Boosts & paid promotions need their approval'}</li>
               <li className="text-amber-400">⚠ {isEl ? 'Το τρέχον πληρωμένο πλάνο σας θα ακυρωθεί' : 'Your current paid plan will be cancelled'}</li>

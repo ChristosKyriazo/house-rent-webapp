@@ -5,6 +5,7 @@ import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/li
 import { requestLogger } from '@/lib/logger'
 import { getStripe } from '@/lib/stripe'
 import { attachChildBroker, hasTeamCapacity } from '@/lib/broker-hierarchy'
+import { syncOwnerSeats } from '@/lib/team-billing'
 
 // POST: the invitee accepts and joins the Main broker's team as a Default (child) broker.
 export async function POST(
@@ -41,7 +42,8 @@ export async function POST(
       return NextResponse.json({ error: 'team_full', message: 'This team is now full.' }, { status: 409 })
     }
 
-    const parentTier = invitation.inviter.subscriptionTier ?? 'pro'
+    // The plan the Main broker assigned to this invite (not simply the parent's own tier).
+    const assignedTier = invitation.tier ?? 'pro'
 
     // Cancel the invitee's own active Stripe subscription — the Main broker now pays.
     const activeTransaction = await prisma.transaction.findFirst({
@@ -58,12 +60,15 @@ export async function POST(
     }
 
     await prisma.$transaction(async (tx) => {
-      await attachChildBroker(user.id, invitation.inviterUserId, parentTier, tx)
+      await attachChildBroker(user.id, invitation.inviterUserId, assignedTier, tx)
       await tx.teamInvitation.update({
         where: { id: invitation.id },
         data: { status: 'accepted', inviteeUserId: user.id, decidedAt: new Date() },
       })
     })
+
+    // Add the new member's seat to the Main broker's per-seat subscription (best-effort).
+    await syncOwnerSeats(invitation.inviterUserId)
 
     // Notify the Main broker.
     try {

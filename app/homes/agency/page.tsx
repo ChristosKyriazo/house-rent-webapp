@@ -21,6 +21,21 @@ const AGENT_COLORS = [
 ]
 const colorFor = (slot: number) => AGENT_COLORS[slot % AGENT_COLORS.length]
 
+type Tier = 'free' | 'plus' | 'pro'
+const TIER_ORDER: Tier[] = ['free', 'plus', 'pro']
+const TIER_RANK: Record<Tier, number> = { free: 0, plus: 1, pro: 2 }
+const TIER_LABEL: Record<Tier, string> = { free: 'Free', plus: 'Plus', pro: 'Pro' }
+const TIER_BADGE: Record<Tier, string> = {
+  free: 'bg-[var(--surface)] border-[var(--border-subtle)] text-[var(--text-muted)]',
+  plus: 'bg-sky-500/15 border-sky-500/40 text-sky-300',
+  pro: 'bg-amber-500/15 border-amber-500/40 text-amber-300',
+}
+const tierHint = (tier: Tier, isEl: boolean): string => {
+  if (tier === 'free') return isEl ? '1 αγγελία · χωρίς χρέωση' : '1 listing · no charge'
+  if (tier === 'plus') return isEl ? '10 αγγελίες · χρεώνεται στη συνδρομή σας' : '10 listings · billed to your subscription'
+  return isEl ? 'Απεριόριστες αγγελίες · χρεώνεται στη συνδρομή σας' : 'Unlimited listings · billed to your subscription'
+}
+
 export default function AgencyPage() {
   const router = useRouter()
   const { language } = useLanguage()
@@ -32,7 +47,9 @@ export default function AgencyPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
+  const [inviteTier, setInviteTier] = useState<Tier>('pro')
   const [inviteBusy, setInviteBusy] = useState(false)
+  const [tierBusyId, setTierBusyId] = useState<number | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -58,7 +75,7 @@ export default function AgencyPage() {
       const res = await fetch('/api/team/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail.trim(), message: inviteMessage.trim() || undefined }),
+        body: JSON.stringify({ email: inviteEmail.trim(), message: inviteMessage.trim() || undefined, tier: inviteTier }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -85,6 +102,27 @@ export default function AgencyPage() {
     if (!confirm(isEl ? 'Αφαίρεση μέλους; Οι αγγελίες του θα μεταφερθούν σε εσάς.' : "Remove this broker? Their listings will transfer to you.")) return
     await fetch(`/api/team/members/${id}`, { method: 'DELETE' })
     await load()
+  }
+
+  async function changeMemberTier(id: number, current: Tier, next: Tier) {
+    if (next === current) return
+    const isDowngrade = TIER_RANK[next] < TIER_RANK[current]
+    if (isDowngrade && !confirm(
+      isEl
+        ? `Αλλαγή πλάνου σε ${TIER_LABEL[next]}; Αγγελίες πάνω από το νέο όριο θα αποκρυφτούν.`
+        : `Change plan to ${TIER_LABEL[next]}? Any listings over the new limit will be hidden.`
+    )) return
+    setTierBusyId(id)
+    try {
+      await fetch(`/api/team/members/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: next }),
+      })
+      await load()
+    } finally {
+      setTierBusyId(null)
+    }
   }
 
   if (loading) {
@@ -170,6 +208,9 @@ export default function AgencyPage() {
                       <p className="font-semibold text-[var(--text)] truncate">
                         {m.name || m.email}
                         {m.isLead && <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">({isEl ? 'εσείς' : 'you'})</span>}
+                        <span className={`ml-2 align-middle text-[10px] font-semibold px-2 py-0.5 rounded-full border ${TIER_BADGE[m.tier]}`}>
+                          {TIER_LABEL[m.tier]}
+                        </span>
                       </p>
                       <p className="text-xs text-[var(--text-muted)]">
                         {m.listingCount} {isEl ? 'αγγελίες' : 'listings'} · {m.avgRating != null ? `${m.avgRating}★ (${m.ratingCount})` : (isEl ? 'χωρίς αξιολ.' : 'no ratings')}
@@ -181,6 +222,19 @@ export default function AgencyPage() {
                       <Link href="/homes/agency/requests" className="text-xs px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold">
                         ● {m.pendingBoostRequests} {isEl ? 'αιτήματα' : 'requests'}
                       </Link>
+                    )}
+                    {!m.isLead && (
+                      <select
+                        aria-label={isEl ? 'Πλάνο μέλους' : 'Member plan'}
+                        value={m.tier}
+                        disabled={tierBusyId === m.id}
+                        onChange={(e) => changeMemberTier(m.id, m.tier, e.target.value as Tier)}
+                        className="text-xs px-2.5 py-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text)] disabled:opacity-50"
+                      >
+                        {TIER_ORDER.map((t) => (
+                          <option key={t} value={t}>{TIER_LABEL[t]}</option>
+                        ))}
+                      </select>
                     )}
                     <button
                       onClick={() => router.push(`/homes/my-listings?agent=${m.id}`)}
@@ -234,8 +288,8 @@ export default function AgencyPage() {
             </div>
             <p className="text-sm text-[var(--text-muted)] mb-4">
               {isEl
-                ? 'Θα αποκτήσουν τα Pro χαρακτηριστικά σας και εσείς θα καλύπτετε τη συνδρομή τους.'
-                : "They’ll get your Pro features, and you’ll cover their subscription."}
+                ? 'Επιλέξτε το πλάνο τους. Οι θέσεις Plus/Pro χρεώνονται στη συνδρομή σας· οι Free είναι δωρεάν.'
+                : 'Pick their plan. Plus/Pro seats are billed to your subscription; Free seats cost nothing.'}
             </p>
 
             {inviteLink ? (
@@ -263,6 +317,28 @@ export default function AgencyPage() {
                   placeholder={isEl ? 'email@παράδειγμα.gr' : 'email@example.com'}
                   className="w-full rounded-xl bg-[var(--surface)] border border-[var(--border-subtle)] px-3 py-2.5 text-sm text-[var(--text)]"
                 />
+                <div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIER_ORDER.map((t) => {
+                      const active = inviteTier === t
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setInviteTier(t)}
+                          className={`px-2 py-2 rounded-xl border text-sm font-semibold transition-colors ${
+                            active
+                              ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--text)]'
+                              : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)]'
+                          }`}
+                        >
+                          {TIER_LABEL[t]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-xs text-[var(--text-muted)]">{tierHint(inviteTier, isEl)}</p>
+                </div>
                 <textarea
                   value={inviteMessage}
                   onChange={(e) => setInviteMessage(e.target.value)}

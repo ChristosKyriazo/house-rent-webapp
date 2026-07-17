@@ -24,13 +24,13 @@ export async function GET(request: NextRequest) {
 
     const children = await prisma.user.findMany({
       where: { parentBrokerId: user.id, brokerCategory: 'child' },
-      select: { id: true, key: true, name: true, email: true },
+      select: { id: true, key: true, name: true, email: true, subscriptionTier: true },
       orderBy: { createdAt: 'asc' },
     })
 
     // Lead is always the first member (color slot 0).
     const roster = [
-      { id: user.id, key: user.key, name: user.name, email: user.email, isLead: true },
+      { id: user.id, key: user.key, name: user.name, email: user.email, subscriptionTier: user.subscriptionTier, isLead: true },
       ...children.map((c) => ({ ...c, isLead: false })),
     ]
     const memberIds = roster.map((m) => m.id)
@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
       key: m.key,
       name: m.name,
       email: m.email,
+      tier: ((m.subscriptionTier ?? 'free') as TeamMember['tier']),
       listingCount: listingMap.get(m.id) ?? 0,
       avgRating: brokerScores[i].score,
       ratingCount: brokerScores[i].count,

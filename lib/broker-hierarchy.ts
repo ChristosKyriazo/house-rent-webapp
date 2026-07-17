@@ -76,13 +76,14 @@ export async function promoteToParent(userId: number, tx: Tx = prisma): Promise<
 
 /**
  * Attach an accepted invitee as a Default (child) broker under a Main broker.
- * Sets role=broker, mirrors the parent's tier, and clears any standalone state.
- * The caller is responsible for cancelling the invitee's own Stripe subscription first.
+ * Sets role=broker, applies the `tier` the Main broker assigned on the invitation, and clears any
+ * standalone state. The caller is responsible for cancelling the invitee's own Stripe subscription
+ * first, and for reconciling the Main broker's per-seat billing afterward (see lib/team-billing).
  */
 export async function attachChildBroker(
   childId: number,
   parentId: number,
-  parentTier: string,
+  tier: string,
   tx: Tx = prisma
 ): Promise<void> {
   await tx.user.update({
@@ -91,7 +92,7 @@ export async function attachChildBroker(
       role: 'broker',
       brokerCategory: 'child',
       parentBrokerId: parentId,
-      subscriptionTier: parentTier,
+      subscriptionTier: tier,
     },
   })
 }
@@ -136,17 +137,6 @@ export async function detachChildBroker(childId: number): Promise<number | null>
     await revertParentIfEmpty(parentId, tx)
 
     return parentId
-  })
-}
-
-/**
- * Cascade a Main broker's subscription tier onto all their Default (child) brokers.
- * Call whenever the parent's tier changes.
- */
-export async function syncChildTiers(parentId: number, tier: string, tx: Tx = prisma): Promise<void> {
-  await tx.user.updateMany({
-    where: { parentBrokerId: parentId, brokerCategory: 'child' },
-    data: { subscriptionTier: tier },
   })
 }
 

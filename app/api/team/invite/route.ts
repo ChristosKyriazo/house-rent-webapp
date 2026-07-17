@@ -10,8 +10,11 @@ import {
   hasTeamCapacity,
   promoteToParent,
 } from '@/lib/broker-hierarchy'
+import { TIER_RANK } from '@/lib/subscription'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const VALID_TIERS = ['free', 'plus', 'pro'] as const
+type Tier = (typeof VALID_TIERS)[number]
 
 // POST: a Main broker (Pro) invites another broker to join their team as a Default (child) broker.
 export async function POST(request: NextRequest) {
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       return forbidden('A broker who is part of a team cannot invite others')
     }
 
-    let body: { email?: string; message?: string }
+    let body: { email?: string; message?: string; tier?: string }
     try {
       body = await request.json()
     } catch {
@@ -44,6 +47,14 @@ export async function POST(request: NextRequest) {
     const message = body.message?.trim() || null
     if (!email || !EMAIL_RE.test(email)) return badRequest('A valid email is required')
     if (email === user.email.toLowerCase()) return badRequest('You cannot invite yourself')
+
+    // The plan the Main broker is assigning this invitee. Defaults to Pro (prior behaviour) and can
+    // never exceed the owner's own tier.
+    const tier = (body.tier ?? 'pro') as Tier
+    if (!VALID_TIERS.includes(tier)) return badRequest(`tier must be one of: ${VALID_TIERS.join(', ')}`)
+    if ((TIER_RANK[tier] ?? 0) > (TIER_RANK[user.subscriptionTier ?? 'free'] ?? 0)) {
+      return badRequest("A member's plan cannot exceed your own plan")
+    }
 
     if (!(await hasTeamCapacity(user.id))) {
       return NextResponse.json(
@@ -86,9 +97,10 @@ export async function POST(request: NextRequest) {
           inviteeUserId: invitee?.id ?? null,
           token,
           message,
+          tier,
           expiresAt,
         },
-        select: { key: true, inviteeEmail: true, status: true, createdAt: true, expiresAt: true },
+        select: { key: true, inviteeEmail: true, status: true, tier: true, createdAt: true, expiresAt: true },
       })
     })
 

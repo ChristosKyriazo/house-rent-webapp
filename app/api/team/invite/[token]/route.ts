@@ -20,6 +20,7 @@ export async function GET(
         expiresAt: true,
         inviteeEmail: true,
         message: true,
+        tier: true,
         inviter: { select: { name: true } },
       },
     })
@@ -30,6 +31,7 @@ export async function GET(
       agencyName: invitation?.inviter.name ?? null,
       inviteeEmail: invitation?.inviteeEmail ?? '',
       message: invitation?.message ?? null,
+      tier: (invitation?.tier ?? 'pro') as InvitationDetails['tier'],
     }
 
     if (!invitation) return NextResponse.json({ ...base, reason: 'not_found' })

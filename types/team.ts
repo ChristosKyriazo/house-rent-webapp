@@ -2,6 +2,9 @@
 
 export type BrokerCategory = 'standalone' | 'parent' | 'child'
 
+/** Subscription plan a broker (owner or member) sits on. */
+export type MemberTier = 'free' | 'plus' | 'pro'
+
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked'
 
 export type BoostRequestStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'paid'
@@ -12,6 +15,8 @@ export interface TeamMember {
   key: string
   name: string | null
   email: string
+  /** Plan this member is on. For the lead this is the owner's own tier. */
+  tier: MemberTier
   listingCount: number
   avgRating: number | null
   ratingCount: number
@@ -39,6 +44,8 @@ export interface InvitationDetails {
   agencyName: string | null
   inviteeEmail: string
   message: string | null
+  /** Plan the Main broker assigned to this invite. */
+  tier: MemberTier
 }
 
 /** Aggregate KPIs for the agency overview. */

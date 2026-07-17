@@ -65,6 +65,7 @@ model TeamInvitation {
   inviteeUserId  Int?     // resolved once the invitee has an account
   token          String   @unique // crypto.randomBytes(32).toString('hex') — used in the /join-team link
   message        String?  // optional note from the inviter
+  tier           String   @default("pro") // "free" | "plus" | "pro" — plan the Main broker assigned this invitee; applied to the child on accept
   status         String   @default("pending") // "pending" | "accepted" | "declined" | "expired" | "revoked"
   expiresAt      DateTime
   createdAt      DateTime @default(now())
