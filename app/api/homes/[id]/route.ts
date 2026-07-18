@@ -6,6 +6,7 @@ import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps
 import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
 import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { requestLogger } from '@/lib/logger'
+import { unauthorized } from '@/lib/api-utils'
 
 export async function GET(
   request: NextRequest,
@@ -122,10 +123,7 @@ export async function PUT(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     // Check if user has owner role (brokers are treated like owners)
@@ -349,10 +347,7 @@ export async function DELETE(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     // Check if user has owner role (brokers are treated like owners)

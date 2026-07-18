@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { validateBody } from '@/lib/api-utils'
+import { validateBody, unauthorized } from '@/lib/api-utils'
 import { setRoleSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
 
@@ -12,10 +12,7 @@ export async function POST(request: NextRequest) {
     const { userId } = await auth()
     
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     const rawBody = await request.json()

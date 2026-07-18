@@ -6,6 +6,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface FinalizeNotification {
   id: number
@@ -207,11 +208,11 @@ export default function FinalizeNotificationModal({
                 <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
                   <h3 className="text-sm font-semibold text-green-400 mb-2">{getTranslation(language, 'rentalDates')}</h3>
                   <p className="text-[var(--text)]">
-                    {getTranslation(language, 'moveInLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveInDate).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    {getTranslation(language, 'moveInLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveInDate).toLocaleDateString(localeFor(language), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                   </p>
                   {finalizationDetails.moveOutDate && (
                     <p className="text-[var(--text)] mt-1">
-                      {getTranslation(language, 'moveOutLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveOutDate).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                      {getTranslation(language, 'moveOutLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveOutDate).toLocaleDateString(localeFor(language), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </p>
                   )}
                 </div>

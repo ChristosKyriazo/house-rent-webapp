@@ -32,8 +32,13 @@ export function isMainBroker(u: BrokerLike): boolean {
   return u.role === 'broker' && u.brokerCategory === 'parent'
 }
 
-/** An invited broker sitting under a Main broker. Cannot pay directly; requests go to the parent. */
-export function isChildBroker(u: BrokerLike): boolean {
+/**
+ * An invited broker sitting under a Main broker. Cannot pay directly; requests go to the parent.
+ *
+ * Narrows `parentBrokerId` to non-null, because a child broker always has a parent — callers can
+ * use `user.parentBrokerId` directly inside the guard without a redundant null check.
+ */
+export function isChildBroker<T extends BrokerLike>(u: T): u is T & { parentBrokerId: number } {
   return u.brokerCategory === 'child' && u.parentBrokerId != null
 }
 
@@ -51,7 +56,7 @@ export async function getChildCount(parentId: number): Promise<number> {
   return prisma.user.count({ where: { parentBrokerId: parentId, brokerCategory: 'child' } })
 }
 
-export async function getPendingInviteCount(parentId: number): Promise<number> {
+async function getPendingInviteCount(parentId: number): Promise<number> {
   return prisma.teamInvitation.count({ where: { inviterUserId: parentId, status: 'pending' } })
 }
 
@@ -159,14 +164,4 @@ export async function applyBoost(homeId: number, days: number, tx: Tx = prisma):
   const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
   await tx.home.update({ where: { id: homeId }, data: { promotedUntil: until } })
   return until
-}
-
-/** Resolve the Main broker (parent) who pays for a given child, or null if not a child. */
-export async function getPayingParent(childId: number): Promise<User | null> {
-  const child = await prisma.user.findUnique({
-    where: { id: childId },
-    select: { parentBrokerId: true },
-  })
-  if (!child?.parentBrokerId) return null
-  return prisma.user.findUnique({ where: { id: child.parentBrokerId } })
 }

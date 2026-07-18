@@ -6,8 +6,9 @@ import { greekUppercaseNoAnnotations } from '@/lib/utils'
 import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/area-utils'
 import TranslatedDescription from './TranslatedDescription'
 import { SaveButton } from './SaveButton'
+import { localeFor } from '@/lib/format'
 
-export interface HomeCardHome {
+interface HomeCardHome {
   id: number
   key: string
   title: string
@@ -113,7 +114,7 @@ function CardBody({ home, language, allAreas, areas, textColor, hasMatchBadge }:
             <span className="text-xs text-[var(--text-muted)]">
               {language === 'el' ? 'Μέλος από' : 'Since'}{' '}
               {new Date(home.owner.createdAt).toLocaleDateString(
-                language === 'el' ? 'el-GR' : 'en-GB',
+                localeFor(language),
                 { month: 'short', year: 'numeric' }
               )}
             </span>

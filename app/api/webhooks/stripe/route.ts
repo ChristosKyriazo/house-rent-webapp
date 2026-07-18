@@ -4,6 +4,7 @@ import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
 import { getListingLimit } from '@/lib/subscription'
 import { applyBoost } from '@/lib/broker-hierarchy'
 import type Stripe from 'stripe'
+import { createNotification } from '@/lib/services/notification-service'
 
 // Raw body required for Stripe signature verification — do not parse as JSON
 export const dynamic = 'force-dynamic'
@@ -70,9 +71,7 @@ export async function POST(request: NextRequest) {
         })
 
         // Notify the Default (child) broker whose listing was boosted.
-        await tx.notification.create({
-          data: { recipientId: boostRequest.requesterId, role: 'broker', type: 'boost_approved', homeKey: boostRequest.home.key, userId: userIdInt },
-        })
+        await createNotification({ recipientId: boostRequest.requesterId, role: 'broker', type: 'boost_approved', homeKey: boostRequest.home.key, userId: userIdInt }, tx)
       })
 
       return NextResponse.json({ received: true })

@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { unauthorized, badRequest } from '@/lib/api-utils'
 import { getSlotLimit, getListingLimit, TIER_RANK } from '@/lib/subscription'
 import { getStripe, STRIPE_PRICES } from '@/lib/stripe'
-import { getChildCount } from '@/lib/broker-hierarchy'
+import { getChildCount, isMainBroker } from '@/lib/broker-hierarchy'
 
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
 type Tier = (typeof VALID_TIERS)[number]
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Block downgrade for a Main broker who still has team members ──────────────
-  if (user.brokerCategory === 'parent') {
+  if (isMainBroker(user)) {
     const childCount = await getChildCount(user.id)
     if (childCount > 0) {
       return NextResponse.json(

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
+import { localeFor } from '@/lib/format'
 
 interface Review {
   comment: string
@@ -141,7 +142,7 @@ export default function HomeRatingsPage() {
                       </span>
                       <p className="text-sm text-[var(--text-muted)]">
                         {new Date(review.createdAt).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
+                          localeFor(language),
                           { year: 'numeric', month: 'long', day: 'numeric' }
                         )}
                       </p>

@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 
 export default function OverlimitBanner() {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const [hiddenCount, setHiddenCount] = useState(0)
   const [role, setRole] = useState<string | null>(null)
 

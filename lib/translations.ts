@@ -1091,7 +1091,7 @@ export const translations = {
   },
 } as const
 
-export type TranslationKey = keyof typeof translations.el
+type TranslationKey =keyof typeof translations.el
 
 export function getTranslation(language: Language, key: TranslationKey): string {
   const dict = translations[language] as Record<string, string>

@@ -63,8 +63,7 @@ function UpgradeDrawer({
   feature: Feature
   onClose: () => void
 }) {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const copy = FEATURE_COPY[feature]
 
   return createPortal(
@@ -131,8 +130,7 @@ export default function UpgradeGate({
   mode = 'drawer',
   children,
 }: UpgradeGateProps) {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const copy = FEATURE_COPY[feature]

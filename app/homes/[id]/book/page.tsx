@@ -12,6 +12,7 @@ import {
   type ParsedOwnerContactInfo,
 } from '@/lib/appointment-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface Availability {
   id: number
@@ -537,7 +538,7 @@ function BookPage() {
                 >
                   <h2 className="text-lg sm:text-2xl font-bold text-[var(--text)] mb-4">
                     {new Date(date).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',
@@ -593,7 +594,7 @@ function BookPage() {
                   <p className="text-[var(--text)] mb-2">
                     <strong>{getTranslation(language, 'selectedDate')}:</strong>{' '}
                     {new Date(selectedDate).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',

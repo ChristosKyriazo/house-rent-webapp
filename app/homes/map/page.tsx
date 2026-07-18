@@ -45,10 +45,9 @@ const FREE_LIMIT = 10
 const SESSION_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 function MapContent() {
-  const { language } = useLanguage()
+  const { language, isEl } = useLanguage()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const isEl = language === 'el'
 
   const mapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

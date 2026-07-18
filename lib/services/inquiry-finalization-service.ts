@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/services/notification-service'
 
 export class InquiryFinalizationError extends Error {
   status: number
@@ -67,17 +68,15 @@ export async function initiateFinalization(
       },
     })
 
-    await tx.notification.create({
-      data: {
-        recipientId: inquiry.user.id,
-        role: 'user',
-        type: 'finalize',
-        homeKey: inquiry.home.key,
-        userId: inquiry.userId,
-        ownerKey: inquiry.home.owner.key,
-        inquiryId: inquiry.id,
-      },
-    })
+    await createNotification({
+      recipientId: inquiry.user.id,
+      role: 'user',
+      type: 'finalize',
+      homeKey: inquiry.home.key,
+      userId: inquiry.userId,
+      ownerKey: inquiry.home.owner.key,
+      inquiryId: inquiry.id,
+    }, tx)
   })
   } catch (err: unknown) {
     // P2002 = unique constraint violation — another request already created the finalization
@@ -136,16 +135,14 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
         data: { deleted: true },
       })
       // Notify tenant: move-in rating window opens 3 days after moveInDate
-      await tx.notification.create({
-        data: {
-          recipientId: inquiry.user.id,
-          role: 'user',
-          type: 'rate',
-          homeKey: inquiry.home.key,
-          ownerKey: inquiry.home.owner.key,
-          inquiryId: inquiry.id,
-        },
-      })
+      await createNotification({
+        recipientId: inquiry.user.id,
+        role: 'user',
+        type: 'rate',
+        homeKey: inquiry.home.key,
+        ownerKey: inquiry.home.owner.key,
+        inquiryId: inquiry.id,
+      }, tx)
     })
 
     return { message: 'Deal finalized', finalized: true }
@@ -165,16 +162,14 @@ export async function respondToFinalization(inquiryId: number, userId: number, a
       where: { inquiryId: inquiry.id, type: 'finalize', recipientId: userId },
       data: { deleted: true },
     })
-    await tx.notification.create({
-      data: {
-        recipientId: inquiry.home.ownerId,
-        role: 'owner',
-        type: 'rejected',
-        homeKey: inquiry.home.key,
-        ownerKey: inquiry.home.owner.key,
-        userId: inquiry.user.id,
-      },
-    })
+    await createNotification({
+      recipientId: inquiry.home.ownerId,
+      role: 'owner',
+      type: 'rejected',
+      homeKey: inquiry.home.key,
+      ownerKey: inquiry.home.owner.key,
+      userId: inquiry.user.id,
+    }, tx)
   })
 
   return { message: 'Finalization declined', declined: true }

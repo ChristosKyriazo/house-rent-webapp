@@ -386,14 +386,6 @@ export async function POST(request: NextRequest) {
     // Instead, include all houses (even with null values) and let AI penalize missing info in match percentage
     // This allows houses with missing information to still appear in results, just with lower scores
 
-    // if (extractedFilters.heatingCategory && extractedFilters.heatingCategory !== null) {
-    //   where.heatingCategory = extractedFilters.heatingCategory
-    // }
-
-    // if (extractedFilters.heatingAgent && extractedFilters.heatingAgent !== null) {
-    //   where.heatingAgent = extractedFilters.heatingAgent
-    // }
-
     if (extractedFilters.minFloor !== undefined && extractedFilters.minFloor !== null) {
       where.floor = { ...where.floor, gte: extractedFilters.minFloor }
     }

@@ -11,9 +11,8 @@ function JoinTeamInner() {
   const router = useRouter()
   const params = useSearchParams()
   const token = params.get('token')
-  const { language } = useLanguage()
+  const { isEl } = useLanguage()
   const { isSignedIn, isLoaded } = useUser()
-  const isEl = language === 'el'
 
   const [details, setDetails] = useState<InvitationDetails | null>(null)
   const [loading, setLoading] = useState(true)

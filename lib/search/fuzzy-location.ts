@@ -17,7 +17,7 @@ const GREEK_TO_LATIN: Record<string, string> = {
 }
 
 /** Greek script → Latin script, accent-insensitive. Latin input passes through. */
-export function transliterateGreek(input: string): string {
+function transliterateGreek(input: string): string {
   return removeGreekAccents(input.toLowerCase())
     .split('')
     .map((ch) => GREEK_TO_LATIN[ch] ?? ch)
@@ -116,12 +116,12 @@ const TIER_CANONICAL = 0
 const TIER_ALIAS = 1
 const TIER_SEGMENT = 2
 
-export interface LocationAlias {
+interface LocationAlias {
   value: string
   tier: number
 }
 
-export interface LocationCandidate {
+interface LocationCandidate {
   /** The value to return on a match — the canonical name as stored in the DB. */
   canonical: string
   /** Every spelling that should resolve to `canonical` (English + Greek). */

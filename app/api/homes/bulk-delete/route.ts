@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { requestLogger } from '@/lib/logger'
+import { unauthorized } from '@/lib/api-utils'
 
 // POST /api/homes/bulk-delete — delete multiple listings owned by the current user
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
     const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) return unauthorized()
 
     const role = user.role || 'user'
     if (role !== 'owner' && role !== 'both' && role !== 'broker') {

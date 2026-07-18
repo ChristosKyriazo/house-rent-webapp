@@ -762,8 +762,7 @@ function ProView({ data, period, sortCol, sortDir, handleSort, isEl, onBarClick,
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const router = useRouter()
 
   const [tier, setTier] = useState<'free' | 'plus' | 'pro'>('free')

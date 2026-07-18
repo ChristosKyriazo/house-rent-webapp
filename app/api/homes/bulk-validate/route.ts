@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { findBestMatch } from '@/lib/value-matcher'
 import { removeGreekAccents, resolveCityToEnglishCanonical, resolveCountryToEnglishCanonical } from '@/lib/utils'
 import * as XLSX from 'xlsx'
+import { unauthorized } from '@/lib/api-utils'
 
 export interface AreaIssue {
   rowIndex: number
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      return unauthorized()
     }
 
     const userRole = user.role || 'user'

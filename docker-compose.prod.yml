@@ -71,7 +71,9 @@ services:
           memory: 128m
 
   app:
-    image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyria zo/house-rent-webapp:latest
+    image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyriazo/house-rent-webapp:dev-latest
+                          # Tags produced by deploy.yml are `sha-<commit>` and `<branch>-latest`
+                          # (dev-latest / main-latest). There is no plain `:latest` tag.
     restart: unless-stopped
     expose:
       - "3000"            # internal only — Caddy proxies here, no direct public access

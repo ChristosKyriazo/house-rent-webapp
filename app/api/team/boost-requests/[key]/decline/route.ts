@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
+import { createNotification } from '@/lib/services/notification-service'
 
 // POST: a Main broker declines a boost request.
 export async function POST(
@@ -34,9 +35,7 @@ export async function POST(
     })
 
     try {
-      await prisma.notification.create({
-        data: { recipientId: boostRequest.requesterId, role: 'broker', type: 'boost_declined', homeKey: boostRequest.home.key, userId: user.id },
-      })
+      await createNotification({ recipientId: boostRequest.requesterId, role: 'broker', type: 'boost_declined', homeKey: boostRequest.home.key, userId: user.id })
     } catch (err) {
       log.error({ err }, 'Failed to create boost_declined notification')
     }

@@ -6,6 +6,7 @@ import { badRequest, parsePositiveInt, parseValidDate, serverError, unauthorized
 import { createBookingSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
 import { features } from '@/lib/features'
+import { createNotification } from '@/lib/services/notification-service'
 
 // GET /api/bookings - Get all bookings for the current user
 export async function GET(request: NextRequest) {
@@ -473,16 +474,14 @@ export async function POST(request: NextRequest) {
       const finalOwnerKey = ownerKey || booking.owner.key || null
       
       if (finalHomeKey && finalOwnerId) {
-        await prisma.notification.create({
-          data: {
-            recipientId: finalOwnerId,
-            role: 'owner',
-            type: 'booking_created',
-            homeKey: finalHomeKey,
-            userId: user.id,
-            ownerKey: finalOwnerKey,
-            inquiryId: finalInquiryId,
-          },
+        await createNotification({
+          recipientId: finalOwnerId,
+          role: 'owner',
+          type: 'booking_created',
+          homeKey: finalHomeKey,
+          userId: user.id,
+          ownerKey: finalOwnerKey,
+          inquiryId: finalInquiryId,
         })
       }
     } catch (error) {

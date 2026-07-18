@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { TIER_RANK } from '@/lib/subscription'
 import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
+import { unauthorized } from '@/lib/api-utils'
 
 const FREE_MONTHLY_LIMIT = 10
 const PAID_MONTHLY_LIMIT = 20
@@ -49,7 +50,7 @@ export async function GET() {
 // POST /api/ai-prompt-usage — consume one search or add pack credits
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser().catch(() => null)
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (!user) return unauthorized()
 
   const body = await request.json().catch(() => ({}))
   const action: string = body.action ?? 'consume'

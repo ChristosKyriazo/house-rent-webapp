@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { processAIChatTurn } from '@/lib/services/ai-chat-service'
 import { requestLogger } from '@/lib/logger'
 import { features } from '@/lib/features'
+import { unauthorized } from '@/lib/api-utils'
 
 // POST /api/homes/ai-chat — conversational AI search
 // Body: { message: string, conversationKey?: string, type?: "rent"|"buy" }
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const user = await getCurrentUser().catch(() => null)
     if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      return unauthorized()
     }
     const userId = user.id
 
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     const { getCurrentUser } = await import('@/lib/auth')
     const user = await getCurrentUser().catch(() => null)
     if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      return unauthorized()
     }
 
     const { prisma } = await import('@/lib/prisma')

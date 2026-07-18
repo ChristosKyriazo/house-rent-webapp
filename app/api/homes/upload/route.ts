@@ -4,6 +4,7 @@ import { join } from 'path'
 import { getCurrentUser } from '@/lib/auth'
 import { requestLogger } from '@/lib/logger'
 import { detectImageType } from '@/lib/image-validation'
+import { unauthorized } from '@/lib/api-utils'
 
 // Increase body size limit for file uploads
 export const maxDuration = 60
@@ -14,10 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     const formData = await request.formData()

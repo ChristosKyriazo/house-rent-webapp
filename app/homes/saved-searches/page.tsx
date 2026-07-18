@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { localeFor } from '@/lib/format'
 
 interface SavedSearch {
   key: string
@@ -17,12 +18,11 @@ interface SavedSearch {
 }
 
 export default function SavedSearchesPage() {
-  const { language } = useLanguage()
+  const { language, isEl } = useLanguage()
   const [searches, setSearches] = useState<SavedSearch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toastError, setToastError] = useState<string | null>(null)
-  const isEl = language === 'el'
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   async function load() {
@@ -211,7 +211,7 @@ export default function SavedSearchesPage() {
                     {search.lastNotifiedAt && (
                       <p className="text-xs text-[var(--text-muted)] mt-2">
                         {isEl ? 'Τελευταία ειδοποίηση:' : 'Last notified:'}{' '}
-                        {new Date(search.lastNotifiedAt).toLocaleDateString(isEl ? 'el-GR' : 'en-GB')}
+                        {new Date(search.lastNotifiedAt).toLocaleDateString(localeFor(language))}
                       </p>
                     )}
                   </div>

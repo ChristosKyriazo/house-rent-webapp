@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface AvailabilitySlot {
   date: string
@@ -332,7 +333,7 @@ function SetAvailabilityPage() {
                     <div className="flex items-center gap-2 sm:gap-4 text-[var(--text)] min-w-0">
                       <span className="font-semibold truncate">
                         {new Date(slot.date).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
+                          localeFor(language),
                           {
                             weekday: 'short',
                             year: 'numeric',

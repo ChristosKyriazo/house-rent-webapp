@@ -8,6 +8,7 @@ import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation, translateValue, translateRole } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
 import { GraphicProfile } from '@/app/components/visual/PageGraphics'
+import { localeFor } from '@/lib/format'
 
 interface User {
   id: number
@@ -533,7 +534,7 @@ function ProfilePageInner() {
             <div>
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'memberSince')}</label>
               <p className="text-lg text-[var(--text)]">
-                {new Date(user.createdAt).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+                {new Date(user.createdAt).toLocaleDateString(localeFor(language), {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',

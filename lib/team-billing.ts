@@ -16,7 +16,7 @@ import { logger } from '@/lib/logger'
  * payment method — no new Checkout per member.
  */
 
-export type SeatCounts = { pro: number; plus: number }
+type SeatCounts ={ pro: number; plus: number }
 
 type ChildTier = { subscriptionTier: string | null }
 

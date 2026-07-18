@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { getSlotLimit, checkTier } from '@/lib/subscription'
 import { requestLogger } from '@/lib/logger'
+import { isChildBroker } from '@/lib/broker-hierarchy'
 
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // mode === 'boost' — Default (child) brokers cannot pay directly; they request from their Main broker.
-    if (user.brokerCategory === 'child' && user.parentBrokerId != null) {
+    if (isChildBroker(user)) {
       return NextResponse.json(
         { error: 'boost_requires_team_approval', message: 'Boosts for your listings are paid by your team. Send a request from your listing instead.' },
         { status: 403 }

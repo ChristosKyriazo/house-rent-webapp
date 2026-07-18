@@ -9,6 +9,7 @@ import { getHomeTitle } from '@/lib/area-utils'
 import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface Booking {
   id: number
@@ -124,7 +125,7 @@ export default function CalendarPage() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleTimeString(localeFor(language), {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -162,10 +163,10 @@ export default function CalendarPage() {
     const start = weekDays[0]
     const end = weekDays[6]
     
-    return `${start.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    return `${start.toLocaleDateString(localeFor(language), {
       month: 'short',
       day: 'numeric',
-    })} - ${end.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    })} - ${end.toLocaleDateString(localeFor(language), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -181,7 +182,7 @@ export default function CalendarPage() {
   }
 
   const days = getDaysInMonth(selectedDate)
-  const monthName = selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', { month: 'long', year: 'numeric' })
+  const monthName = selectedDate.toLocaleDateString(localeFor(language), { month: 'long', year: 'numeric' })
   const weekDays = language === 'el' 
     ? ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -255,7 +256,7 @@ export default function CalendarPage() {
                 ←
               </button>
               <h2 className="text-base sm:text-2xl font-bold text-[var(--text)] text-center flex-1 mx-2 truncate">
-                {selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+                {selectedDate.toLocaleDateString(localeFor(language), {
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
@@ -887,7 +888,7 @@ function RescheduleModal({
           </p>
           <p className="text-[var(--text)]">
             {new Date(booking.startTime).toLocaleDateString(
-              language === 'el' ? 'el-GR' : 'en-US',
+              localeFor(language),
               {
                 weekday: 'long',
                 year: 'numeric',
@@ -895,7 +896,7 @@ function RescheduleModal({
                 day: 'numeric',
               }
             )} at {new Date(booking.startTime).toLocaleTimeString(
-              language === 'el' ? 'el-GR' : 'en-US',
+              localeFor(language),
               { hour: '2-digit', minute: '2-digit' }
             )}
           </p>
@@ -916,7 +917,7 @@ function RescheduleModal({
                 >
                   <h3 className="text-lg font-semibold text-[var(--text)] mb-3">
                     {new Date(date).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',
@@ -974,7 +975,7 @@ function RescheduleModal({
             </p>
             <p className="text-[var(--text)]">
               {new Date(selectedDate).toLocaleDateString(
-                language === 'el' ? 'el-GR' : 'en-US',
+                localeFor(language),
                 {
                   weekday: 'long',
                   year: 'numeric',

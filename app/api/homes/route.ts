@@ -5,7 +5,7 @@ import { calculatePropertyDistances } from '@/lib/google-maps'
 import { removeGreekAccents, resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
 import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
-import { validateBody } from '@/lib/api-utils'
+import { validateBody, unauthorized } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
 import { getListingLimit, checkTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
@@ -463,10 +463,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
     subscriptionTier = user.subscriptionTier
 

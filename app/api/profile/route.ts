@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { clerkClient } from '@clerk/nextjs/server'
 import { requestLogger } from '@/lib/logger'
+import { unauthorized } from '@/lib/api-utils'
 
 // GET /api/profile - get current user's profile or a specific user by userId query param
 export async function GET(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
       // Viewing another user's profile requires authentication
       const currentUser = await getCurrentUser()
       if (!currentUser) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+        return unauthorized()
       }
       const userId = parseInt(userIdParam)
       if (isNaN(userId)) {
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       // Get current user's profile
       const currentUser = await getCurrentUser()
       if (!currentUser) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+        return unauthorized()
       }
       
       user = await prisma.user.findUnique({
@@ -88,10 +89,7 @@ export async function PATCH(request: NextRequest) {
     const user = await getCurrentUser()
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     const { name, dateOfBirth, occupation, role } = await request.json()
@@ -163,10 +161,7 @@ export async function DELETE(request: NextRequest) {
     const user = await getCurrentUser()
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     const clerkUserId = user.clerkUserId

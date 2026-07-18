@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { localeFor } from '@/lib/format'
 
 interface ApprovedInquiry {
   id: number
@@ -223,7 +224,7 @@ export default function ApprovedInquiriesPage() {
                                   ? (language === 'el' ? 'Επίσκεψη ολοκληρώθηκε' : 'Viewing completed')
                                   : (language === 'el' ? 'Επίσκεψη προγραμματισμένη' : 'Viewing scheduled')}
                               </p>
-                              <p className="text-xs text-green-400/70 mt-0.5">{new Date(appointment.startTime).toLocaleString(language === 'el' ? 'el-GR' : 'en-US')}</p>
+                              <p className="text-xs text-green-400/70 mt-0.5">{new Date(appointment.startTime).toLocaleString(localeFor(language))}</p>
                             </>
                           ) : (
                             <p className="font-semibold">

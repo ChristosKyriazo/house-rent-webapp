@@ -14,8 +14,7 @@ interface SearchEntry {
 
 export default function SearchPage() {
   const router = useRouter()
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { language, isEl } = useLanguage()
   const [history, setHistory] = useState<SearchEntry[]>([])
 
   useEffect(() => {

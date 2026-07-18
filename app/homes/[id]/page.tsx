@@ -11,6 +11,7 @@ import { useTranslatedDescription } from '@/app/hooks/useTranslatedDescription'
 import StarRating from '@/app/components/StarRating'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import { localeFor } from '@/lib/format'
 
 interface Home {
   id: number
@@ -1024,7 +1025,7 @@ function HomeDetailPage() {
                   <div>
                     <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'availableFrom')}</p>
                     <p className="text-lg font-bold text-[var(--text)]">
-                      {new Date(home.availableFrom).toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+                      {new Date(home.availableFrom).toLocaleDateString(localeFor(language), {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',

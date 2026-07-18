@@ -8,6 +8,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useRole } from '../contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import FinalizeNotificationModal from './FinalizeNotificationModal'
+import { localeFor } from '@/lib/format'
 
 interface Notification {
   id: number
@@ -477,7 +478,7 @@ export default function NotificationBell() {
                         </p>
                         <p className="mt-1 text-xs text-[var(--text-muted)]">
                           {new Date(notification.createdAt).toLocaleDateString(
-                            language === 'el' ? 'el-GR' : 'en-US',
+                            localeFor(language),
                             {
                               month: 'short',
                               day: 'numeric',

@@ -66,8 +66,7 @@ const SOURCE_LABELS: Record<string, { en: string; el: string }> = {
 
 export default function ListingAnalyticsPage() {
   const params = useParams()
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const homeKey = params.id as string
 
   const [data, setData] = useState<AnalyticsData | null>(null)

@@ -29,13 +29,12 @@ interface SavedEntry {
 }
 
 export default function SavedHomesPage() {
-  const { language } = useLanguage()
+  const { language, isEl } = useLanguage()
   const [saved, setSaved] = useState<SavedEntry[]>([])
   const [areas, setAreas] = useState<{ name: string; nameGreek: string | null; city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
-  const isEl = language === 'el'
 
   useEffect(() => {
     setLoading(true)

@@ -46,10 +46,9 @@ function fmtBool(v: boolean | null | undefined, language: string) {
 }
 
 function CompareContent() {
-  const { language } = useLanguage()
+  const { language, isEl } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const isEl = language === 'el'
 
   const keys = (searchParams.get('keys') ?? '').split(',').filter(Boolean).slice(0, 3)
   const [homes, setHomes] = useState<Home[]>([])

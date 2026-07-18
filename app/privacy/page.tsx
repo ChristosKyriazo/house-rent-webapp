@@ -8,8 +8,7 @@ const EFFECTIVE_DATE_GR = '30 Ιουνίου 2026'
 const CONTACT_EMAIL = 'privacy@kaparro.gr'
 
 export default function PrivacyPolicyPage() {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] pt-20 pb-16 px-4">

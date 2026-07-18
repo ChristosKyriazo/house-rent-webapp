@@ -9,6 +9,7 @@ import {
   unauthorized,
 } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
+import { createNotification } from '@/lib/services/notification-service'
 
 // GET: Get all inquiries for the current user
 export async function GET(request: NextRequest) {
@@ -124,14 +125,12 @@ export async function POST(request: NextRequest) {
 
     // Create notification for the owner
     try {
-      await prisma.notification.create({
-        data: {
-          recipientId: home.owner.id,
-          role: 'owner',
-          type: 'inquiry',
-          homeKey: home.key,
-          userId: user.id,
-        },
+      await createNotification({
+        recipientId: home.owner.id,
+        role: 'owner',
+        type: 'inquiry',
+        homeKey: home.key,
+        userId: user.id,
       })
     } catch (error) {
       log.error({ err: error }, 'Failed to create notification')

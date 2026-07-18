@@ -9,6 +9,7 @@ import { join } from 'path'
 import { requestLogger } from '@/lib/logger'
 import { detectImageType } from '@/lib/image-validation'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { unauthorized } from '@/lib/api-utils'
 
 // Each row fans out to ~10 paid API calls (OpenAI normalization/vision/description,
 // Google Maps, embeddings) — the cap bounds the cost of a single job.
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      return unauthorized()
     }
 
     const userRole = user.role || 'user'

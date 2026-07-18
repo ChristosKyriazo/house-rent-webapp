@@ -6,6 +6,7 @@ import { requestLogger } from '@/lib/logger'
 import { detachChildBroker } from '@/lib/broker-hierarchy'
 import { syncOwnerSeats } from '@/lib/team-billing'
 import { TIER_RANK, enforceTierListingLimits } from '@/lib/subscription'
+import { createNotification } from '@/lib/services/notification-service'
 
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
 type Tier = (typeof VALID_TIERS)[number]
@@ -56,9 +57,7 @@ export async function PATCH(
       // Reconcile the owner's per-seat billing (best-effort) and notify the member.
       await syncOwnerSeats(user.id)
       try {
-        await prisma.notification.create({
-          data: { recipientId: childId, role: 'broker', type: 'team_tier_changed', userId: user.id },
-        })
+        await createNotification({ recipientId: childId, role: 'broker', type: 'team_tier_changed', userId: user.id })
       } catch (err) {
         log.error({ err }, 'Failed to create tier-change notification')
       }
@@ -100,9 +99,7 @@ export async function DELETE(
 
     // Notify the removed broker.
     try {
-      await prisma.notification.create({
-        data: { recipientId: childId, role: 'broker', type: 'team_removed', userId: user.id },
-      })
+      await createNotification({ recipientId: childId, role: 'broker', type: 'team_removed', userId: user.id })
     } catch (err) {
       log.error({ err }, 'Failed to create removal notification')
     }

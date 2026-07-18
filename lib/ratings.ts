@@ -180,21 +180,6 @@ export async function getOwnerRatingDetails(homeId: number) {
   }
 }
 
-// ── Rater-facing queries (no revealAt filter — users always see their own submissions) ──
-
-// All ratings submitted by a user (for their rating dashboard pages)
-export async function getRatingsByRater(raterId: number, type: string) {
-  return prisma.rating.findMany({
-    where: { raterId, type },
-    include: {
-      ratedUser: { select: { id: true, name: true, email: true } },
-      ratedHome: { select: { id: true, key: true, title: true, titleGreek: true, city: true, country: true } },
-      finalization: { select: { id: true, moveInDate: true, moveOutDate: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-}
-
 // ── Dedup guards ──────────────────────────────────────────────────────────────
 
 export async function hasRatedFinalization(raterId: number, finalizationId: number, type: string) {
@@ -209,21 +194,6 @@ export async function hasRatedBooking(raterId: number, bookingId: number, type: 
     where: { raterId, bookingId, type },
   })
   return !!existing
-}
-
-// ── Legacy helpers ────────────────────────────────────────────────────────────
-
-export async function getUserRatings(userId: number) {
-  const [userScore, brokerScore] = await Promise.all([
-    getUserScore(userId),
-    getBrokerScore(userId),
-  ])
-  return {
-    userScore: userScore.score,
-    userCount: userScore.count,
-    brokerScore: brokerScore.score,
-    brokerCount: brokerScore.count,
-  }
 }
 
 // Batch version — single DB round-trip for a list of user IDs (avoids N+1)

@@ -9,8 +9,7 @@ interface ViberAlertModalProps {
 }
 
 export default function ViberAlertModal({ onClose }: ViberAlertModalProps) {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const [activating, setActivating] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState(false)

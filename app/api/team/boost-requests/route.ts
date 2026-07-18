@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
-import { BOOST_AMOUNT_CENTS, BOOST_DAYS } from '@/lib/broker-hierarchy'
+import { BOOST_AMOUNT_CENTS, BOOST_DAYS, isChildBroker, isMainBroker } from '@/lib/broker-hierarchy'
 import type { BoostRequestStatus, BoostRequestView } from '@/types/team'
+import { createNotification } from '@/lib/services/notification-service'
 
 // GET: list boost requests. A Main broker sees all their team's requests; a child sees their own.
 export async function GET(request: NextRequest) {
@@ -13,10 +14,9 @@ export async function GET(request: NextRequest) {
     const user = await getCurrentUser()
     if (!user) return unauthorized()
 
-    const where =
-      user.brokerCategory === 'parent'
-        ? { approverId: user.id }
-        : { requesterId: user.id }
+    const where = isMainBroker(user)
+      ? { approverId: user.id }
+      : { requesterId: user.id }
 
     const rows = await prisma.boostRequest.findMany({
       where,
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       requester: r.requester,
     }))
 
-    return NextResponse.json({ requests, viewerRole: user.brokerCategory === 'parent' ? 'parent' : 'child' })
+    return NextResponse.json({ requests, viewerRole: isMainBroker(user) ? 'parent' : 'child' })
   } catch (error) {
     log.error({ err: error }, 'Error listing boost requests')
     return serverError()
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return unauthorized()
-    if (user.brokerCategory !== 'child' || user.parentBrokerId == null) {
+    if (!isChildBroker(user)) {
       return forbidden('Only brokers who are part of a team can request boosts')
     }
 
@@ -104,9 +104,7 @@ export async function POST(request: NextRequest) {
 
     // Notify the Main broker.
     try {
-      await prisma.notification.create({
-        data: { recipientId: user.parentBrokerId, role: 'broker', type: 'boost_request', homeKey, userId: user.id },
-      })
+      await createNotification({ recipientId: user.parentBrokerId, role: 'broker', type: 'boost_request', homeKey, userId: user.id })
     } catch (err) {
       log.error({ err }, 'Failed to create boost_request notification')
     }

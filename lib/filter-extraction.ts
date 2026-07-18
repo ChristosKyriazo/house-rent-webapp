@@ -46,7 +46,7 @@ const FILTER_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
  * Returns JSON with filter values only, plus prompt/response for logging
  */
 
-export async function extractFiltersWithAI(
+async function extractFiltersWithAI(
   query: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   openai: any
@@ -123,7 +123,7 @@ export async function extractFiltersWithAI(
   }
 }
 
-export type ListingSearchMode = 'rent' | 'buy'
+type ListingSearchMode ='rent' | 'buy'
 
 /**
  * Extract filters using AI only (removed simple pattern matching)

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/services/notification-service'
 
 export class InquiryManagementError extends Error {
   status: number
@@ -66,15 +67,13 @@ export async function manageInquiryApproval({
       await tx.inquiry.update({ where: { id: inquiry.id }, data: updateData })
 
       if (inquiryWithDetails) {
-        await tx.notification.create({
-          data: {
-            recipientId: inquiryWithDetails.user.id,
-            role: 'user',
-            type: 'approved',
-            homeKey: inquiryWithDetails.home.key,
-            ownerKey: inquiryWithDetails.home.owner.key,
-          },
-        })
+        await createNotification({
+          recipientId: inquiryWithDetails.user.id,
+          role: 'user',
+          type: 'approved',
+          homeKey: inquiryWithDetails.home.key,
+          ownerKey: inquiryWithDetails.home.owner.key,
+        }, tx)
         await tx.notification.updateMany({
           where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
           data: { deleted: true },
@@ -102,15 +101,13 @@ export async function manageInquiryApproval({
         where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
         data: { deleted: true },
       })
-      await tx.notification.create({
-        data: {
-          recipientId: inquiryWithDetails.user.id,
-          role: 'user',
-          type: 'dismissed',
-          homeKey: inquiryWithDetails.home.key,
-          ownerKey: inquiryWithDetails.home.owner.key,
-        },
-      })
+      await createNotification({
+        recipientId: inquiryWithDetails.user.id,
+        role: 'user',
+        type: 'dismissed',
+        homeKey: inquiryWithDetails.home.key,
+        ownerKey: inquiryWithDetails.home.owner.key,
+      }, tx)
     }
   })
 
@@ -145,16 +142,14 @@ export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: numb
 
   await prisma.$transaction(async tx => {
     await tx.inquiry.update({ where: { id: inquiry.id }, data: { dismissed: true } })
-    await tx.notification.create({
-      data: {
-        recipientId: inquiry.user.id,
-        role: 'user',
-        type: 'rejected',
-        homeKey: inquiry.home.key,
-        userId: inquiry.userId,
-        ownerKey: inquiry.home.owner.key,
-        inquiryId: inquiry.id,
-      },
-    })
+    await createNotification({
+      recipientId: inquiry.user.id,
+      role: 'user',
+      type: 'rejected',
+      homeKey: inquiry.home.key,
+      userId: inquiry.userId,
+      ownerKey: inquiry.home.owner.key,
+      inquiryId: inquiry.id,
+    }, tx)
   })
 }

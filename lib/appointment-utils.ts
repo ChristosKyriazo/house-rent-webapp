@@ -1,7 +1,7 @@
 /** Allowed viewing slot lengths (minutes), must match owner set-availability options. */
-export const APPOINTMENT_SLOT_MINUTES = [15, 30, 45, 60] as const
+const APPOINTMENT_SLOT_MINUTES = [15, 30, 45, 60] as const
 
-export function isValidAppointmentSlotMinutes(n: number): boolean {
+function isValidAppointmentSlotMinutes(n: number): boolean {
   return APPOINTMENT_SLOT_MINUTES.includes(n as (typeof APPOINTMENT_SLOT_MINUTES)[number])
 }
 

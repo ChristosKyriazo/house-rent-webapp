@@ -9,8 +9,11 @@ import {
   TEAM_REQUIRED_TIER,
   hasTeamCapacity,
   promoteToParent,
+  isChildBroker,
+  isMainBroker,
 } from '@/lib/broker-hierarchy'
 import { TIER_RANK } from '@/lib/subscription'
+import { createNotification } from '@/lib/services/notification-service'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const VALID_TIERS = ['free', 'plus', 'pro'] as const
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
         { status: 402 }
       )
     }
-    if (user.brokerCategory === 'child') {
+    if (isChildBroker(user)) {
       return forbidden('A broker who is part of a team cannot invite others')
     }
 
@@ -66,12 +69,12 @@ export async function POST(request: NextRequest) {
     // Reject if the target already belongs to a team or leads one.
     const invitee = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, brokerCategory: true, parentBrokerId: true },
+      select: { id: true, role: true, brokerCategory: true, parentBrokerId: true },
     })
-    if (invitee?.brokerCategory === 'child' && invitee.parentBrokerId != null) {
+    if (invitee && isChildBroker(invitee)) {
       return NextResponse.json({ error: 'already_in_team', message: 'This broker is already part of a team.' }, { status: 409 })
     }
-    if (invitee?.brokerCategory === 'parent') {
+    if (invitee && isMainBroker(invitee)) {
       return NextResponse.json({ error: 'is_team_lead', message: "This broker manages their own team and can't join yours." }, { status: 409 })
     }
 
@@ -107,9 +110,7 @@ export async function POST(request: NextRequest) {
     // If the invitee already has an account, drop them an in-app notification.
     if (invitee?.id) {
       try {
-        await prisma.notification.create({
-          data: { recipientId: invitee.id, role: 'broker', type: 'team_invite', userId: user.id },
-        })
+        await createNotification({ recipientId: invitee.id, role: 'broker', type: 'team_invite', userId: user.id })
       } catch (err) {
         log.error({ err }, 'Failed to create team invite notification')
       }

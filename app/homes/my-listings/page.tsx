@@ -12,6 +12,7 @@ import TranslatedDescription from '@/app/components/TranslatedDescription'
 import { SkeletonList } from '@/app/components/SkeletonCard'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
 import UpgradeGate from '@/app/components/UpgradeGate'
+import { localeFor } from '@/lib/format'
 
 interface Home {
   id: number
@@ -43,9 +44,8 @@ type Tab = 'active' | 'hidden'
 function MyListingsInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { language } = useLanguage()
+  const { language, isEl } = useLanguage()
   const { brokerCategory } = useRole()
-  const isEl = language === 'el'
   const agentId = searchParams.get('agent')
 
   const [allHomes, setAllHomes] = useState<Home[]>([])
@@ -466,7 +466,7 @@ function MyListingsInner() {
                     {!isHidden && (
                       <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
                         <p className="text-xs text-[var(--text-muted)]">
-                          {getTranslation(language, 'publishedOn')} {new Date(home.createdAt).toLocaleDateString(isEl ? 'el-GR' : 'en-US', {
+                          {getTranslation(language, 'publishedOn')} {new Date(home.createdAt).toLocaleDateString(localeFor(language), {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
@@ -476,7 +476,7 @@ function MyListingsInner() {
                           home.promotedUntil && new Date(home.promotedUntil) > new Date() ? (
                             <span className="text-xs text-emerald-300">
                               ⭐ {isEl ? 'Προωθείται έως ' : 'Boosted until '}
-                              {new Date(home.promotedUntil).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
+                              {new Date(home.promotedUntil).toLocaleDateString(localeFor(language), { month: 'short', day: 'numeric' })}
                             </span>
                           ) : (
                             <button
@@ -512,7 +512,7 @@ function MyListingsInner() {
                         ) : home.promotedUntil && new Date(home.promotedUntil) > new Date() ? (
                           <span className="text-xs text-[var(--text-muted)]">
                             {isEl ? 'Προωθείται έως ' : 'Promoted until '}
-                            {new Date(home.promotedUntil).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}
+                            {new Date(home.promotedUntil).toLocaleDateString(localeFor(language), { month: 'short', day: 'numeric' })}
                           </span>
                         ) : brokerCategory === 'child' ? (
                           boostReqByHome[home.key] === 'pending' ? (

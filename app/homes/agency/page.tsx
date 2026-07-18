@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import type { AgencyOverviewResponse, TeamMember } from '@/types/team'
+import { localeFor } from '@/lib/format'
 
 // Static Tailwind strings per color slot (0 = lead). No interpolation — Tailwind 4 purges dynamic classes.
 const AGENT_COLORS = [
@@ -38,8 +39,7 @@ const tierHint = (tier: Tier, isEl: boolean): string => {
 
 export default function AgencyPage() {
   const router = useRouter()
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { language, isEl } = useLanguage()
 
   const [data, setData] = useState<AgencyOverviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -266,7 +266,7 @@ export default function AgencyPage() {
                 <div key={inv.key} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] px-5 py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm text-[var(--text)] truncate">✉ {inv.inviteeEmail}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{isEl ? 'Λήγει' : 'Expires'} {new Date(inv.expiresAt).toLocaleDateString(isEl ? 'el-GR' : 'en-US', { month: 'short', day: 'numeric' })}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{isEl ? 'Λήγει' : 'Expires'} {new Date(inv.expiresAt).toLocaleDateString(localeFor(language), { month: 'short', day: 'numeric' })}</p>
                   </div>
                   <button onClick={() => revokeInvite(inv.key)} className="text-xs px-3 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--status-error)] transition-colors">
                     {isEl ? 'Ακύρωση' : 'Cancel'}

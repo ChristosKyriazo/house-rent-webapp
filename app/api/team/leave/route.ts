@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { badRequest, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
 import { detachChildBroker } from '@/lib/broker-hierarchy'
+import { createNotification } from '@/lib/services/notification-service'
 
 // POST: a Default (child) broker leaves their team. Their listings transfer to the Main broker.
 export async function POST(request: NextRequest) {
@@ -20,9 +20,7 @@ export async function POST(request: NextRequest) {
     await detachChildBroker(user.id)
 
     try {
-      await prisma.notification.create({
-        data: { recipientId: parentId, role: 'broker', type: 'team_left', userId: user.id },
-      })
+      await createNotification({ recipientId: parentId, role: 'broker', type: 'team_left', userId: user.id })
     } catch (err) {
       log.error({ err }, 'Failed to create leave notification')
     }

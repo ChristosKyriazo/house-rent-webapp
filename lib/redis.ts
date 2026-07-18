@@ -36,10 +36,3 @@ export async function redisSet(key: string, value: unknown, ttlSeconds: number):
     // ignore — in-memory fallback still active
   }
 }
-
-export async function redisDel(key: string): Promise<void> {
-  if (!redis) return
-  try {
-    await redis.del(key)
-  } catch {}
-}

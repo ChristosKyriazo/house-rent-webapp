@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { SkeletonList } from '@/app/components/SkeletonCard'
+import { localeFor } from '@/lib/format'
 
 interface Home {
   id: number
@@ -198,7 +199,7 @@ export default function UserInquiriesPage() {
                   <p className="text-[var(--text-muted)] text-xs">
                     {getTranslation(language, 'inquiryDate')}:{' '}
                     {new Date(home.inquiryDate).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         year: 'numeric',
                         month: 'short',

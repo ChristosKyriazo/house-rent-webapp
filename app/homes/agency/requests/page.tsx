@@ -15,8 +15,7 @@ const statusStyles: Record<string, string> = {
 }
 
 export default function BoostRequestsPage() {
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
 
   const [requests, setRequests] = useState<BoostRequestView[]>([])
   const [viewerRole, setViewerRole] = useState<'parent' | 'child'>('child')

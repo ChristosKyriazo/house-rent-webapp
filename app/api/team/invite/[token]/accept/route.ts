@@ -4,8 +4,9 @@ import { getCurrentUser } from '@/lib/auth'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
 import { getStripe } from '@/lib/stripe'
-import { attachChildBroker, hasTeamCapacity } from '@/lib/broker-hierarchy'
+import { attachChildBroker, hasTeamCapacity, isChildBroker, isMainBroker } from '@/lib/broker-hierarchy'
 import { syncOwnerSeats } from '@/lib/team-billing'
+import { createNotification } from '@/lib/services/notification-service'
 
 // POST: the invitee accepts and joins the Main broker's team as a Default (child) broker.
 export async function POST(
@@ -32,10 +33,10 @@ export async function POST(
       return forbidden('This invitation was sent to a different email address')
     }
     if (user.id === invitation.inviterUserId) return badRequest('You cannot accept your own invitation')
-    if (user.brokerCategory === 'parent') {
+    if (isMainBroker(user)) {
       return forbidden('You manage your own team; leave it before joining another')
     }
-    if (user.brokerCategory === 'child' && user.parentBrokerId != null) {
+    if (isChildBroker(user)) {
       return forbidden('You are already part of a team')
     }
     if (!(await hasTeamCapacity(invitation.inviterUserId))) {
@@ -72,9 +73,7 @@ export async function POST(
 
     // Notify the Main broker.
     try {
-      await prisma.notification.create({
-        data: { recipientId: invitation.inviterUserId, role: 'broker', type: 'team_invite_accepted', userId: user.id },
-      })
+      await createNotification({ recipientId: invitation.inviterUserId, role: 'broker', type: 'team_invite_accepted', userId: user.id })
     } catch (err) {
       log.error({ err }, 'Failed to create accept notification')
     }

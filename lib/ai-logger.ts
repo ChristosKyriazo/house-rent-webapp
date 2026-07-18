@@ -2,7 +2,7 @@ import pino from 'pino'
 
 const log = pino({ name: 'ai-calls' })
 
-export type AITask =
+type AITask =
   | 'filter_extraction'
   | 'description_generation'
   | 'vision_analysis'
@@ -45,25 +45,4 @@ function estimateCost(model: string, inputTokens: number, outputTokens: number):
     (inputTokens / 1_000_000) * costs[0] +
     (outputTokens / 1_000_000) * costs[1]
   )
-}
-
-/** Wrap an async OpenAI call with structured logging. */
-export async function withAILog<T>(
-  meta: Omit<AICallMeta, 'latencyMs' | 'success' | 'error'>,
-  fn: () => Promise<T>
-): Promise<T> {
-  const start = Date.now()
-  try {
-    const result = await fn()
-    logAICall({ ...meta, latencyMs: Date.now() - start, success: true })
-    return result
-  } catch (err) {
-    logAICall({
-      ...meta,
-      latencyMs: Date.now() - start,
-      success: false,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    throw err
-  }
 }

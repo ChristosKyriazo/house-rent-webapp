@@ -1,4 +1,4 @@
-export const DISTINCT_VIBES = [
+const DISTINCT_VIBES =[
   'Central',
   'Family',
   'Historic',

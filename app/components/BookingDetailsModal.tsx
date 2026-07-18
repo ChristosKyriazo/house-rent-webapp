@@ -8,6 +8,7 @@ import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import Link from 'next/link'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import { localeFor } from '@/lib/format'
 
 interface Booking {
   id: number
@@ -172,7 +173,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleTimeString(localeFor(language), {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -180,7 +181,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleDateString(localeFor(language), {
       weekday: 'long',
       year: 'numeric',
       month: 'long',

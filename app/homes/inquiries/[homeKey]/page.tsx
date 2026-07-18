@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { localeFor } from '@/lib/format'
 
 interface Inquiry {
   id: number
@@ -279,7 +280,7 @@ export default function HomeInquiriesPage() {
                       <p className="text-[var(--text-muted)] text-xs mt-2">
                         {getTranslation(language, 'inquiryDate')}:{' '}
                         {new Date(inquiry.createdAt).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
+                          localeFor(language),
                           {
                             year: 'numeric',
                             month: 'short',

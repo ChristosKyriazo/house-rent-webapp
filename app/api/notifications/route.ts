@@ -14,6 +14,7 @@ import {
   markAllNotificationsAsViewed,
   NotificationServiceError,
 } from '@/lib/services/notification-service'
+import { localeFor } from '@/lib/format'
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
@@ -264,7 +265,7 @@ export async function GET(request: NextRequest) {
             if (booking) {
               if (notif.role === 'user') {
                 const bookingTime = new Date(booking.startTime).toLocaleTimeString(
-                  language === 'el' ? 'el-GR' : 'en-US',
+                  localeFor(language),
                   { hour: '2-digit', minute: '2-digit' }
                 )
                 message = t.notificationBookingReminder.replace('{title}', booking.title).replace('{time}', bookingTime)

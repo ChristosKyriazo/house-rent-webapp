@@ -68,8 +68,7 @@ const TIERS: { id: Tier; priceEn: string; priceEl: string; labelEn: string; labe
 function UpgradePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { language } = useLanguage()
-  const isEl = language === 'el'
+  const { isEl } = useLanguage()
   const fromParam = searchParams.get('from')
 
   const [currentTier, setCurrentTier] = useState<Tier>('free')
