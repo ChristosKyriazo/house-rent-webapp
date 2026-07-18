@@ -137,7 +137,10 @@ function AIChatPanel(
     }
   }
 
-  const runSearch = async (filters: object) => {
+  // `key` comes from the chat response rather than the conversationKey state:
+  // on the first turn that state hasn't flushed yet, so the opening search
+  // would log without a key and fall out of its own conversation.
+  const runSearch = async (filters: object, key: string | null) => {
     const res = await fetch('/api/homes/ai-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -147,6 +150,7 @@ function AIChatPanel(
         excludeInquired,
         excludeApproved,
         preExtractedFilters: filters,
+        conversationKey: key,
       }),
     })
     const data = await res.json()
@@ -191,7 +195,7 @@ function AIChatPanel(
       const { ok, remaining: newRemaining, pack: newPack } = await consumeSearchCredit()
       if (!ok) { setLoading(false); return }
 
-      const homes = await runSearch(chatData.filters)
+      const homes = await runSearch(chatData.filters, chatData.conversationKey ?? null)
       const resultMsg = homes.length > 0
         ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}`
         : t.noResults

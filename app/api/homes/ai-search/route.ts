@@ -58,11 +58,14 @@ export async function POST(request: NextRequest) {
   let avgDescriptionPhotoScore: number | null = null
   let errorMessage: string | null = null
   let userQuery: string = 'unknown'
+  // Declared out here so the error path below can log it too
+  let conversationKey: string | null = null
 
   try {
     const body = await request.json()
     const { query, type, excludeInquired, excludeApproved, preExtractedFilters } = body
     userQuery = query || (preExtractedFilters ? '[conversational]' : 'unknown')
+    conversationKey = typeof body.conversationKey === 'string' ? body.conversationKey : null
 
     if (!preExtractedFilters && (!query || !query.trim())) {
       return NextResponse.json(
@@ -1312,6 +1315,7 @@ export async function POST(request: NextRequest) {
         finalHomesCount,
         descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
+        conversationKey,
       },
     }).catch((logError) => {
       log.error({ err: logError }, 'Failed to log AI search to database')
@@ -1348,6 +1352,7 @@ export async function POST(request: NextRequest) {
         finalHomesCount,
         descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
+        conversationKey,
       },
     }).catch((logError) => {
       log.error({ err: logError }, 'Failed to log AI search error to database')

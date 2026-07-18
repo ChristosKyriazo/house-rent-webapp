@@ -158,10 +158,17 @@ export async function processAIChatTurn(
     ? applyLocationRewrites(aiResponse.followUpQuestion, rewrites)
     : undefined
 
+  // Persist the text the user actually saw. On "ask" turns the UI renders
+  // followUpQuestion, not assistantMessage — storing the latter left the model
+  // blind to its own question, so a bare reply ("2") looked like it answered
+  // nothing and the same question came back next turn.
+  const visibleText =
+    aiResponse.action === 'ask' && followUpQuestion ? followUpQuestion : assistantMessage
+
   const updatedHistory: ChatMessage[] = [
     ...fullHistory,
     { role: 'user', content: userMessage },
-    { role: 'assistant', content: assistantMessage },
+    { role: 'assistant', content: visibleText },
   ]
 
   let savedKey: string

@@ -11,7 +11,9 @@ import { GraphicProfile } from '@/app/components/visual/PageGraphics'
 
 interface User {
   id: number
-  email: string
+  // Absent when viewing someone else's profile — GET /api/profile?userId=…
+  // deliberately withholds email and date of birth.
+  email?: string
   name: string | null
   dateOfBirth: string | null
   occupation: string | null
@@ -38,6 +40,7 @@ function ProfilePageInner() {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [ratings, setRatings] = useState<Ratings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadFailure, setLoadFailure] = useState<'unauthenticated' | 'error' | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
@@ -64,6 +67,10 @@ function ProfilePageInner() {
         ])
         
         if (!profileRes.ok) {
+          // 401 is the only status that means "sign in". Showing the sign-in
+          // card for 404/500 too made a failed profile load look like a
+          // logged-out session.
+          setLoadFailure(profileRes.status === 401 ? 'unauthenticated' : 'error')
           setUser(null)
           return
         }
@@ -98,6 +105,7 @@ function ProfilePageInner() {
         }
       } catch (error) {
         console.error('Error fetching profile:', error)
+        setLoadFailure('error')
         setUser(null)
       } finally {
         setLoading(false)
@@ -123,21 +131,30 @@ function ProfilePageInner() {
   // If no user, show a loading/error state but don't redirect
   // This allows Clerk to handle auth and redirect if needed
   if (!user && !loading) {
+    const isAuthFailure = loadFailure === 'unauthenticated'
     return (
       <div className="min-h-screen bg-[var(--ink-soft)] flex flex-col items-center justify-center px-4">
         <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] max-w-md w-full text-center">
           <h1 className="text-2xl font-bold text-[var(--text)] mb-4">
-            {getTranslation(language, 'welcome')}
+            {isAuthFailure
+              ? getTranslation(language, 'welcome')
+              : getTranslation(language, 'somethingWentWrong')}
           </h1>
-          <p className="text-[var(--text-muted)] mb-6">
-            {getTranslation(language, 'or')}{' '}
-            <Link
-              href="/login"
-              className="font-semibold text-[var(--text)] hover:text-[var(--accent)] transition-colors underline"
-            >
-              {getTranslation(language, 'login')}
-            </Link>
-          </p>
+          {isAuthFailure ? (
+            <p className="text-[var(--text-muted)] mb-6">
+              {getTranslation(language, 'or')}{' '}
+              <Link
+                href="/login"
+                className="font-semibold text-[var(--text)] hover:text-[var(--accent)] transition-colors underline"
+              >
+                {getTranslation(language, 'login')}
+              </Link>
+            </p>
+          ) : (
+            <p className="text-[var(--text-muted)] mb-6">
+              {getTranslation(language, 'profileUnavailable')}
+            </p>
+          )}
         </div>
       </div>
     )
@@ -153,7 +170,8 @@ function ProfilePageInner() {
   }
 
   // Calculate username
-  const displayName = user.name || user.email.split('@')[0]
+  // email is undefined on other users' profiles, so it can't be the fallback there
+  const displayName = user.name || user.email?.split('@')[0] || getTranslation(language, 'user')
   const userRole = user.role || 'user'
   const isOwnerOrBroker = userRole === 'owner' || userRole === 'broker' || userRole === 'both'
   
@@ -453,10 +471,12 @@ function ProfilePageInner() {
                 {user.occupation ? translateValue(language, user.occupation) : getTranslation(language, 'notSet')}
               </p>
             </div>
-            <div className="pb-4 border-b border-[var(--border-subtle)]">
-              <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'email')}</label>
-              <p className="text-lg text-[var(--text)]">{user.email}</p>
-            </div>
+            {isOwnProfile && (
+              <div className="pb-4 border-b border-[var(--border-subtle)]">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'email')}</label>
+                <p className="text-lg text-[var(--text)]">{user.email}</p>
+              </div>
+            )}
             <div className="pb-4 border-b border-[var(--border-subtle)]">
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'role')}</label>
               <p className="text-lg text-[var(--text)]">

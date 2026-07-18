@@ -331,10 +331,12 @@ model AISearchLog {
   descriptionPhotoScore  Float?  // Combined description and photo matching bonus score (0-5%)
   clickedHomeId         Int?    // First home the user clicked after seeing results
   error                 String? // Error message if any
+  conversationKey       String? // SearchConversation.key — groups every turn of one conversational search. Null for one-shot searches.
   createdAt             DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
+  @@index([conversationKey])
   @@map("ai_search_logs")
 }
 
