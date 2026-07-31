@@ -73,3 +73,8 @@ export async function checkMapsLimit(userId: string | number): Promise<boolean> 
 export async function checkEmbeddingLimit(userId: string | number): Promise<boolean> {
   return checkRateLimit(`${userId}:embeddings`, 15, 60_000)
 }
+
+/** 10 usage-assistant chat turns per user per minute (each can fan out to several LLM calls) */
+export async function checkUsageAssistantLimit(userId: string | number): Promise<boolean> {
+  return checkRateLimit(`${userId}:usage-assistant`, 10, 60_000)
+}

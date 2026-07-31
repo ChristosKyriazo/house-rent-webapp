@@ -9,4 +9,5 @@ function isEnabled(envVar: string | undefined): boolean {
 export const features = {
   aiSearch: isEnabled(process.env.FEATURE_AI_SEARCH),
   bookings: isEnabled(process.env.FEATURE_BOOKINGS),
+  usageAssistant: isEnabled(process.env.FEATURE_USAGE_ASSISTANT),
 } as const

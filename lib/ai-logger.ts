@@ -46,3 +46,9 @@ function estimateCost(model: string, inputTokens: number, outputTokens: number):
     (outputTokens / 1_000_000) * costs[1]
   )
 }
+
+// Exposed for the usage assistant's cost estimates. Same MODEL_COSTS table as
+// the live per-call logging above, so reported and logged costs stay consistent.
+export function estimateAiSearchCost(model: string, inputTokens: number, outputTokens: number): number {
+  return estimateCost(model, inputTokens, outputTokens)
+}

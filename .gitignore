@@ -41,6 +41,7 @@ yarn-error.log*
 tests/e2e/.auth/
 tests/e2e/fixtures/state.json
 playwright-report/
+test-results/
 
 # database
 *.db

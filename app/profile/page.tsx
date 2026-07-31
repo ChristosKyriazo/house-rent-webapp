@@ -545,9 +545,15 @@ function ProfilePageInner() {
 
           {/* Edit Profile Button - Only show for own profile */}
           {isOwnProfile && (
-          <div className="flex justify-center pt-4">
+          <div className="flex flex-col items-center gap-3 pt-4">
             <Link href="/profile/edit" className="btn-primary px-8 py-3">
               {getTranslation(language, 'editProfile')}
+            </Link>
+            <Link
+              href="/assistant"
+              className="text-sm px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors"
+            >
+              {language === 'el' ? '💬 Βοηθός χρήσης AI' : '💬 AI usage assistant'}
             </Link>
           </div>
           )}

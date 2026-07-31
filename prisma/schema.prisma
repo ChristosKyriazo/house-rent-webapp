@@ -483,6 +483,25 @@ model SearchConversation {
   @@index([createdAt])
   @@map("search_conversations")
 }
+
+// Threads of the AI Usage Assistant chatbot. One row per conversation; the full
+// transcript lives in `messages` as JSON (same pattern as SearchConversation).
+// `scope` records whether the thread was opened by an admin (can ask about any
+// user) or a normal user (own data only) — captured at creation for auditing.
+model AssistantConversation {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @default(cuid())
+  userId    Int      // who is chatting (owner of this thread)
+  scope     String   // "admin" | "self"
+  title     String?  // derived from the first user message, for the thread list
+  messages  Json     @default("[]") // [{ role: "user"|"assistant", content, createdAt }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("assistant_conversations")
+}
+
 model Transaction {
   id                    Int      @id @default(autoincrement())
   key                   String   @unique @default(cuid())

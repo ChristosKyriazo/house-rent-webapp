@@ -1,24 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { TIER_RANK } from '@/lib/subscription'
 import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
 import { unauthorized } from '@/lib/api-utils'
-
-const FREE_MONTHLY_LIMIT = 10
-const PAID_MONTHLY_LIMIT = 20
-
-function isPaidTier(tier: string | null) {
-  return (TIER_RANK[tier ?? 'free'] ?? 0) > 0
-}
-
-function getMonthlyReset(resetAt: Date | null): { needsReset: boolean; nextReset: Date } {
-  const now = new Date()
-  const next = new Date(now)
-  next.setMonth(next.getMonth() + 1)
-  if (!resetAt || resetAt <= now) return { needsReset: true, nextReset: next }
-  return { needsReset: false, nextReset: resetAt }
-}
+import { FREE_MONTHLY_LIMIT, PAID_MONTHLY_LIMIT, isPaidTier, getMonthlyReset } from '@/lib/ai-usage-limits'
 
 // GET /api/ai-prompt-usage — return current usage state for the logged-in user
 export async function GET() {
