@@ -1,184 +1,232 @@
-# House Rent Webapp
+# kaparro
 
-A Next.js (App Router) application for browsing and managing rental listings. The stack includes **Prisma** with **PostgreSQL** (via Docker locally), **Clerk** for authentication, **Sentry** for error monitoring, **pino** for structured logging, and optional **OpenAI** / **Google Maps** integrations for AI-assisted search and location features.
+A two-sided Greek property marketplace for rentals and sales — listings, AI-assisted search, inquiries, viewing bookings, deal finalization, and two-way ratings. Next.js 16 App Router, PostgreSQL via Prisma, Clerk auth, Stripe payments.
 
-**Default git branch:** `dev` — day-to-day work happens here; `main` triggers the automated deploy pipeline.
+| Doc | For |
+|---|---|
+| This file | setting up and running the app locally |
+| [docs/APP.md](./docs/APP.md) | what the app does — features, routes, data model, journeys |
+| [docs/OPERATIONS.md](./docs/OPERATIONS.md) | branching, deploys, secrets, the server, rollback, incidents |
+| [CLAUDE.md](./CLAUDE.md) | agent-facing context, gotchas, known issues |
+| [tests/e2e/TEST_PLAN.md](./tests/e2e/TEST_PLAN.md) | numbered E2E scenarios and coverage |
 
 ---
 
 ## Prerequisites
 
-- **Node.js 20** (LTS) and **npm**
-- **Docker Desktop** — runs the local PostgreSQL database ([docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/))
-- A **Clerk** account and application ([dashboard.clerk.com](https://dashboard.clerk.com)) — required for sign-in and protected routes
+- **Node.js 22.18.0** (see `.nvmrc`; `package.json` `engines` requires `>=22.18.0`)
+- npm, Docker Desktop
+- A Clerk account (create a **separate** application per environment)
+- SSH access to the staging server and `~/.ssh/deploy_key`, for the database tunnel
+
+> ⚠️ CI and the production Dockerfile currently run **Node 20**, while `.nvmrc`/`engines` say 22.18.0. Local and production are on different majors — see Known issues in [CLAUDE.md](./CLAUDE.md).
 
 ---
 
-## End-to-end local setup
+## The two databases
 
-### 1. Clone and enter the app
+This is the single most confusing thing about local setup, so read it before anything else.
+
+| Port | What it is | Used for |
+|---|---|---|
+| **5432** | an **empty** local Postgres from `docker compose up db` | running `prisma migrate dev` only |
+| **5433** | an SSH tunnel to the **staging** database | everything else — this is where the real data is |
+
+There is no local Postgres holding real data. Day to day, `DATABASE_URL` points at **5433**.
+
+---
+
+## Local setup
 
 ```bash
-git clone <your-repo-url>
-cd webapp
-```
-
-### 2. Install dependencies
-
-```bash
+git clone https://github.com/ChristosKyriazo/house-rent-webapp.git
+cd house-rent-webapp
 npm install
 ```
 
-### 3. Start the database
+**1. Start the empty local database** (only needed for creating migrations):
 
 ```bash
 docker compose up db -d
 ```
 
-This starts PostgreSQL on port 5432. The container is healthy when `docker compose ps` shows `(healthy)`.
+`docker-compose.yml` defines `db`, `redis` and `app`; the `app` service waits on a healthy `redis`. For normal development you run Next.js on the host and only need `db`.
 
-### 4. Environment variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` — never commit it. Required variables:
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL: `postgresql://postgres:postgres@localhost:5432/house_rent` |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key (browser) — from [dashboard.clerk.com](https://dashboard.clerk.com) |
-| `CLERK_SECRET_KEY` | Yes | Clerk secret key (server) — same Clerk app |
-| `CALCOM_TOKEN_ENCRYPTION_KEY` | Yes | 32-byte hex key for Cal.com OAuth tokens. Generate with: `openssl rand -hex 32` |
-| `SENTRY_DSN` | Recommended | Sentry DSN for server-side error tracking |
-| `NEXT_PUBLIC_SENTRY_DSN` | Recommended | Same DSN value — used by the browser Sentry SDK |
-| `LOG_LEVEL` | No | `debug` / `info` / `warn` / `error` (default: `info`) |
-| `OPENAI_API_KEY` | No | AI descriptions, translation, and natural-language search |
-| `GOOGLE_MAPS_API_KEY` | No | Geocoding and nearby-places distance calculation |
-
-### 5. Apply database migrations
+**2. Open the tunnel to staging** — in a dedicated terminal, it blocks:
 
 ```bash
-npx prisma migrate dev
+ssh -i ~/.ssh/deploy_key -L 5433:172.18.0.2:5432 deploy@116.203.100.64 -N
 ```
 
-This creates all tables in the PostgreSQL database and generates the Prisma client.
+**3. Create `.env`** from `.env.example` and set at minimum:
 
-### 6. Optional: seed reference data
+```dotenv
+DATABASE_URL="postgresql://houserent:<password>@localhost:5433/house_rent"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+```
+
+**4. Generate the Prisma client and run:**
 
 ```bash
-npm run db:seed:universities   # Greek universities
-npm run db:seed:areas          # All 83 areas (Athens, Thessaloniki, Volos, Ioannina, Serres, Komotini, Chania, Iraklio, Patra)
+npx prisma generate
+npm run dev          # http://localhost:3000
 ```
 
-### 7. Start the development server
+Signing in creates the Clerk user and syncs a matching Prisma `User` on first request.
+
+### Creating a migration
+
+Point `DATABASE_URL` at **5432** (the empty local DB) first, then:
 
 ```bash
-npm run dev
+npm run db:migrate
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in via `/login`. The app syncs Clerk users into the Prisma `User` model via `lib/auth.ts`.
+Never run `prisma migrate dev` against 5433 — that is the staging database and the command is interactive and destructive.
+
+### Container parity check
+
+```bash
+npm run build && docker compose up --build
+```
+
+---
+
+## Environment variables
+
+Full list, from `.env.example` plus a grep of `process.env` in the code.
+
+### Required
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection string (5433 tunnel locally) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk, client side (also a Docker build arg) |
+| `CLERK_SECRET_KEY` | Clerk, server side |
+
+### Feature-dependent
+
+| Variable | Needed for |
+|---|---|
+| `OPENAI_API_KEY` | AI search, description generation, vision tagging, embeddings |
+| `GOOGLE_MAPS_API_KEY` | server-side geocoding and distances |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | the client-side map page — same value, separate build arg |
+| `STRIPE_SECRET_KEY` | payments |
+| `STRIPE_WEBHOOK_SECRET` | verifying webhook signatures |
+| `STRIPE_PRICE_ID_PLUS`, `STRIPE_PRICE_ID_PRO` | recurring price IDs per tier |
+| `REDIS_URL` | cross-process rate limiting and AI-search cache; falls back to per-process memory if unset |
+
+There is deliberately **no** `NEXT_PUBLIC_STRIPE_*` key — checkout sessions are created server-side.
+
+### Optional
+
+| Variable | Purpose |
+|---|---|
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | error tracking — **set both to the same value** |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | source map upload |
+| `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` (production hardcodes `info`) |
+| `ADMIN_CLERK_IDS` | preferred admin allowlist (Clerk user IDs) |
+| `ADMIN_EMAILS` | legacy admin allowlist, still honoured as a fallback |
+| `CRON_SECRET` | value for the `x-cron-secret` header on cron-triggered endpoints |
+| `FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS` | set to `"false"` to disable; absent = enabled |
+| `OPENAI_FILTER_MODEL`, `OPENAI_VISION_MODEL`, `OPENAI_HOUSE_DESCRIPTION_MODEL`, `OPENAI_COMPATIBILITY_MODEL` | per-task model overrides |
+| `E2E_BASE_URL` | Playwright target (defaults to `https://dev.kaparro.com`) |
 
 ---
 
 ## npm scripts
 
-| Script | Purpose |
-|--------|---------|
-| `dev` | Next.js dev server |
-| `build` | Production build |
-| `start` | Run production server after `build` |
-| `lint` / `lint:fix` | ESLint |
+| Script | Does |
+|---|---|
+| `dev` / `build` / `start` | Next.js dev server, production build, production server |
+| `lint` / `lint:fix` | ESLint (flat config) |
 | `typecheck` | `tsc --noEmit` |
-| `test` | Vitest unit tests |
-| `test:e2e` | Playwright end-to-end tests (requires dev server running) |
+| `format` / `format:check` | Prettier — **note the repo is not currently prettier-formatted and CI does not check it** |
+| `test` | Vitest, all unit tests |
+| `test:integration` | Vitest, `tests/api` only |
+| `test:e2e` | Playwright, all projects |
+| `test:e2e:auth` | the four authenticated projects (owner, renter, broker, both) |
+| `test:e2e:owner` / `:renter` / `:broker` / `:both` / `:flows` | a single project |
+| `test:e2e:role-checks` | owner + broker + both |
+| `test:e2e:report` | open the last HTML report |
 | `db:generate` | `prisma generate` |
-| `db:migrate` | `prisma migrate dev` |
-| `db:studio` | Prisma Studio — visual DB browser |
-| `db:seed:universities` | Seed Greek universities |
-| `db:seed:areas` | Seed all 83 areas across Greece |
+| `db:migrate` | `prisma migrate dev` (local only) |
+| `db:studio` | Prisma Studio, port 5555 |
+| `db:seed:universities` / `db:seed:areas` / `db:seed:embeddings` | seed scripts |
 
 ---
 
 ## Testing
 
-```bash
-npm test                   # unit tests (vitest) — 101 tests, no database needed
-npm run test:e2e           # E2E smoke tests (Playwright) — requires dev server + DB
-```
-
-Coverage is enforced at ≥60% on statements, branches, and lines. Running `npm test -- --coverage` prints the full report.
-
----
-
-## Health endpoints
-
-| Endpoint | Expected | Purpose |
-|----------|----------|---------|
-| `GET /api/healthz` | `{"status":"ok"}` | Liveness — is the process up? |
-| `GET /api/readyz` | `{"status":"ok","db":"connected"}` | Readiness — is the DB reachable? |
-
----
-
-## Production build (local check)
+**Unit** — 201 tests across 21 files. Uses SQLite (`DATABASE_URL=file:./test.db`), so no tunnel and no Docker needed:
 
 ```bash
-npm run build
-npm run start
+npm test
 ```
 
-For full containerised local/staging parity:
+Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functions 60, lines 60.
 
-```bash
-docker compose up         # starts both db + app
-```
+**E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`https://dev.kaparro.com`** by default, not localhost — set `E2E_BASE_URL` to point elsewhere, and put credentials in `.env.test`.
+
+> CI does **not** run E2E. `ci.yml` is lint → typecheck → test → build.
 
 ---
 
 ## Repository layout
 
-| Path | Purpose |
-|------|---------|
-| `app/` | App Router pages and layouts |
-| `app/api/` | API route handlers |
-| `app/components/` | Shared React components |
-| `lib/` | Server/shared helpers (Prisma, auth, logger, AI, maps) |
-| `proxy.ts` | Clerk auth middleware (Next.js 16 convention, replaces `middleware.ts`) |
+| Path | Contents |
+|---|---|
+| `app/` | App Router pages, layouts, and `app/api/*` route handlers |
+| `app/components/` | shared React components |
+| `app/contexts/` | React context providers (role, language) |
+| `lib/` | business logic, integrations, helpers |
+| `lib/services/` | transaction-aware service layer (inquiries, finalization, notifications) |
+| `lib/search/` | location matching, scoring, description scoring, student context |
+| `lib/schemas/` | Zod request schemas |
 | `prisma/` | `schema.prisma` and migration history |
-| `tests/` | Vitest unit tests (`tests/api/`, `tests/lib/`, `tests/services/`) and Playwright E2E (`tests/e2e/`) |
-| `scripts/seeds/` | Prisma seed scripts |
-| `scripts/sql/` | Raw SQL snippets for manual use |
-| `.github/workflows/` | CI (`ci.yml`) and deploy (`deploy.yml`) pipelines |
+| `proxy.ts` | Clerk middleware (Next.js 16 convention — replaces `middleware.ts`) |
+| `scripts/seeds/` | seed scripts |
+| `scripts/sql/` | raw SQL snippets for manual use |
+| `scripts/tools/` | maintenance utilities |
+| `tests/` | Vitest tests (`tests/api/`, `tests/lib/`, `tests/services/`) and Playwright E2E (`tests/e2e/`) |
+| `types/` | shared TypeScript types |
+| `docs/` | operations and app reference |
+| `.github/workflows/` | CI (`ci.yml`) and deploy (`deploy.yml`) |
 
 ---
 
 ## Git workflow
 
-1. **Work on `dev`:**
-   ```bash
-   git checkout dev && git pull origin dev
-   ```
-2. **Commit and push:**
-   ```bash
-   git commit -m "Your change"
-   git push origin dev
-   ```
-3. **Promote to `main`** (triggers the deploy pipeline):
-   ```bash
-   git checkout main && git merge dev && git push origin main
-   ```
+Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS.md#branching-and-release).
 
-See `docs/BRANCHING_STRATEGY.md` for full branch roles, hotfix handling, and rollback steps.
+1. Branch from `dev`: `feature/*` for product work, `hardening/*` for reliability work.
+2. Small commits, push, open a **PR into `dev`**.
+3. Merging to `dev` **deploys to staging** (dev.kaparro.com).
+4. Promote `dev` → `main` with `git merge --ff-only dev` when a release candidate is ready.
+5. Never work directly on `main` — pushing it deploys to production immediately.
+
+---
+
+## Health endpoints
+
+| Endpoint | Response | Purpose |
+|---|---|---|
+| `GET /api/healthz` | `{"status":"ok"}` | liveness |
+| `GET /api/readyz` | `{"status":"ok","db":"connected"}` | readiness (DB reachable) |
 
 ---
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| `prisma migrate dev` fails with URL error | Check `DATABASE_URL` starts with `postgresql://` |
-| Docker port 5432 already in use | Stop other Postgres processes or change the port in `docker-compose.yml` |
-| App boots but auth fails instantly | Verify Clerk keys match your Clerk application and environment (dev vs prod) |
+| Symptom | Cause / fix |
+|---|---|
+| `ECONNREFUSED ... 5433` | the SSH tunnel is not running — restart it in its own terminal |
+| Queries return no data | `DATABASE_URL` is pointing at 5432 (the empty local DB) instead of 5433 |
+| `prisma migrate dev` prompts to reset | you are pointed at 5433 (staging). Point at 5432 first |
+| Docker port 5432 already in use | stop other Postgres processes, or change the port in `docker-compose.yml` |
+| Clerk session not recognised | dev vs production Clerk keys mismatched between `.env` and the Clerk dashboard |
 | Port 3000 in use | `npx next dev -p 3001` |
-| Sentry not receiving events | Check `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are both set |
+| Sentry silent | both `SENTRY_DSN` **and** `NEXT_PUBLIC_SENTRY_DSN` must be set |
+| E2E failing on auth | the saved `storageState` has expired — re-run `test:e2e:auth` to refresh |
+| `docker compose up` hangs on app | the `app` service waits for a healthy `redis`; check `docker compose ps` |

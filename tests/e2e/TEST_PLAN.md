@@ -1,6 +1,9 @@
 # E2E Test Plan
 > Reference for all test scenarios across every role and feature.
 > Ask Claude to run any test by its ID (e.g. "run test L-3") and watch the video in `test-results/videos/`.
+>
+> For what the app actually does — features, routes, roles, data model — see [docs/APP.md](../../docs/APP.md).
+> Tests run against `https://dev.kaparro.com` by default; override with `E2E_BASE_URL`.
 
 ---
 
