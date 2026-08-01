@@ -1,5 +1,16 @@
 import type { PrismaClient } from '@prisma/client'
 import { cosineSimilarity } from '@/lib/embeddings'
+import { calculateVibeScore, getDistanceFields } from '@/lib/ai-search-helpers'
+import {
+  scoreHome,
+  normalizeDistance,
+  normalizeSafety,
+  normalizeVibe,
+  normalizeParking,
+  VIBE_WEIGHT_LOCATION_PREFERENCE,
+  type HomeComponents,
+} from '@/lib/search/score-home'
+import { semanticScore } from '@/lib/search/calibration'
 
 interface HomeForMatching {
   id: number
@@ -18,6 +29,11 @@ interface HomeForMatching {
   heatingAgent: string | null
   yearBuilt: number | null
   floor: number | null
+  closestMetro?: number | null
+  closestSchool?: number | null
+  closestHospital?: number | null
+  closestPark?: number | null
+  closestUniversity?: number | null
 }
 
 interface FilterParams {
@@ -38,7 +54,15 @@ interface FilterParams {
   yearBuilt?: string | number | null
   areas?: string[] | null
   parking?: boolean | null
+  /** Soft criteria snapshot written by POST /api/saved-searches for `ai` searches. */
+  softCriteria?: Record<string, unknown> | null
 }
+
+/**
+ * A user with one broad saved search should not get a notification per listing when an
+ * agency bulk-uploads fifty of them. Anything past this in a rolling day is dropped.
+ */
+const MAX_MATCH_NOTIFICATIONS_PER_DAY = 5
 
 function num(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === '') return null
@@ -95,6 +119,62 @@ function matchesFilters(home: HomeForMatching, params: FilterParams): boolean {
   return true
 }
 
+/**
+ * Score one new listing against one saved AI search on the **same absolute 0-100 scale the
+ * search UI shows**, so `minMatchPercent` means what the slider says it means.
+ *
+ * This used to compare a raw embedding cosine directly against `minMatchPercent / 100`.
+ * Query-vs-listing cosine for text-embedding-3-small lives around 0.20-0.50, so the default
+ * 70% threshold could never be met and AI saved searches never notified anyone; 30% fired on
+ * everything. `semanticScore` calibrates that band to 0..1 and `scoreHome` aggregates it with
+ * whatever soft criteria were snapshotted at save time.
+ */
+function scoreAgainstSavedSearch(
+  home: HomeForMatching,
+  homeEmbedding: number[],
+  queryVec: number[],
+  params: FilterParams,
+  areaData: { safety: number | null; vibe: string | null } | null,
+): number {
+  const components: HomeComponents = {
+    semantic: semanticScore(cosineSimilarity(homeEmbedding, queryVec)),
+  }
+
+  const soft = params.softCriteria ?? {}
+
+  const distances = getDistanceFields(soft).filter(
+    d => d.category && d.category !== 'Not important' && d.category !== 'Not mentioned',
+  )
+  if (distances.length > 0) {
+    let total = 0
+    for (const d of distances) {
+      total += normalizeDistance(home[d.field] as number | null | undefined, d.category)
+    }
+    components.distance = total / distances.length
+  }
+
+  const safetyCategory = soft.Safety as string | undefined
+  if (safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned') {
+    components.safety = normalizeSafety(areaData?.safety ?? null)
+  }
+
+  const vibePreference = soft.vibePreference as string | undefined
+  if (vibePreference) {
+    const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
+    components.vibe = normalizeVibe(calculateVibeScore(vibePreference, propertyVibes))
+  }
+
+  if (soft.parkingSoftPreference === true) {
+    components.parking = normalizeParking(home.parking)
+  }
+
+  return scoreHome(components, {
+    weights: soft.hasLocationPreference === true && vibePreference
+      ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
+      : undefined,
+  })
+}
+
 export async function matchSavedSearches(
   home: HomeForMatching,
   embedding: number[],
@@ -114,6 +194,17 @@ export async function matchSavedSearches(
     },
   })
 
+  if (searches.length === 0) return
+
+  // Area safety/vibe for this one listing — needed to score the soft criteria the same way
+  // the search route does.
+  const areaData = home.area
+    ? await prisma.area.findFirst({
+        where: { name: home.area },
+        select: { safety: true, vibe: true },
+      })
+    : null
+
   const toNotify: number[] = []
   const matchedIds: number[] = []
 
@@ -121,26 +212,24 @@ export async function matchSavedSearches(
     if (search.userId === home.ownerId) continue
 
     let matched = false
+    const params = (search.filterParams ?? {}) as FilterParams
 
     if (search.type === 'filter') {
-      const params = (search.filterParams ?? {}) as FilterParams
       matched = matchesFilters(home, params)
     } else if (search.type === 'ai') {
       if (!search.queryEmbedding) continue
       const queryVec = search.queryEmbedding as number[]
       if (!Array.isArray(queryVec) || queryVec.length === 0) continue
 
-      const threshold = (search.minMatchPercent ?? 70) / 100
-      const similarity = cosineSimilarity(embedding, queryVec)
-      if (similarity < threshold) continue
-
-      // Also enforce hard location/type filters from stored filterParams
-      const params = (search.filterParams ?? {}) as FilterParams
+      // Hard location/type filters are absolute — no score can rescue a wrong city.
       if (params.city || params.country || params.listingType) {
-        matched = matchesFilters(home, { city: params.city, country: params.country, listingType: params.listingType })
-      } else {
-        matched = true
+        if (!matchesFilters(home, { city: params.city, country: params.country, listingType: params.listingType })) {
+          continue
+        }
       }
+
+      const fit = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData)
+      matched = fit >= (search.minMatchPercent ?? 70)
     }
 
     if (matched) {
@@ -154,15 +243,43 @@ export async function matchSavedSearches(
   // Deduplicate: one notification per user per listing
   const uniqueUserIds = [...new Set(toNotify)]
 
-  await prisma.notification.createMany({
-    data: uniqueUserIds.map(userId => ({
-      recipientId: userId,
-      role: 'user',
-      type: 'new_listing_match',
-      homeKey: home.key,
-    })),
-    skipDuplicates: true,
-  })
+  // `skipDuplicates` cannot help here — Notification has no unique constraint for Postgres to
+  // conflict on — so re-running the embedding queue for the same listing would re-notify
+  // everyone. Check explicitly instead, and cap the daily volume per user.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const [alreadyNotified, recentCounts] = await Promise.all([
+    prisma.notification.findMany({
+      where: { recipientId: { in: uniqueUserIds }, homeKey: home.key, type: 'new_listing_match' },
+      select: { recipientId: true },
+    }),
+    prisma.notification.groupBy({
+      by: ['recipientId'],
+      where: {
+        recipientId: { in: uniqueUserIds },
+        type: 'new_listing_match',
+        createdAt: { gte: since },
+      },
+      _count: { _all: true },
+    }),
+  ])
+
+  const seen = new Set(alreadyNotified.map(n => n.recipientId))
+  const dailyCount = new Map(recentCounts.map(c => [c.recipientId, c._count._all]))
+
+  const recipients = uniqueUserIds.filter(
+    userId => !seen.has(userId) && (dailyCount.get(userId) ?? 0) < MAX_MATCH_NOTIFICATIONS_PER_DAY,
+  )
+
+  if (recipients.length > 0) {
+    await prisma.notification.createMany({
+      data: recipients.map(userId => ({
+        recipientId: userId,
+        role: 'user',
+        type: 'new_listing_match',
+        homeKey: home.key,
+      })),
+    })
+  }
 
   // Stamp lastNotifiedAt on every matched search
   await prisma.savedSearch.updateMany({

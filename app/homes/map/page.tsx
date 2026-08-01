@@ -20,7 +20,7 @@ interface Home {
   latitude: number | null
   longitude: number | null
   photos: string | null
-  matchPercentage?: number
+  matchPercentage?: number | null
 }
 
 interface AIChatMessage { role: 'user' | 'assistant'; content: string }

@@ -1,11 +1,7 @@
 'use client'
 
-import { useState, lazy, Suspense } from 'react'
+import { useState } from 'react'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-
-const ViberAlertModal = lazy(() => import('./ViberAlertModal'))
-
-const SESSION_KEY = 'kaparro_viber_offered'
 
 interface SaveButtonProps {
   homeKey: string
@@ -17,7 +13,6 @@ interface SaveButtonProps {
 export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md' }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved)
   const [loading, setLoading] = useState(false)
-  const [showViber, setShowViber] = useState(false)
   const { language } = useLanguage()
 
   const toggle = async (e: React.MouseEvent) => {
@@ -41,7 +36,6 @@ export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md
         if (res.ok) {
           setSaved(true)
           onToggle?.(true)
-          maybeShowViberOffer()
         }
       }
     } finally {
@@ -49,20 +43,10 @@ export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md
     }
   }
 
-  function maybeShowViberOffer() {
-    if (typeof window === 'undefined') return
-    if (sessionStorage.getItem(SESSION_KEY)) return
-    // Check if viber already active before showing
-    fetch('/api/profile')
-      .then(r => r.json())
-      .then(d => {
-        if (!d.user?.viberAlertsActive) {
-          sessionStorage.setItem(SESSION_KEY, '1')
-          setShowViber(true)
-        }
-      })
-      .catch(() => {})
-  }
+  // The alert upsell used to fire here. Bookmarking a listing is the lowest-intent action on
+  // the site and the modal interrupted it — and because it was gated on sessionStorage, a user
+  // got re-pitched in every new tab. It now lives on saving a *search* with notifications on,
+  // where the user has just asked to be told when something happens. See SaveSearchModal.
 
   const sizeClass = size === 'sm' ? 'text-base p-1.5' : 'text-xl p-2'
 
@@ -82,11 +66,6 @@ export function SaveButton({ homeKey, initialSaved = false, onToggle, size = 'md
         {saved ? '♥' : '♡'}
       </button>
 
-      {showViber && (
-        <Suspense fallback={null}>
-          <ViberAlertModal onClose={() => setShowViber(false)} />
-        </Suspense>
-      )}
     </>
   )
 }

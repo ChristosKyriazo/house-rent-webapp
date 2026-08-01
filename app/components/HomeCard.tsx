@@ -25,7 +25,8 @@ interface HomeCardHome {
   sizeSqMeters: number | null
   energyClass: string | null
   createdAt: string
-  matchPercentage?: number
+  /** null when the query was pure hard filters — every result matches, so there is no percentage to show */
+  matchPercentage?: number | null
   incompatibilityReason?: string
   owner: { email: string; name: string | null; createdAt?: string }
 }
@@ -155,21 +156,25 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
       title={isDismissed ? (language === 'el' ? 'Απέρριψες αυτό το ακίνητο' : 'You dismissed this property') : undefined}
     >
       {/* AI match badge — top right */}
-      {home.matchPercentage !== undefined && (
+      {'matchPercentage' in home && (
         <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
           <div
             className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
               home.incompatibilityReason
                 ? 'border-[var(--status-error)] bg-[var(--status-error-bg)] text-[var(--status-error)]'
-                : home.matchPercentage >= 80
-                  ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)]'
-                  : home.matchPercentage >= 60
-                    ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
-                    : 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+                : home.matchPercentage == null
+                  ? 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+                  : home.matchPercentage >= 80
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)]'
+                    : home.matchPercentage >= 60
+                      ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
+                      : 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
             }`}
             title={home.incompatibilityReason || undefined}
           >
-            {home.matchPercentage.toFixed(1)}% Match
+            {home.matchPercentage == null
+              ? (language === 'el' ? 'Ταιριάζει με τα φίλτρα' : 'Matches your filters')
+              : `${home.matchPercentage.toFixed(1)}% Match`}
           </div>
           {home.incompatibilityReason && (
             <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">
@@ -201,11 +206,11 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
 
       {isDismissed ? (
         <div className="block cursor-not-allowed pointer-events-none">
-          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={home.matchPercentage !== undefined} />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={'matchPercentage' in home} />
         </div>
       ) : (
         <Link href={`/homes/${home.key}?from=browse`} className="block">
-          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={home.matchPercentage !== undefined} />
+          <CardBody home={home} language={language} allAreas={allAreas} areas={areas} textColor={textColor} hasMatchBadge={'matchPercentage' in home} />
         </Link>
       )}
 

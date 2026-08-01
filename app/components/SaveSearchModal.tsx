@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
+import { clientFeatures } from '@/lib/features'
+
+const ViberAlertModal = lazy(() => import('./ViberAlertModal'))
 
 interface SaveSearchModalProps {
   type: 'filter' | 'ai'
@@ -25,6 +28,7 @@ export default function SaveSearchModal({
   const [minMatchPercent, setMinMatchPercent] = useState(70)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAlertUpsell, setShowAlertUpsell] = useState(false)
 
   async function handleSave() {
     setSaving(true)
@@ -51,6 +55,13 @@ export default function SaveSearchModal({
         throw new Error(data.error ?? `Error ${res.status}`)
       }
 
+      // The one moment where offering push alerts is a continuation rather than an
+      // interruption: the user has just explicitly asked to be told when something matches.
+      if (clientFeatures.viberAlerts) {
+        setShowAlertUpsell(true)
+        return
+      }
+
       onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -60,6 +71,14 @@ export default function SaveSearchModal({
   }
 
   const isEl = language === 'el'
+
+  if (showAlertUpsell) {
+    return (
+      <Suspense fallback={null}>
+        <ViberAlertModal onClose={onSaved} />
+      </Suspense>
+    )
+  }
 
   return (
     <div

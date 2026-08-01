@@ -3,13 +3,27 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, getDistanceFields, calculateVibeScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
 import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 import { features } from '@/lib/features'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
 import { redisGet, redisSet } from '@/lib/redis'
+import {
+  scoreHome,
+  rankScore,
+  normalizeDistance,
+  normalizeSafety,
+  normalizeVibe,
+  normalizeParking,
+  normalizeDescriptionBonus,
+  normalizeDescriptionPenalty,
+  normalizePhoto,
+  VIBE_WEIGHT_LOCATION_PREFERENCE,
+  type HomeComponents,
+} from '@/lib/search/score-home'
+import { semanticScore, SEM_NEUTRAL } from '@/lib/search/calibration'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -31,6 +45,9 @@ const searchResultCache: CachedSearchResult[] = []
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 const SEARCH_CACHE_MAX_ENTRIES = 100
 const SEARCH_CACHE_SIM_THRESHOLD = 0.78
+
+/** Added to the fit (0..1 scale) when a listing sits in an area the user named. */
+const PREFERRED_AREA_BONUS = 0.12
 
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
@@ -731,15 +748,37 @@ export async function POST(request: NextRequest) {
       ? applyStudentTransitBoost(extractedFilters as Record<string, unknown>)
       : extractedFilters
     
-    // If we have hard filters but NO soft criteria, all matching properties get 100%
-    const shouldForce100 = hasHardFilters && !effectiveSoftCriteria
+    // Hard filters and nothing else: every returned listing satisfies the query completely,
+    // so there is no match signal to report — we order by intrinsic quality and show no
+    // percentage at all rather than inventing one out of unrelated attributes.
+    const hardFiltersOnly = hasHardFilters && !effectiveSoftCriteria
 
-    // PROGRAMMATIC MATCH CALCULATION (replaces AI match calculation)
-    // Calculate match percentages based on distance scores and vibe matching
-    const matchMap = new Map<number, number>()
-    
-    if (shouldForce100) {
-      // Score by intrinsic home quality so identical-filter results still have different percentages
+    // ABSOLUTE MATCH CALCULATION
+    // Every component below normalises to [0,1] independently of the rest of the result
+    // set, and they are aggregated once at the end by `scoreHome`. Keeping the components
+    // separate (rather than mutating a running score) is what lets the saved-search
+    // matcher reuse the exact same maths on a single new listing.
+    /** homeId → per-component [0,1] scores */
+    const componentsMap = new Map<number, HomeComponents>()
+    /** homeId → [0,1] bonus for sitting in an explicitly preferred area */
+    const areaBonusMap = new Map<number, number>()
+    /** homeId → [0,1] penalty from a description that contradicts the query */
+    const penaltyMap = new Map<number, number>()
+    /** homeId → intrinsic quality, ordering only, used when `hardFiltersOnly` */
+    const intrinsicRankMap = new Map<number, number>()
+
+    const getComponents = (homeId: number): HomeComponents => {
+      let c = componentsMap.get(homeId)
+      if (!c) {
+        c = {}
+        componentsMap.set(homeId, c)
+      }
+      return c
+    }
+
+    if (hardFiltersOnly) {
+      // Order by intrinsic home quality so identical-filter results still have a stable,
+      // non-arbitrary sequence. This number is never shown as a match percentage.
       const energyBonus: Record<string, number> = { 'A+': 22, A: 18, B: 13, C: 9, D: 5, E: 2, F: 1, G: 0 }
       homes.forEach(home => {
         let score = 55 // base
@@ -773,7 +812,7 @@ export async function POST(request: NextRequest) {
           const dist = Math.abs((home as any).pricePerMonth - mid) / (maxP - minP)
           score += Math.max(0, Math.round((1 - dist) * 6))
         }
-        matchMap.set(home.id, Math.min(100, score))
+        intrinsicRankMap.set(home.id, Math.min(100, score))
       })
     } else {
       // Calculate scores programmatically
@@ -786,192 +825,43 @@ export async function POST(request: NextRequest) {
         d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
       )
       
-      // Calculate raw scores for each home
-      const rawScores = new Map<number, number>()
-      let minScore = Infinity
-      let maxScore = -Infinity
-      
-      const calculationDetails: Array<{
-        homeId: number
-        homeTitle: string
-        distanceScores: Array<{ field: string; distance: number | null; score: number }>
-        avgDistanceScore: number
-        safety: number | null
-        safetyScore: number
-        parking: boolean | null
-        parkingScore: number
-        propertyVibes: string[]
-        vibeScore: number
-        rawScore: number
-        finalScaledScore?: number
-      }> = []
-      
+      // Per-home component scores. Each is absolute and in [0,1]: it depends only on this
+      // home and this query, never on the other results. A component left unset was not
+      // expressed by the query and is skipped by `scoreHome` rather than scored as 0.
       homes.forEach((home) => {
-        let rawScore = 0 // Start from 0, build up
-        
-        // Calculate distance scores with priority logic for Metro/Bus
-        let totalDistanceScore = 0
-        let distanceCount = 0
-        const distanceScores: Array<{ field: string; distance: number | null; score: number }> = []
-        
-        for (const distanceInfo of distancesToConsider) {
-          const distance = home[distanceInfo.field] as number | null
-          const score = calculateDistanceScore(distance, distanceInfo.category)
-          totalDistanceScore += score
-          distanceScores.push({ field: distanceInfo.name, distance, score })
-          if (distance !== null && distance !== undefined) {
-            distanceCount++
-          }
-        }
-        
-        // Average distance scores if multiple distances, otherwise use the single score
-        const avgDistanceScore = distanceCount > 0 ? totalDistanceScore / distanceCount : 0
-        
-        // Calculate safety score
+        const components = getComponents(home.id)
         const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
-        const safety = areaData?.safety || null
-        const safetyScore = calculateSafetyScore(safety, safetyCategory)
-        
-        // Calculate vibe score
-        const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
-        const vibeScore = calculateVibeScore(vibePreference, propertyVibes)
-        
-        // Calculate parking score (only if it's a soft preference)
-        const parkingScore = calculateParkingScore(home.parking, parkingSoftPreference)
-        
-        // Combine distance, safety, vibe, and parking scores
-        // If location preference is mentioned, vibe gets 40% weight
-        // Adjust based on what exists
-        const hasDistance = distancesToConsider.length > 0
-        const hasSafety = safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned'
-        const hasVibe = !!vibePreference
-        const hasParking = parkingSoftPreference
-        const hasLocationPreference = extractedFilters.hasLocationPreference === true
-        
-        // Count how many components we have
-        const componentCount = [hasDistance, hasSafety, hasVibe, hasParking].filter(Boolean).length
-        
-        // If location preference is mentioned, vibe gets 40% weight
-        if (hasLocationPreference && hasVibe) {
-          if (componentCount === 4) {
-            // All four with location preference: Distance 50%, Safety 5%, Vibe 40%, Parking 5%
-            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.05) + (vibeScore * 0.4) + (parkingScore * 0.05)
-          } else if (hasDistance && hasSafety && hasVibe) {
-            // Distance + Safety + Vibe with location: Distance 50%, Safety 10%, Vibe 40%
-            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.1) + (vibeScore * 0.4)
-          } else if (hasDistance && hasVibe && hasParking) {
-            // Distance + Vibe + Parking with location: Distance 50%, Vibe 40%, Parking 10%
-            rawScore = (avgDistanceScore * 0.5) + (vibeScore * 0.4) + (parkingScore * 0.1)
-          } else if (hasSafety && hasVibe && hasParking) {
-            // Safety + Vibe + Parking with location: Safety 20%, Vibe 40%, Parking 40%
-            rawScore = (safetyScore * 0.2) + (vibeScore * 0.4) + (parkingScore * 0.4)
-          } else if (hasDistance && hasVibe) {
-            // Distance + Vibe with location: Distance 60%, Vibe 40%
-            rawScore = (avgDistanceScore * 0.6) + (vibeScore * 0.4)
-          } else if (hasSafety && hasVibe) {
-            // Safety + Vibe with location: Safety 60%, Vibe 40%
-            rawScore = (safetyScore * 0.6) + (vibeScore * 0.4)
-          } else if (hasVibe && hasParking) {
-            // Vibe + Parking with location: Vibe 40%, Parking 60%
-            rawScore = (vibeScore * 0.4) + (parkingScore * 0.6)
-          } else if (hasVibe) {
-            // Only vibe with location preference: 100% Vibe
-            rawScore = vibeScore
-          } else {
-            // Fallback (shouldn't happen)
-            rawScore = avgDistanceScore || safetyScore || parkingScore || 50
+
+        // Proximity — mean over every distance the query asked about. Missing data gets an
+        // explicit prior inside `normalizeDistance`, so an ungeocoded listing can never
+        // outrank one we know is close.
+        if (distancesToConsider.length > 0) {
+          let total = 0
+          for (const distanceInfo of distancesToConsider) {
+            total += normalizeDistance(home[distanceInfo.field] as number | null, distanceInfo.category)
           }
-        } else {
-          // No location preference - use original weighting
-          if (componentCount === 4) {
-            // All four: Distance 70%, Safety 10%, Vibe 10%, Parking 10%
-            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.1) + (vibeScore * 0.1) + (parkingScore * 0.1)
-          } else if (hasDistance && hasSafety && hasVibe) {
-            // Distance + Safety + Vibe: 80% Distance, 10% Safety, 10% Vibe
-            rawScore = (avgDistanceScore * 0.8) + (safetyScore * 0.1) + (vibeScore * 0.1)
-          } else if (hasDistance && hasSafety && hasParking) {
-            // Distance + Safety + Parking: 70% Distance, 20% Safety, 10% Parking
-            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.2) + (parkingScore * 0.1)
-          } else if (hasDistance && hasVibe && hasParking) {
-            // Distance + Vibe + Parking: 75% Distance, 15% Vibe, 10% Parking
-            rawScore = (avgDistanceScore * 0.75) + (vibeScore * 0.15) + (parkingScore * 0.1)
-          } else if (hasSafety && hasVibe && hasParking) {
-            // Safety + Vibe + Parking: 60% Safety, 25% Vibe, 15% Parking
-            rawScore = (safetyScore * 0.6) + (vibeScore * 0.25) + (parkingScore * 0.15)
-          } else if (hasDistance && hasSafety) {
-            // Distance + Safety: 60% Distance, 40% Safety
-            rawScore = (avgDistanceScore * 0.6) + (safetyScore * 0.4)
-          } else if (hasDistance && hasVibe) {
-            // Distance + Vibe: 80% Distance, 20% Vibe
-            rawScore = (avgDistanceScore * 0.8) + (vibeScore * 0.2)
-          } else if (hasDistance && hasParking) {
-            // Distance + Parking: 85% Distance, 15% Parking
-            rawScore = (avgDistanceScore * 0.85) + (parkingScore * 0.15)
-          } else if (hasSafety && hasVibe) {
-            // Safety + Vibe: 70% Safety, 30% Vibe
-            rawScore = (safetyScore * 0.7) + (vibeScore * 0.3)
-          } else if (hasSafety && hasParking) {
-            // Safety + Parking: 75% Safety, 25% Parking
-            rawScore = (safetyScore * 0.75) + (parkingScore * 0.25)
-          } else if (hasVibe && hasParking) {
-            // Vibe + Parking: 70% Vibe, 30% Parking
-            rawScore = (vibeScore * 0.7) + (parkingScore * 0.3)
-          } else if (hasDistance) {
-            // Only distance
-            rawScore = avgDistanceScore
-          } else if (hasSafety) {
-            // Only safety
-            rawScore = safetyScore
-          } else if (hasVibe) {
-            // Only vibe
-            rawScore = vibeScore
-          } else if (hasParking) {
-            // Only parking
-            rawScore = parkingScore
-          } else {
-            // No soft criteria (shouldn't happen, but fallback)
-            rawScore = 50
-          }
+          components.distance = total / distancesToConsider.length
         }
-        
-        rawScores.set(home.id, rawScore)
-        minScore = Math.min(minScore, rawScore)
-        maxScore = Math.max(maxScore, rawScore)
-        
-        calculationDetails.push({
-          homeId: home.id,
-          homeTitle: home.title.substring(0, 50),
-          distanceScores,
-          avgDistanceScore,
-          safety,
-          safetyScore,
-          parking: home.parking,
-          parkingScore,
-          propertyVibes,
-          vibeScore,
-          rawScore,
-        })
-      })
-      
-      // Scale all scores to 0-100 range
-      const scoreRange = maxScore - minScore
-      
-      homes.forEach((home) => {
-        const rawScore = rawScores.get(home.id) || 50
-        let scaledScore = scoreRange > 0
-          ? 30 + ((rawScore - minScore) / scoreRange) * 65
-          : 70
-        scaledScore = Math.max(0, Math.min(100, scaledScore))
-        matchMap.set(home.id, scaledScore)
+
+        if (safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned') {
+          components.safety = normalizeSafety(areaData?.safety ?? null)
+        }
+
+        if (vibePreference) {
+          const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
+          components.vibe = normalizeVibe(calculateVibeScore(vibePreference, propertyVibes))
+        }
+
+        if (parkingSoftPreference) {
+          components.parking = normalizeParking(home.parking)
+        }
       })
     }
 
-    // Distance scoring is now handled in the programmatic calculation above
-    
     // Post-process: Apply preferred areas bonus
     // If user mentions areas as preferences (e.g., "like Filothei, Psychiko"), boost properties in those areas
-    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
-    if (!shouldForce100) {
+    // Skipped when only hard filters were given — there is no percentage to boost.
+    if (!hardFiltersOnly) {
       const preferredAreas = extractedFilters.preferredAreas
       
       if (preferredAreas && Array.isArray(preferredAreas) && preferredAreas.length > 0) {
@@ -1032,38 +922,24 @@ export async function POST(request: NextRequest) {
               )
             
             if (isPreferred) {
-        const currentScore = matchMap.get(home.id) || 50
-              const bonus = 12 // Bonus for being in a preferred area
-              const finalScore = Math.min(100, Math.max(0, currentScore + bonus))
-              matchMap.set(home.id, finalScore)
+              areaBonusMap.set(home.id, PREFERRED_AREA_BONUS)
             }
           }
         })
       }
     }
     
-    // Parking: If hard filter, database is already filtered. If soft preference, it's included in scoring above.
-    
-    // Distance, safety, and vibe matching are now handled in the programmatic calculation above
+    // Parking: If hard filter, database is already filtered. If soft preference, it's a component above.
 
     // Post-process: Apply description bonus + disqualifier detection
     // Analyze descriptions to match user query features (e.g., "new stove", "backyard", "big balcony")
-    // This bonus is applied after all other scores are calculated
     /** homeId → incompatibility reason when description explicitly prohibits what user wants */
     const disqualifierMap = new Map<number, string>()
-    if (!shouldForce100) {
+    if (!hardFiltersOnly) {
       // Calculate description bonus for each home
       const descriptionScores: number[] = []
       const descriptionBonusMap = new Map<number, number>()
-      const descriptionPenaltyMap = new Map<number, number>()
-      const descriptionDetails: Array<{
-        homeId: number
-        homeTitle: string
-        description: string | null
-        bonus: number
-        penalty: number
-      }> = []
-      
+
       for (const home of homes) {
         const result = calculateDescriptionBonus(
           query,
@@ -1075,47 +951,29 @@ export async function POST(request: NextRequest) {
         const disqualifier = calculateDisqualifiers(query, home.description)
         if (disqualifier) {
           disqualifierMap.set(home.id, disqualifier)
-          matchMap.set(home.id, 0)
         }
 
         descriptionScores.push(result.bonus)
         descriptionBonusMap.set(home.id, result.bonus)
-        descriptionPenaltyMap.set(home.id, result.penalty)
-        descriptionDetails.push({
-          homeId: home.id,
-          homeTitle: home.title.substring(0, 50),
-          description: home.description ? home.description.substring(0, 200) : null,
-          bonus: result.bonus,
-          penalty: result.penalty,
-        })
+
+        if (disqualifierMap.has(home.id)) continue
+
+        // A description that speaks to the query at all is evidence of fit; one that
+        // explicitly denies what was asked for is evidence against it. The first is a
+        // component, the second a penalty on the aggregate — a listing that says
+        // "no pets" should not be rescued by scoring well everywhere else.
+        if (result.bonus > 0) {
+          getComponents(home.id).description = normalizeDescriptionBonus(result.bonus)
+        }
+        if (result.penalty < 0) {
+          penaltyMap.set(home.id, normalizeDescriptionPenalty(result.penalty))
+        }
       }
-      
+
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
-      
-      // Apply bonuses and penalties (skip disqualified homes — their score is locked at 0)
-      homes.forEach(home => {
-        if (disqualifierMap.has(home.id)) return
-        const bonus = descriptionBonusMap.get(home.id) || 0
-        const penalty = descriptionPenaltyMap.get(home.id) || 0
-        const currentScore = matchMap.get(home.id) || 0
 
-        let finalScore = currentScore
 
-        // Apply explicit penalty (home description says it doesn't have what user wants)
-        if (penalty < 0) {
-          finalScore = Math.max(0, finalScore + penalty)
-        }
-
-        // Apply description bonus — no relative penalty on homes that simply don't mention it
-        if (bonus > 0) {
-          finalScore = Math.min(100, finalScore + bonus)
-        }
-
-        matchMap.set(home.id, finalScore)
-      })
-      
-      
       // Apply photo tag bonus — visual features confirmed in photos that match user query
       // Skip disqualified homes to keep their score locked at 0
       homes.forEach(home => {
@@ -1128,22 +986,12 @@ export async function POST(request: NextRequest) {
           : null
         const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
         if (photoBonus > 0) {
-          const cur = matchMap.get(home.id) || 0
-          matchMap.set(home.id, Math.min(100, cur + photoBonus))
+          getComponents(home.id).photo = normalizePhoto(photoBonus)
         }
       })
 
-      // Recency bonus — new listings get a visibility boost to prevent cold-start invisibility
-      homes.forEach(home => {
-        if (disqualifierMap.has(home.id)) return
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ageMs = Date.now() - new Date((home as any).createdAt).getTime()
-        const ageDays = ageMs / (1000 * 60 * 60 * 24)
-        const recencyBonus = ageDays < 7 ? 15 : ageDays < 30 ? 8 : ageDays < 60 ? 3 : 0
-        if (recencyBonus > 0) {
-          matchMap.set(home.id, Math.min(100, (matchMap.get(home.id) || 0) + recencyBonus))
-        }
-      })
+      // Recency is applied in `rankScore` below, never to the displayed fit — freshness is
+      // a merchandising decision, not evidence that a listing answers the query.
 
       // Calculate average description score for logging
       if (descriptionScores.length > 0) {
@@ -1157,13 +1005,6 @@ export async function POST(request: NextRequest) {
         homes = homes.filter(home => {
           const bonus = descriptionBonusMap.get(home.id) || 0
           return bonus > 0
-        })
-        // Update matchMap to only include filtered homes
-        const filteredHomeIds = new Set(homes.map(h => h.id))
-        matchMap.forEach((score, homeId) => {
-          if (!filteredHomeIds.has(homeId)) {
-            matchMap.delete(homeId)
-          }
         })
       }
       
@@ -1190,7 +1031,7 @@ export async function POST(request: NextRequest) {
         )
       }
     } else {
-      // If shouldForce100 but only country filter, return nothing
+      // Hard filters only, but only a country was given — too broad to be useful.
       if (onlyCountryFilter) {
         return NextResponse.json(
           {
@@ -1201,72 +1042,95 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Even in force-100 path, still detect hard incompatibilities in descriptions
+      // Still detect hard incompatibilities in descriptions
       if (query) {
         for (const home of homes) {
           const disqualifier = calculateDisqualifiers(query, home.description)
           if (disqualifier) {
             disqualifierMap.set(home.id, disqualifier)
-            matchMap.set(home.id, 0)
           }
         }
       }
     }
 
-    // Semantic similarity boost — pgvector if available, JS cosine as fallback
-    if (queryEmbedding && homes.length > 0) {
-      const homeIds = homes.filter(h => !disqualifierMap.has(h.id)).map(h => h.id)
-      let pgvectorUsed = false
+    // Semantic similarity — the single strongest signal we have, and a first-class
+    // component rather than the ~0-4 point afterthought it used to be. pgvector when the
+    // column is populated, JS cosine over the JSON column otherwise.
+    if (queryEmbedding && homes.length > 0 && !hardFiltersOnly) {
+      const candidates = homes.filter(h => !disqualifierMap.has(h.id))
+      /** Homes the in-database query actually returned a similarity for. */
+      const scoredByPgvector = new Set<number>()
 
-      if (homeIds.length > 0) {
+      if (candidates.length > 0) {
         try {
-          // Attempt pgvector cosine similarity in-database (fast, no memory overhead)
           const vectorStr = `[${queryEmbedding.join(',')}]`
           const pgResults = await prisma.$queryRawUnsafe<Array<{ id: number; sim: number }>>(
             `SELECT id, 1 - ("embeddingVec" <=> $1::vector) AS sim
              FROM homes
              WHERE id = ANY($2::int[]) AND "embeddingVec" IS NOT NULL`,
             vectorStr,
-            homeIds
+            candidates.map(h => h.id)
           )
-          if (pgResults.length > 0) {
-            pgvectorUsed = true
-            for (const { id, sim } of pgResults) {
-              const bonus = Math.round(sim * 8)
-              if (bonus > 0) matchMap.set(id, Math.min(100, (matchMap.get(id) || 0) + bonus))
-            }
+          for (const { id, sim } of pgResults) {
+            scoredByPgvector.add(id)
+            getComponents(id).semantic = semanticScore(sim)
           }
         } catch {
-          // pgvector not yet available — fall through to JS cosine
+          // pgvector not yet available — everything falls through to JS cosine
         }
 
-        if (!pgvectorUsed) {
-          // JS cosine fallback (loads embeddings from JSON column)
-          for (const home of homes) {
-            if (disqualifierMap.has(home.id)) continue
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const stored = (home as any).embedding
-            if (!Array.isArray(stored)) continue
-            const sim = cosineSimilarity(queryEmbedding, stored as number[])
-            const bonus = Math.round(sim * 8)
-            if (bonus > 0) matchMap.set(home.id, Math.min(100, (matchMap.get(home.id) || 0) + bonus))
-          }
+        // Per-home coverage, not a global flag: `embeddingVec` is only written by the bulk
+        // uploader and the re-embed job, so a single bulk-uploaded home in the result set
+        // used to mark pgvector "used" and silently strip the semantic signal from every
+        // normally-created listing.
+        for (const home of candidates) {
+          if (scoredByPgvector.has(home.id)) continue
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const stored = (home as any).embedding
+          getComponents(home.id).semantic = Array.isArray(stored)
+            ? semanticScore(cosineSimilarity(queryEmbedding, stored as number[]))
+            : SEM_NEUTRAL
         }
       }
     }
 
-    // Attach match percentages and safety to homes and sort by match percentage (highest first)
-    // Disqualified homes (0%) sort to the bottom
+    // Final aggregation. `matchPercentage` is the absolute fit and is what the user sees;
+    // `rankScore` adds freshness and is only ever used to order the list.
+    // When only hard filters were given every result satisfies the query completely, so we
+    // report no percentage at all and let the UI say "matches your filters".
+    const vibeWeightOverride = extractedFilters.hasLocationPreference === true && extractedFilters.vibePreference
+      ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
+      : undefined
+
     const homesWithMatches = homes.map(home => {
       const incompatibilityReason = disqualifierMap.get(home.id) ?? undefined
+      const disqualified = incompatibilityReason !== undefined
+
+      const fit = hardFiltersOnly
+        ? null
+        : scoreHome(componentsMap.get(home.id) ?? {}, {
+            penalty: penaltyMap.get(home.id),
+            areaBonus: areaBonusMap.get(home.id),
+            disqualified,
+            weights: vibeWeightOverride,
+          })
+
+      const base = hardFiltersOnly
+        ? (disqualified ? 0 : intrinsicRankMap.get(home.id) ?? 50)
+        : fit ?? 0
+
       return {
         ...home,
         embedding: undefined, // strip from response
-        matchPercentage: matchMap.get(home.id) ?? 0,
+        matchPercentage: fit,
         incompatibilityReason,
         safety: extractedFilters.Safety || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        _rank: disqualified ? -1 : rankScore(base, (home as any).createdAt),
       }
-    }).sort((a, b) => b.matchPercentage - a.matchPercentage)
+    })
+      .sort((a, b) => b._rank - a._rank)
+      .map(({ _rank, ...home }) => home)
 
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length

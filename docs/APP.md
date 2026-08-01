@@ -55,7 +55,16 @@ The DB fact separating Main from Default is `brokerCategory`; the fact separatin
 | Save / unsave listing | Logged-in | `POST` / `DELETE /api/homes/saved`, viewed at `/homes/saved` |
 | **Saved searches** | Logged-in | `/homes/saved-searches`, `GET/POST /api/saved-searches`, `/api/saved-searches/[key]` |
 
-**Saved searches** persist either a filter snapshot (`type: 'filter'`, `filterParams`) or an AI query (`type: 'ai'`, `queryText` + `queryEmbedding`, matched above `minMatchPercent`, default 70). When `notificationsEnabled`, `lib/saved-search-matcher.ts` notifies on new matching listings and stamps `lastNotifiedAt`.
+**Saved searches** persist either a filter snapshot (`type: 'filter'`, `filterParams`) or an AI query (`type: 'ai'`, `queryText` + `queryEmbedding` + a `softCriteria` snapshot inside `filterParams`, matched above `minMatchPercent`, default 70). When `notificationsEnabled`, `lib/saved-search-matcher.ts` notifies on new matching listings and stamps `lastNotifiedAt`. It scores the new listing with the **same** `scoreHome` used by AI search, so `minMatchPercent` is on the same scale as the percentage the user saw. Notifications are deduplicated per (user, listing) and capped at 5 per user per rolling day.
+
+### Match scoring
+
+`lib/search/score-home.ts` is the single scorer, shared by AI search and the saved-search matcher. Every component normalises to `[0,1]` **absolutely** — independent of the rest of the result set — and the fit is the weighted mean over only the components the query actually expressed (`semantic` .30, `distance` .25, `description` .15, `vibe` .10, `safety` .08, `photo` .07, `parking` .05, renormalised).
+
+- **Semantic** is a first-class term, not a late bonus. Raw cosine for query-vs-listing sits around 0.20–0.50 for `text-embedding-3-small`, so `lib/search/calibration.ts` maps it through a logistic (`SEM_CENTER` 0.32, `SEM_TEMP` 0.06). Changing those constants changes what every stored `minMatchPercent` means — bump `SCORING_VERSION` with them.
+- **Missing data gets a prior, never 0.** An ungeocoded listing must not outrank one known to be close.
+- **Fit is not rank.** The displayed `matchPercentage` is the fit alone; freshness is added in `rankScore` for ordering only.
+- **Hard-filters-only queries return `matchPercentage: null`** — every result satisfies the query completely, so there is no match signal to report and the UI says "matches your filters".
 
 ### 3. Inquiries and deal flow
 
@@ -166,9 +175,13 @@ Three purchase types are routed by session metadata: tier subscription, one-off 
 
 `enforceTierListingLimits` hides the least-recently-updated listings beyond the new limit (stamping `overlimitHiddenAt`) and revokes excess promotion slots. Upgrading restores them. A Main broker with team members **cannot** downgrade — `409 team_members_present`.
 
-### Viber alerts
+### Viber alerts — not shipped
 
-`POST /api/subscription/viber-alerts` sets `viberAlertsActive`. ⚠️ **This endpoint currently has no payment check** — see Known issues in [CLAUDE.md](../CLAUDE.md).
+There is **no delivery pipeline**: no verified phone column on `User`, no provider, and nothing reads `viberAlertsActive` to send anything. `POST /api/subscription/viber-alerts` used to grant the paid flag to any authenticated caller for a €2.99 feature it could not deliver; it now returns `501` unless `FEATURE_VIBER_ALERTS=true`, and `402` even then.
+
+Before this can ship: (1) `User.phone` + `phoneVerifiedAt`, OTP-verified; (2) a server-priced Stripe line item with the flag flipped **from the webhook only**; (3) a sender invoked from `createNotification` so routing lives in one place.
+
+The upsell modal is gated on `NEXT_PUBLIC_FEATURE_VIBER_ALERTS` and now triggers on **saving a search with notifications enabled** — the moment the user has explicitly asked to be told when something happens — rather than on bookmarking a listing, which is the lowest-intent action on the site. Push-worthy events are the time-critical human-caused ones (inquiry approved/dismissed, deal finalized, viewing reminder); `new_listing_match` is in-app by default and a once-daily digest at most.
 
 ---
 

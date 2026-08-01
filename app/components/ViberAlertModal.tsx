@@ -73,13 +73,16 @@ export default function ViberAlertModal({ onClose }: ViberAlertModalProps) {
             </p>
           </div>
 
-          {/* Features */}
+          {/* Features — time-critical, human-caused events only. New-listing matches are
+              deliberately a once-daily digest: a broad saved search against a bulk upload
+              would otherwise fire dozens of messages in a minute. */}
           <ul className="space-y-2">
             {[
               isEl ? '✓  Έγκριση αιτήματος' : '✓  Inquiry approved',
               isEl ? '✓  Απόρριψη αιτήματος' : '✓  Inquiry dismissed',
               isEl ? '✓  Οριστικοποίηση ενοικίου' : '✓  Deal finalized',
               isEl ? '✓  Υπενθύμιση επίσκεψης' : '✓  Viewing reminder',
+              isEl ? '✓  Ημερήσια σύνοψη νέων αγγελιών' : '✓  Daily digest of new matches',
             ].map(f => (
               <li key={f} className="text-sm text-amber-300/80">{f}</li>
             ))}

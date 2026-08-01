@@ -97,10 +97,31 @@ export async function POST(request: NextRequest) {
     ? (typeof accFilters.hardFilters === 'string' ? JSON.parse(accFilters.hardFilters) : accFilters.hardFilters)
     : accFilters
 
+  // Snapshot the soft criteria alongside the hard ones so `matchSavedSearches` can rebuild
+  // the same components the search route scored with — without these it can only compare
+  // embeddings, and the saved threshold means something different from what the user saw.
+  const softSource = (accFilters.softFilters
+    ? (typeof accFilters.softFilters === 'string' ? JSON.parse(accFilters.softFilters) : accFilters.softFilters)
+    : accFilters) as Record<string, unknown>
+
+  const SOFT_CRITERIA_KEYS = [
+    'Metro', 'Bus', 'School', 'Hospital', 'Park', 'University', 'Safety',
+    'vibePreference', 'parkingSoftPreference', 'hasLocationPreference',
+  ] as const
+
+  const softCriteria: Record<string, unknown> = {}
+  for (const key of SOFT_CRITERIA_KEYS) {
+    const value = softSource[key]
+    if (value !== undefined && value !== null && value !== 'Not mentioned') {
+      softCriteria[key] = value
+    }
+  }
+
   const savedFilterParams = {
     city: (hardFilters as Record<string, unknown>).city ?? null,
     country: (hardFilters as Record<string, unknown>).country ?? null,
     listingType: (hardFilters as Record<string, unknown>).listingType ?? null,
+    softCriteria: Object.keys(softCriteria).length > 0 ? softCriteria : null,
   }
 
   const search = await prisma.savedSearch.create({

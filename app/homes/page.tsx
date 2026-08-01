@@ -34,7 +34,7 @@ interface Home {
   createdAt: string
   energyClass: string | null
   closestUniversity: number | null
-  matchPercentage?: number // AI match percentage
+  matchPercentage?: number | null // AI match percentage; null = pure hard-filter search
   /** Set when AI detects listing rules vs your query/profile conflict */
   incompatibilityReason?: string
   owner: {

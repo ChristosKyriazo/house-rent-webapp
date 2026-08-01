@@ -759,6 +759,14 @@ export async function POST(request: NextRequest) {
         try {
           const embedding = await generateEmbedding(buildHomeText(home), openai)
           await prisma.home.update({ where: { id: home.id }, data: { embedding } })
+          // Also write the native vector column — without this, listings created through the
+          // UI were invisible to the pgvector path in AI search and only ever scored through
+          // the JS cosine fallback.
+          await prisma.$executeRawUnsafe(
+            `UPDATE homes SET "embeddingVec" = $1::vector WHERE id = $2`,
+            `[${embedding.join(',')}]`,
+            home.id
+          ).catch(() => {}) // silently skip if extension not yet installed
           await prisma.embeddingQueue.update({ where: { homeId: home.id }, data: { status: 'completed' } })
           await matchSavedSearches(home, embedding, prisma)
         } catch (err) {

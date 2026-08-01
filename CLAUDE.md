@@ -108,7 +108,7 @@ Replaces four overlapping phase-plan documents. Verified against the code on 202
 
 | # | Issue |
 |---|---|
-| 1 | **Viber alerts are not gated on payment.** `app/api/subscription/viber-alerts/route.ts` sets `viberAlertsActive: true` for any authenticated caller — a paid feature given away. |
+| 1 | ~~Viber alerts are not gated on payment.~~ **Fixed.** The route now returns `501` (`FEATURE_VIBER_ALERTS` off by default) and the modal is gated on `NEXT_PUBLIC_FEATURE_VIBER_ALERTS`. Shipping it for real still needs a verified phone column, a Stripe gate flipped from the webhook, and a sender — see [docs/APP.md](./docs/APP.md#viber-alerts--not-shipped). |
 | 2 | **Admin allowlist is likely empty in production.** `deploy.yml` writes neither `ADMIN_EMAILS` nor `ADMIN_CLERK_IDS`. Needs verification. |
 | 3 | **Node version is split.** `.nvmrc` and `engines` say 22.18.0; `ci.yml` and the Dockerfile use Node 20. Production runs 20, local runs 22. |
 | 4 | **CI never runs E2E.** `ci.yml` is lint → typecheck → test → build only, though the `flows/` specs exist and pass locally. |
