@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { buildFilterChips, removeChipFields, clearableFields } from '@/lib/search/filter-chips'
 
 interface ChatMessage {
   id: string
@@ -32,6 +33,9 @@ function AIChatPanel(
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [conversationKey, setConversationKey] = useState<string | null>(null)
+  /** Filters currently driving the results — mirrored into chips the user can drop. */
+  const [activeFilters, setActiveFilters] = useState<Record<string, unknown> | null>(null)
+  const [chipBusy, setChipBusy] = useState(false)
   const [promptCount, setPromptCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
@@ -62,6 +66,7 @@ function AIChatPanel(
         // Never clobber a conversation the user has already started typing in
         setMessages(prev => (prev.length > 0 ? prev : restored))
         setConversationKey(initialConversationKey)
+        setActiveFilters(conv?.accumulatedFilters ?? null)
         setPromptCount(restored.filter(m => m.role === 'user').length)
       })
       .catch(() => { /* hydration is best-effort */ })
@@ -109,6 +114,12 @@ function AIChatPanel(
     noResults: isEl ? 'Δεν βρήκα ακίνητα. Δοκιμάστε διαφορετικά κριτήρια.' : 'No matching properties. Try different criteria.',
     errorMsg: isEl ? 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.' : 'Something went wrong. Please try again.',
     switchToManual: isEl ? 'Χειροκίνητα φίλτρα' : 'Manual filters',
+    activeFilters: isEl ? 'Ενεργά φίλτρα' : 'Active filters',
+    clearFilters: isEl ? 'Καθαρισμός όλων' : 'Reset all',
+    removeFilter: isEl ? 'Αφαίρεση φίλτρου' : 'Remove filter',
+    filtersHint: isEl
+      ? 'Αφαιρέστε ένα φίλτρο για να διευρύνετε την αναζήτηση — δεν χρεώνεται αναζήτηση.'
+      : 'Drop a filter to widen the search — this does not use a search credit.',
     getMoreSearches: isEl ? 'Αγορά περισσότερων αναζητήσεων' : 'Get more searches',
     exampleRent: isEl
       ? 'π.χ. "2άρι στην Αθήνα, γύρω στα 900€, κοντά σε σχολεία"'
@@ -195,6 +206,7 @@ function AIChatPanel(
       const { ok, remaining: newRemaining, pack: newPack } = await consumeSearchCredit()
       if (!ok) { setLoading(false); return }
 
+      setActiveFilters(chatData.filters ?? null)
       const homes = await runSearch(chatData.filters, chatData.conversationKey ?? null)
       const resultMsg = homes.length > 0
         ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}`
@@ -243,12 +255,62 @@ function AIChatPanel(
     setMessages([])
     setInput('')
     setConversationKey(null)
+    setActiveFilters(null)
     onConversationKeyChange?.(null)
     setPromptCount(0)
     setError(null)
     setShowPurchaseModal(false)
     onResultsFound([])
     setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const chips = useMemo(() => buildFilterChips(activeFilters, isEl), [activeFilters, isEl])
+
+  /**
+   * Apply a filter edit and re-run the search directly.
+   *
+   * No chat turn and no credit: the user is narrowing or widening something they already
+   * told us, and charging them to undo it is the fastest way to make the chips useless.
+   * The conversation is patched so the next chat turn doesn't resurrect what was removed.
+   */
+  const applyFilterEdit = async (next: Record<string, unknown>) => {
+    if (chipBusy) return
+    const previous = activeFilters
+    setActiveFilters(next)
+    setChipBusy(true)
+    setError(null)
+
+    try {
+      if (conversationKey) {
+        await fetch('/api/homes/ai-chat', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationKey, filters: next }),
+        })
+      }
+      const homes = await runSearch(next, conversationKey)
+      onResultsFound(homes)
+      setMessages(prev => [...prev, {
+        id: `${Date.now()}-filter`,
+        role: 'assistant',
+        content: homes.length > 0 ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}` : t.noResults,
+      }])
+    } catch {
+      setActiveFilters(previous)
+      setError(t.errorMsg)
+    } finally {
+      setChipBusy(false)
+    }
+  }
+
+  const handleRemoveChip = (fields: string[]) => {
+    if (!activeFilters) return
+    applyFilterEdit(removeChipFields(activeFilters, fields))
+  }
+
+  const handleClearFilters = () => {
+    if (!activeFilters) return
+    applyFilterEdit(removeChipFields(activeFilters, clearableFields(activeFilters)))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -296,6 +358,40 @@ function AIChatPanel(
             <p className="text-xs text-[var(--text-muted)]/60 italic">
               {searchType === 'buy' ? t.exampleBuy : t.exampleRent}
             </p>
+          </div>
+        )}
+
+        {/* Active filters — visible state of the search, each bound independently removable */}
+        {chips.length > 0 && (
+          <div className="px-6 py-3 border-b border-[var(--border-subtle)] bg-[var(--ink-soft)]/40">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t.activeFilters}
+              </span>
+              <button
+                onClick={handleClearFilters}
+                disabled={chipBusy}
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
+              >
+                {t.clearFilters}
+              </button>
+            </div>
+            <div className={`flex flex-wrap gap-2 transition-opacity ${chipBusy ? 'opacity-50' : ''}`}>
+              {chips.map(chip => (
+                <button
+                  key={chip.id}
+                  onClick={() => handleRemoveChip(chip.fields)}
+                  disabled={chipBusy}
+                  title={`${t.removeFilter}: ${chip.label}`}
+                  aria-label={`${t.removeFilter}: ${chip.label}`}
+                  className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface)] pl-3 pr-2 py-1 text-xs text-[var(--text)] transition-colors hover:border-[var(--status-error)] hover:text-[var(--status-error)] disabled:cursor-not-allowed"
+                >
+                  <span>{chip.label}</span>
+                  <span className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--status-error)]">×</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]/70">{t.filtersHint}</p>
           </div>
         )}
 

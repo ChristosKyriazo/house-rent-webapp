@@ -474,6 +474,7 @@ model SearchConversation {
   userId             Int?
   messages           Json     @default("[]") // Array of {role, content} objects
   accumulatedFilters Json     @default("{}") // Merged filters across all turns
+  pendingNumeric     Json?    // Bound fields the last question asked about, e.g. ["maxPrice"] — lets a bare "600" bind deterministically
   embedding          Json?    // text-embedding-3-small vector of the conversation intent
   listingMode        String?  // "rent" | "buy"
   createdAt          DateTime @default(now())

@@ -1,8 +1,14 @@
 import OpenAI from 'openai'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { CONVERSATIONAL_SEARCH_SYSTEM_PROMPT } from '@/lib/ai-prompts'
 import { generateEmbedding } from '@/lib/embeddings'
 import { createLocationResolver } from '@/lib/search/fuzzy-location'
+import {
+  bindPendingNumericAnswer,
+  reconcileBounds,
+  BOUND_FIELDS,
+} from '@/lib/search/numeric-bounds'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -49,6 +55,12 @@ interface ConversationalAIResponse {
   filters: ConversationalFilters
   assistantMessage: string
   followUpQuestion?: string
+  /**
+   * Bound fields the follow-up question asks about, in the order it asks them
+   * (e.g. `["maxPrice", "minBedrooms"]`). Declared by the model so the *next* turn can
+   * bind a bare numeric reply deterministically rather than re-guessing from history.
+   */
+  pendingNumeric?: string[]
 }
 
 export async function processAIChatTurn(
@@ -62,27 +74,41 @@ export async function processAIChatTurn(
   filters: ConversationalFilters
   assistantMessage: string
   followUpQuestion?: string
+  /** Bounds removed because the user's revision contradicted them. */
+  droppedBounds: string[]
 }> {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-  let conversation: { key: string; messages: ChatMessage[]; accumulatedFilters: ConversationalFilters } | null = null
+  let conversation: {
+    key: string
+    messages: ChatMessage[]
+    accumulatedFilters: ConversationalFilters
+    pendingNumeric: string[] | null
+  } | null = null
 
   if (conversationKey) {
     const existing = await prisma.searchConversation.findUnique({
       where: { key: conversationKey },
-      select: { key: true, messages: true, accumulatedFilters: true },
+      select: { key: true, messages: true, accumulatedFilters: true, pendingNumeric: true },
     })
     if (existing) {
       conversation = {
         key: existing.key,
         messages: existing.messages as unknown as ChatMessage[],
         accumulatedFilters: existing.accumulatedFilters as unknown as ConversationalFilters,
+        pendingNumeric: Array.isArray(existing.pendingNumeric)
+          ? (existing.pendingNumeric as string[])
+          : null,
       }
     }
   }
 
   const fullHistory: ChatMessage[] = conversation?.messages ?? []
   const accumulated: ConversationalFilters = conversation?.accumulatedFilters ?? {}
+
+  // Resolve a bare numeric reply against the bound the assistant actually asked for,
+  // before the model gets a chance to guess the wrong side of the range.
+  const boundAnswer = bindPendingNumericAnswer(userMessage, conversation?.pendingNumeric)
 
   // Keep only the last 6 turns (12 messages) to cap token usage
   const MAX_HISTORY_MESSAGES = 12
@@ -100,8 +126,17 @@ export async function processAIChatTurn(
       ? `\n\n[Accumulated filters from previous turns: ${JSON.stringify(accumulated)}]`
       : ''
 
+  // Tell the model what the bare number was already resolved to, so its prose agrees with
+  // the filter that will actually be applied.
+  const boundContext =
+    Object.keys(boundAnswer).length > 0
+      ? `\n\n[The user's reply is a bare number answering your previous question. It has already been bound to: ${JSON.stringify(boundAnswer)}. Treat these as settled — echo them back in your own words and do not move the value to the opposite bound.]`
+      : conversation?.pendingNumeric?.length
+        ? `\n\n[Your previous question asked for these bounds: ${JSON.stringify(conversation.pendingNumeric)}. The reply was not a bare number, so read it yourself — honour any qualifier the user used ("at least", "max", "around").]`
+        : ''
+
   const messagesForAI: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: CONVERSATIONAL_SEARCH_SYSTEM_PROMPT + modeHint + accumulatedContext },
+    { role: 'system', content: CONVERSATIONAL_SEARCH_SYSTEM_PROMPT + modeHint + accumulatedContext + boundContext },
     ...history.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     { role: 'user', content: userMessage },
   ]
@@ -137,7 +172,18 @@ export async function processAIChatTurn(
   }
   clearTimeout(timeoutId)
 
-  const mergedFilters: ConversationalFilters = mergeFilters(accumulated, aiResponse.filters ?? {})
+  const incoming = aiResponse.filters ?? {}
+  const mergedFilters: ConversationalFilters = mergeFilters(accumulated, incoming)
+
+  // The deterministic binding outranks the model. It knows which bound was asked for;
+  // the model has to re-derive that from history every turn and gets it wrong.
+  Object.assign(mergedFilters, boundAnswer)
+
+  // Drop bounds the user's revision has made impossible. Without this, "under €600"
+  // followed by "actually at least €800" leaves min 800 / max 600 and silently returns
+  // nothing — the single most confusing way for a refinement to fail.
+  const justSet = new Set([...Object.keys(incoming), ...Object.keys(boundAnswer)])
+  const droppedBounds = reconcileBounds(mergedFilters as Record<string, unknown>, justSet)
 
   // The UI mode is authoritative for rent-vs-buy — the model never asks for it
   // and must not be able to override it.
@@ -171,22 +217,41 @@ export async function processAIChatTurn(
     { role: 'assistant', content: visibleText },
   ]
 
+  // Only carry a pending bound forward when the model actually asked a question about
+  // one — otherwise a stale entry would hijack the next unrelated number the user types.
+  const nextPendingNumeric =
+    aiResponse.action === 'ask' ? sanitizePendingNumeric(aiResponse.pendingNumeric) : null
+
   let savedKey: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messagesJson = updatedHistory as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filtersJson = mergedFilters as any
+  // `Json?` columns need the DbNull sentinel to be set back to SQL NULL — a plain `null`
+  // is rejected as ambiguous with the JSON literal `null`.
+  const pendingJson = nextPendingNumeric ?? Prisma.DbNull
 
   if (conversation) {
     const updated = await prisma.searchConversation.update({
       where: { key: conversation.key },
-      data: { messages: messagesJson, accumulatedFilters: filtersJson, listingMode: listingMode ?? undefined },
+      data: {
+        messages: messagesJson,
+        accumulatedFilters: filtersJson,
+        pendingNumeric: pendingJson,
+        listingMode: listingMode ?? undefined,
+      },
       select: { key: true },
     })
     savedKey = updated.key
   } else {
     const created = await prisma.searchConversation.create({
-      data: { userId, messages: messagesJson, accumulatedFilters: filtersJson, listingMode: listingMode ?? undefined },
+      data: {
+        userId,
+        messages: messagesJson,
+        accumulatedFilters: filtersJson,
+        pendingNumeric: pendingJson,
+        listingMode: listingMode ?? undefined,
+      },
       select: { key: true },
     })
     savedKey = created.key
@@ -209,7 +274,19 @@ export async function processAIChatTurn(
     filters: mergedFilters,
     assistantMessage,
     followUpQuestion,
+    droppedBounds,
   }
+}
+
+/**
+ * Keep only real bound field names. The model occasionally answers with a prose label
+ * ("budget") or a field that isn't half of a range, and a bad entry here would bind the
+ * user's next number to nothing — or worse, to the wrong filter.
+ */
+export function sanitizePendingNumeric(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  const fields = value.filter((v): v is string => typeof v === 'string' && BOUND_FIELDS.has(v))
+  return fields.length > 0 ? [...new Set(fields)] : null
 }
 
 // Exported for unit tests — the null-vs-CLEAR semantics caused a real bug

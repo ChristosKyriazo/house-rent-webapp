@@ -50,12 +50,25 @@ The DB fact separating Main from Default is `brokerCategory`; the fact separatin
 | Filter search | Public | `GET /api/homes` |
 | Browse / map / compare | Public | `/homes`, `/homes/map`, `/homes/compare?ids=…` |
 | AI semantic search | Logged-in | `POST /api/homes/ai-search` — NL → hard filters + soft preferences → embedding similarity, returns match % |
-| Conversational AI search | Logged-in | `POST /api/homes/ai-chat` — multi-turn, accumulates filters, rent/buy mode |
+| Conversational AI search | Logged-in | `POST /api/homes/ai-chat` — multi-turn, accumulates filters, rent/buy mode. `PATCH` overwrites the stored filters (used by the chip editor) |
 | Search history | Logged-in | `GET` / `DELETE /api/homes/search-history` |
 | Save / unsave listing | Logged-in | `POST` / `DELETE /api/homes/saved`, viewed at `/homes/saved` |
 | **Saved searches** | Logged-in | `/homes/saved-searches`, `GET/POST /api/saved-searches`, `/api/saved-searches/[key]` |
 
 **Saved searches** persist either a filter snapshot (`type: 'filter'`, `filterParams`) or an AI query (`type: 'ai'`, `queryText` + `queryEmbedding` + a `softCriteria` snapshot inside `filterParams`, matched above `minMatchPercent`, default 70). When `notificationsEnabled`, `lib/saved-search-matcher.ts` notifies on new matching listings and stamps `lastNotifiedAt`. It scores the new listing with the **same** `scoreHome` used by AI search, so `minMatchPercent` is on the same scale as the percentage the user saw. Notifications are deduplicated per (user, listing) and capped at 5 per user per rolling day.
+
+### Numeric bounds in conversational search
+
+`lib/search/numeric-bounds.ts`. Every quantitative criterion — price, size, bedrooms, bathrooms, floor, year built/renovated — is a **range, never an exact value**. A bare "600" is a limit, but not which one, so:
+
+- **The assistant names the bound when it asks** ("what's the most you'd want to pay?", not "what's your budget?") and returns `pendingNumeric: ["maxPrice"]` alongside the question. That is persisted on `SearchConversation.pendingNumeric`.
+- **The next turn binds the answer deterministically.** `bindPendingNumericAnswer` resolves a purely numeric reply against the stored field before the model runs, and the binding overrides whatever the model produced. Replies carrying a qualifier ("at least 600", "600 max") are left to the model — the qualifier always beats the question's direction.
+- **`reconcileBounds` drops contradictions on revision.** "under €600" then "actually at least €800" would otherwise leave min 800 / max 600 and silently return nothing. Whichever side the user just set wins.
+- **min never equals max** unless the user said "exactly" — an exact-value filter usually returns nothing.
+
+### Editable filter chips
+
+`lib/search/filter-chips.ts` renders the accumulated filters as removable chips above the chat, one per bound so `≥ €400` and `≤ €600` come off separately. Removing a chip re-runs the search directly and `PATCH`es the conversation — **no model call and no AI credit**, since the user is undoing something they already told us. The rent/buy toggle is never a chip; the UI owns it.
 
 ### Match scoring
 
@@ -293,7 +306,7 @@ Everything an owner does, plus: invite Default brokers with a per-seat plan, vie
 | `University` | bilingual name, city, coordinates |
 | `AISearchLog` | userQuery, hardFilters, softFilters, homesCountBefore/After/Final |
 | `SearchLog` | query, conversation key |
-| `SearchConversation` | messages (JSON), accumulatedFilters, listingMode, embedding |
+| `SearchConversation` | messages (JSON), accumulatedFilters, pendingNumeric, listingMode, embedding |
 | `ListingView` | source, durationSeconds, sessionId (anonymous supported) |
 | `BulkUploadJob` | status, progress, total, errors (JSON) |
 | `EmbeddingQueue` | homeId, status — async embedding regeneration |

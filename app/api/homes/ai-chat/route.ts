@@ -57,6 +57,64 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH /api/homes/ai-chat — overwrite a conversation's accumulated filters
+// Body: { conversationKey: string, filters: object }
+// Used by the filter chips: removing a bound re-runs the search directly, with no model
+// call and no AI credit, so the stored filters must be updated out of band. Without this
+// the next chat turn would resurrect whatever the user just removed.
+export async function PATCH(request: NextRequest) {
+  const log = requestLogger(request)
+
+  try {
+    if (!features.aiSearch) {
+      return NextResponse.json({ error: 'AI search is currently disabled' }, { status: 503 })
+    }
+
+    const user = await getCurrentUser().catch(() => null)
+    if (!user) return unauthorized()
+
+    const body = await request.json()
+    const { conversationKey, filters } = body
+
+    if (!conversationKey || typeof conversationKey !== 'string') {
+      return NextResponse.json({ error: 'conversationKey is required' }, { status: 400 })
+    }
+    if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+      return NextResponse.json({ error: 'filters must be an object' }, { status: 400 })
+    }
+
+    const { prisma } = await import('@/lib/prisma')
+    const conversation = await prisma.searchConversation.findUnique({
+      where: { key: conversationKey },
+      select: { id: true, userId: true },
+    })
+
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+    if (conversation.userId !== null && conversation.userId !== user.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    const { Prisma } = await import('@prisma/client')
+    await prisma.searchConversation.update({
+      where: { key: conversationKey },
+      data: {
+        accumulatedFilters: filters as object,
+        // A hand-edit invalidates any bound the assistant was waiting on: the user has
+        // moved on, and binding their next bare number to a stale question would be wrong.
+        pendingNumeric: Prisma.DbNull,
+      },
+    })
+
+    log.info({ conversationKey }, 'ai-chat filters patched')
+    return NextResponse.json({ ok: true, filters })
+  } catch (error) {
+    log.error({ error }, 'ai-chat patch error')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 // GET /api/homes/ai-chat/:key — retrieve conversation history
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
