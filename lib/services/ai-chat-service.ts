@@ -10,6 +10,8 @@ import {
   BOUND_FIELDS,
 } from '@/lib/search/numeric-bounds'
 import { buildIntentText, hasUsableIntent } from '@/lib/search/intent-text'
+import { selectNextQuestion, ALL_SLOT_FIELDS } from '@/lib/search/dialogue-policy'
+import { buildQuestion, closingLine } from '@/lib/search/question-templates'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -51,17 +53,19 @@ interface ConversationalFilters {
   confidence?: number
 }
 
+/**
+ * What the model is responsible for, and nothing more: reading the utterance into filter
+ * observations, naming what the user dropped, and one warm sentence.
+ *
+ * It no longer chooses the next question, the bound direction, or whether to keep asking.
+ * Those were carried on prompt adherence — a channel the model can silently drop — while
+ * the code that selects the question already knows the answer.
+ */
 interface ConversationalAIResponse {
-  action: 'search' | 'ask'
   filters: ConversationalFilters
+  /** Fields the user explicitly dropped or reversed this turn. */
+  clearFields?: string[]
   assistantMessage: string
-  followUpQuestion?: string
-  /**
-   * Bound fields the follow-up question asks about, in the order it asks them
-   * (e.g. `["maxPrice", "minBedrooms"]`). Declared by the model so the *next* turn can
-   * bind a bare numeric reply deterministically rather than re-guessing from history.
-   */
-  pendingNumeric?: string[]
 }
 
 /** Every filter field the model may write, with the value shapes each accepts. */
@@ -118,14 +122,21 @@ function buildResponseSchema(): Record<string, unknown> {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['action', 'filters', 'assistantMessage', 'followUpQuestion', 'pendingNumeric'],
+    required: ['filters', 'clearFields', 'assistantMessage'],
     properties: {
-      action: { type: 'string', enum: ['search', 'ask'] },
       assistantMessage: { type: 'string' },
-      followUpQuestion: { type: ['string', 'null'] },
-      pendingNumeric: {
-        type: ['array', 'null'],
-        items: { type: 'string', enum: [...NUMERIC_FILTER_FIELDS] },
+      clearFields: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: [
+            ...NUMERIC_FILTER_FIELDS,
+            ...STRING_FILTER_FIELDS,
+            ...CATEGORY_FILTER_FIELDS,
+            ...BOOLEAN_FILTER_FIELDS,
+            'preferredAreas',
+          ],
+        },
       },
       filters: {
         type: 'object',
@@ -208,7 +219,7 @@ async function requestChatTurn(
       const content = completion.choices[0]?.message?.content
       if (!content) throw new Error('Empty AI response')
       const parsed = JSON.parse(content) as Record<string, unknown>
-      if (!parsed.action || !parsed.assistantMessage) {
+      if (!parsed.assistantMessage) {
         throw new Error('AI chat response missing required fields')
       }
       return parsed as unknown as ConversationalAIResponse
@@ -250,12 +261,13 @@ export async function processAIChatTurn(
     messages: ChatMessage[]
     accumulatedFilters: ConversationalFilters
     pendingNumeric: string[] | null
+    askedSlots: string[]
   } | null = null
 
   if (conversationKey) {
     const existing = await prisma.searchConversation.findUnique({
       where: { key: conversationKey },
-      select: { key: true, messages: true, accumulatedFilters: true, pendingNumeric: true },
+      select: { key: true, messages: true, accumulatedFilters: true, pendingNumeric: true, askedSlots: true },
     })
     if (existing) {
       conversation = {
@@ -265,6 +277,7 @@ export async function processAIChatTurn(
         pendingNumeric: Array.isArray(existing.pendingNumeric)
           ? (existing.pendingNumeric as string[])
           : null,
+        askedSlots: Array.isArray(existing.askedSlots) ? (existing.askedSlots as string[]) : [],
       }
     }
   }
@@ -321,6 +334,15 @@ export async function processAIChatTurn(
   const incoming = aiResponse.filters ?? {}
   const mergedFilters: ConversationalFilters = mergeFilters(accumulated, incoming)
 
+  // Explicit removals. `clearFields` is a first-class list in the response schema rather
+  // than a "CLEAR" sentinel smuggled into a value slot, so "actually I don't need parking"
+  // removes the filter reliably instead of depending on the model remembering a magic
+  // string. Works for every characteristic, not just the numeric ones.
+  const clearedFields = sanitizeClearFields(aiResponse.clearFields)
+  for (const field of clearedFields) {
+    delete (mergedFilters as Record<string, unknown>)[field]
+  }
+
   // The deterministic binding outranks the model. It knows which bound was asked for;
   // the model has to re-derive that from history every turn and gets it wrong.
   Object.assign(mergedFilters, boundAnswer)
@@ -329,6 +351,7 @@ export async function processAIChatTurn(
   // followed by "actually at least €800" leaves min 800 / max 600 and silently returns
   // nothing — the single most confusing way for a refinement to fail.
   const justSet = new Set([...Object.keys(incoming), ...Object.keys(boundAnswer)])
+  for (const field of clearedFields) justSet.delete(field)
   const droppedBounds = reconcileBounds(mergedFilters as Record<string, unknown>, justSet)
 
   // The UI mode is authoritative for rent-vs-buy — the model never asks for it
@@ -349,18 +372,38 @@ export async function processAIChatTurn(
   // disappears without explanation is worse than the contradiction it resolved.
   const droppedNotice = describeDroppedBounds(droppedBounds, isGreek(userMessage))
 
-  const assistantMessage =
+  const acknowledgement =
     applyLocationRewrites(aiResponse.assistantMessage, rewrites) + droppedNotice
-  const followUpQuestion = aiResponse.followUpQuestion
-    ? applyLocationRewrites(aiResponse.followUpQuestion, rewrites)
-    : undefined
 
-  // Persist the text the user actually saw. On "ask" turns the UI renders
-  // followUpQuestion, not assistantMessage — storing the latter left the model
-  // blind to its own question, so a bare reply ("2") looked like it answered
-  // nothing and the same question came back next turn.
-  const visibleText =
-    aiResponse.action === 'ask' && followUpQuestion ? followUpQuestion : assistantMessage
+  // The next question is chosen HERE, from the filters as they now stand — after this
+  // turn's answers have been merged. Selecting it in the model's own response meant
+  // choosing before knowing what the user had just said, which is how it ended up
+  // re-asking things it had literally been told.
+  //
+  // A slot the user was asked about but did not answer is recorded so it is not asked
+  // again; that is what stops the assistant looping on a question someone declined.
+  const askedBefore = conversation?.askedSlots ?? []
+  const next = selectNextQuestion(mergedFilters as Record<string, unknown>, askedBefore)
+  const replyInGreek = isGreek(userMessage) || (userMessage.trim().length < 3 && isGreek(acknowledgement))
+
+  const followUpQuestion = next.exhausted
+    ? undefined
+    : buildQuestion(next.slots, replyInGreek)
+
+  // The conversation keeps going until the criteria are genuinely exhausted. It used to
+  // stop after three turns and then only ever search, which left the percentages resting
+  // on priors for every criterion nobody had got round to asking about.
+  const action: 'search' | 'ask' = next.exhausted ? 'search' : 'ask'
+
+  const assistantMessage = next.exhausted
+    ? `${acknowledgement} ${closingLine(replyInGreek)}`.trim()
+    : acknowledgement
+
+  // Persist both halves of what the user saw, so a later turn can read a terse reply
+  // against the question that prompted it.
+  const visibleText = followUpQuestion
+    ? `${assistantMessage} ${followUpQuestion}`.trim()
+    : assistantMessage
 
   const updatedHistory: ChatMessage[] = [
     ...fullHistory,
@@ -368,10 +411,9 @@ export async function processAIChatTurn(
     { role: 'assistant', content: visibleText },
   ]
 
-  // Only carry a pending bound forward when the model actually asked a question about
-  // one — otherwise a stale entry would hijack the next unrelated number the user types.
-  const nextPendingNumeric =
-    aiResponse.action === 'ask' ? sanitizePendingNumeric(aiResponse.pendingNumeric) : null
+  // Written by the asker, not reported by the model — the two can no longer disagree.
+  const nextPendingNumeric = next.pendingNumeric.length > 0 ? next.pendingNumeric : null
+  const nextAskedSlots = [...new Set([...askedBefore, ...next.slots.map(s => s.id)])]
 
   let savedKey: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -381,6 +423,8 @@ export async function processAIChatTurn(
   // `Json?` columns need the DbNull sentinel to be set back to SQL NULL — a plain `null`
   // is rejected as ambiguous with the JSON literal `null`.
   const pendingJson = nextPendingNumeric ?? Prisma.DbNull
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const askedSlotsJson = nextAskedSlots as any
 
   if (conversation) {
     const updated = await prisma.searchConversation.update({
@@ -389,6 +433,7 @@ export async function processAIChatTurn(
         messages: messagesJson,
         accumulatedFilters: filtersJson,
         pendingNumeric: pendingJson,
+        askedSlots: askedSlotsJson,
         listingMode: listingMode ?? undefined,
       },
       select: { key: true },
@@ -401,6 +446,7 @@ export async function processAIChatTurn(
         messages: messagesJson,
         accumulatedFilters: filtersJson,
         pendingNumeric: pendingJson,
+        askedSlots: askedSlotsJson,
         listingMode: listingMode ?? undefined,
       },
       select: { key: true },
@@ -413,7 +459,7 @@ export async function processAIChatTurn(
   // fragment ended it ("600", "ναι"), and the matcher then weighted that against every
   // new listing forever.
   // Fire-and-forget: doesn't block the chat response.
-  if (aiResponse.action === 'search' && hasUsableIntent(intentText)) {
+  if (hasUsableIntent(intentText)) {
     generateEmbedding(intentText, openai)
       .then(vec => prisma.searchConversation.update({
         where: { key: savedKey },
@@ -424,7 +470,7 @@ export async function processAIChatTurn(
 
   return {
     conversationKey: savedKey,
-    action: aiResponse.action,
+    action,
     filters: mergedFilters,
     assistantMessage,
     followUpQuestion,
@@ -502,14 +548,14 @@ export function sliceHistoryOnTurnBoundary(history: ChatMessage[], max: number):
 }
 
 /**
- * Keep only real bound field names. The model occasionally answers with a prose label
- * ("budget") or a field that isn't half of a range, and a bad entry here would bind the
- * user's next number to nothing — or worse, to the wrong filter.
+ * Keep only field names a slot actually owns. A removal is destructive, so a hallucinated
+ * or mistyped entry must delete nothing rather than something adjacent.
  */
-export function sanitizePendingNumeric(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null
-  const fields = value.filter((v): v is string => typeof v === 'string' && BOUND_FIELDS.has(v))
-  return fields.length > 0 ? [...new Set(fields)] : null
+export function sanitizeClearFields(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(
+    value.filter((v): v is string => typeof v === 'string' && (ALL_SLOT_FIELDS.has(v) || BOUND_FIELDS.has(v)))
+  )]
 }
 
 // Exported for unit tests — the null-vs-CLEAR semantics caused a real bug

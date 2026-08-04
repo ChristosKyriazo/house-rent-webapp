@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/prisma', () => ({ prisma: {} }))
 
-import { mergeFilters, sliceHistoryOnTurnBoundary, describeDroppedBounds } from '@/lib/services/ai-chat-service'
+import { mergeFilters, sliceHistoryOnTurnBoundary, describeDroppedBounds, sanitizeClearFields } from '@/lib/services/ai-chat-service'
 
 describe('mergeFilters — conversational filter accumulation', () => {
   it('keeps accumulated values when the model returns null for unmentioned fields', () => {
@@ -91,5 +91,32 @@ describe('describeDroppedBounds', () => {
     const el = describeDroppedBounds(['maxPrice', 'minBedrooms'], true)
     expect(el).toContain('τη μέγιστη τιμή')
     expect(el).toContain('και')
+  })
+})
+
+describe('sanitizeClearFields — reversing a stated preference', () => {
+  it('accepts any real filter field, not just numeric bounds', () => {
+    // "actually I don't need parking" has to work as reliably as changing a price does.
+    expect(sanitizeClearFields(['parking'])).toEqual(['parking'])
+    expect(sanitizeClearFields(['Metro'])).toEqual(['Metro'])
+    expect(sanitizeClearFields(['vibePreference'])).toEqual(['vibePreference'])
+    expect(sanitizeClearFields(['area'])).toEqual(['area'])
+    expect(sanitizeClearFields(['maxPrice'])).toEqual(['maxPrice'])
+  })
+
+  it('drops anything that is not a real field — a removal must never hit the wrong filter', () => {
+    expect(sanitizeClearFields(['budget', 'everything', ''])).toEqual([])
+    expect(sanitizeClearFields('parking')).toEqual([])
+    expect(sanitizeClearFields(null)).toEqual([])
+    expect(sanitizeClearFields([1, 2])).toEqual([])
+  })
+
+  it('deduplicates', () => {
+    expect(sanitizeClearFields(['parking', 'parking'])).toEqual(['parking'])
+  })
+
+  it('handles a multi-field removal', () => {
+    expect(sanitizeClearFields(['parking', 'parkingSoftPreference']))
+      .toEqual(['parking', 'parkingSoftPreference'])
   })
 })

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { buildFilterChips, removeChipFields, clearableFields } from '@/lib/search/filter-chips'
 import { buildIntentText } from '@/lib/search/intent-text'
+import { criteriaCoverage } from '@/lib/search/dialogue-policy'
 
 interface ChatMessage {
   id: string
@@ -121,6 +122,10 @@ function AIChatPanel(
     filtersHint: isEl
       ? 'Αφαιρέστε ένα φίλτρο για να διευρύνετε την αναζήτηση — δεν χρεώνεται αναζήτηση.'
       : 'Drop a filter to widen the search — this does not use a search credit.',
+    matchAccuracy: isEl ? 'Ακρίβεια ταιριάσματος' : 'Match accuracy',
+    accuracyHint: isEl
+      ? 'Κάθε απάντηση κάνει τα ποσοστά πιο ακριβή.'
+      : 'Every answer makes the percentages sharper.',
     getMoreSearches: isEl ? 'Αγορά περισσότερων αναζητήσεων' : 'Get more searches',
     exampleRent: isEl
       ? 'π.χ. "2άρι στην Αθήνα, γύρω στα 900€, κοντά σε σχολεία"'
@@ -203,7 +208,12 @@ function AIChatPanel(
       onConversationKeyChange?.(chatData.conversationKey ?? null)
 
       // Show AI follow-up / summary message
-      const aiMsg = chatData.followUpQuestion || chatData.assistantMessage || ''
+      // Acknowledgement and question are now separate: the model writes the first, the
+      // dialogue policy chooses the second. Both are shown — dropping the acknowledgement
+      // made the assistant read as an interrogation rather than a conversation.
+      const aiMsg = [chatData.assistantMessage, chatData.followUpQuestion]
+        .filter(Boolean)
+        .join(' ')
       if (aiMsg) setMessages(prev => [...prev, { id: `${Date.now()}-ai`, role: 'assistant', content: aiMsg }])
 
       // Consume one credit and immediately search with accumulated filters
@@ -269,6 +279,11 @@ function AIChatPanel(
   }
 
   const chips = useMemo(() => buildFilterChips(activeFilters, isEl), [activeFilters, isEl])
+
+  // How much of the *scoring* picture we have. Only the criteria that separate one home
+  // from another count — pinning down city and budget narrows the list without sharpening
+  // the ranking within it, and this says so honestly rather than showing a full bar.
+  const coverage = useMemo(() => criteriaCoverage(activeFilters ?? {}), [activeFilters])
 
   /**
    * Apply a filter edit and re-run the search directly.
@@ -362,6 +377,27 @@ function AIChatPanel(
             <p className="text-xs text-[var(--text-muted)]/60 italic">
               {searchType === 'buy' ? t.exampleBuy : t.exampleRent}
             </p>
+          </div>
+        )}
+
+        {/* Match accuracy — what the answered criteria are worth to the scoring */}
+        {activeFilters && (
+          <div className="px-6 pt-3 pb-1">
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {t.matchAccuracy}
+              </span>
+              <span className="text-xs font-bold text-[var(--accent)]">{Math.round(coverage * 100)}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--ink-soft)]">
+              <div
+                className="h-full rounded-full bg-[var(--accent)] transition-all duration-500"
+                style={{ width: `${Math.max(3, Math.round(coverage * 100))}%` }}
+              />
+            </div>
+            {coverage < 1 && (
+              <p className="mt-1.5 text-[11px] leading-snug text-[var(--text-muted)]/70">{t.accuracyHint}</p>
+            )}
           </div>
         )}
 

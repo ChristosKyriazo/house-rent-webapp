@@ -65,6 +65,26 @@ It exists because the chat used to send the literal placeholder `"[conversationa
 
 English regardless of conversation language: it is compared by cosine against `buildHomeText` output, which is English. Mirroring the user's language would put query and document in different regions of the embedding space.
 
+### The dialogue policy
+
+`lib/search/dialogue-policy.ts` decides what the assistant asks next — **in code, not in the prompt**. The prompt used to hold the conversation flow as English control flow ("max 3 ask turns", "prefer searching once you have a city plus a budget"), which is why it contradicted itself and why the assistant went quiet after a few turns no matter how little it knew.
+
+The ranking idea: **ask the question that most sharpens the match percentage.** An unknown criterion is not neutral, it is scored with a prior — so every home looks equally plausible on that axis and the percentages bunch together. Question value is banded:
+
+| Tier | Value | Why |
+|---|---|---|
+| Primary hard filters | 0.8–1.0 | location, budget, bedrooms — without them the result set isn't worth ranking |
+| Components | 0.4–0.75 | carry scoring weight, so they separate homes; ordered by `COMPONENT_WEIGHTS` |
+| Secondary hard filters | ≤0.35 | size, bathrooms, heating, building age — trim the list, don't sharpen the ranking |
+
+The conversation continues until every slot is settled; it no longer stops after three turns. A slot the user was *asked* about but left unanswered is recorded in `SearchConversation.askedSlots` and never asked again. `pendingNumeric` is written by the policy that selected the question, so the wording and the binding cannot disagree — the model no longer reports it. Question text comes from `lib/search/question-templates.ts` for the same reason; the model writes only the acknowledgement sentence.
+
+`criteriaCoverage()` drives the "Match accuracy" meter in the chat. It counts **component slots only** — pinning down city and budget narrows the candidates without sharpening the ranking within them, and the meter says so rather than showing a full bar.
+
+### Reversing a preference
+
+The response schema carries an explicit `clearFields` array. "Actually I don't need parking" → `clearFields: ["parking", "parkingSoftPreference"]`, applied deterministically in the service. This replaces the `"CLEAR"` string sentinel smuggled into a value slot, and works for every characteristic rather than only the numeric ones. `sanitizeClearFields` drops anything that isn't a real filter field, so a hallucinated entry removes nothing rather than something adjacent.
+
 ### Numeric bounds in conversational search
 
 `lib/search/numeric-bounds.ts`. Every quantitative criterion — price, size, bedrooms, bathrooms, floor, year built/renovated — is a **range, never an exact value**. A bare "600" is a limit, but not which one, so:
