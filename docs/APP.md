@@ -57,11 +57,19 @@ The DB fact separating Main from Default is `brokerCategory`; the fact separatin
 
 **Saved searches** persist either a filter snapshot (`type: 'filter'`, `filterParams`) or an AI query (`type: 'ai'`, `queryText` + `queryEmbedding` + a `softCriteria` snapshot inside `filterParams`, matched above `minMatchPercent`, default 70). When `notificationsEnabled`, `lib/saved-search-matcher.ts` notifies on new matching listings and stamps `lastNotifiedAt`. It scores the new listing with the **same** `scoreHome` used by AI search, so `minMatchPercent` is on the same scale as the percentage the user saw. Notifications are deduplicated per (user, listing) and capped at 5 per user per rolling day.
 
+### Conversational search: the intent string
+
+`lib/search/intent-text.ts` renders the accumulated filters as one canonical **English** sentence — `"rental property in Kolonaki, Athens, at least 2 bedrooms, up to €600, close to a metro station"`. This is what the chat sends as its `query`, what gets embedded, and what a saved AI search stores as `queryText`.
+
+It exists because the chat used to send the literal placeholder `"[conversational]"`. Embedding generation was gated on `!preExtractedFilters`, so `queryEmbedding` stayed null and the 0.30-weight semantic component was never expressed; the description and photo keyword bonuses matched the placeholder against listing text and scored nothing. **Over half the weight table was inert in the only search UI in real use.** Saved searches had a related bug — they embedded the *last message*, so one saved after five turns stored the vector for `"600"`.
+
+English regardless of conversation language: it is compared by cosine against `buildHomeText` output, which is English. Mirroring the user's language would put query and document in different regions of the embedding space.
+
 ### Numeric bounds in conversational search
 
 `lib/search/numeric-bounds.ts`. Every quantitative criterion — price, size, bedrooms, bathrooms, floor, year built/renovated — is a **range, never an exact value**. A bare "600" is a limit, but not which one, so:
 
-- **The assistant names the bound when it asks** ("what's the most you'd want to pay?", not "what's your budget?") and returns `pendingNumeric: ["maxPrice"]` alongside the question. That is persisted on `SearchConversation.pendingNumeric`.
+- **The assistant names the bound when it asks** ("what's the most you'd want to pay?", not "what's your budget?") and returns `pendingNumeric: ["maxPrice"]` alongside the question. That is persisted on `SearchConversation.pendingNumeric`. The turn call uses **Structured Outputs with `strict: true`**, so this field cannot be silently dropped and an out-of-enum value is undecodable rather than merely discouraged — `json_object` only ever guaranteed syntactic JSON. Strict mode requires every field present, hence "emit null", not "omit".
 - **The next turn binds the answer deterministically.** `bindPendingNumericAnswer` resolves a purely numeric reply against the stored field before the model runs, and the binding overrides whatever the model produced. Replies carrying a qualifier ("at least 600", "600 max") are left to the model — the qualifier always beats the question's direction.
 - **`reconcileBounds` drops contradictions on revision.** "under €600" then "actually at least €800" would otherwise leave min 800 / max 600 and silently return nothing. Whichever side the user just set wins.
 - **min never equals max** unless the user said "exactly" — an exact-value filter usually returns nothing.
@@ -72,7 +80,9 @@ The DB fact separating Main from Default is `brokerCategory`; the fact separatin
 
 ### Match scoring
 
-`lib/search/score-home.ts` is the single scorer, shared by AI search and the saved-search matcher. Every component normalises to `[0,1]` **absolutely** — independent of the rest of the result set — and the fit is the weighted mean over only the components the query actually expressed (`semantic` .30, `distance` .25, `description` .15, `vibe` .10, `safety` .08, `photo` .07, `parking` .05, renormalised).
+`lib/search/score-home.ts` is the single scorer, shared by AI search and the saved-search matcher. Every component normalises to `[0,1]` **absolutely** — independent of the rest of the result set — and the fit is the weighted mean over only the components the query expressed (`semantic` .30, `distance` .25, `vibe` .10, `safety` .08, `parking` .05, renormalised).
+
+**The expressed set must be a function of the query, never of the listing.** A weighted mean is only comparable to another weighted mean when both cover the same components — express one side more than the other and the same home scores 87% in search and 70% in the matcher. `expressedComponents()` derives the set from the criteria so both call sites cannot drift, and `semantic` is always expressed (a home with no embedding gets the neutral prior rather than dropping the term). Description and photo evidence are therefore **bonuses applied outside the mean**, not components: they only exist when they happen to match, so putting them in the denominator would make the scale depend on the listing.
 
 - **Semantic** is a first-class term, not a late bonus. Raw cosine for query-vs-listing sits around 0.20–0.50 for `text-embedding-3-small`, so `lib/search/calibration.ts` maps it through a logistic (`SEM_CENTER` 0.32, `SEM_TEMP` 0.06). Changing those constants changes what every stored `minMatchPercent` means — bump `SCORING_VERSION` with them.
 - **Missing data gets a prior, never 0.** An ungeocoded listing must not outrank one known to be close.

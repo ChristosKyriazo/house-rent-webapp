@@ -57,6 +57,32 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/** Filter fields the chip editor is allowed to write back. */
+const ALLOWED_FILTER_FIELDS = new Set([
+  'city', 'country', 'area', 'listingType', 'preferredAreas',
+  'minPrice', 'maxPrice', 'minBedrooms', 'maxBedrooms', 'minBathrooms', 'maxBathrooms',
+  'minSize', 'maxSize', 'minFloor', 'maxFloor',
+  'minYearBuilt', 'maxYearBuilt', 'minYearRenovated', 'maxYearRenovated',
+  'parking', 'parkingSoftPreference', 'heatingCategory', 'heatingAgent',
+  'Metro', 'Bus', 'School', 'Hospital', 'Park', 'University', 'Safety',
+  'vibePreference', 'hasLocationPreference', 'confidence',
+])
+
+function sanitizeFilters(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (!ALLOWED_FILTER_FIELDS.has(key)) continue
+    if (value === null || value === undefined) continue
+    const ok =
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      (Array.isArray(value) && value.every(v => typeof v === 'string'))
+    if (ok) out[key] = value
+  }
+  return out
+}
+
 // PATCH /api/homes/ai-chat — overwrite a conversation's accumulated filters
 // Body: { conversationKey: string, filters: object }
 // Used by the filter chips: removing a bound re-runs the search directly, with no model
@@ -83,6 +109,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'filters must be an object' }, { status: 400 })
     }
 
+    // Whitelist rather than storing client JSON verbatim — this object is fed straight
+    // back into scoring as `preExtractedFilters` on the next search.
+    const sanitized = sanitizeFilters(filters as Record<string, unknown>)
+
     const { prisma } = await import('@/lib/prisma')
     const conversation = await prisma.searchConversation.findUnique({
       where: { key: conversationKey },
@@ -92,7 +122,8 @@ export async function PATCH(request: NextRequest) {
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
-    if (conversation.userId !== null && conversation.userId !== user.id) {
+    // Strict ownership: an unowned conversation is not everyone's to edit.
+    if (conversation.userId !== user.id) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
@@ -100,7 +131,7 @@ export async function PATCH(request: NextRequest) {
     await prisma.searchConversation.update({
       where: { key: conversationKey },
       data: {
-        accumulatedFilters: filters as object,
+        accumulatedFilters: sanitized as object,
         // A hand-edit invalidates any bound the assistant was waiting on: the user has
         // moved on, and binding their next bare number to a stale question would be wrong.
         pendingNumeric: Prisma.DbNull,
@@ -108,7 +139,7 @@ export async function PATCH(request: NextRequest) {
     })
 
     log.info({ conversationKey }, 'ai-chat filters patched')
-    return NextResponse.json({ ok: true, filters })
+    return NextResponse.json({ ok: true, filters: sanitized })
   } catch (error) {
     log.error({ error }, 'ai-chat patch error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

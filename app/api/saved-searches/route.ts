@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { unauthorized, badRequest } from '@/lib/api-utils'
+import { buildIntentText } from '@/lib/search/intent-text'
 
 // GET /api/saved-searches — list current user's saved searches
 export async function GET() {
@@ -124,13 +125,18 @@ export async function POST(request: NextRequest) {
     softCriteria: Object.keys(softCriteria).length > 0 ? softCriteria : null,
   }
 
+  // `queryText` drives the matcher's description and photo evidence, so it must describe
+  // the whole accumulated intent — the first user message is only the opening fragment of
+  // a conversation that may have refined everything since.
+  const intentText = buildIntentText({ ...hardFilters as Record<string, unknown>, ...softCriteria })
+
   const search = await prisma.savedSearch.create({
     data: {
       userId: user.id,
       name: name ?? (firstUserMessage ? firstUserMessage.slice(0, 80) : null),
       type: 'ai',
       filterParams: savedFilterParams as object,
-      queryText: firstUserMessage,
+      queryText: intentText || firstUserMessage,
       queryEmbedding: conversation.embedding ?? undefined,
       minMatchPercent: minMatchPercent ?? 70,
       notificationsEnabled: true,

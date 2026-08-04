@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { buildFilterChips, removeChipFields, clearableFields } from '@/lib/search/filter-chips'
+import { buildIntentText } from '@/lib/search/intent-text'
 
 interface ChatMessage {
   id: string
@@ -151,12 +152,15 @@ function AIChatPanel(
   // `key` comes from the chat response rather than the conversationKey state:
   // on the first turn that state hasn't flushed yet, so the opening search
   // would log without a key and fall out of its own conversation.
-  const runSearch = async (filters: object, key: string | null) => {
+  const runSearch = async (filters: object, key: string | null, intentText?: string) => {
     const res = await fetch('/api/homes/ai-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: '[conversational]',
+        // The conversation's accumulated intent as one English sentence. This used to be
+        // the literal placeholder "[conversational]", which silently disabled the semantic,
+        // description and photo scoring — over half the weight table — in this UI.
+        query: intentText && intentText.trim() ? intentText : '[conversational]',
         type: searchType,
         excludeInquired,
         excludeApproved,
@@ -207,7 +211,7 @@ function AIChatPanel(
       if (!ok) { setLoading(false); return }
 
       setActiveFilters(chatData.filters ?? null)
-      const homes = await runSearch(chatData.filters, chatData.conversationKey ?? null)
+      const homes = await runSearch(chatData.filters, chatData.conversationKey ?? null, chatData.intentText)
       const resultMsg = homes.length > 0
         ? `${t.foundPrefix} ${homes.length} ${t.foundSuffix}`
         : t.noResults
@@ -288,7 +292,7 @@ function AIChatPanel(
           body: JSON.stringify({ conversationKey, filters: next }),
         })
       }
-      const homes = await runSearch(next, conversationKey)
+      const homes = await runSearch(next, conversationKey, buildIntentText(next))
       onResultsFound(homes)
       setMessages(prev => [...prev, {
         id: `${Date.now()}-filter`,

@@ -1,12 +1,20 @@
 import type { PrismaClient } from '@prisma/client'
 import { cosineSimilarity } from '@/lib/embeddings'
-import { calculateVibeScore, getDistanceFields } from '@/lib/ai-search-helpers'
+import {
+  calculateVibeScore,
+  getDistanceFields,
+  calculateDescriptionBonus,
+  calculatePhotoBonus,
+  calculateDisqualifiers,
+} from '@/lib/ai-search-helpers'
 import {
   scoreHome,
   normalizeDistance,
   normalizeSafety,
   normalizeVibe,
   normalizeParking,
+  normalizeDescriptionBonus,
+  normalizePhoto,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
   type HomeComponents,
 } from '@/lib/search/score-home'
@@ -34,6 +42,8 @@ interface HomeForMatching {
   closestHospital?: number | null
   closestPark?: number | null
   closestUniversity?: number | null
+  description?: string | null
+  photoTagsArray?: string[] | null
 }
 
 interface FilterParams {
@@ -135,7 +145,12 @@ function scoreAgainstSavedSearch(
   queryVec: number[],
   params: FilterParams,
   areaData: { safety: number | null; vibe: string | null } | null,
+  queryText: string | null,
 ): number {
+  // `semantic` is always expressed, exactly as in the search route. A weighted mean is only
+  // comparable to another weighted mean when both cover the same set — express one side
+  // more than the other and the same home scores 87% in search and 70% here, which is the
+  // original min-max bug in a smaller costume.
   const components: HomeComponents = {
     semantic: semanticScore(cosineSimilarity(homeEmbedding, queryVec)),
   }
@@ -168,7 +183,29 @@ function scoreAgainstSavedSearch(
     components.parking = normalizeParking(home.parking)
   }
 
+  // Description and photo evidence are bonuses outside the mean, so computing them here is
+  // optional for scale correctness — but the saved search kept the original query text, so
+  // we can and should apply the same evidence the search route would have.
+  let descriptionBonus: number | undefined
+  let photoBonus: number | undefined
+  let disqualified = false
+
+  if (queryText) {
+    const result = calculateDescriptionBonus(queryText, home.description ?? null, home.yearBuilt, null)
+    if (result.bonus > 0) descriptionBonus = normalizeDescriptionBonus(result.bonus)
+    if (calculateDisqualifiers(queryText, home.description ?? null)) disqualified = true
+
+    const tagsRaw = Array.isArray(home.photoTagsArray) && home.photoTagsArray.length > 0
+      ? JSON.stringify(home.photoTagsArray)
+      : null
+    const photo = calculatePhotoBonus(queryText, tagsRaw)
+    if (photo > 0) photoBonus = normalizePhoto(photo)
+  }
+
   return scoreHome(components, {
+    descriptionBonus,
+    photoBonus,
+    disqualified,
     weights: soft.hasLocationPreference === true && vibePreference
       ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
       : undefined,
@@ -191,6 +228,7 @@ export async function matchSavedSearches(
       filterParams: true,
       queryEmbedding: true,
       minMatchPercent: true,
+      queryText: true,
     },
   })
 
@@ -228,7 +266,7 @@ export async function matchSavedSearches(
         }
       }
 
-      const fit = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData)
+      const fit = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData, search.queryText)
       matched = fit >= (search.minMatchPercent ?? 70)
     }
 

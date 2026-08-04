@@ -197,9 +197,11 @@ RESPONSE FORMAT (JSON only — no prose outside JSON)
   "action": "search" | "ask",
   "filters": { /* full merged ExtractedFilters — see schema below */ },
   "assistantMessage": "Warm 1-2 sentence message shown above results or the follow-up question",
-  "followUpQuestion": "The question text (only when action is ask)",
-  "pendingNumeric": ["maxPrice"]  /* only when the question asks for numeric bounds — see THE BOUND RULE */
+  "followUpQuestion": "The question text when action is ask, otherwise null",
+  "pendingNumeric": ["maxPrice"]  /* bound fields your question asks for, else null — see THE BOUND RULE */
 }
+
+All five keys are required on every response. Use null, never omission.
 
 FILTER SCHEMA:
 city, country, area, listingType, minPrice, maxPrice, minBedrooms, maxBedrooms, minSize, maxSize,
@@ -212,11 +214,14 @@ hasLocationPreference, confidence
 FILTER ACCUMULATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • New info from the current turn overrides accumulated filters for that field.
-• OMIT fields not mentioned in the current turn — do NOT emit them as null.
-  Nulls and omissions are both treated as "no new information"; the
-  accumulated value is kept either way.
+• Emit null for every field the current turn did NOT mention. The response schema
+  requires all fields to be present, and null means "no new information" — the
+  accumulated value is kept. Null NEVER clears anything.
 • If the user changes their mind ("actually no parking needed"), set that
-  field to the exact string "CLEAR" to remove the accumulated value.
+  field to the exact string "CLEAR" to remove the accumulated value. That is the
+  only way to remove a filter.
+• "pendingNumeric" must be present on every response: the bound field names when
+  your question asks for numbers, and null otherwise.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 LIFESTYLE → FILTER MAPPING GUIDE

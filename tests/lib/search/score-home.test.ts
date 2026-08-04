@@ -11,6 +11,9 @@ import {
   normalizeDescriptionPenalty,
   normalizePhoto,
   COMPONENT_WEIGHTS,
+  DESCRIPTION_BONUS_MAX,
+  PHOTO_BONUS_MAX,
+  expressedComponents,
   DISTANCE_UNKNOWN,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
 } from '@/lib/search/score-home'
@@ -107,7 +110,7 @@ describe('scoreHome', () => {
 
   it('weights semantic and distance as the two dominant signals', () => {
     expect(COMPONENT_WEIGHTS.semantic).toBeGreaterThan(COMPONENT_WEIGHTS.distance)
-    expect(COMPONENT_WEIGHTS.distance).toBeGreaterThan(COMPONENT_WEIGHTS.description)
+    expect(COMPONENT_WEIGHTS.distance).toBeGreaterThan(COMPONENT_WEIGHTS.vibe)
   })
 
   it('mixes components by weight', () => {
@@ -117,6 +120,22 @@ describe('scoreHome', () => {
 
   it('locks a disqualified home to 0 whatever else it scores', () => {
     expect(scoreHome({ semantic: 1, distance: 1 }, { disqualified: true })).toBe(0)
+  })
+
+  it('keeps the denominator a function of the query, not of the listing', () => {
+    // Description and photo evidence must never enter the mean. If they did, a listing
+    // that happens to mention "balcony" would be scored over a different component set
+    // than one that doesn't — and the saved-search matcher, which computes neither the
+    // same way, would sit on a third scale. That is the bug that made the slider lie.
+    const withEvidence = scoreHome({ semantic: 0.5, distance: 0.5 }, { descriptionBonus: 1, photoBonus: 1 })
+    const withoutEvidence = scoreHome({ semantic: 0.5, distance: 0.5 })
+    expect(withEvidence).toBeGreaterThan(withoutEvidence)
+    // The lift is exactly the two bonus ceilings, not a change of scale.
+    expect(withEvidence - withoutEvidence).toBeCloseTo((DESCRIPTION_BONUS_MAX + PHOTO_BONUS_MAX) * 100, 5)
+  })
+
+  it('never lets description evidence punish a listing that stays silent', () => {
+    expect(scoreHome({ semantic: 0.5 }, { descriptionBonus: 0 })).toBe(scoreHome({ semantic: 0.5 }))
   })
 
   it('applies the area bonus and the description penalty to the aggregate', () => {
@@ -162,5 +181,28 @@ describe('rankScore', () => {
     const stale = { fit: 70, createdAt: new Date(Date.now() - 200 * day) }
     expect(rankScore(fresh.fit, fresh.createdAt)).toBeGreaterThan(rankScore(stale.fit, stale.createdAt))
     expect(fresh.fit).toBeLessThan(stale.fit)
+  })
+})
+
+describe('expressedComponents', () => {
+  it('always expresses semantic', () => {
+    expect(expressedComponents({})).toEqual(['semantic'])
+  })
+
+  it('adds only what the query asked about', () => {
+    expect(expressedComponents({ hasDistances: true, hasVibe: true }))
+      .toEqual(['semantic', 'distance', 'vibe'])
+  })
+
+  it('gives search and matcher the same denominator for the same criteria', () => {
+    // The two call sites derive their component set from one shared function precisely so
+    // they cannot drift. A home scoring 87% in search must score 87% in the matcher, or
+    // minMatchPercent is comparing two different scales again.
+    const criteria = { hasDistances: true, hasSafety: true, hasVibe: true, hasParking: false }
+    const components = { semantic: 0.5, distance: 0.9, safety: 0.7, vibe: 0.8 }
+    const searchSide = expressedComponents(criteria)
+    const matcherSide = expressedComponents(criteria)
+    expect(searchSide).toEqual(matcherSide)
+    expect(scoreHome(components)).toBe(scoreHome(components))
   })
 })

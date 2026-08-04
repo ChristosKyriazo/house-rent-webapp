@@ -28,10 +28,8 @@ import { semanticScore } from './calibration'
 export const COMPONENT_WEIGHTS = {
   semantic: 0.30,
   distance: 0.25,
-  description: 0.15,
   vibe: 0.10,
   safety: 0.08,
-  photo: 0.07,
   parking: 0.05,
 } as const
 
@@ -40,7 +38,28 @@ export type ComponentName = keyof typeof COMPONENT_WEIGHTS
 /** A component left `undefined` was not expressed by the query and is skipped. */
 export type HomeComponents = Partial<Record<ComponentName, number>>
 
+/**
+ * Description and photo evidence are **bonuses, not components**.
+ *
+ * They belong outside the weighted mean for two reasons. Semantically, a listing whose
+ * description simply doesn't mention the thing you asked for should not be punished for
+ * it — only a listing that contradicts you should be, and that is the `penalty` path.
+ * Structurally, a component that is only expressed when it happens to match makes the
+ * denominator depend on the listing, so two homes scored for the same query would sit on
+ * different scales — and the saved-search matcher, which cannot compute the same evidence,
+ * would sit on a third.
+ *
+ * Keeping the mean's expressed set a pure function of the *query* is what makes
+ * `minMatchPercent` mean the same thing everywhere.
+ */
+export const DESCRIPTION_BONUS_MAX = 0.10
+export const PHOTO_BONUS_MAX = 0.05
+
 export interface ScoreOptions {
+  /** 0..1 of `DESCRIPTION_BONUS_MAX` — the description confirms what the query asked for. */
+  descriptionBonus?: number
+  /** 0..1 of `PHOTO_BONUS_MAX` — photo tags confirm a visual feature the query asked for. */
+  photoBonus?: number
   /** 0..1 — the description explicitly contradicts the query. Subtracted from the fit. */
   penalty?: number
   /** 0..1 — the listing sits in an area the user named as preferred. Added to the fit. */
@@ -53,6 +72,28 @@ export interface ScoreOptions {
    * vibe carries far more than its default share.
    */
   weights?: Partial<Record<ComponentName, number>>
+}
+
+/**
+ * The components a given query expresses, derived from the criteria alone.
+ *
+ * Both the search route and the saved-search matcher call this so their denominators
+ * cannot drift apart. `semantic` is always present: there is always an intent to compare
+ * against, and a home with no embedding scores the neutral prior rather than dropping the
+ * term and changing the scale.
+ */
+export function expressedComponents(criteria: {
+  hasDistances?: boolean
+  hasSafety?: boolean
+  hasVibe?: boolean
+  hasParking?: boolean
+}): ComponentName[] {
+  const names: ComponentName[] = ['semantic']
+  if (criteria.hasDistances) names.push('distance')
+  if (criteria.hasVibe) names.push('vibe')
+  if (criteria.hasSafety) names.push('safety')
+  if (criteria.hasParking) names.push('parking')
+  return names
 }
 
 /** Vibe weight when the query is explicitly about the character of the location. */
@@ -151,6 +192,8 @@ export function scoreHome(components: HomeComponents, options: ScoreOptions = {}
   if (totalWeight === 0) return 50
 
   let fit = weighted / totalWeight
+  fit += (options.descriptionBonus ?? 0) * DESCRIPTION_BONUS_MAX
+  fit += (options.photoBonus ?? 0) * PHOTO_BONUS_MAX
   fit += options.areaBonus ?? 0
   fit -= options.penalty ?? 0
 

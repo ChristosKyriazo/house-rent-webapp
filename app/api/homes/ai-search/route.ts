@@ -111,8 +111,21 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Semantic cache: generate embedding early, check for similar recent queries ---
+    //
+    // The embedding is generated for the conversational path too. It previously was not:
+    // the gate here excluded `preExtractedFilters`, and the chat UI sent the literal
+    // string "[conversational]" as its query — so `queryEmbedding` stayed null, the
+    // 0.30-weight semantic component was never expressed, and the description and photo
+    // keyword bonuses matched that placeholder against listing text and scored nothing.
+    // Over half the weight table was inert in the only search UI in real use. The chat now
+    // sends a canonical intent string (`lib/search/intent-text.ts`) and is embedded like
+    // any other query.
+    //
+    // The *result* cache still only serves single-turn searches: it is keyed on the query
+    // alone, and conversational results additionally depend on `preExtractedFilters`.
     let queryEmbedding: number[] | null = null
-    if (openai && process.env.OPENAI_API_KEY && query && query.trim() && !preExtractedFilters) {
+    const resultCacheEligible = !preExtractedFilters && !excludeInquired && !excludeApproved
+    if (openai && process.env.OPENAI_API_KEY && query && query.trim()) {
       try {
         const normalizedQuery = query.trim()
         // Reuse embedding for the exact same query text
@@ -138,8 +151,8 @@ export async function POST(request: NextRequest) {
           embeddingTextCache.set(normalizedQuery, { vec: queryEmbedding, ts: Date.now() })
         }
 
-        // Only check cache when results aren't user-specific (no exclusion filters)
-        if (!excludeInquired && !excludeApproved) {
+        // Only check cache when results aren't user-specific and aren't filter-driven
+        if (resultCacheEligible) {
           // Try Redis cache first (shared across instances, survives restarts)
           const { createHash } = await import('crypto')
           const queryHash = createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16)
@@ -764,6 +777,9 @@ export async function POST(request: NextRequest) {
     const areaBonusMap = new Map<number, number>()
     /** homeId → [0,1] penalty from a description that contradicts the query */
     const penaltyMap = new Map<number, number>()
+    /** homeId → [0,1] description/photo evidence, applied as bonuses outside the mean */
+    const descriptionBonusScoreMap = new Map<number, number>()
+    const photoBonusScoreMap = new Map<number, number>()
     /** homeId → intrinsic quality, ordering only, used when `hardFiltersOnly` */
     const intrinsicRankMap = new Map<number, number>()
 
@@ -958,12 +974,13 @@ export async function POST(request: NextRequest) {
 
         if (disqualifierMap.has(home.id)) continue
 
-        // A description that speaks to the query at all is evidence of fit; one that
-        // explicitly denies what was asked for is evidence against it. The first is a
-        // component, the second a penalty on the aggregate — a listing that says
-        // "no pets" should not be rescued by scoring well everywhere else.
+        // A description that speaks to the query is evidence *for* a listing; one that
+        // explicitly denies what was asked for is evidence against it. Both sit outside
+        // the weighted mean — the bonus so that a listing which simply doesn't mention the
+        // feature is not punished for it, and both so the mean's denominator stays a pure
+        // function of the query rather than of the listing.
         if (result.bonus > 0) {
-          getComponents(home.id).description = normalizeDescriptionBonus(result.bonus)
+          descriptionBonusScoreMap.set(home.id, normalizeDescriptionBonus(result.bonus))
         }
         if (result.penalty < 0) {
           penaltyMap.set(home.id, normalizeDescriptionPenalty(result.penalty))
@@ -986,7 +1003,7 @@ export async function POST(request: NextRequest) {
           : null
         const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
         if (photoBonus > 0) {
-          getComponents(home.id).photo = normalizePhoto(photoBonus)
+          photoBonusScoreMap.set(home.id, normalizePhoto(photoBonus))
         }
       })
 
@@ -1056,12 +1073,20 @@ export async function POST(request: NextRequest) {
     // Semantic similarity — the single strongest signal we have, and a first-class
     // component rather than the ~0-4 point afterthought it used to be. pgvector when the
     // column is populated, JS cosine over the JSON column otherwise.
-    if (queryEmbedding && homes.length > 0 && !hardFiltersOnly) {
+    if (homes.length > 0 && !hardFiltersOnly) {
       const candidates = homes.filter(h => !disqualifierMap.has(h.id))
       /** Homes the in-database query actually returned a similarity for. */
       const scoredByPgvector = new Set<number>()
 
-      if (candidates.length > 0) {
+      // `semantic` is expressed unconditionally — a home we cannot compare gets the neutral
+      // prior rather than dropping the term. Dropping it would change the denominator of
+      // the weighted mean, and a fit is only comparable to another fit when both were
+      // computed over the same expressed set. That is what `minMatchPercent` relies on.
+      for (const home of candidates) {
+        getComponents(home.id).semantic = SEM_NEUTRAL
+      }
+
+      if (queryEmbedding && candidates.length > 0) {
         try {
           const vectorStr = `[${queryEmbedding.join(',')}]`
           const pgResults = await prisma.$queryRawUnsafe<Array<{ id: number; sim: number }>>(
@@ -1109,6 +1134,8 @@ export async function POST(request: NextRequest) {
       const fit = hardFiltersOnly
         ? null
         : scoreHome(componentsMap.get(home.id) ?? {}, {
+            descriptionBonus: descriptionBonusScoreMap.get(home.id),
+            photoBonus: photoBonusScoreMap.get(home.id),
             penalty: penaltyMap.get(home.id),
             areaBonus: areaBonusMap.get(home.id),
             disqualified,
@@ -1136,7 +1163,7 @@ export async function POST(request: NextRequest) {
     homesCountAfterFilter = homes.length
 
     // Store in cache for future similar queries (Redis + in-memory)
-    if (queryEmbedding && !excludeInquired && !excludeApproved) {
+    if (queryEmbedding && resultCacheEligible) {
       const cacheResult = { homes: homesWithMatches, message: 'AI search completed' }
       // Redis (shared, persists across deploys)
       const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`

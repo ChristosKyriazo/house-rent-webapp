@@ -9,6 +9,7 @@ import {
   reconcileBounds,
   BOUND_FIELDS,
 } from '@/lib/search/numeric-bounds'
+import { buildIntentText, hasUsableIntent } from '@/lib/search/intent-text'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -63,6 +64,169 @@ interface ConversationalAIResponse {
   pendingNumeric?: string[]
 }
 
+/** Every filter field the model may write, with the value shapes each accepts. */
+const NUMERIC_FILTER_FIELDS = [
+  'minPrice', 'maxPrice', 'minBedrooms', 'maxBedrooms', 'minBathrooms', 'maxBathrooms',
+  'minSize', 'maxSize', 'minFloor', 'maxFloor',
+  'minYearBuilt', 'maxYearBuilt', 'minYearRenovated', 'maxYearRenovated',
+] as const
+
+const STRING_FILTER_FIELDS = [
+  'city', 'country', 'area', 'heatingCategory', 'heatingAgent', 'vibePreference',
+] as const
+
+const CATEGORY_FILTER_FIELDS = [
+  'Metro', 'Bus', 'School', 'Hospital', 'Park', 'University', 'Safety',
+] as const
+
+const BOOLEAN_FILTER_FIELDS = ['parking', 'parkingSoftPreference', 'hasLocationPreference'] as const
+
+/**
+ * Structured Outputs schema for the turn response.
+ *
+ * `json_object` only guaranteed the reply was syntactically JSON — field presence, field
+ * names and enum membership were all prompt-adherence hopes, and `pendingNumeric` in
+ * particular is correctness-critical: if the model drops it, the next bare number binds to
+ * nothing. With `strict: true` constrained decoding makes an out-of-enum value
+ * *undecodable* rather than merely discouraged.
+ *
+ * Strict mode requires every property to be listed in `required` with
+ * `additionalProperties: false`, so "omit what you didn't extract" becomes "emit null" —
+ * which `mergeFilters` already treats as no-new-information.
+ */
+function buildResponseSchema(): Record<string, unknown> {
+  const properties: Record<string, unknown> = {}
+
+  for (const field of NUMERIC_FILTER_FIELDS) {
+    // "CLEAR" is the mind-change sentinel, so a number field must also admit that string.
+    properties[field] = { type: ['number', 'string', 'null'] }
+  }
+  for (const field of STRING_FILTER_FIELDS) {
+    properties[field] = { type: ['string', 'null'] }
+  }
+  for (const field of CATEGORY_FILTER_FIELDS) {
+    properties[field] = {
+      type: ['string', 'null'],
+      enum: ['Essential', 'Strong', 'Not important', 'Avoid', 'Not mentioned', 'CLEAR', null],
+    }
+  }
+  for (const field of BOOLEAN_FILTER_FIELDS) {
+    properties[field] = { type: ['boolean', 'string', 'null'] }
+  }
+  properties.preferredAreas = { type: ['array', 'null'], items: { type: 'string' } }
+
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['action', 'filters', 'assistantMessage', 'followUpQuestion', 'pendingNumeric'],
+    properties: {
+      action: { type: 'string', enum: ['search', 'ask'] },
+      assistantMessage: { type: 'string' },
+      followUpQuestion: { type: ['string', 'null'] },
+      pendingNumeric: {
+        type: ['array', 'null'],
+        items: { type: 'string', enum: [...NUMERIC_FILTER_FIELDS] },
+      },
+      filters: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          ...NUMERIC_FILTER_FIELDS,
+          ...STRING_FILTER_FIELDS,
+          ...CATEGORY_FILTER_FIELDS,
+          ...BOOLEAN_FILTER_FIELDS,
+          'preferredAreas',
+        ],
+        properties,
+      },
+    },
+  }
+}
+
+const RESPONSE_SCHEMA = buildResponseSchema()
+
+/**
+ * The area table was read in full on every single chat turn, purely to build the
+ * name resolver. Areas change on the order of never; cache the resolver.
+ */
+const AREA_CACHE_TTL_MS = 10 * 60 * 1000
+let areaResolverCache: { resolver: ReturnType<typeof createLocationResolver>; ts: number } | null = null
+
+async function getLocationResolver() {
+  if (areaResolverCache && Date.now() - areaResolverCache.ts < AREA_CACHE_TTL_MS) {
+    return areaResolverCache.resolver
+  }
+  const areas = await prisma.area.findMany({
+    select: { name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
+  })
+  const resolver = createLocationResolver(areas)
+  areaResolverCache = { resolver, ts: Date.now() }
+  return resolver
+}
+
+const RETRYABLE_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504])
+
+function isRetryable(error: unknown): boolean {
+  if (error instanceof Error && error.name === 'AbortError') return true
+  const status = (error as { status?: number })?.status
+  return typeof status === 'number' && RETRYABLE_STATUSES.has(status)
+}
+
+/**
+ * One completion, with a single jittered retry on transient failure.
+ *
+ * Without this a lone 503 or a slow response lost the user's message outright — they had
+ * typed it, been charged nothing, and got an error. One retry covers the overwhelming
+ * majority of transient faults; beyond that the caller falls back to searching on the
+ * filters we already have, because for a search product stale results beat no results.
+ */
+async function requestChatTurn(
+  openai: OpenAI,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[]
+): Promise<ConversationalAIResponse> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+    try {
+      const completion = await openai.chat.completions.create(
+        {
+          model: 'gpt-4o-mini',
+          messages,
+          // There is exactly one correct reading of an utterance. Sampling buys nothing
+          // on the extraction half and costs consistency.
+          temperature: 0,
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'conversational_search_turn', strict: true, schema: RESPONSE_SCHEMA },
+          },
+        },
+        { signal: controller.signal }
+      )
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) throw new Error('Empty AI response')
+      const parsed = JSON.parse(content) as Record<string, unknown>
+      if (!parsed.action || !parsed.assistantMessage) {
+        throw new Error('AI chat response missing required fields')
+      }
+      return parsed as unknown as ConversationalAIResponse
+    } catch (error) {
+      lastError = error
+      if (attempt === 0 && isRetryable(error)) {
+        await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 400))
+        continue
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  throw lastError
+}
+
 export async function processAIChatTurn(
   conversationKey: string | null,
   userMessage: string,
@@ -76,6 +240,8 @@ export async function processAIChatTurn(
   followUpQuestion?: string
   /** Bounds removed because the user's revision contradicted them. */
   droppedBounds: string[]
+  /** Canonical English rendering of the accumulated intent — the query the search runs on. */
+  intentText: string
 }> {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -110,9 +276,11 @@ export async function processAIChatTurn(
   // before the model gets a chance to guess the wrong side of the range.
   const boundAnswer = bindPendingNumericAnswer(userMessage, conversation?.pendingNumeric)
 
-  // Keep only the last 6 turns (12 messages) to cap token usage
-  const MAX_HISTORY_MESSAGES = 12
-  const history = fullHistory.slice(-MAX_HISTORY_MESSAGES)
+  // Keep only the last 6 turns (12 messages) to cap token usage. Sliced on a turn
+  // boundary: a plain `slice(-12)` can start mid-turn and orphan an assistant question
+  // from the answer that follows it, which is exactly the bare-reply case the whole design
+  // exists to read correctly.
+  const history = sliceHistoryOnTurnBoundary(fullHistory, 12)
 
   const modeHint =
     listingMode === 'buy'
@@ -135,42 +303,20 @@ export async function processAIChatTurn(
         ? `\n\n[Your previous question asked for these bounds: ${JSON.stringify(conversation.pendingNumeric)}. The reply was not a bare number, so read it yourself — honour any qualifier the user used ("at least", "max", "around").]`
         : ''
 
+  // The static prompt MUST stay byte-identical as message[0]. OpenAI prompt caching matches
+  // on the longest common prefix, so the per-turn state that used to be concatenated onto it
+  // (accumulated filters change every turn) meant the cache this prompt was written for
+  // never hit once. Turn state goes in its own message, after the cacheable prefix.
+  const turnContext = modeHint + accumulatedContext + boundContext
+
   const messagesForAI: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: CONVERSATIONAL_SEARCH_SYSTEM_PROMPT + modeHint + accumulatedContext + boundContext },
+    { role: 'system', content: CONVERSATIONAL_SEARCH_SYSTEM_PROMPT },
+    ...(turnContext ? [{ role: 'system' as const, content: turnContext.trim() }] : []),
     ...history.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     { role: 'user', content: userMessage },
   ]
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-  let aiResponse: ConversationalAIResponse
-  try {
-    const completion = await openai.chat.completions.create(
-      {
-        model: 'gpt-4o-mini',
-        messages: messagesForAI,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-      },
-      { signal: controller.signal }
-    )
-
-    const content = completion.choices[0]?.message?.content
-    if (!content) throw new Error('Empty AI response')
-    let parsed: Record<string, unknown>
-    try {
-      parsed = JSON.parse(content)
-    } catch {
-      throw new Error('AI chat returned invalid JSON')
-    }
-    if (!parsed.action || !parsed.assistantMessage) throw new Error('AI chat response missing required fields')
-    aiResponse = parsed as unknown as ConversationalAIResponse
-  } catch (error) {
-    clearTimeout(timeoutId)
-    throw error
-  }
-  clearTimeout(timeoutId)
+  const aiResponse = await requestChatTurn(openai, messagesForAI)
 
   const incoming = aiResponse.filters ?? {}
   const mergedFilters: ConversationalFilters = mergeFilters(accumulated, incoming)
@@ -194,12 +340,17 @@ export async function processAIChatTurn(
   // The model echoes the user's spelling ("Nea Smirni"). Pin the accumulated
   // filters to the canonical area names so later turns and the assistant's own
   // prose stay consistent with the DB.
-  const areas = await prisma.area.findMany({
-    select: { name: true, nameGreek: true, city: true, cityGreek: true, country: true, countryGreek: true },
-  })
-  const rewrites = canonicalizeFilterLocations(mergedFilters, createLocationResolver(areas))
+  const rewrites = canonicalizeFilterLocations(mergedFilters, await getLocationResolver())
 
-  const assistantMessage = applyLocationRewrites(aiResponse.assistantMessage, rewrites)
+  // Built after canonicalization so the embedded text uses the DB's spelling of places.
+  const intentText = buildIntentText(mergedFilters as Record<string, unknown>)
+
+  // Reconciliation silently removed a limit the user had given. Say so — a filter that
+  // disappears without explanation is worse than the contradiction it resolved.
+  const droppedNotice = describeDroppedBounds(droppedBounds, isGreek(userMessage))
+
+  const assistantMessage =
+    applyLocationRewrites(aiResponse.assistantMessage, rewrites) + droppedNotice
   const followUpQuestion = aiResponse.followUpQuestion
     ? applyLocationRewrites(aiResponse.followUpQuestion, rewrites)
     : undefined
@@ -257,10 +408,13 @@ export async function processAIChatTurn(
     savedKey = created.key
   }
 
-  // Persist query embedding so AI saved-search matching can use it.
+  // Persist the embedding of the conversation's *accumulated intent*, not of the last
+  // message. A search saved after five turns used to store the vector for whatever
+  // fragment ended it ("600", "ναι"), and the matcher then weighted that against every
+  // new listing forever.
   // Fire-and-forget: doesn't block the chat response.
-  if (aiResponse.action === 'search') {
-    generateEmbedding(userMessage, openai)
+  if (aiResponse.action === 'search' && hasUsableIntent(intentText)) {
+    generateEmbedding(intentText, openai)
       .then(vec => prisma.searchConversation.update({
         where: { key: savedKey },
         data: { embedding: vec as unknown as never },
@@ -275,7 +429,76 @@ export async function processAIChatTurn(
     assistantMessage,
     followUpQuestion,
     droppedBounds,
+    intentText,
   }
+}
+
+/**
+ * Trim history to at most `max` messages without cutting between an assistant question and
+ * the user reply that answers it.
+ *
+ * Exported for tests: the orphaned-question case is invisible in normal use and only shows
+ * up as the model mysteriously re-asking something in long conversations.
+ */
+const GREEK_BOUND_LABELS: Record<string, string> = {
+  minPrice: 'την ελάχιστη τιμή',
+  maxPrice: 'τη μέγιστη τιμή',
+  minBedrooms: 'τον ελάχιστο αριθμό υπνοδωματίων',
+  maxBedrooms: 'τον μέγιστο αριθμό υπνοδωματίων',
+  minBathrooms: 'τον ελάχιστο αριθμό μπάνιων',
+  maxBathrooms: 'τον μέγιστο αριθμό μπάνιων',
+  minSize: 'το ελάχιστο εμβαδόν',
+  maxSize: 'το μέγιστο εμβαδόν',
+  minFloor: 'τον ελάχιστο όροφο',
+  maxFloor: 'τον μέγιστο όροφο',
+  minYearBuilt: 'το παλαιότερο έτος κατασκευής',
+  maxYearBuilt: 'το νεότερο έτος κατασκευής',
+  minYearRenovated: 'το παλαιότερο έτος ανακαίνισης',
+  maxYearRenovated: 'το νεότερο έτος ανακαίνισης',
+}
+
+const ENGLISH_BOUND_LABELS: Record<string, string> = {
+  minPrice: 'the minimum price',
+  maxPrice: 'the maximum price',
+  minBedrooms: 'the minimum bedrooms',
+  maxBedrooms: 'the maximum bedrooms',
+  minBathrooms: 'the minimum bathrooms',
+  maxBathrooms: 'the maximum bathrooms',
+  minSize: 'the minimum size',
+  maxSize: 'the maximum size',
+  minFloor: 'the lowest floor',
+  maxFloor: 'the highest floor',
+  minYearBuilt: 'the earliest build year',
+  maxYearBuilt: 'the latest build year',
+  minYearRenovated: 'the earliest renovation year',
+  maxYearRenovated: 'the latest renovation year',
+}
+
+function isGreek(text: string): boolean {
+  return GREEK_SCRIPT.test(text)
+}
+
+/** One short clause naming what reconciliation removed, in the user's language. */
+export function describeDroppedBounds(dropped: string[], greek: boolean): string {
+  if (dropped.length === 0) return ''
+  const labels = greek ? GREEK_BOUND_LABELS : ENGLISH_BOUND_LABELS
+  const named = dropped.map(field => labels[field] ?? field)
+  const list = named.length === 1
+    ? named[0]
+    : `${named.slice(0, -1).join(', ')} ${greek ? 'και' : 'and'} ${named[named.length - 1]}`
+
+  return greek
+    ? ` (Αφαίρεσα ${list}, γιατί δεν ταίριαζε πλέον με αυτό που ζητήσατε.)`
+    : ` (I dropped ${list}, since it no longer fit what you asked for.)`
+}
+
+export function sliceHistoryOnTurnBoundary(history: ChatMessage[], max: number): ChatMessage[] {
+  if (history.length <= max) return history
+  let start = history.length - max
+  // A window that opens on an assistant message begins with a question whose answer is in
+  // the window but whose own context is not — start on the user turn instead.
+  if (history[start]?.role === 'assistant') start += 1
+  return history.slice(start)
 }
 
 /**
