@@ -24,7 +24,12 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com https://clerk-telemetry.com https://api.openai.com https://maps.googleapis.com https://maps.google.com https://maps.gstatic.com https://*.sentry.io wss:",
+      // challenges.cloudflare.com must be here as well as in script-src/frame-src:
+      // Clerk's bot sign-up protection (Turnstile) renders its widget from the
+      // script and frame origins, then completes the challenge over XHR. Without
+      // it in connect-src the widget loads but never resolves, and sign-up fails
+      // for new users only — already-authenticated sessions never see the widget.
+      "connect-src 'self' https://*.clerk.accounts.dev https://clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com https://clerk-telemetry.com https://challenges.cloudflare.com https://api.openai.com https://maps.googleapis.com https://maps.google.com https://maps.gstatic.com https://*.sentry.io wss:",
       "frame-src 'self' https://challenges.cloudflare.com https://*.clerk.accounts.dev https://*.clerk.com https://kaparro.com https://*.kaparro.com",
       "worker-src 'self' blob:",
       "media-src 'self' blob:",
