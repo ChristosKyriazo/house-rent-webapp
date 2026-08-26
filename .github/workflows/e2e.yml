@@ -1,0 +1,95 @@
+name: E2E
+
+# Playwright against a real deployed environment — never localhost.
+#
+# Two rungs of the ladder:
+#   • smoke ("public" project, no credentials) runs after every staging deploy
+#   • full  (all 6 projects) runs on a PR from dev → main, i.e. the release gate
+#
+# Authenticated projects need the TEST_* Clerk credentials. When those secrets
+# are absent the run degrades to smoke-only rather than failing — a missing
+# secret should not look like a broken app.
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+    inputs:
+      base_url:
+        description: Environment to test against
+        type: string
+        default: https://dev.kaparro.com
+      suite:
+        description: '"smoke" (public only) or "full" (all projects)'
+        type: string
+        default: smoke
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Environment to test against
+        type: string
+        default: https://dev.kaparro.com
+      suite:
+        description: '"smoke" or "full"'
+        type: choice
+        options: [smoke, full]
+        default: smoke
+
+jobs:
+  e2e:
+    # A PR into main is the release gate and always runs the full suite.
+    name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
+      TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
+      TEST_RENTER_EMAIL: ${{ secrets.TEST_RENTER_EMAIL }}
+      TEST_RENTER_PASSWORD: ${{ secrets.TEST_RENTER_PASSWORD }}
+      TEST_BROKER_EMAIL: ${{ secrets.TEST_BROKER_EMAIL }}
+      TEST_BROKER_PASSWORD: ${{ secrets.TEST_BROKER_PASSWORD }}
+      TEST_BOTH_EMAIL: ${{ secrets.TEST_BOTH_EMAIL }}
+      TEST_BOTH_PASSWORD: ${{ secrets.TEST_BOTH_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Decide which projects to run
+        id: scope
+        run: |
+          suite="${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }}"
+          if [ "$suite" = "full" ] && [ -n "$TEST_OWNER_EMAIL" ] && [ -n "$CLERK_SECRET_KEY" ]; then
+            echo "args=" >> "$GITHUB_OUTPUT"
+            echo "Running the full suite (all projects)."
+          else
+            if [ "$suite" = "full" ]; then
+              echo "::warning::TEST_* / CLERK_SECRET_KEY secrets are not set — falling back to smoke-only. Authenticated journeys are NOT covered by this run."
+            fi
+            echo "args=--project=public" >> "$GITHUB_OUTPUT"
+            echo "Running smoke only (public project)."
+          fi
+
+      - name: Run Playwright
+        run: npx playwright test ${{ steps.scope.outputs.args }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 14

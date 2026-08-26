@@ -17,22 +17,28 @@ A two-sided Greek property marketplace for rentals and sales — listings, AI-as
 - **Node.js 22.18.0** (see `.nvmrc`; `package.json` `engines` requires `>=22.18.0`)
 - npm, Docker Desktop
 - A Clerk account (create a **separate** application per environment)
-- SSH access to the staging server and `~/.ssh/deploy_key`, for the database tunnel
-
-> ⚠️ CI and the production Dockerfile currently run **Node 20**, while `.nvmrc`/`engines` say 22.18.0. Local and production are on different majors — see Known issues in [CLAUDE.md](./CLAUDE.md).
+- *Optional:* SSH access to the staging server and `~/.ssh/deploy_key`, only if you need to inspect staging data
 
 ---
 
-## The two databases
+## The three environments
 
-This is the single most confusing thing about local setup, so read it before anything else.
+| | Local | UAT / staging | Production |
+|---|---|---|---|
+| Branch | `feature/*` | `dev` | `main` |
+| URL | localhost:3000 | dev.kaparro.com | kaparro.com |
+| Database | your own Postgres on **5432**, seeded with fake data | staging DB (real-ish data) | production DB |
 
-| Port | What it is | Used for |
-|---|---|---|
-| **5432** | an **empty** local Postgres from `docker compose up db` | running `prisma migrate dev` only |
-| **5433** | an SSH tunnel to the **staging** database | everything else — this is where the real data is |
+Local development runs against **your own database**. Nothing you do locally can affect UAT.
 
-There is no local Postgres holding real data. Day to day, `DATABASE_URL` points at **5433**.
+### The port that will bite you
+
+| Port | What it is |
+|---|---|
+| **5432** | your local Postgres — fake seeded data, safe to wipe |
+| **5433** | an SSH tunnel to the **STAGING** database — real data, shared with UAT |
+
+Port 5433 is for *reading* staging when debugging a UAT-only bug. Writing to it changes the environment you are testing against, so point `DATABASE_URL` back at 5432 when you are done. `npm run db:seed:dev` refuses to run against 5433 or any non-localhost host.
 
 ---
 
@@ -44,46 +50,52 @@ cd house-rent-webapp
 npm install
 ```
 
-**1. Start the empty local database** (only needed for creating migrations):
-
-```bash
-docker compose up db -d
-```
-
-`docker-compose.yml` defines `db`, `redis` and `app`; the `app` service waits on a healthy `redis`. For normal development you run Next.js on the host and only need `db`.
-
-**2. Open the tunnel to staging** — in a dedicated terminal, it blocks:
-
-```bash
-ssh -i ~/.ssh/deploy_key -L 5433:172.18.0.2:5432 deploy@116.203.100.64 -N
-```
-
-**3. Create `.env`** from `.env.example` and set at minimum:
+**1. Create `.env`** from `.env.example`. The defaults already point at the local database; set your Clerk keys:
 
 ```dotenv
-DATABASE_URL="postgresql://houserent:<password>@localhost:5433/house_rent"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/house_rent"
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 ```
 
-**4. Generate the Prisma client and run:**
+**2. Bring up the database and fill it** — starts Postgres + Redis, applies all migrations, seeds areas, universities and fake listings:
 
 ```bash
-npx prisma generate
+npm run db:setup
+```
+
+**3. Run it:**
+
+```bash
 npm run dev          # http://localhost:3000
 ```
 
-Signing in creates the Clerk user and syncs a matching Prisma `User` on first request.
+You get 6 users, 10 listings across real Athens/Thessaloniki areas (8 rentals, 2 for sale), 83 areas and 20 universities.
+
+### Signing in locally
+
+Seeded users have no `clerkUserId`, so you cannot log in *as* them — they exist to own listings and give the UI data to render. To sign in, register through your own Clerk dev instance; the Prisma `User` is created and synced on first request.
+
+### Day-to-day database commands
+
+| Command | What it does |
+|---|---|
+| `npm run db:up` | start Postgres + Redis, wait until healthy |
+| `npm run db:down` | stop them (data survives) |
+| `npm run db:nuke` | stop and **delete the volumes** — full reset |
+| `npm run db:setup` | up + migrate + seed, from nothing |
+| `npm run db:seed:dev` | re-seed fake users/listings only |
+| `npm run db:studio` | Prisma Studio on :5555 |
 
 ### Creating a migration
 
-Point `DATABASE_URL` at **5432** (the empty local DB) first, then:
+With `DATABASE_URL` on **5432**:
 
 ```bash
 npm run db:migrate
 ```
 
-Never run `prisma migrate dev` against 5433 — that is the staging database and the command is interactive and destructive.
+Never run `prisma migrate dev` against 5433 — that is staging, and the command is interactive and destructive.
 
 ### Container parity check
 
@@ -101,7 +113,7 @@ Full list, from `.env.example` plus a grep of `process.env` in the code.
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection string (5433 tunnel locally) |
+| `DATABASE_URL` | Postgres connection string (local Postgres on 5432 by default) |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk, client side (also a Docker build arg) |
 | `CLERK_SECRET_KEY` | Clerk, server side |
 
@@ -149,17 +161,22 @@ There is deliberately **no** `NEXT_PUBLIC_STRIPE_*` key — checkout sessions ar
 | `test:e2e:auth` | the four authenticated projects (owner, renter, broker, both) |
 | `test:e2e:owner` / `:renter` / `:broker` / `:both` / `:flows` | a single project |
 | `test:e2e:role-checks` | owner + broker + both |
+| `test:e2e:smoke` | the `public` project only — what runs after a staging deploy |
 | `test:e2e:report` | open the last HTML report |
+| `db:up` / `db:down` | start / stop local Postgres + Redis |
+| `db:nuke` | stop and delete the local volumes (full reset) |
+| `db:setup` | up + migrate + seed — local environment from nothing |
 | `db:generate` | `prisma generate` |
 | `db:migrate` | `prisma migrate dev` (local only) |
 | `db:studio` | Prisma Studio, port 5555 |
+| `db:seed:dev` | fake local users and listings — **refuses to run against a non-local DB** |
 | `db:seed:universities` / `db:seed:areas` / `db:seed:embeddings` | seed scripts |
 
 ---
 
 ## Testing
 
-**Unit** — 201 tests across 21 files. Uses SQLite (`DATABASE_URL=file:./test.db`), so no tunnel and no Docker needed:
+**Unit** — 318 tests across 26 files. Uses SQLite (`DATABASE_URL=file:./test.db`), so no database and no Docker needed:
 
 ```bash
 npm test
@@ -169,7 +186,15 @@ Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functi
 
 **E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`https://dev.kaparro.com`** by default, not localhost — set `E2E_BASE_URL` to point elsewhere, and put credentials in `.env.test`.
 
-> CI does **not** run E2E. `ci.yml` is lint → typecheck → test → build.
+**Where E2E runs in CI:**
+
+| Trigger | Suite |
+|---|---|
+| push to `feature/*` | none — fast gate only (lint, typecheck, unit, build) |
+| PR into `dev` | none — fast gate only |
+| merge to `dev` | smoke (`public` project) against dev.kaparro.com, after the deploy |
+| **PR `dev` → `main`** | **full suite** against dev.kaparro.com — the release gate |
+| merge to `main` | in-deploy smoke (liveness, readiness, page render) with auto-rollback |
 
 ---
 
@@ -192,7 +217,7 @@ Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functi
 | `tests/` | Vitest tests (`tests/api/`, `tests/lib/`, `tests/services/`) and Playwright E2E (`tests/e2e/`) |
 | `types/` | shared TypeScript types |
 | `docs/` | operations and app reference |
-| `.github/workflows/` | CI (`ci.yml`) and deploy (`deploy.yml`) |
+| `.github/workflows/` | fast gate (`ci.yml`), Playwright (`e2e.yml`), deploy (`deploy.yml`) |
 
 ---
 
@@ -221,8 +246,10 @@ Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS
 
 | Symptom | Cause / fix |
 |---|---|
-| `ECONNREFUSED ... 5433` | the SSH tunnel is not running — restart it in its own terminal |
-| Queries return no data | `DATABASE_URL` is pointing at 5432 (the empty local DB) instead of 5433 |
+| `ECONNREFUSED ... 5432` | local Postgres is not running — `npm run db:up` |
+| Queries return no data | the local DB was never seeded — `npm run db:setup` |
+| `ECONNREFUSED ... 5433` | you are pointed at the staging tunnel and it is not running. For normal work use 5432 |
+| Seed refuses to run | working as intended — `DATABASE_URL` is not a local database. Check it is `localhost:5432` |
 | `prisma migrate dev` prompts to reset | you are pointed at 5433 (staging). Point at 5432 first |
 | Docker port 5432 already in use | stop other Postgres processes, or change the port in `docker-compose.yml` |
 | Clerk session not recognised | dev vs production Clerk keys mismatched between `.env` and the Clerk dashboard |

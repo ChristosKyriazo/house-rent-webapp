@@ -129,7 +129,6 @@ jobs:
             # ── Third-party APIs ──────────────────────────────────────────────
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
-            CALCOM_TOKEN_ENCRYPTION_KEY=${{ secrets.CALCOM_TOKEN_ENCRYPTION_KEY }}
 
             # ── Stripe ───────────────────────────────────────────────────────
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
@@ -137,11 +136,37 @@ jobs:
             STRIPE_PRICE_ID_PLUS=${{ secrets.STRIPE_PRICE_ID_PLUS }}
             STRIPE_PRICE_ID_PRO=${{ secrets.STRIPE_PRICE_ID_PRO }}
 
+            # ── Admin allowlist ──────────────────────────────────────────────
+            # Without these, /admin is unreachable in this environment: lib/admin.ts
+            # treats an empty allowlist as "nobody is an admin".
+            ADMIN_CLERK_IDS=${{ secrets.ADMIN_CLERK_IDS }}
+            ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}
+
+            # ── Cron ─────────────────────────────────────────────────────────
+            # Required by /api/bookings/reminders — the route 401s every request
+            # while this is unset, so booking reminders never send.
+            CRON_SECRET=${{ secrets.CRON_SECRET }}
+
+            # ── Feature flags ────────────────────────────────────────────────
+            # Absent or "true" = enabled; "false" disables without a redeploy.
+            FEATURE_AI_SEARCH=${{ vars.FEATURE_AI_SEARCH || 'true' }}
+            FEATURE_BOOKINGS=${{ vars.FEATURE_BOOKINGS || 'true' }}
+            FEATURE_USAGE_ASSISTANT=${{ vars.FEATURE_USAGE_ASSISTANT || 'true' }}
+            FEATURE_VIBER_ALERTS=${{ vars.FEATURE_VIBER_ALERTS || 'false' }}
+            NEXT_PUBLIC_FEATURE_VIBER_ALERTS=${{ vars.FEATURE_VIBER_ALERTS || 'false' }}
+
             # ── App config ────────────────────────────────────────────────────
             LOG_LEVEL=info
             GITHUB_ACTIONS_ENV_EOF
 
             mv "$tmp" .env
+
+            # ── Record the currently running image, for rollback ──────────────
+            # Read from the live container rather than .env, which we just
+            # overwrote with the NEW image tag.
+            PREVIOUS_IMAGE=$(docker compose -f docker-compose.prod.yml ps -q app 2>/dev/null \
+              | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null | head -1)
+            echo "Previous image: ${PREVIOUS_IMAGE:-<none, first deploy>}"
 
             # ── Pull new image ────────────────────────────────────────────────
             echo "${{ secrets.GITHUB_TOKEN }}" | \
@@ -157,14 +182,80 @@ jobs:
             docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
               --config /etc/caddy/Caddyfile --adapter caddyfile || true
 
-            # ── Health check ──────────────────────────────────────────────────
+            # ── Roll back to the previous image and fail the deploy ───────────
+            rollback() {
+              echo "::error::$1"
+              if [ -z "$PREVIOUS_IMAGE" ]; then
+                echo "No previous image recorded — cannot roll back automatically."
+                echo "Recent app logs:"
+                docker compose -f docker-compose.prod.yml logs --tail 50 app || true
+                exit 1
+              fi
+              echo "Rolling back to $PREVIOUS_IMAGE ..."
+              echo "Failing container's logs:"
+              docker compose -f docker-compose.prod.yml logs --tail 50 app || true
+              # Rewrite APP_IMAGE in .env so the rollback survives a container restart.
+              # NOTE: the NEXT deploy regenerates .env and will bring the bad image
+              # straight back — push a revert commit, do not rely on this pin.
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${PREVIOUS_IMAGE}|" .env
+              docker compose -f docker-compose.prod.yml up -d --no-deps app
+              echo "Rolled back. Push a revert commit — the pin does not survive the next deploy."
+              exit 1
+            }
+
+            # ── Liveness: is the process up? ──────────────────────────────────
+            HEALTHY=0
             for i in $(seq 1 30); do
               if curl -sf http://localhost/api/healthz > /dev/null 2>&1; then
-                echo "App is healthy"
-                exit 0
+                echo "App is live"
+                HEALTHY=1
+                break
               fi
               echo "Waiting for app... ($i/30)"
               sleep 3
             done
-            echo "App failed to become healthy"
-            exit 1
+            [ "$HEALTHY" = "1" ] || rollback "App failed to become live within 90s"
+
+            # ── Readiness: can it actually reach the database? ────────────────
+            # healthz only proves the Node process is answering. A migration
+            # failure or a dead pool passes healthz and fails here.
+            READY=0
+            for i in $(seq 1 10); do
+              if curl -sf http://localhost/api/readyz | grep -q '"db":"connected"'; then
+                echo "App is ready (database connected)"
+                READY=1
+                break
+              fi
+              echo "Waiting for database readiness... ($i/10)"
+              sleep 3
+            done
+            [ "$READY" = "1" ] || rollback "App is live but never became ready — database not connected"
+
+            # ── Smoke: do real pages actually render? ─────────────────────────
+            # Sent through Caddy with the public Host header so routing, TLS
+            # termination and the app are all exercised, not just the container.
+            SMOKE_HOST="${{ github.ref_name == 'main' && 'kaparro.com' || 'dev.kaparro.com' }}"
+            for path in / /homes /api/healthz; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${SMOKE_HOST}" \
+                --max-time 20 "http://localhost${path}")
+              if [ "$code" != "200" ]; then
+                rollback "Smoke test failed: ${path} returned HTTP ${code} (expected 200)"
+              fi
+              echo "  ${path} → ${code}"
+            done
+
+            echo "Deploy verified: live, ready, and serving pages."
+
+  e2e:
+    # Staging only. Browser-level smoke against the environment we just shipped
+    # to, so UAT is known-good before anyone promotes it to main.
+    #
+    # Deliberately does NOT run against production: these specs write data.
+    name: Post-deploy E2E (staging)
+    needs: deploy
+    if: github.ref_name == 'dev'
+    uses: ./.github/workflows/e2e.yml
+    with:
+      base_url: https://dev.kaparro.com
+      suite: smoke
+    secrets: inherit
