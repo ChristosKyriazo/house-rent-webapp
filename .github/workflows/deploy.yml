@@ -22,14 +22,23 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-      full_image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+      image_tag: ${{ steps.img.outputs.tag }}
+      # Deliberately the immutable sha- tag, NOT <branch>-latest. Deploying a
+      # mutable tag makes rollback meaningless: re-pinning `dev-latest` just
+      # re-selects whatever was pushed last, which is the broken build.
+      full_image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.img.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Lowercase image name
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Compute immutable image tag
+        id: img
+        # Matches docker/metadata-action's `type=sha,prefix=sha-`, which uses the
+        # 7-character short SHA.
+        run: echo "tag=sha-$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -162,11 +171,21 @@ jobs:
             mv "$tmp" .env
 
             # ── Record the currently running image, for rollback ──────────────
-            # Read from the live container rather than .env, which we just
-            # overwrote with the NEW image tag.
-            PREVIOUS_IMAGE=$(docker compose -f docker-compose.prod.yml ps -q app 2>/dev/null \
-              | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null | head -1)
-            echo "Previous image: ${PREVIOUS_IMAGE:-<none, first deploy>}"
+            # Capture the image *ID* (sha256), not .Config.Image: the latter is
+            # whatever tag it was started with, and `dev-latest` is mutable —
+            # `docker compose pull` below repoints it at the new build, so
+            # re-pinning that tag would "roll back" to the broken image.
+            # Tag the ID so the layers survive the pull and compose can name it.
+            PREVIOUS_IMAGE=""
+            PREVIOUS_IMAGE_ID=$(docker compose -f docker-compose.prod.yml ps -q app 2>/dev/null \
+              | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null | head -1)
+            if [ -n "$PREVIOUS_IMAGE_ID" ]; then
+              docker tag "$PREVIOUS_IMAGE_ID" house-rent-rollback:previous
+              PREVIOUS_IMAGE=house-rent-rollback:previous
+              echo "Previous image: ${PREVIOUS_IMAGE_ID} (tagged ${PREVIOUS_IMAGE})"
+            else
+              echo "Previous image: <none, first deploy> — rollback unavailable"
+            fi
 
             # ── Pull new image ────────────────────────────────────────────────
             echo "${{ secrets.GITHUB_TOKEN }}" | \
@@ -203,10 +222,28 @@ jobs:
               exit 1
             }
 
-            # ── Liveness: is the process up? ──────────────────────────────────
+            # ── How we talk to the app ────────────────────────────────────────
+            # NOT via http://localhost. Caddy 308-redirects every :80 request to
+            # HTTPS, and `curl -f` only fails on 4xx/5xx — so a 308 with an empty
+            # body is a curl SUCCESS. The old `curl -sf http://localhost/api/healthz`
+            # check therefore passed the instant Caddy was up, whether or not the
+            # app worked at all. It never verified anything.
+            #
+            # --resolve pins the public hostname to the loopback address, so the
+            # request goes through Caddy's real site block: routing, TLS
+            # termination and the app are all exercised. -k because the origin
+            # certificate is a Cloudflare origin cert, not publicly trusted.
+            SMOKE_HOST="${{ github.ref_name == 'main' && 'kaparro.com' || 'dev.kaparro.com' }}"
+            fetch_code() {
+              curl -sk -o /dev/null -w '%{http_code}' \
+                --resolve "${SMOKE_HOST}:443:127.0.0.1" --max-time 20 \
+                "https://${SMOKE_HOST}$1" 2>/dev/null || echo 000
+            }
+
+            # ── Liveness: is the process answering? ───────────────────────────
             HEALTHY=0
             for i in $(seq 1 30); do
-              if curl -sf http://localhost/api/healthz > /dev/null 2>&1; then
+              if [ "$(fetch_code /api/healthz)" = "200" ]; then
                 echo "App is live"
                 HEALTHY=1
                 break
@@ -217,27 +254,27 @@ jobs:
             [ "$HEALTHY" = "1" ] || rollback "App failed to become live within 90s"
 
             # ── Readiness: can it actually reach the database? ────────────────
-            # healthz only proves the Node process is answering. A migration
-            # failure or a dead pool passes healthz and fails here.
+            # healthz only proves the Node process is answering. A failed
+            # migration or a dead pool passes healthz and fails here.
             READY=0
             for i in $(seq 1 10); do
-              if curl -sf http://localhost/api/readyz | grep -q '"db":"connected"'; then
-                echo "App is ready (database connected)"
-                READY=1
-                break
-              fi
+              body=$(curl -sk --resolve "${SMOKE_HOST}:443:127.0.0.1" --max-time 20 \
+                "https://${SMOKE_HOST}/api/readyz" 2>/dev/null || true)
+              case "$body" in
+                *'"db":"connected"'*)
+                  echo "App is ready (database connected)"
+                  READY=1
+                  break
+                  ;;
+              esac
               echo "Waiting for database readiness... ($i/10)"
               sleep 3
             done
             [ "$READY" = "1" ] || rollback "App is live but never became ready — database not connected"
 
             # ── Smoke: do real pages actually render? ─────────────────────────
-            # Sent through Caddy with the public Host header so routing, TLS
-            # termination and the app are all exercised, not just the container.
-            SMOKE_HOST="${{ github.ref_name == 'main' && 'kaparro.com' || 'dev.kaparro.com' }}"
-            for path in / /homes /api/healthz; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${SMOKE_HOST}" \
-                --max-time 20 "http://localhost${path}")
+            for path in / /homes; do
+              code=$(fetch_code "$path")
               if [ "$code" != "200" ]; then
                 rollback "Smoke test failed: ${path} returned HTTP ${code} (expected 200)"
               fi

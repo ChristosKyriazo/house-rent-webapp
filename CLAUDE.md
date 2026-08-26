@@ -78,7 +78,8 @@ Never run `prisma migrate dev` against the production or staging DB — it promp
 - Image tags are `sha-<commit>` and `<branch>-latest` (`dev-latest` / `main-latest`). **There is no plain `:latest`.**
 - The deploy only restarts the app container; DB, pgbouncer, Redis and Caddy keep running.
 - **`/opt/house-rent/.env` is regenerated wholesale from GitHub secrets on every deploy.** Hand edits do not survive.
-- Health check polls `/api/healthz` 30 times at 3s intervals (90 seconds total).
+- Deploy verification (liveness → readiness → page smoke) must go over **HTTPS with `curl --resolve <host>:443:127.0.0.1`**. Caddy 308-redirects all port-80 traffic, and `curl -f` treats a 308 as success, so any `http://localhost` health check silently passes without testing the app.
+- `APP_IMAGE` deploys the immutable `sha-<short>` tag, never `dev-latest` — rollback to a mutable tag is a no-op.
 
 ## Payments (Stripe)
 

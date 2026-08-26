@@ -100,12 +100,14 @@ Naming: `feature/owner-notes-card`, `hardening/booking-overlap-invariants`, `hot
 8. **Verification, in three rungs** — any failure triggers an automatic rollback (below):
    - **Liveness**: `/api/healthz`, polled 30× at 3s (90s total). Proves the process answers.
    - **Readiness**: `/api/readyz` must report `"db":"connected"`, polled 10× at 3s. Catches a failed migration or a dead pool, which liveness alone happily passes.
-   - **Smoke**: `/`, `/homes` and `/api/healthz` fetched through Caddy with the public `Host` header, each expected to return 200. Exercises routing and rendering, not just the container.
+   - **Smoke**: `/` and `/homes` each expected to return 200. Exercises routing and rendering, not just the container.
+
+   All three go over **HTTPS via `curl --resolve <host>:443:127.0.0.1`**, not `http://localhost`. This matters: Caddy 308-redirects every port-80 request to HTTPS, and `curl -f` only fails on 4xx/5xx — so a 308 with an empty body is a curl *success*. The original `curl -sf http://localhost/api/healthz` gate passed the moment Caddy was up, regardless of whether the app worked, and had never verified anything. `-k` is required because the origin certificate is a Cloudflare origin cert, not publicly trusted.
 9. **Post-deploy E2E** (`dev` only): `e2e.yml` runs the Playwright `public` project against dev.kaparro.com. Not run against production — those specs write data.
 
 ### Automatic rollback
 
-Before pulling the new image the deploy records the currently running image (read off the live container, not `.env`, which has already been rewritten). If any verification rung fails, the deploy:
+Before pulling the new image the deploy records the running container's image **ID** (`docker inspect --format '{{.Image}}'`) and tags it `house-rent-rollback:previous`. The ID rather than the tag, because `docker compose pull` repoints `dev-latest` at the new build moments later; the explicit tag because the pull would otherwise leave those layers dangling. If any verification rung fails, the deploy:
 
 1. prints the last 50 lines of the failing container's logs into the Actions output,
 2. rewrites `APP_IMAGE` in `.env` to the previous image and restarts the app,
@@ -115,7 +117,9 @@ Before pulling the new image the deploy records the currently running image (rea
 
 ### Image tags
 
-Tags produced are `sha-<commit>` and `<branch>-latest` — i.e. `dev-latest` and `main-latest`. **There is no plain `:latest` tag.** Pulling `:latest` gets you nothing.
+Tags produced are `sha-<short-commit>` and `<branch>-latest` — i.e. `dev-latest` and `main-latest`. **There is no plain `:latest` tag.** Pulling `:latest` gets you nothing.
+
+`APP_IMAGE` is deployed as the **immutable `sha-` tag**, never `<branch>-latest`. Deploying a mutable tag makes rollback meaningless: re-pinning `dev-latest` just re-selects whatever was pushed last, which is the broken build you are trying to escape.
 
 ---
 
