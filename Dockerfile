@@ -1,4 +1,6 @@
-FROM node:20-alpine AS base
+# Keep in lockstep with .nvmrc, package.json "engines", and ci.yml, which all
+# read 22.18.0. A split here means production runs a runtime nobody develops on.
+FROM node:22.18.0-alpine AS base
 
 # ── deps: install all dependencies ──────────────────────────────────────────
 FROM base AS deps

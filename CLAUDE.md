@@ -20,19 +20,24 @@ Deeper references: [docs/APP.md](./docs/APP.md) for features and data model, [do
 
 ## Local database connection
 
-The local dev environment connects to the **staging database** via an SSH tunnel — there is no local Postgres instance with real data.
+Local development runs against **its own Postgres on port 5432**, seeded with fake data. One-time setup:
 
-**Start the tunnel** (run in a dedicated terminal, it blocks — that's normal):
+```
+npm run db:setup      # up + migrate deploy + seed areas, universities, dev data
+```
+
+`DATABASE_URL` in `.env`:
+```
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/house_rent"
+```
+
+**Port 5433 is an SSH tunnel to the STAGING database — real data shared with UAT.** Use it only to read staging while debugging, then switch back. Writing to it mutates the environment being tested.
+
 ```
 ssh -i ~/.ssh/deploy_key -L 5433:172.18.0.2:5432 deploy@116.203.100.64 -N
 ```
 
-Then set `DATABASE_URL` in `.env`:
-```
-DATABASE_URL="postgresql://houserent:<password>@localhost:5433/house_rent"
-```
-
-Port 5432 is an empty local Postgres used only when running `prisma migrate dev`. Port 5433 is the tunnel to real data.
+`scripts/seeds/seed-dev.ts` hard-refuses any non-localhost host and refuses port 5433 specifically. Do not weaken that guard, and never add the dev seed to a deploy pipeline.
 
 ## Commands
 
@@ -41,9 +46,12 @@ npm run dev              # Start dev server (port 3000)
 npm run typecheck        # TypeScript check (no emit)
 npm run lint             # ESLint (flat config, eslint.config.mjs)
 npm run lint:fix         # Auto-fix lint issues
-npm test                 # Vitest unit tests (SQLite — no tunnel needed)
+npm test                 # Vitest unit tests (SQLite — no database needed)
 npm run test:integration # Vitest, tests/api only
 npm run test:e2e         # Playwright (runs against dev.kaparro.com by default)
+npm run db:setup         # local DB from nothing: up + migrate + seed
+npm run db:up            # start local Postgres + Redis
+npm run db:nuke          # delete local volumes (full reset)
 npm run db:migrate       # prisma migrate dev (local, interactive)
 npm run db:studio        # Prisma Studio on port 5555
 ```
@@ -52,7 +60,7 @@ Run `npm run typecheck && npm run lint` before pushing — CI blocks the deploy 
 
 `npm run format` exists but the repo is **not** prettier-formatted and CI does not check it. Running it would reformat everything; don't, unless that is the intended change.
 
-There is **no `db:seed:demo` script.** The seeds that exist are `db:seed:universities`, `db:seed:areas`, `db:seed:embeddings`.
+There is **no `db:seed:demo` script.** The seeds are `db:seed:dev` (fake local data, localhost-only), `db:seed:universities`, `db:seed:areas`, `db:seed:embeddings`.
 
 ## Migrations
 
@@ -109,14 +117,15 @@ Replaces four overlapping phase-plan documents. Verified against the code on 202
 | # | Issue |
 |---|---|
 | 1 | ~~Viber alerts are not gated on payment.~~ **Fixed.** The route now returns `501` (`FEATURE_VIBER_ALERTS` off by default) and the modal is gated on `NEXT_PUBLIC_FEATURE_VIBER_ALERTS`. Shipping it for real still needs a verified phone column, a Stripe gate flipped from the webhook, and a sender — see [docs/APP.md](./docs/APP.md#viber-alerts--not-shipped). |
-| 2 | **Admin allowlist is likely empty in production.** `deploy.yml` writes neither `ADMIN_EMAILS` nor `ADMIN_CLERK_IDS`. Needs verification. |
-| 3 | **Node version is split.** `.nvmrc` and `engines` say 22.18.0; `ci.yml` and the Dockerfile use Node 20. Production runs 20, local runs 22. |
-| 4 | **CI never runs E2E.** `ci.yml` is lint → typecheck → test → build only, though the `flows/` specs exist and pass locally. |
+| 2 | ~~Admin allowlist empty in production.~~ **Fixed in `deploy.yml`** — it now writes `ADMIN_CLERK_IDS`, `ADMIN_EMAILS`, `CRON_SECRET` and the `FEATURE_*` flags. The **secrets must still be set** in the GitHub `staging` and `production` environments, or the values land empty. |
+| 3 | ~~Node version split.~~ **Fixed.** Dockerfile is `node:22.18.0-alpine`; `ci.yml` reads `.nvmrc`. One version everywhere. |
+| 4 | ~~CI never runs E2E.~~ **Fixed.** `e2e.yml` runs smoke after every staging deploy and the full suite on a `dev` → `main` PR. Authenticated projects need the `TEST_*` secrets set, or the run degrades to smoke-only with a warning. |
 | 5 | **Caddy rate limiting is inert.** The `rate_limit` directive needs the caddy-ratelimit plugin, which `caddy:2-alpine` does not ship. Either build with xcaddy or drop the block. |
-| 6 | **`CALCOM_TOKEN_ENCRYPTION_KEY`** is still written into the production `.env` with zero consumers. |
+| 6 | ~~`CALCOM_TOKEN_ENCRYPTION_KEY` written with zero consumers.~~ **Removed from `deploy.yml`.** |
 | 7 | Backups are on-box only — no off-server copy. |
 | 8 | `~185` `any` warnings across API routes. |
 | 9 | `lib/translations.ts` (~1270 lines) has not been migrated to next-intl/i18next. |
 | 10 | The booking endpoint has never been load-tested. |
 | 11 | No metrics dashboard or alerting policy beyond raw Sentry errors. |
 | 12 | Branch protection on `main` — status unverified. |
+| 13 | ~~Fresh databases could not be provisioned.~~ **Fixed.** `20260612000001_remove_calcom_fields` targeted `ALTER TABLE "User"` — a table that has never existed, since the model is `@@map("users")`. `prisma migrate deploy` therefore aborted with 42P01 at migration 22 of 32 on any **new** database: no new environment, no restore-from-backup, no local DB. Rewritten with `ALTER TABLE IF EXISTS` so it is a safe no-op on every database shape. Verified: all 32 migrations now apply to an empty database. Staging and production are unaffected — `migrate deploy` does not re-check the checksums of already-applied migrations, it only applies pending ones. |

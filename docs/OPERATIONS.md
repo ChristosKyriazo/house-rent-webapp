@@ -8,12 +8,15 @@ Companion docs: [README](../README.md) for local setup, [docs/APP.md](./APP.md) 
 
 ## Environments
 
-| | Staging | Production |
-|---|---|---|
-| Branch | `dev` | `main` |
-| Domain | dev.kaparro.com | kaparro.com, www.kaparro.com |
-| Host secret | `SERVER_HOST_STAGING` | `SERVER_HOST_PROD` |
-| GitHub Environment | `staging` | `production` |
+| | Local | UAT / staging | Production |
+|---|---|---|---|
+| Branch | `feature/*` | `dev` | `main` |
+| Domain | localhost:3000 | dev.kaparro.com | kaparro.com, www.kaparro.com |
+| Database | own Postgres on 5432, fake seed | staging DB | production DB |
+| Host secret | — | `SERVER_HOST_STAGING` | `SERVER_HOST_PROD` |
+| GitHub Environment | — | `staging` | `production` |
+
+Local runs against its own database (`npm run db:setup`) — see the [README](../README.md#the-three-environments). Port 5433 is a tunnel to *staging*, not a local database; treat it as read-only.
 
 **Both branches deploy.** `.github/workflows/deploy.yml` triggers on pushes to `main` *and* `dev`. A push to `dev` is a real deploy to staging, not just a build.
 
@@ -44,19 +47,19 @@ git push -u origin <branch-name>
 # open a PR into dev; merge when lint, typecheck and tests pass
 ```
 
-Note that `ci.yml` only runs on `pull_request`. Pushing straight to `dev` skips that gate — the deploy workflow calls CI itself, so it is still caught, but at deploy time rather than review time.
+`ci.yml` runs on every push to a non-`main`/`dev` branch, so you get lint/typecheck/test/build feedback within a few minutes of pushing, before the PR is even open. It runs again on the PR, and a third time as the blocking first job of `deploy.yml`.
 
 ### Promotion to production
 
+Promote by **pull request**, not by pushing `main`. The PR is what triggers the full Playwright suite against dev.kaparro.com — the release gate. A direct push to `main` skips it.
+
 ```bash
-git checkout dev  && git pull origin dev
-git checkout main && git pull origin main
-git merge --ff-only dev
-git push origin main
-git checkout dev
+gh pr create --base main --head dev --title "Release: <summary>" --body "<what changed>"
 ```
 
-If `--ff-only` fails: open a PR from `dev` to `main`, resolve conflicts with review, merge with checks. Never bypass checks on `main`.
+Wait for CI **and** the full E2E run to go green, then merge. Merging deploys to production, which runs its own in-deploy smoke check and rolls back automatically on failure.
+
+If the merge conflicts, resolve on a branch off `main` and PR that. Never bypass checks on `main`.
 
 ### Hotfix
 
@@ -87,14 +90,28 @@ Naming: `feature/owner-notes-card`, `hardening/booking-overlap-invariants`, `hot
 
 `deploy.yml`, in order:
 
-1. **CI** (`ci.yml` via `workflow_call`): lint → typecheck → `npm test` → build. It does **not** run E2E.
+1. **CI** (`ci.yml` via `workflow_call`): lint → typecheck → `npm test` → build.
 2. **Build & push image** to GHCR, tagged `sha-<commit>` and `<branch>-latest`.
 3. **scp `Caddyfile`** to `/opt/house-rent/`.
 4. **Regenerate `/opt/house-rent/.env`** wholesale from GitHub secrets (mktemp → `chmod 600` → atomic `mv`, so the running container never sees a partial file).
 5. `docker login ghcr.io` → `docker compose -f docker-compose.prod.yml pull app`.
 6. **Rolling restart of the app only**: `up -d --no-deps --remove-orphans app`. DB, pgbouncer, Redis and Caddy keep running.
 7. `caddy reload` — config-validated, so a bad Caddyfile keeps the old config serving rather than taking the site down. Suffixed `|| true`.
-8. **Health check**: polls `/api/healthz` 30 times at 3-second intervals (90 seconds total), and fails the deploy if it never comes up.
+8. **Verification, in three rungs** — any failure triggers an automatic rollback (below):
+   - **Liveness**: `/api/healthz`, polled 30× at 3s (90s total). Proves the process answers.
+   - **Readiness**: `/api/readyz` must report `"db":"connected"`, polled 10× at 3s. Catches a failed migration or a dead pool, which liveness alone happily passes.
+   - **Smoke**: `/`, `/homes` and `/api/healthz` fetched through Caddy with the public `Host` header, each expected to return 200. Exercises routing and rendering, not just the container.
+9. **Post-deploy E2E** (`dev` only): `e2e.yml` runs the Playwright `public` project against dev.kaparro.com. Not run against production — those specs write data.
+
+### Automatic rollback
+
+Before pulling the new image the deploy records the currently running image (read off the live container, not `.env`, which has already been rewritten). If any verification rung fails, the deploy:
+
+1. prints the last 50 lines of the failing container's logs into the Actions output,
+2. rewrites `APP_IMAGE` in `.env` to the previous image and restarts the app,
+3. exits non-zero so the run goes red.
+
+**The pin does not survive the next deploy** — `.env` is regenerated wholesale every time. Always follow an automatic rollback with a revert commit.
 
 ### Image tags
 
@@ -129,7 +146,9 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 | `OPENAI_API_KEY` | |
 | `GOOGLE_MAPS_API_KEY` | server-side key |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PLUS`, `STRIPE_PRICE_ID_PRO` | |
-| `CALCOM_TOKEN_ENCRYPTION_KEY` | **dead** — Cal.com was removed; zero code references. Safe to drop from `deploy.yml`. |
+| `ADMIN_CLERK_IDS` | admin allowlist (Clerk user IDs). **Empty = nobody can reach /admin.** |
+| `ADMIN_EMAILS` | legacy admin allowlist, honoured as a fallback |
+| `CRON_SECRET` | `x-cron-secret` value; **unset means `/api/bookings/reminders` 401s every request** |
 
 ### Build args (baked into the image)
 
@@ -141,9 +160,17 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 `SERVER_HOST_STAGING`, `SERVER_HOST_PROD`, `DEPLOY_SSH_KEY` (private key whose public half is in `deploy`'s `authorized_keys`), and the automatic `GITHUB_TOKEN`.
 
+### Feature flags — GitHub *variables*, not secrets
+
+`FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS`, `FEATURE_USAGE_ASSISTANT` and `FEATURE_VIBER_ALERTS` are read from `vars.*` (Settings → Environments → Variables), defaulting to `true` (`false` for Viber). They are not secret, and keeping them as variables means you can flip a feature off per environment and redeploy without touching secrets.
+
+### Optional E2E secrets
+
+`TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD` and the `RENTER`, `BROKER`, `BOTH` equivalents, plus `CLERK_SECRET_KEY`, let `e2e.yml` run the authenticated projects. **If they are absent the release gate silently degrades to smoke-only** — it emits a workflow warning and passes. Set them, or the `dev` → `main` gate is much weaker than it looks.
+
 ### Not written by deploy.yml
 
-`LOG_LEVEL` is hardcoded to `info`. `REDIS_URL` comes from compose. `ADMIN_EMAILS`, `ADMIN_CLERK_IDS`, `CRON_SECRET`, `FEATURE_AI_SEARCH` and `FEATURE_BOOKINGS` are **not written at all**, so they are unset in production — see Known issues.
+`LOG_LEVEL` is hardcoded to `info`. `REDIS_URL` comes from compose.
 
 ---
 
@@ -218,6 +245,20 @@ Prisma does not generate down migrations. To reverse one:
    DELETE FROM _prisma_migrations WHERE migration_name = '<migration_name>';
    ```
 4. Redeploy the previous image.
+
+### Migrations must apply to an empty database
+
+`20260612000001_remove_calcom_fields` originally ran `ALTER TABLE "User"` — a table that has never existed, since the User model is `@@map("users")`. It was recorded as applied on staging and production without ever succeeding, so nothing looked wrong; but on a **fresh** database `prisma migrate deploy` aborted there with 42P01, which meant a new environment could not be provisioned and a backup could not be restored into a clean box.
+
+It is now a safe no-op (`ALTER TABLE IF EXISTS`), and all 32 migrations apply to an empty database.
+
+**Test this, don't assume it.** `migrate deploy` only applies *pending* migrations, so a chain that is broken for new databases stays invisible on long-lived ones indefinitely:
+
+```bash
+npm run db:nuke && npm run db:setup     # full chain against an empty DB
+```
+
+Do that before any release that adds a migration.
 
 **Prevention:** for destructive schema changes use expand–contract — add the new column, backfill, deploy, then drop the old column in a *separate* later migration. That keeps every intermediate state rollback-safe.
 
@@ -368,15 +409,45 @@ If a choice improves speed but hurts reliability or security, do not choose it.
 
 ---
 
+## Branch protection
+
+Configure under Settings → Branches. Both branches deploy, so both need rules.
+
+**`main`** — production:
+- Require a pull request before merging (no direct pushes)
+- Require status checks: `Lint · Typecheck · Test`, and the E2E job
+- Require branches to be up to date before merging
+- Do not allow force pushes or deletion
+- Include administrators — the point is to stop *you* pushing to prod at 2am
+
+**`dev`** — UAT:
+- Require a pull request before merging
+- Require status check: `Lint · Typecheck · Test`
+- Do not allow force pushes or deletion
+
+Apply with the `gh` CLI:
+
+```bash
+gh api -X PUT repos/ChristosKyriazo/house-rent-webapp/branches/main/protection \
+  --input .github/branch-protection-main.json
+gh api -X PUT repos/ChristosKyriazo/house-rent-webapp/branches/dev/protection \
+  --input .github/branch-protection-dev.json
+```
+
+---
+
 ## Release-readiness checklist
 
-Open items, honestly marked. Nothing here has been verified as done.
-
-- [ ] Branch protections active on `main`
-- [ ] Required checks configured in CI
-- [ ] CI runs E2E as well as lint/typecheck/test (see Known issues)
-- [ ] Critical user journeys tested end-to-end in CI
-- [ ] Rollback process actually rehearsed, not just documented
+- [x] CI blocks the deploy — `deploy.yml`'s `build-push` job has `needs: ci`
+- [x] CI runs E2E as well as lint/typecheck/test — `e2e.yml`, smoke post-deploy and full on the release PR
+- [x] Deploy verifies more than liveness — readiness plus page-render smoke
+- [x] Automatic rollback on a failed deploy
+- [x] Migrations proven to apply to an empty database
+- [x] Local development isolated from UAT — own database, guarded seed
+- [ ] Branch protections active on `main` and `dev` — **apply the JSON above**
+- [ ] `TEST_*` E2E secrets set, so the release gate is not smoke-only
+- [ ] `ADMIN_CLERK_IDS` and `CRON_SECRET` set in both GitHub Environments
+- [ ] Rollback rehearsed against staging, not just implemented
 - [ ] Alerting policy beyond raw Sentry errors
 - [ ] Off-server backup copy
 - [ ] On-call / owner responsibilities defined
