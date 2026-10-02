@@ -3,12 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, getDistanceFields, calculateVibeScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, getDistanceFields, calculateVibeScore, assessListing, requestedConcepts, inferStudentContext, applyStudentTransitBoost, type ListingEvidence } from '@/lib/ai-search-helpers'
 import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 import { features } from '@/lib/features'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
+import { createHash } from 'crypto'
 import { redisGet, redisSet } from '@/lib/redis'
 import {
   scoreHome,
@@ -17,9 +18,9 @@ import {
   normalizeSafety,
   normalizeVibe,
   normalizeParking,
-  normalizeDescriptionBonus,
-  normalizeDescriptionPenalty,
-  normalizePhoto,
+  normalizeHeating,
+  evidenceScoreOptions,
+  PREFERRED_AREA_BONUS,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
   type HomeComponents,
 } from '@/lib/search/score-home'
@@ -35,19 +36,54 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 /** Reuse embedding vectors for identical query strings (LRU, max 200 entries) */
 const embeddingTextCache = new Map<string, { vec: number[]; ts: number }>()
 
+/**
+ * Result cache, keyed on the exact query. It used to serve any *semantically similar* query
+ * (cosine ≥ 0.78) — but "2-bed in Kifisia under €800" and "3-bed in Glyfada under €1500"
+ * embed closer than that, because embeddings barely encode numbers and place names, so one
+ * user's search answered another's. The Redis copy was also written under a different key
+ * from the one it was read with, so it never hit at all.
+ *
+ * Cached results are stored *before* per-user exclusions and filtered on the way out.
+ */
 interface CachedSearchResult {
-  embedding: number[]
-  type: string | undefined
-  result: { homes: unknown[]; message: string }
+  result: { homes: Array<{ id: number }>; message: string }
   ts: number
 }
-const searchResultCache: CachedSearchResult[] = []
+const searchResultCache = new Map<string, CachedSearchResult>()
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 const SEARCH_CACHE_MAX_ENTRIES = 100
-const SEARCH_CACHE_SIM_THRESHOLD = 0.78
 
-/** Added to the fit (0..1 scale) when a listing sits in an area the user named. */
-const PREFERRED_AREA_BONUS = 0.12
+function resultCacheKey(query: string, type: string | undefined, student: boolean): string {
+  const hash = createHash('sha256').update(query).digest('hex').slice(0, 24)
+  return `ai-search:v2:${type || 'any'}:${student ? 's' : '-'}:${hash}`
+}
+
+/** Homes this user should never see in results, mirroring GET /api/homes. */
+async function excludedHomeIdsFor(
+  userId: number | null,
+  opts: { excludeInquired?: boolean; excludeApproved?: boolean },
+): Promise<Set<number>> {
+  if (!userId) return new Set()
+  const inquiries = await prisma.inquiry.findMany({
+    where: { userId },
+    select: { homeId: true, approved: true, dismissed: true, finalized: true },
+  })
+  const ids = new Set<number>()
+  for (const inq of inquiries) {
+    // Dismissed (rejected) listings are always hidden, as in the regular browse.
+    if (inq.dismissed) ids.add(inq.homeId)
+    else if (!inq.finalized && opts.excludeInquired) ids.add(inq.homeId)
+    else if (!inq.finalized && opts.excludeApproved && inq.approved) ids.add(inq.homeId)
+  }
+  return ids
+}
+
+function present(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return false
+  if (Array.isArray(value)) return value.length > 0
+  return true
+}
+
 
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
@@ -125,6 +161,12 @@ export async function POST(request: NextRequest) {
     // alone, and conversational results additionally depend on `preExtractedFilters`.
     let queryEmbedding: number[] | null = null
     const resultCacheEligible = !preExtractedFilters && !excludeInquired && !excludeApproved
+    const studentContext = inferStudentContext(userQuery, appUserOccupation)
+    const excludedIds = await excludedHomeIdsFor(userId, { excludeInquired, excludeApproved })
+    const cacheKey = query && query.trim() ? resultCacheKey(query.trim(), type, studentContext) : null
+    const withoutExcluded = <T extends { homes: Array<{ id: number }> }>(result: T): T =>
+      excludedIds.size === 0 ? result : { ...result, homes: result.homes.filter(h => !excludedIds.has(h.id)) }
+
     if (openai && process.env.OPENAI_API_KEY && query && query.trim()) {
       try {
         const normalizedQuery = query.trim()
@@ -151,34 +193,17 @@ export async function POST(request: NextRequest) {
           embeddingTextCache.set(normalizedQuery, { vec: queryEmbedding, ts: Date.now() })
         }
 
-        // Only check cache when results aren't user-specific and aren't filter-driven
-        if (resultCacheEligible) {
-          // Try Redis cache first (shared across instances, survives restarts)
-          const { createHash } = await import('crypto')
-          const queryHash = createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16)
-          const redisCacheKey = `ai-search:${type || 'any'}:${queryHash}`
-          const redisHit = await redisGet<{ homes: unknown[]; message: string }>(redisCacheKey)
+        // Only check cache when results aren't filter-driven or exclusion-dependent
+        if (resultCacheEligible && cacheKey) {
+          const redisHit = await redisGet<{ homes: Array<{ id: number }>; message: string }>(cacheKey)
           if (redisHit) {
             log.info('Serving AI search from Redis cache')
-            return NextResponse.json(redisHit, { status: 200 })
+            return NextResponse.json(withoutExcluded(redisHit), { status: 200 })
           }
-
-          // Fall back to in-memory semantic cache
-          const now = Date.now()
-          let i = searchResultCache.length
-          while (i--) {
-            if (now - searchResultCache[i].ts > SEARCH_CACHE_TTL_MS) searchResultCache.splice(i, 1)
-          }
-          let bestSim = 0
-          let bestEntry: CachedSearchResult | null = null
-          for (const entry of searchResultCache) {
-            if (entry.type !== (type || undefined)) continue
-            const sim = cosineSimilarity(queryEmbedding, entry.embedding)
-            if (sim > bestSim) { bestSim = sim; bestEntry = entry }
-          }
-          if (bestEntry && bestSim >= SEARCH_CACHE_SIM_THRESHOLD) {
-            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from in-memory cache')
-            return NextResponse.json(bestEntry.result, { status: 200 })
+          const memHit = searchResultCache.get(cacheKey)
+          if (memHit && Date.now() - memHit.ts < SEARCH_CACHE_TTL_MS) {
+            log.info('Serving AI search from in-memory cache')
+            return NextResponse.json(withoutExcluded(memHit.result), { status: 200 })
           }
         }
       } catch {
@@ -348,8 +373,9 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {}
 
-    // Match /api/homes: exclude finalized listings from browse
+    // Match /api/homes: exclude finalized listings and listings hidden by a tier downgrade
     where.finalized = false
+    where.overlimitHiddenAt = null
 
     // Listing type: UI mode (rent vs buy) always wins over AI extraction — same as manual search
     if (type === 'buy') {
@@ -521,12 +547,18 @@ export async function POST(request: NextRequest) {
           // Convert area filter to city filter
           extractedFilters.city = matchingArea.city || matchingArea.cityGreek || null
           extractedFilters.area = null
-          // Re-fetch homes without area filter
+          // Re-fetch homes without area filter — and apply the city filter we just switched
+          // to. Without this the fallback returned every home in every city.
           homes = await prisma.home.findMany({
             where,
             orderBy: { createdAt: 'desc' },
             include: { owner: { select: { id: true, name: true } } },
           })
+          if (extractedFilters.city) {
+            const fallbackCity = extractedFilters.city as string
+            const fallbackVariations = getLocationVariations(fallbackCity, cityMap)
+            homes = homes.filter(home => matchesLocation(home.city, fallbackCity, cityMap, fallbackVariations))
+          }
         }
       }
     }
@@ -576,8 +608,16 @@ export async function POST(request: NextRequest) {
           .map(a => a.name)
         
         if (areasInDistricts.length > 0) {
-          homes = homes.filter(home => 
-            home.area !== null && areasInDistricts.includes(home.area)
+          // A home may store its area in Greek; compare through the same variation map the
+          // area filter uses.
+          const districtAreaVariations = new Set<string>()
+          for (const name of areasInDistricts) {
+            for (const v of getLocationVariations(name, areaNameMap)) {
+              districtAreaVariations.add(removeGreekAccents(v.toLowerCase()))
+            }
+          }
+          homes = homes.filter(home =>
+            home.area !== null && districtAreaVariations.has(removeGreekAccents(home.area.toLowerCase()))
           )
         } else {
           // No areas found in requested districts
@@ -597,79 +637,8 @@ export async function POST(request: NextRequest) {
     // - Avoid: Penalize homes within 3km, reward homes further away
     // - Not important/Not mentioned: No distance-based scoring
 
-    // Apply exclude filters for inquired and approved listings
-    // Note: excludeInquired and excludeApproved come from the request body
-    if (excludeInquired || excludeApproved) {
-      try {
-        // Get user ID - try to get current user if not already set
-        let currentUserId = userId
-        if (!currentUserId) {
-          try {
-            const user = await getCurrentUser()
-            if (user) {
-              currentUserId = user.id
-            }
-          } catch {
-            // User not logged in, can't exclude
-          }
-        }
-
-        if (currentUserId) {
-          // Always exclude homes where user has dismissed (rejected) inquiries
-          const rejectedInquiries = await prisma.inquiry.findMany({
-            where: {
-              userId: currentUserId,
-              dismissed: true,
-            },
-            select: {
-              homeId: true,
-            },
-          })
-          const excludeRejectedHomeIds = rejectedInquiries.map(inq => inq.homeId)
-
-          const userInquiries = await prisma.inquiry.findMany({
-            where: {
-              userId: currentUserId,
-            },
-            select: {
-              homeId: true,
-              approved: true,
-              dismissed: true,
-              finalized: true,
-            },
-          })
-
-          const excludeHomeIds: number[] = []
-
-          if (excludeInquired) {
-            // Exclude homes where user has inquired (not dismissed, not finalized)
-            const inquiredHomeIds = userInquiries
-              .filter(inq => inq.dismissed === false && inq.finalized === false)
-              .map(inq => inq.homeId)
-            excludeHomeIds.push(...inquiredHomeIds)
-          }
-
-          if (excludeApproved) {
-            // Exclude homes where user has approved inquiries (not dismissed, not finalized)
-            const approvedHomeIds = userInquiries
-              .filter(inq => inq.approved === true && inq.dismissed === false && inq.finalized === false)
-              .map(inq => inq.homeId)
-            excludeHomeIds.push(...approvedHomeIds)
-          }
-
-          // Combine all excluded home IDs (rejected + filter exclusions)
-          const allExcludedHomeIds = [...new Set([...excludeRejectedHomeIds, ...excludeHomeIds])]
-          
-          // Remove duplicates and filter out excluded homes
-          if (allExcludedHomeIds.length > 0) {
-            homes = homes.filter(home => !allExcludedHomeIds.includes(home.id))
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching inquiries for exclude filter:', error)
-        // Continue without excluding if there's an error
-      }
-    }
+    // Per-user exclusions (dismissed, inquired, approved) are applied at the very end, so the
+    // cached result is the same for everyone and filtered per user on the way out.
 
     if (homes.length === 0) {
       return NextResponse.json(
@@ -706,55 +675,36 @@ export async function POST(request: NextRequest) {
       })
     })
 
-    // Check if ONLY hard filters were extracted (no soft criteria)
-    // Hard filters: location (city/country/area), price, bedrooms, bathrooms, size, floor, year built/renovated, 
-    // heating category/agent, parking, listing type
-    // Soft criteria: distance categories, vibe preference
-    // If ONLY hard filters are present, all matching properties should get 100%
-    
-    const hasHardFilters =
-      extractedFilters.city || extractedFilters.country || extractedFilters.area ||
-      (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) ||
-      extractedFilters.listingType || extractedFilters.listingtype ||
-      extractedFilters.minPrice || extractedFilters.maxPrice ||
-      extractedFilters.minBedrooms || extractedFilters.maxBedrooms ||
-      extractedFilters.minBathrooms || extractedFilters.maxBathrooms ||
-      extractedFilters.minSize || extractedFilters.maxSize ||
-      extractedFilters.parking !== undefined ||
-      extractedFilters.heatingCategory || extractedFilters.heatingAgent ||
-      extractedFilters.minFloor || extractedFilters.maxFloor ||
-      extractedFilters.minYearBuilt || extractedFilters.maxYearBuilt ||
-      extractedFilters.minYearRenovated || extractedFilters.maxYearRenovated
-    
-    // Check if country is the ONLY hard filter - if so, return nothing
-    const onlyCountryFilter = extractedFilters.country && 
-      !extractedFilters.city && !extractedFilters.area &&
-      !(extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) &&
-      !extractedFilters.listingType && !extractedFilters.listingtype &&
-      !extractedFilters.minPrice && !extractedFilters.maxPrice &&
-      !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
-      !extractedFilters.minBathrooms && !extractedFilters.maxBathrooms &&
-      !extractedFilters.minSize && !extractedFilters.maxSize &&
-      extractedFilters.parking === undefined &&
-      !extractedFilters.heatingCategory && !extractedFilters.heatingAgent &&
-      !extractedFilters.minFloor && !extractedFilters.maxFloor &&
-      !extractedFilters.minYearBuilt && !extractedFilters.maxYearBuilt &&
-      !extractedFilters.minYearRenovated && !extractedFilters.maxYearRenovated
-    
-    // Check if we have soft criteria (distance categories, safety, vibe preference, or parking soft preference)
-    const parkingSoftPreference = extractedFilters.parkingSoftPreference === true
-    const hasSoftCriteria = 
-      (extractedFilters.Metro && extractedFilters.Metro !== 'Not mentioned') ||
-      (extractedFilters.Bus && extractedFilters.Bus !== 'Not mentioned') ||
-      (extractedFilters.School && extractedFilters.School !== 'Not mentioned') ||
-      (extractedFilters.Hospital && extractedFilters.Hospital !== 'Not mentioned') ||
-      (extractedFilters.Park && extractedFilters.Park !== 'Not mentioned') ||
-      (extractedFilters.University && extractedFilters.University !== 'Not mentioned') ||
-      (extractedFilters.Safety && extractedFilters.Safety !== 'Not mentioned') ||
-      extractedFilters.vibePreference ||
-      parkingSoftPreference
+    // `present`, not truthiness or `!== undefined`: the extraction prompt emits every field,
+    // null when unmentioned, and `parking !== undefined` read that null as a hard filter on
+    // almost every query — so a search for "a flat with a fireplace" was treated as
+    // filters-only, skipped description matching and percentages, and listed every home.
+    const HARD_FIELDS_EXCEPT_COUNTRY = [
+      'city', 'area', 'districts', 'listingType', 'listingtype',
+      'minPrice', 'maxPrice', 'minBedrooms', 'maxBedrooms', 'minBathrooms', 'maxBathrooms',
+      'minSize', 'maxSize', 'minFloor', 'maxFloor',
+      'minYearBuilt', 'maxYearBuilt', 'minYearRenovated', 'maxYearRenovated',
+    ]
+    const parkingIsHard = present(extractedFilters.parking) && extractedFilters.parkingSoftPreference !== true
+    const hasNonCountryHardFilter = parkingIsHard || HARD_FIELDS_EXCEPT_COUNTRY.some(f => present(extractedFilters[f]))
+    const hasHardFilters = hasNonCountryHardFilter || present(extractedFilters.country)
+    const onlyCountryFilter = present(extractedFilters.country) && !hasNonCountryHardFilter
 
-    const studentContext = inferStudentContext(userQuery, appUserOccupation)
+    const isActiveCategory = (v: unknown) => present(v) && v !== 'Not mentioned' && v !== 'Not important'
+    const parkingSoftPreference = extractedFilters.parkingSoftPreference === true
+    const wantsHeating = present(extractedFilters.heatingCategory) || present(extractedFilters.heatingAgent)
+    // Features named in the query (balcony, furnished, pets …) — judged from each listing's
+    // own text and photos. They are soft criteria in their own right: before, "2-bed in
+    // Kifisia with a balcony" counted as filters-only and the balcony was never looked at.
+    const askedConcepts = query ? requestedConcepts(query) : []
+    const hasNonConceptSoftCriteria =
+      ['Metro', 'School', 'Hospital', 'Park', 'University', 'Safety'].some(f => isActiveCategory(extractedFilters[f])) ||
+      present(extractedFilters.vibePreference) ||
+      present(extractedFilters.preferredAreas) ||
+      parkingSoftPreference ||
+      wantsHeating
+    const hasSoftCriteria = hasNonConceptSoftCriteria || askedConcepts.length > 0
+
     /** Students care about uni + transit; treat as soft criteria so we rank by distance, not flat 100%. */
     const effectiveSoftCriteria = hasSoftCriteria || studentContext
     const filtersForDistanceScoring = studentContext
@@ -775,11 +725,6 @@ export async function POST(request: NextRequest) {
     const componentsMap = new Map<number, HomeComponents>()
     /** homeId → [0,1] bonus for sitting in an explicitly preferred area */
     const areaBonusMap = new Map<number, number>()
-    /** homeId → [0,1] penalty from a description that contradicts the query */
-    const penaltyMap = new Map<number, number>()
-    /** homeId → [0,1] description/photo evidence, applied as bonuses outside the mean */
-    const descriptionBonusScoreMap = new Map<number, number>()
-    const photoBonusScoreMap = new Map<number, number>()
     /** homeId → intrinsic quality, ordering only, used when `hardFiltersOnly` */
     const intrinsicRankMap = new Map<number, number>()
 
@@ -871,6 +816,10 @@ export async function POST(request: NextRequest) {
         if (parkingSoftPreference) {
           components.parking = normalizeParking(home.parking)
         }
+
+        if (wantsHeating) {
+          components.heating = normalizeHeating(home, extractedFilters)
+        }
       })
     }
 
@@ -947,127 +896,50 @@ export async function POST(request: NextRequest) {
     
     // Parking: If hard filter, database is already filtered. If soft preference, it's a component above.
 
-    // Post-process: Apply description bonus + disqualifier detection
-    // Analyze descriptions to match user query features (e.g., "new stove", "backyard", "big balcony")
-    /** homeId → incompatibility reason when description explicitly prohibits what user wants */
+    // Listing evidence: does the listing's own text, structured data or photos confirm the
+    // features the query named — or explicitly deny them, or exclude the person asking?
+    // Disqualifiers are checked even for filters-only queries; a dog owner should never be
+    // shown a "no pets" flat as a match.
+    /** homeId → incompatibility reason when the listing excludes the person asking */
     const disqualifierMap = new Map<number, string>()
-    if (!hardFiltersOnly) {
-      // Calculate description bonus for each home
-      const descriptionScores: number[] = []
-      const descriptionBonusMap = new Map<number, number>()
-
+    const evidenceMap = new Map<number, ListingEvidence>()
+    if (query) {
       for (const home of homes) {
-        const result = calculateDescriptionBonus(
-          query,
-          home.description,
-          home.yearBuilt,
-          home.yearRenovated
-        )
-
-        const disqualifier = calculateDisqualifiers(query, home.description)
-        if (disqualifier) {
-          disqualifierMap.set(home.id, disqualifier)
-        }
-
-        descriptionScores.push(result.bonus)
-        descriptionBonusMap.set(home.id, result.bonus)
-
-        if (disqualifierMap.has(home.id)) continue
-
-        // A description that speaks to the query is evidence *for* a listing; one that
-        // explicitly denies what was asked for is evidence against it. Both sit outside
-        // the weighted mean — the bonus so that a listing which simply doesn't mention the
-        // feature is not punished for it, and both so the mean's denominator stays a pure
-        // function of the query rather than of the listing.
-        if (result.bonus > 0) {
-          descriptionBonusScoreMap.set(home.id, normalizeDescriptionBonus(result.bonus))
-        }
-        if (result.penalty < 0) {
-          penaltyMap.set(home.id, normalizeDescriptionPenalty(result.penalty))
-        }
-      }
-
-      // Check if any homes have description bonus
-      const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
-
-
-      // Apply photo tag bonus — visual features confirmed in photos that match user query
-      // Skip disqualified homes to keep their score locked at 0
-      homes.forEach(home => {
-        if (disqualifierMap.has(home.id)) return
-        // photoTagsArray is the canonical column; JSON-stringify it for calculatePhotoBonus compatibility
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tagsRaw = Array.isArray((home as any).photoTagsArray) && (home as any).photoTagsArray.length > 0
+        const evidence = assessListing(query, {
+          title: home.title,
+          description: home.description,
+          descriptionGreek: home.descriptionGreek,
+          yearBuilt: home.yearBuilt,
+          yearRenovated: home.yearRenovated,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ? JSON.stringify((home as any).photoTagsArray)
-          : null
-        const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
-        if (photoBonus > 0) {
-          photoBonusScoreMap.set(home.id, normalizePhoto(photoBonus))
-        }
-      })
-
-      // Recency is applied in `rankScore` below, never to the displayed fit — freshness is
-      // a merchandising decision, not evidence that a listing answers the query.
-
-      // Calculate average description score for logging
-      if (descriptionScores.length > 0) {
-        avgDescriptionPhotoScore = descriptionScores.reduce((sum, score) => sum + score, 0) / descriptionScores.length
-      }
-      
-      // Check if only description matching is requested (no other hard/soft criteria except maybe country)
-      // If so, filter to only houses with description score > 0
-      const hasOnlyDescriptionMatching = (!hasHardFilters || onlyCountryFilter) && !effectiveSoftCriteria && hasAnyDescriptionBonus
-      if (hasOnlyDescriptionMatching) {
-        homes = homes.filter(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          return bonus > 0
+          photoTags: Array.isArray((home as any).photoTagsArray) ? (home as any).photoTagsArray : null,
         })
+        evidenceMap.set(home.id, evidence)
+        if (evidence.disqualifier) disqualifierMap.set(home.id, evidence.disqualifier)
       }
-      
-      // If only country filter and no description matches, return nothing
-      if (onlyCountryFilter && !hasAnyDescriptionBonus) {
-        return NextResponse.json(
-          { 
-            homes: [],
-            message: 'No homes found matching your criteria'
-          },
-          { status: 200 }
-        )
-      }
-      
-      // If no hard filters (or only country) and all description scores are 0 AND no soft criteria, return nothing
-      // If there are soft criteria (Safety, vibe, distances), we should still return results
-      if ((!hasHardFilters || onlyCountryFilter) && !hasAnyDescriptionBonus && !effectiveSoftCriteria) {
-        return NextResponse.json(
-          { 
-            homes: [],
-            message: 'No homes found matching your criteria'
-          },
-          { status: 200 }
-        )
-      }
-    } else {
-      // Hard filters only, but only a country was given — too broad to be useful.
-      if (onlyCountryFilter) {
-        return NextResponse.json(
-          {
-            homes: [],
-            message: 'No homes found matching your criteria'
-          },
-          { status: 200 }
-        )
-      }
+    }
 
-      // Still detect hard incompatibilities in descriptions
-      if (query) {
-        for (const home of homes) {
-          const disqualifier = calculateDisqualifiers(query, home.description)
-          if (disqualifier) {
-            disqualifierMap.set(home.id, disqualifier)
-          }
-        }
-      }
+    const anyConfirmed = [...evidenceMap.values()].some(e => e.confirmed.length > 0)
+    if (evidenceMap.size > 0) {
+      avgDescriptionPhotoScore =
+        [...evidenceMap.values()].reduce((sum, e) => sum + (e.requested.length ? e.confirmed.length / e.requested.length : 0), 0) /
+        evidenceMap.size
+    }
+
+    // Too broad to be useful: nothing but a country, and nothing the listings could confirm.
+    if (onlyCountryFilter && !effectiveSoftCriteria && !anyConfirmed) {
+      return NextResponse.json({ homes: [], message: 'No homes found matching your criteria' }, { status: 200 })
+    }
+
+    // The query named features and nothing else: only listings that actually have one.
+    if (!hasNonCountryHardFilter && !studentContext && askedConcepts.length > 0 && !hasNonConceptSoftCriteria) {
+      homes = homes.filter(home => (evidenceMap.get(home.id)?.confirmed.length ?? 0) > 0)
+    }
+
+    // Nothing at all to match on and no embedding to rank by — an honest empty result beats
+    // a list in arbitrary order with made-up percentages.
+    if (!hasHardFilters && !effectiveSoftCriteria && !queryEmbedding) {
+      return NextResponse.json({ homes: [], message: 'No homes found matching your criteria' }, { status: 200 })
     }
 
     // Semantic similarity — the single strongest signal we have, and a first-class
@@ -1134,9 +1006,7 @@ export async function POST(request: NextRequest) {
       const fit = hardFiltersOnly
         ? null
         : scoreHome(componentsMap.get(home.id) ?? {}, {
-            descriptionBonus: descriptionBonusScoreMap.get(home.id),
-            photoBonus: photoBonusScoreMap.get(home.id),
-            penalty: penaltyMap.get(home.id),
+            ...(evidenceMap.has(home.id) ? evidenceScoreOptions(evidenceMap.get(home.id)!) : {}),
             areaBonus: areaBonusMap.get(home.id),
             disqualified,
             weights: vibeWeightOverride,
@@ -1146,11 +1016,16 @@ export async function POST(request: NextRequest) {
         ? (disqualified ? 0 : intrinsicRankMap.get(home.id) ?? 50)
         : fit ?? 0
 
+      const evidence = evidenceMap.get(home.id)
       return {
         ...home,
         embedding: undefined, // strip from response
         matchPercentage: fit,
         incompatibilityReason,
+        // Which named features this listing confirms or explicitly lacks — concept ids from
+        // lib/search/listing-evidence.ts. Lets the UI explain a percentage.
+        matchedFeatures: evidence?.confirmed ?? [],
+        missingFeatures: evidence?.contradicted ?? [],
         safety: extractedFilters.Safety || null,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         _rank: disqualified ? -1 : rankScore(base, (home as any).createdAt),
@@ -1162,21 +1037,20 @@ export async function POST(request: NextRequest) {
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length
 
-    // Store in cache for future similar queries (Redis + in-memory)
-    if (queryEmbedding && resultCacheEligible) {
-      const cacheResult = { homes: homesWithMatches, message: 'AI search completed' }
-      // Redis (shared, persists across deploys)
-      const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`
-      redisSet(redisCacheKey, cacheResult, SEARCH_CACHE_TTL_MS / 1000).catch(() => {})
-      // In-memory fallback
-      if (searchResultCache.length >= SEARCH_CACHE_MAX_ENTRIES) searchResultCache.shift()
-      searchResultCache.push({
-        embedding: queryEmbedding,
-        type: type || undefined,
-        result: cacheResult,
-        ts: Date.now(),
-      })
+    const result = { homes: homesWithMatches, message: 'AI search completed' }
+
+    // Cache the un-excluded result under the exact query; exclusions are per user.
+    if (cacheKey && resultCacheEligible && openai) {
+      redisSet(cacheKey, result, SEARCH_CACHE_TTL_MS / 1000).catch(() => {})
+      if (searchResultCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+        const oldest = searchResultCache.keys().next().value
+        if (oldest) searchResultCache.delete(oldest)
+      }
+      searchResultCache.set(cacheKey, { result, ts: Date.now() })
     }
+
+    const visible = withoutExcluded(result)
+    finalHomesCount = visible.homes.length
 
     // Log to database (async, don't wait for it)
     prisma.aISearchLog.create({
@@ -1204,13 +1078,7 @@ export async function POST(request: NextRequest) {
       log.error({ err: logError }, 'Failed to log AI search to database')
     })
 
-    return NextResponse.json(
-      { 
-        homes: homesWithMatches,
-        message: 'AI search completed'
-      },
-      { status: 200 }
-    )
+    return NextResponse.json(visible, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'AI search error')
     errorMessage = error instanceof Error ? error.message : String(error)

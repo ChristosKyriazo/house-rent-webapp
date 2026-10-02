@@ -29,7 +29,11 @@ export const SEM_TEMP = 0.06
  * Bumped whenever SEM_CENTER / SEM_TEMP or the component weights change, so a
  * stored threshold can be recognised as belonging to an older calibration.
  */
-export const SCORING_VERSION = 1
+export const SCORING_VERSION = 2
+// v2 (2026-10): heating became a component; description/photo evidence is concept-based
+// (lib/search/listing-evidence.ts); a known vibe mismatch scores 20 instead of 50. Stored
+// thresholds are not migrated — v1 percentages were dominated by false penalties, so a v1
+// threshold was not meaningful to preserve.
 
 /** Neutral value used when a home has no embedding to compare against. */
 export const SEM_NEUTRAL = 0.5

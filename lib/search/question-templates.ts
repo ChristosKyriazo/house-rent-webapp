@@ -51,6 +51,10 @@ const QUESTIONS: Record<string, QuestionText> = {
     en: 'Do you need a parking space?',
     el: 'Χρειάζεστε θέση στάθμευσης;',
   },
+  features: {
+    en: 'Is there anything the place must have — a balcony, furniture, an elevator, room for a pet?',
+    el: 'Υπάρχει κάτι που πρέπει οπωσδήποτε να έχει το σπίτι — μπαλκόνι, έπιπλα, ασανσέρ, να επιτρέπονται κατοικίδια;',
+  },
   size: {
     en: "What's the smallest size that would work for you, in square meters?",
     el: 'Ποιο είναι το μικρότερο εμβαδόν που σας βολεύει, σε τετραγωνικά;',

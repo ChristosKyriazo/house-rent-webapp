@@ -108,6 +108,8 @@ export async function POST(request: NextRequest) {
   const SOFT_CRITERIA_KEYS = [
     'Metro', 'Bus', 'School', 'Hospital', 'Park', 'University', 'Safety',
     'vibePreference', 'parkingSoftPreference', 'hasLocationPreference',
+    // Scored rather than filtered, exactly as in the search route.
+    'heatingCategory', 'heatingAgent', 'preferredAreas', 'features',
   ] as const
 
   const softCriteria: Record<string, unknown> = {}
@@ -118,12 +120,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const savedFilterParams = {
-    city: (hardFilters as Record<string, unknown>).city ?? null,
-    country: (hardFilters as Record<string, unknown>).country ?? null,
-    listingType: (hardFilters as Record<string, unknown>).listingType ?? null,
-    softCriteria: Object.keys(softCriteria).length > 0 ? softCriteria : null,
-  }
+  // Every hard filter the conversation settled on. Only city/country/type used to be kept, so
+  // the matcher alerted on listings far over budget or with too few bedrooms.
+  const hf = hardFilters as Record<string, unknown>
+  const HARD_KEYS = [
+    'city', 'country', 'listingType',
+    'minPrice', 'maxPrice', 'minBedrooms', 'maxBedrooms', 'minBathrooms', 'maxBathrooms',
+    'minSize', 'maxSize', 'minFloor',
+  ] as const
+  const savedFilterParams: Record<string, unknown> = {}
+  for (const key of HARD_KEYS) savedFilterParams[key] = hf[key] ?? null
+  if (typeof hf.area === 'string' && hf.area.trim()) savedFilterParams.areas = [hf.area]
+  if (hf.parking === true && hf.parkingSoftPreference !== true) savedFilterParams.parking = true
+  savedFilterParams.softCriteria = Object.keys(softCriteria).length > 0 ? softCriteria : null
 
   // `queryText` drives the matcher's description and photo evidence, so it must describe
   // the whole accumulated intent — the first user message is only the opening fragment of

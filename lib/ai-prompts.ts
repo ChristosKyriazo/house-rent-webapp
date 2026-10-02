@@ -10,12 +10,12 @@
  */
 export const FILTER_EXTRACTION_SYSTEM_PROMPT = `Extract filters from real estate search query. Return JSON only.
 
-Structure: {"filters": {"city": "Athens" or null, "country": "Greece" or null, "area": "Nea Smyrni" or null, "districts": ["Central Athens", "Northern Suburbs"] or null, "listingtype": "Rent" or "Buy" or null, "minPrice": 400 or null, "maxPrice": 600 or null, "minBedrooms": 2 or null, "maxBedrooms": 3 or null, "minSize": 50 or null, "maxSize": 100 or null, "parking": true or false or null, "parkingSoftPreference": true or false or null, "heatingCategory": "central" or "autonomous" or null, "heatingAgent": "natural gas" or "oil" or "electricity" or null, "minFloor": 1 or null, "maxFloor": 5 or null, "minYearBuilt": 2000 or null, "maxYearBuilt": 2020 or null, "minYearRenovated": 2010 or null, "maxYearRenovated": 2023 or null, "minBathrooms": 1 or null, "maxBathrooms": 3 or null, "Metro": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Bus": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "School": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Hospital": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Park": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "University": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Safety": "Essential" or "Strong" or "Not important" or "Not mentioned", "preferredAreas": ["Filothei", "Psychiko"] or null, "vibePreference": "waterfront" or "urban" or "central" or "family-friendly" or "quiet" or "upscale" or "working-class" or "rural" or "suburban" or null, "hasLocationPreference": true or false}}
+Structure: {"filters": {"city": "Athens" or null, "country": "Greece" or null, "area": "Nea Smyrni" or null, "districts": ["Central Athens", "Northern Suburbs"] or null, "listingtype": "Rent" or "Buy" or null, "minPrice": 400 or null, "maxPrice": 600 or null, "minBedrooms": 2 or null, "maxBedrooms": 3 or null, "minSize": 50 or null, "maxSize": 100 or null, "parking": true or false or null, "parkingSoftPreference": true or false or null, "heatingCategory": "central" or "autonomous" or null, "heatingAgent": "natural gas" or "oil" or "electricity" or null, "minFloor": 1 or null, "maxFloor": 5 or null, "minYearBuilt": 2000 or null, "maxYearBuilt": 2020 or null, "minYearRenovated": 2010 or null, "maxYearRenovated": 2023 or null, "minBathrooms": 1 or null, "maxBathrooms": 3 or null, "Metro": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Bus": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "School": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Hospital": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Park": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "University": "Essential" or "Strong" or "Not important" or "Avoid" or "Not mentioned", "Safety": "Essential" or "Strong" or "Not important" or "Not mentioned", "preferredAreas": ["Filothei", "Psychiko"] or null, "vibePreference": "waterfront" or "urban" or "central" or "family-friendly" or "quiet" or "upscale" or "working-class" or "student" or "rural" or "suburban" or "historic" or null, "hasLocationPreference": true or false}}
 
 RULES:
 - HARD FILTERS (filter DB): city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (unless soft preference), floor, yearBuilt, yearRenovated
 - Price semantics: If the user query or appended context indicates RENT/rental, minPrice/maxPrice are monthly rent. If it indicates BUY/sale/purchase, minPrice/maxPrice are total purchase price. When ambiguous and context is provided, follow the context.
-- SOFT FILTERS (scoring only): distance categories, preferredAreas, heatingCategory, heatingAgent, parking (if soft preference)
+- SOFT FILTERS (scoring only): distance categories, Safety, vibePreference, preferredAreas, heatingCategory, heatingAgent, parking (if soft preference). Features like balcony, furnished or sea view need no field — they are read from the query text directly.
 - CRITICAL: Only extract explicitly mentioned values. Do NOT infer. "heating" alone → heatingCategory: null, heatingAgent: null
 - Parking extraction: ONLY extract parking if user explicitly mentions "parking", "garage", "car", "vehicle", or similar parking-related terms. Do NOT infer parking from mentions of pets/dogs, family, or any other context. If user mentions "dog" or "pet" → parking: null (only Park distance category should be Essential). If parking is not explicitly mentioned → parking: null
 - Soft preference phrases: "not a deal breaker", "not that important", "nice to have", "would be good but not essential" → set parkingSoftPreference: true
@@ -42,13 +42,13 @@ RULES:
   * "near bus station" or "close to bus" or "bus access" → Bus: Essential (higher priority)
   * "near metro station" or "close to metro" or "metro access" → Metro: Essential (higher priority)
 - Park category: CRITICAL - If user mentions pet/dog/cat/animal/pets → Park: Essential (ALWAYS set to Essential when pets are mentioned). Also Essential if user explicitly wants park. Strong if mentions park would be nice but no pets mentioned. Unmentioned → "Not mentioned"
-- Safety category: Essential if user explicitly wants safe area OR mentions kids/children OR person in need OR elderly. Strong if mentions safety would be nice but not in explicit ways above. Not important if not mentioned. Unmentioned → "Not mentioned"
+- Safety category: Essential if user explicitly wants safe area OR mentions kids/children OR person in need OR elderly. Strong if mentions safety would be nice but not in explicit ways above. "Not important" only if the user says safety doesn't matter. Unmentioned → "Not mentioned"
 - School category: Essential if user mentions kids/children/family with children. Strong if user mentions school would be nice. Unmentioned → "Not mentioned"
 - LIFESTYLE INFERENCE (strong signals — extract even without explicit keywords):
   * "I have kids/children/toddler/baby/a family" → Safety: Essential, School: Essential, vibePreference: "family-friendly"
   * "I have a dog/cat/pet/puppy/kitten" → Park: Essential (ALWAYS — overrides default)
   * "I drive/I have a car/I commute by car" → parking: true (hard filter)
-  * "I'm a student/I study/I go to university" → University: Strong, Metro: Strong or Essential, vibePreference: "working-class"
+  * "I'm a student/I study/I go to university" → University: Strong, Metro: Strong or Essential, vibePreference: "student"
   * "I work from home/remote work/home office" → vibePreference: "quiet", Safety: Strong
   * "I use public transport/I don't drive/no car" → Metro: Essential or Bus: Essential
 - Vibe preference: Extract 1-2 words describing the vibe/atmosphere the user wants based on location preferences. Location-based mappings:
@@ -58,7 +58,8 @@ RULES:
   * "quiet", "peaceful", "calm", "tranquil", "away from noise" → vibePreference: "quiet" (matches: rural, suburban)
   * "upscale", "luxury", "premium", "high-end", "expensive", "financial stability", "pricey" → vibePreference: "upscale"
   * "near mountain", "mountainous", "mountain area" → vibePreference: "rural" or "quiet"
-  * "young workers", "affordable", "budget-friendly", "student area" → vibePreference: "working-class"
+  * "young workers", "affordable", "budget-friendly" → vibePreference: "working-class"
+  * "student area", "near students" → vibePreference: "student"
   * If user mentions location preferences (beach, center, mountain, etc.), set "hasLocationPreference": true
   * If no vibe/location mentioned → vibePreference: null, hasLocationPreference: false`
 
@@ -110,6 +111,24 @@ When they REPLACE a value rather than remove it ("make it 3 bedrooms instead of
 Anything they did not touch this turn: emit null and leave it alone.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FEATURES — "features" / "removedFeatures"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"features" lists what the place must have, and facts about who is moving in,
+using ONLY these ids. Emit just what THIS message adds; the app keeps the rest.
+• Property: balcony, terrace, garden, pool, seaView, view, fireplace, storage,
+  elevator, airConditioning, furnished, unfurnished, renovated, newBuild,
+  modernKitchen, woodFloors, bright, quiet, solarHeater, doubleGlazing,
+  securityDoor, penthouse
+• Household: pets (any pet), children, student, smoker, shortTerm (a lease of a
+  few months), livesAlone
+"I need a balcony and it should be furnished" → features: ["balcony", "furnished"]
+"we have a dog" → features: ["pets"] AND Park: "Essential"
+"I'm a student" → features: ["student"] (plus the lifestyle mapping below)
+"κλιματισμός και ασανσέρ" → features: ["airConditioning", "elevator"]
+When a feature is dropped ("the balcony isn't essential after all"), list it in
+"removedFeatures". Nothing dropped → [].
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REPLY LANGUAGE — MIRROR THE USER, NOT THE APP
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Write "assistantMessage" in the language of the user's MOST RECENT message.
@@ -159,7 +178,7 @@ LIFESTYLE → FILTER MAPPING (the only sanctioned inference):
 • Children / "I have kids" → School: Essential, Safety: Essential, vibePreference: "family-friendly"
 • Pet / dog / cat → Park: Essential
 • Elderly or medical needs → Hospital: Strong, Safety: Strong
-• Student / "I study" → University: Strong, Metro: Strong, vibePreference: "working-class"
+• Student / "I study" → University: Strong, Metro: Strong, vibePreference: "student"
 • Works from home → vibePreference: "quiet", Safety: Strong
 • Drives / has a car → parking: true
 • Uses public transport / no car → Metro: Essential
@@ -175,7 +194,8 @@ RESPONSE FORMAT
 {
   "filters": { /* every field present; null where this turn said nothing */ },
   "clearFields": ["parking"],   /* [] when nothing was dropped */
+  "removedFeatures": [],         /* feature ids dropped this turn */
   "assistantMessage": "One warm sentence, no question."
 }
-All three keys are required on every response. Use null or [], never omission.`
+All four keys are required on every response. Use null or [], never omission.`
 

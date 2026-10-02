@@ -19,6 +19,7 @@
  */
 
 import { semanticScore } from './calibration'
+import type { ListingEvidence } from './listing-evidence'
 
 /**
  * Relative importance of each signal. Renormalised over whatever the query
@@ -30,6 +31,7 @@ export const COMPONENT_WEIGHTS = {
   distance: 0.25,
   vibe: 0.10,
   safety: 0.08,
+  heating: 0.06,
   parking: 0.05,
 } as const
 
@@ -54,13 +56,17 @@ export type HomeComponents = Partial<Record<ComponentName, number>>
  */
 export const DESCRIPTION_BONUS_MAX = 0.10
 export const PHOTO_BONUS_MAX = 0.05
+/** Added to the fit when a listing sits in an area the user named as preferred. */
+export const PREFERRED_AREA_BONUS = 0.12
+/** Subtracted when the listing explicitly denies *everything* the query asked for. */
+export const DESCRIPTION_PENALTY_MAX = 0.25
 
 export interface ScoreOptions {
   /** 0..1 of `DESCRIPTION_BONUS_MAX` — the description confirms what the query asked for. */
   descriptionBonus?: number
   /** 0..1 of `PHOTO_BONUS_MAX` — photo tags confirm a visual feature the query asked for. */
   photoBonus?: number
-  /** 0..1 — the description explicitly contradicts the query. Subtracted from the fit. */
+  /** Absolute amount subtracted from the 0..1 fit — the description contradicts the query. */
   penalty?: number
   /** 0..1 — the listing sits in an area the user named as preferred. Added to the fit. */
   areaBonus?: number
@@ -87,11 +93,13 @@ export function expressedComponents(criteria: {
   hasSafety?: boolean
   hasVibe?: boolean
   hasParking?: boolean
+  hasHeating?: boolean
 }): ComponentName[] {
   const names: ComponentName[] = ['semantic']
   if (criteria.hasDistances) names.push('distance')
   if (criteria.hasVibe) names.push('vibe')
   if (criteria.hasSafety) names.push('safety')
+  if (criteria.hasHeating) names.push('heating')
   if (criteria.hasParking) names.push('parking')
   return names
 }
@@ -148,19 +156,60 @@ export function normalizeParking(hasParking: boolean | null | undefined): number
   return 0.25
 }
 
-/** `calculateDescriptionBonus` saturates well before 25 points in practice. */
-export function normalizeDescriptionBonus(bonus: number): number {
-  return clamp01(bonus / 25)
+/**
+ * Heating the user asked for, against what the listing has. Each requested attribute
+ * (system type, fuel) is 1 on a match, 0 on a known mismatch, and `HEATING_UNKNOWN` when the
+ * listing doesn't say — averaged over what was asked.
+ *
+ * Heating used to be extracted and then ignored: not filtered (so listings with missing data
+ * still show), and not scored either, so "autonomous gas heating" changed nothing at all.
+ */
+export const HEATING_UNKNOWN = 0.35
+
+export function normalizeHeating(
+  home: { heatingCategory?: string | null; heatingAgent?: string | null },
+  wanted: { heatingCategory?: string | null; heatingAgent?: string | null },
+): number | undefined {
+  const pairs: Array<[string | null | undefined, string | null | undefined]> = [
+    [wanted.heatingCategory, home.heatingCategory],
+    [wanted.heatingAgent, home.heatingAgent],
+  ]
+  const asked = pairs.filter(([want]) => typeof want === 'string' && want.trim())
+  if (asked.length === 0) return undefined
+  let total = 0
+  for (const [want, has] of asked) {
+    if (!has || !has.trim()) total += HEATING_UNKNOWN
+    else total += sameHeating(want!, has) ? 1 : 0
+  }
+  return total / asked.length
 }
 
-/** Description penalties arrive negative. */
-export function normalizeDescriptionPenalty(penalty: number): number {
-  return clamp01(-penalty / 20)
+function sameHeating(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')
+  const x = norm(a)
+  const y = norm(b)
+  if (x === y) return true
+  // "gas" vs "natural gas", "electric" vs "electricity"
+  return x.length >= 3 && y.length >= 3 && (x.includes(y) || y.includes(x))
 }
 
-/** `calculatePhotoBonus` is capped at 12. */
-export function normalizePhoto(bonus: number): number {
-  return clamp01(bonus / 12)
+/**
+ * Turn listing evidence into the score adjustments `scoreHome` applies outside the mean.
+ * One function for both the search route and the saved-search matcher, so the two cannot
+ * weigh the same evidence differently.
+ */
+export function evidenceScoreOptions(evidence: ListingEvidence): Pick<
+  ScoreOptions,
+  'descriptionBonus' | 'photoBonus' | 'penalty' | 'disqualified'
+> {
+  const asked = evidence.requested.length
+  if (evidence.disqualifier) return { disqualified: true }
+  if (asked === 0) return {}
+  return {
+    descriptionBonus: evidence.confirmed.length / asked,
+    photoBonus: evidence.confirmedInPhotos.length / asked,
+    penalty: (evidence.contradicted.length / asked) * DESCRIPTION_PENALTY_MAX,
+  }
 }
 
 export { semanticScore }

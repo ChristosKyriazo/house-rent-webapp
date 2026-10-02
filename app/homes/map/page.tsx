@@ -226,15 +226,24 @@ function MapContent() {
       if (!chatRes.ok) throw new Error(chatData.error ?? 'Chat error')
       setConversationKey(chatData.conversationKey)
 
-      // Add assistant message (follow-up question or summary)
-      const assistantMsg = chatData.assistantMessage || chatData.followUpQuestion || ''
+      // Acknowledgement and the policy's next question are separate fields; show both, as
+      // the main chat panel does. `||` showed the question only when there was no
+      // acknowledgement, i.e. never.
+      const assistantMsg = [chatData.assistantMessage, chatData.followUpQuestion].filter(Boolean).join(' ')
       if (assistantMsg) setAiMessages(prev => [...prev, { role: 'assistant', content: assistantMsg }])
 
       // Step 2: Immediately search with accumulated filters so far
       const searchRes = await fetch('/api/homes/ai-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: msg, type, preExtractedFilters: chatData.filters }),
+        // Search on the conversation's accumulated intent, not the last message: "600" or
+        // "ναι" embedded as the query left semantic and feature matching scoring nothing.
+        body: JSON.stringify({
+          query: chatData.intentText && chatData.intentText.trim() ? chatData.intentText : msg,
+          type,
+          preExtractedFilters: chatData.filters,
+          conversationKey: chatData.conversationKey ?? null,
+        }),
       })
       const searchData = await searchRes.json()
       const matched = (searchData.homes ?? []).filter((h: Home) => h.latitude && h.longitude)

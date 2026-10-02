@@ -3,9 +3,7 @@ import { cosineSimilarity } from '@/lib/embeddings'
 import {
   calculateVibeScore,
   getDistanceFields,
-  calculateDescriptionBonus,
-  calculatePhotoBonus,
-  calculateDisqualifiers,
+  assessListing,
 } from '@/lib/ai-search-helpers'
 import {
   scoreHome,
@@ -13,8 +11,9 @@ import {
   normalizeSafety,
   normalizeVibe,
   normalizeParking,
-  normalizeDescriptionBonus,
-  normalizePhoto,
+  normalizeHeating,
+  evidenceScoreOptions,
+  PREFERRED_AREA_BONUS,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
   type HomeComponents,
 } from '@/lib/search/score-home'
@@ -42,7 +41,10 @@ interface HomeForMatching {
   closestHospital?: number | null
   closestPark?: number | null
   closestUniversity?: number | null
+  title?: string | null
   description?: string | null
+  descriptionGreek?: string | null
+  yearRenovated?: number | null
   photoTagsArray?: string[] | null
 }
 
@@ -183,32 +185,40 @@ function scoreAgainstSavedSearch(
     components.parking = normalizeParking(home.parking)
   }
 
-  // Description and photo evidence are bonuses outside the mean, so computing them here is
-  // optional for scale correctness — but the saved search kept the original query text, so
-  // we can and should apply the same evidence the search route would have.
-  let descriptionBonus: number | undefined
-  let photoBonus: number | undefined
-  let disqualified = false
+  const heating = normalizeHeating(home, {
+    heatingCategory: soft.heatingCategory as string | null | undefined,
+    heatingAgent: soft.heatingAgent as string | null | undefined,
+  })
+  if (heating !== undefined) components.heating = heating
 
-  if (queryText) {
-    const result = calculateDescriptionBonus(queryText, home.description ?? null, home.yearBuilt, null)
-    if (result.bonus > 0) descriptionBonus = normalizeDescriptionBonus(result.bonus)
-    if (calculateDisqualifiers(queryText, home.description ?? null)) disqualified = true
-
-    const tagsRaw = Array.isArray(home.photoTagsArray) && home.photoTagsArray.length > 0
-      ? JSON.stringify(home.photoTagsArray)
-      : null
-    const photo = calculatePhotoBonus(queryText, tagsRaw)
-    if (photo > 0) photoBonus = normalizePhoto(photo)
-  }
+  // Same evidence, same weights as the search route (`evidenceScoreOptions`), from the saved
+  // intent text — including the contradiction penalty, which this path used to skip.
+  const evidence = queryText
+    ? assessListing(queryText, {
+        title: home.title,
+        description: home.description,
+        descriptionGreek: home.descriptionGreek,
+        yearBuilt: home.yearBuilt,
+        yearRenovated: home.yearRenovated,
+        photoTags: home.photoTagsArray,
+      })
+    : null
 
   return scoreHome(components, {
-    descriptionBonus,
-    photoBonus,
-    disqualified,
+    ...(evidence ? evidenceScoreOptions(evidence) : {}),
+    areaBonus: inPreferredArea(home.area, soft.preferredAreas) ? PREFERRED_AREA_BONUS : undefined,
     weights: soft.hasLocationPreference === true && vibePreference
       ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
       : undefined,
+  })
+}
+
+function inPreferredArea(area: string | null, preferred: unknown): boolean {
+  if (!area || !Array.isArray(preferred) || preferred.length === 0) return false
+  const a = area.toLowerCase().trim()
+  return preferred.some(p => {
+    const q = String(p).toLowerCase().trim()
+    return q.length > 0 && (a === q || a.includes(q) || q.includes(a))
   })
 }
 
@@ -259,12 +269,12 @@ export async function matchSavedSearches(
       const queryVec = search.queryEmbedding as number[]
       if (!Array.isArray(queryVec) || queryVec.length === 0) continue
 
-      // Hard location/type filters are absolute — no score can rescue a wrong city.
-      if (params.city || params.country || params.listingType) {
-        if (!matchesFilters(home, { city: params.city, country: params.country, listingType: params.listingType })) {
-          continue
-        }
-      }
+      // Every hard filter the user gave is absolute — no score can rescue a wrong city or a
+      // listing over budget. Only city, country and type used to be enforced, so a saved
+      // "2-bed in Kolonaki under €900" alerted on €3,000 flats anywhere in Athens. Heating is
+      // scored, not filtered, exactly as in the search route.
+      const { heatingCategory: _hc, heatingAgent: _ha, softCriteria: _sc, ...hardParams } = params
+      if (!matchesFilters(home, hardParams)) continue
 
       const fit = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData, search.queryText)
       matched = fit >= (search.minMatchPercent ?? 70)

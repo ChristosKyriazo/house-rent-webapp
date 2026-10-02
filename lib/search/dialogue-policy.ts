@@ -141,6 +141,16 @@ export const SLOTS: readonly Slot[] = [
     topicEl: 'αν χρειάζονται θέση στάθμευσης',
   },
   {
+    // Must-haves are scored from each listing's text and photos (listing-evidence.ts), so
+    // an answer here moves percentages across the whole result set, like a component.
+    id: 'features',
+    fields: ['features'],
+    kind: 'component',
+    value: 0.6,
+    topicEn: 'anything the place must have — a balcony, furnished, an elevator, pets allowed',
+    topicEl: 'κάτι που πρέπει οπωσδήποτε να έχει το σπίτι — μπαλκόνι, επίπλωση, ασανσέρ, να επιτρέπονται κατοικίδια',
+  },
+  {
     id: 'size',
     fields: ['minSize', 'maxSize'],
     kind: 'hard',
@@ -169,8 +179,9 @@ export const SLOTS: readonly Slot[] = [
   {
     id: 'heating',
     fields: ['heatingCategory', 'heatingAgent'],
-    kind: 'hard',
-    value: 0.25,
+    // Scored, not filtered, since heating became a component.
+    kind: 'component',
+    value: componentValue(COMPONENT_WEIGHTS.heating),
     topicEn: 'whether they care what kind of heating the place has',
     topicEl: 'αν τους ενδιαφέρει το είδος της θέρμανσης',
   },
