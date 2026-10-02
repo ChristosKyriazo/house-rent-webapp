@@ -5,17 +5,21 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
-import { getTranslation, translateValue } from '@/lib/translations'
-import { greekUppercaseNoAnnotations } from '@/lib/utils'
-import { getCityName, getCountryName, getAreaName } from '@/lib/area-utils'
-import TranslatedDescription from '@/app/components/TranslatedDescription'
+import { getTranslation } from '@/lib/translations'
+import { getAreaName as _getAreaName } from '@/lib/area-utils'
 import { GraphicSearchBanner } from '@/app/components/visual/PageGraphics'
 import AIChatPanel from '@/app/components/AIChatPanel'
+import { ManualFiltersPanel } from '@/app/homes/components/ManualFiltersPanel'
+import { HomeCard } from '@/app/components/HomeCard'
+import SaveSearchModal from '@/app/components/SaveSearchModal'
+
+const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   descriptionGreek: string | null
   city: string
@@ -30,12 +34,13 @@ interface Home {
   createdAt: string
   energyClass: string | null
   closestUniversity: number | null
-  matchPercentage?: number // AI match percentage
+  matchPercentage?: number | null // AI match percentage; null = pure hard-filter search
   /** Set when AI detects listing rules vs your query/profile conflict */
   incompatibilityReason?: string
   owner: {
     email: string
     name: string | null
+    createdAt?: string
   }
 }
 
@@ -57,7 +62,8 @@ function HomesPageInner() {
     ? selectedRole 
     : (actualRole || userRole || 'user')
   const [aiQuery, setAiQuery] = useState('')
-  const [isAISearchActive, setIsAISearchActive] = useState(false) // Track if AI search has been performed
+  const [isAISearchActive, setIsAISearchActive] = useState(false)
+  const [aiSearchError, setAiSearchError] = useState<string | null>(null)
   const [manualFilters, setManualFilters] = useState({
     city: '',
     country: '',
@@ -93,6 +99,10 @@ function HomesPageInner() {
   const [showOrderDropdown, setShowOrderDropdown] = useState(false)
   const [sortOrder, setSortOrder] = useState<string>('')
   const [inquiryStatus, setInquiryStatus] = useState<Record<number, 'inquired' | 'approved' | 'dismissed'>>({})
+  const [compareKeys, setCompareKeys] = useState<string[]>([])
+  const [conversationKey, setConversationKey] = useState<string | null>(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [savedSearchOk, setSavedSearchOk] = useState(false)
   const isInitialized = useRef(false)
   const homesRef = useRef(homes)
   
@@ -158,9 +168,9 @@ function HomesPageInner() {
         setFilterType(storedFilterType)
         if (storedFilterType === 'ai') {
           setIsAISearchActive(true)
-          if (storedAiQuery) {
-            setAiQuery(storedAiQuery)
-          }
+          if (storedAiQuery) setAiQuery(storedAiQuery)
+          const storedConversationKey = sessionStorage.getItem('homesConversationKey')
+          if (storedConversationKey) setConversationKey(storedConversationKey)
         }
       }
     } catch (error) {
@@ -171,10 +181,12 @@ function HomesPageInner() {
   // Restore on mount - MUST run before clearing effects
   useEffect(() => {
     restoreSearchState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Restore when navigating back to /homes page (e.g., from house detail page)
   // This should run BEFORE the clearing effect
+   
   useEffect(() => {
     if (pathname === '/homes' && homesRef.current.length === 0) {
       // Small delay to ensure this runs before clearing effect
@@ -183,25 +195,29 @@ function HomesPageInner() {
       }, 0)
       return () => clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
   // Restore when window gets focus (user navigates back)
+   
   useEffect(() => {
     const handleFocus = () => {
       if (pathname === '/homes' && homesRef.current.length === 0) {
         restoreSearchState()
       }
     }
-    
+
     window.addEventListener('focus', handleFocus)
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
-  
+
   // Clear AI search results when filterType changes or is removed from URL
   // BUT: Don't clear if we have stored state in sessionStorage (user is returning from detail page)
   // This effect should run AFTER restoration effects
+   
   useEffect(() => {
     if (!isInitialized.current) return
     
@@ -230,6 +246,7 @@ function HomesPageInner() {
   }, [searchParams, filterType, isAISearchActive])
 
   // Update URL when searchType or filterType changes (but not on initial mount)
+   
   useEffect(() => {
     if (!isInitialized.current) return
     
@@ -242,13 +259,14 @@ function HomesPageInner() {
     }
     
     const newSearch = params.toString()
-    const currentSearch = window.location.search.replace('?', '')
+    const currentSearch = searchParams.toString()
     
     // Only update URL if it's different to avoid unnecessary navigation
     if (currentSearch !== newSearch) {
       const newUrl = newSearch ? `/homes?${newSearch}` : '/homes'
       router.replace(newUrl, { scroll: false })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchType, filterType, router])
 
   // Check user role and fetch inquiries on mount
@@ -291,6 +309,7 @@ function HomesPageInner() {
       .then((res) => res.json())
       .then((data) => {
         setAreas(data.areas || [])
+        setAllAreas(data.areas || [])
       })
       .catch((error) => {
         console.error('Error fetching areas for translation:', error)
@@ -391,14 +410,14 @@ function HomesPageInner() {
   // Handle city selection - filter country and area dropdowns
   const handleCitySelect = (city: { city: string; cityGreek: string | null; country: string; countryGreek: string | null }) => {
     setManualFilters({ ...manualFilters, city: city.city })
-    setCitySearchQuery(language === 'el' && city.cityGreek ? city.cityGreek : city.city)
+    setCitySearchQuery(isGreekInput(citySearchQuery) && city.cityGreek ? city.cityGreek : city.city)
     setShowCityDropdown(false)
     setCitySuggestions([])
-    
+
     // Auto-set country if not already set
     if (!manualFilters.country) {
       setManualFilters(prev => ({ ...prev, country: city.country }))
-      setCountrySearchQuery(language === 'el' && city.countryGreek ? city.countryGreek : city.country)
+      setCountrySearchQuery(isGreekInput(citySearchQuery) && city.countryGreek ? city.countryGreek : city.country)
     }
     
     // Clear area selection if it doesn't match the new city
@@ -411,7 +430,7 @@ function HomesPageInner() {
   // Handle country selection - filter city and area dropdowns
   const handleCountrySelect = (country: { country: string; countryGreek: string | null }) => {
     setManualFilters({ ...manualFilters, country: country.country })
-    setCountrySearchQuery(language === 'el' && country.countryGreek ? country.countryGreek : country.country)
+    setCountrySearchQuery(isGreekInput(countrySearchQuery) && country.countryGreek ? country.countryGreek : country.country)
     setShowCountryDropdown(false)
     setCountrySuggestions([])
     
@@ -439,11 +458,11 @@ function HomesPageInner() {
     // Auto-set city and country if not already set
     if (area.city && !manualFilters.city) {
       setManualFilters(prev => ({ ...prev, city: area.city! }))
-      setCitySearchQuery(language === 'el' && area.cityGreek ? area.cityGreek : area.city)
+      setCitySearchQuery(isGreekInput(areaSearchQuery) && area.cityGreek ? area.cityGreek : area.city)
     }
     if (area.country && !manualFilters.country) {
       setManualFilters(prev => ({ ...prev, country: area.country! }))
-      setCountrySearchQuery(language === 'el' && area.countryGreek ? area.countryGreek : area.country)
+      setCountrySearchQuery(isGreekInput(areaSearchQuery) && area.countryGreek ? area.countryGreek : area.country)
     }
   }
 
@@ -458,18 +477,20 @@ function HomesPageInner() {
 
   const fetchHomes = async () => {
     setLoading(true)
+    setAiSearchError(null)
     try {
       const response = await fetch('/api/homes')
+      if (!response.ok) throw new Error(String(response.status))
       const data = await response.json()
       setHomes(data.homes || [])
-    } catch (error) {
-      console.error('Error fetching homes:', error)
+    } catch {
+      setHomes([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAISearch = async () => {
+  const _handleAISearch = async () => {
     if (!aiQuery.trim()) return
     
     setLoading(true)
@@ -487,6 +508,14 @@ function HomesPageInner() {
       const data = await response.json()
       const homesResults = data.homes || []
       setHomes(homesResults)
+      // Record to search history (fire-and-forget, non-blocking)
+      if (aiQuery) {
+        fetch('/api/homes/search-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: aiQuery, type: searchType }),
+        }).catch(() => { /* ignore */ })
+      }
       setIsAISearchActive(true) // Mark AI search as active
       setShowFilters(false) // Hide filters section
       
@@ -499,16 +528,15 @@ function HomesPageInner() {
         excludeInquired,
         excludeApproved,
       }))
-    } catch (error) {
-      console.error('Error with AI search:', error)
-      // Fallback to showing all homes if AI search fails
+    } catch {
+      setAiSearchError(language === 'el' ? 'Η αναζήτηση AI απέτυχε — εμφανίζονται όλα τα αγγέλματα.' : 'AI search failed — showing all listings.')
       fetchHomes()
     } finally {
       setLoading(false)
     }
   }
 
-  const handleNewAISearch = () => {
+  const _handleNewAISearch = () => {
     setIsAISearchActive(false) // Reset AI search state
     // Don't clear the query - keep the previous one so user can see/edit it
     // setAiQuery('') // Clear the query
@@ -520,6 +548,7 @@ function HomesPageInner() {
 
   const handleManualFilter = async () => {
     setLoading(true)
+    setSavedSearchOk(false)
     try {
       const params = new URLSearchParams()
       if (searchType) params.append('listingType', searchType)
@@ -567,6 +596,7 @@ function HomesPageInner() {
   }
 
   return (
+    <>
     <div className="min-h-screen py-12 px-4">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--ink-soft)]/50 shadow-inner motion-safe:animate-fade-in-slow">
@@ -630,341 +660,31 @@ function HomesPageInner() {
 
         {/* Manual Filter Form */}
         {searchType && filterType === 'manual' && showFilters && (
-          <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)] mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-[var(--text)]">{getTranslation(language, 'filterByFeatures')}</h2>
-              <button
-                onClick={() => setFilterType(null)}
-                className="px-3 py-1.5 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
-              >
-                ← {getTranslation(language, 'back')}
-              </button>
-            </div>
-            <div className="space-y-4 mb-4">
-              {/* Row 1: City, Country */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="relative">
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
-                <input
-                  type="text"
-                  value={citySearchQuery || (manualFilters.city ? (language === 'el' ? (areas.find(a => a.city === manualFilters.city)?.cityGreek || manualFilters.city) : manualFilters.city) : '')}
-                  onChange={(e) => {
-                    const query = e.target.value
-                    setCitySearchQuery(query)
-                    if (query.length > 0) {
-                      setShowCityDropdown(true)
-                      searchCities(query)
-                    } else {
-                      setShowCityDropdown(false)
-                      setCitySuggestions([])
-                      setManualFilters({ ...manualFilters, city: '' })
-                    }
-                  }}
-                  onFocus={() => {
-                    if (citySearchQuery.length > 0 || manualFilters.city) {
-                      setShowCityDropdown(true)
-                      if (citySearchQuery.length > 0) {
-                        searchCities(citySearchQuery)
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCityDropdown(false), 200)
-                  }}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'anyCity')}
-                />
-                {showCityDropdown && citySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                    {citySuggestions.map((city, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleCitySelect(city)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                      >
-                        <div className="font-medium">{language === 'el' && city.cityGreek ? city.cityGreek : city.city}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="relative">
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
-                <input
-                  type="text"
-                  value={countrySearchQuery || (manualFilters.country ? (language === 'el' ? (areas.find(a => a.country === manualFilters.country)?.countryGreek || manualFilters.country) : manualFilters.country) : '')}
-                  onChange={(e) => {
-                    const query = e.target.value
-                    setCountrySearchQuery(query)
-                    if (query.length > 0) {
-                      setShowCountryDropdown(true)
-                      searchCountries(query)
-                    } else {
-                      setShowCountryDropdown(false)
-                      setCountrySuggestions([])
-                      setManualFilters({ ...manualFilters, country: '' })
-                    }
-                  }}
-                  onFocus={() => {
-                    if (countrySearchQuery.length > 0 || manualFilters.country) {
-                      setShowCountryDropdown(true)
-                      if (countrySearchQuery.length > 0) {
-                        searchCountries(countrySearchQuery)
-                      }
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCountryDropdown(false), 200)
-                  }}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'anyCountry')}
-                />
-                {showCountryDropdown && countrySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                    {countrySuggestions.map((country, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => handleCountrySelect(country)}
-                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                      >
-                        <div className="font-medium">{language === 'el' && country.countryGreek ? country.countryGreek : country.country}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
-              </div>
-
-              {/* Row 2: City Area (alone) */}
-              <div>
-                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'cityArea')}</label>
-                <div className="space-y-3">
-                  {/* Selected areas as chips */}
-                  {selectedAreas.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedAreas.map((area) => (
-                        <div
-                          key={area}
-                          className="btn-primary inline-flex items-center gap-2 px-3 py-1.5 text-sm"
-                        >
-                          <span className="text-sm font-medium">{getAreaName(area, allAreas, language)}</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAreas(selectedAreas.filter(a => a !== area))}
-                            className="text-[var(--btn-primary-fg)] hover:text-red-600 transition-colors"
-                            aria-label={getTranslation(language, 'close')}
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Area autocomplete with multi-select */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={areaSearchQuery}
-                      onChange={(e) => {
-                        const query = e.target.value
-                        setAreaSearchQuery(query)
-                        if (query.length > 0) {
-                          setShowAreaDropdown(true)
-                          searchAreas(query)
-                        } else {
-                          setShowAreaDropdown(false)
-                          setAreaSuggestions([])
-                        }
-                      }}
-                      onFocus={() => {
-                        if (areaSearchQuery.length > 0) {
-                          setShowAreaDropdown(true)
-                        }
-                      }}
-                      onBlur={() => {
-                        setTimeout(() => setShowAreaDropdown(false), 200)
-                      }}
-                      className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                      placeholder={getTranslation(language, 'selectCityArea')}
-                    />
-                    {showAreaDropdown && areaSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                        {areaSuggestions.map((area) => (
-                          <button
-                            key={area.id}
-                            type="button"
-                            onClick={() => handleAreaSelect(area)}
-                            className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
-                          >
-                            <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Min Price, Max Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minPrice')}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={manualFilters.minPrice}
-                    onChange={(e) => setManualFilters({ ...manualFilters, minPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxPrice')}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={manualFilters.maxPrice}
-                    onChange={(e) => setManualFilters({ ...manualFilters, maxPrice: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Min Size, Max Size */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minSize')}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={manualFilters.minSize}
-                    onChange={(e) => setManualFilters({ ...manualFilters, minSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxSize')}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={manualFilters.maxSize}
-                    onChange={(e) => setManualFilters({ ...manualFilters, maxSize: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                  />
-                </div>
-              </div>
-
-              {/* Row 5: Heating Category, Heating Agent */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingCategory')}</label>
-                  <select
-                    value={manualFilters.heatingCategory}
-                    onChange={(e) => setManualFilters({ ...manualFilters, heatingCategory: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
-                  >
-                    <option value="">{getTranslation(language, 'any')}</option>
-                    <option value="central">{translateValue(language, 'central')}</option>
-                    <option value="autonomous">{translateValue(language, 'autonomous')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'heatingAgent')}</label>
-                  <select
-                    value={manualFilters.heatingAgent}
-                    onChange={(e) => setManualFilters({ ...manualFilters, heatingAgent: e.target.value })}
-                    className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)]"
-                  >
-                    <option value="">{getTranslation(language, 'any')}</option>
-                    <option value="oil">{translateValue(language, 'oil')}</option>
-                    <option value="natural gas">{translateValue(language, 'natural gas')}</option>
-                    <option value="electricity">{translateValue(language, 'electricity')}</option>
-                    <option value="other">{translateValue(language, 'other')}</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 6: Min Bedrooms, Max Bedrooms */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'minBedrooms')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={manualFilters.minBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, minBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                  <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'maxBedrooms')}</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={manualFilters.maxBedrooms}
-                  onChange={(e) => setManualFilters({ ...manualFilters, maxBedrooms: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                    placeholder={getTranslation(language, 'any')}
-                />
-              </div>
-              </div>
-
-              {/* Row 7: Year Built (alone) */}
-              <div>
-                <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'yearBuilt')}</label>
-                <input
-                  type="number"
-                  min="1900"
-                  max={new Date().getFullYear()}
-                  value={manualFilters.yearBuilt}
-                  onChange={(e) => setManualFilters({ ...manualFilters, yearBuilt: e.target.value })}
-                  className="w-full px-4 py-2 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder={getTranslation(language, 'any')}
-                />
-              </div>
-
-              {/* Row 8: Exclude Filters (checkboxes) */}
-              <div className="space-y-3 pt-2">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={excludeInquired}
-                    onChange={(e) => setExcludeInquired(e.target.checked)}
-                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-[var(--text)]">
-                    {getTranslation(language, 'excludeInquired') || 'Exclude Inquired Listings'}
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={excludeApproved}
-                    onChange={(e) => setExcludeApproved(e.target.checked)}
-                    className="w-5 h-5 rounded border-[var(--border-subtle)] bg-[var(--ink-soft)] text-[var(--text)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 focus:ring-offset-[var(--ink-soft)] cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-[var(--text)]">
-                    {getTranslation(language, 'excludeApproved') || 'Exclude Approved Listings'}
-                  </span>
-                </label>
-              </div>
-            </div>
-            <button
-              onClick={handleManualFilter}
-              disabled={loading}
-              className="btn-primary w-full px-6 py-3 sm:w-auto disabled:opacity-50"
-            >
-              {loading ? getTranslation(language, 'searching') : getTranslation(language, 'applyFilters')}
-            </button>
-          </div>
+          <ManualFiltersPanel
+            language={language}
+            filters={manualFilters}
+            onFiltersChange={setManualFilters}
+            areas={areas}
+            allAreas={allAreas}
+            cityQuery={citySearchQuery} setCityQuery={setCitySearchQuery}
+            showCityDropdown={showCityDropdown} setShowCityDropdown={setShowCityDropdown}
+            citySuggestions={citySuggestions} setCitySuggestions={setCitySuggestions}
+            onCitySelect={handleCitySelect} searchCities={searchCities}
+            countryQuery={countrySearchQuery} setCountryQuery={setCountrySearchQuery}
+            showCountryDropdown={showCountryDropdown} setShowCountryDropdown={setShowCountryDropdown}
+            countrySuggestions={countrySuggestions} setCountrySuggestions={setCountrySuggestions}
+            onCountrySelect={handleCountrySelect} searchCountries={searchCountries}
+            areaQuery={areaSearchQuery} setAreaQuery={setAreaSearchQuery}
+            showAreaDropdown={showAreaDropdown} setShowAreaDropdown={setShowAreaDropdown}
+            areaSuggestions={areaSuggestions} setAreaSuggestions={setAreaSuggestions}
+            selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas}
+            onAreaSelect={handleAreaSelect} searchAreas={searchAreas}
+            excludeInquired={excludeInquired} setExcludeInquired={setExcludeInquired}
+            excludeApproved={excludeApproved} setExcludeApproved={setExcludeApproved}
+            loading={loading}
+            onBack={() => setFilterType(null)}
+            onSubmit={handleManualFilter}
+          />
         )}
 
         {/* AI Chat Search */}
@@ -974,6 +694,7 @@ function HomesPageInner() {
             excludeInquired={excludeInquired}
             excludeApproved={excludeApproved}
             language={language}
+            initialConversationKey={conversationKey}
             onResultsFound={(results) => {
               setHomes(results)
               setIsAISearchActive(true)
@@ -988,11 +709,20 @@ function HomesPageInner() {
               setAiQuery('')
               setHomes([])
               setShowFilters(true)
+              setConversationKey(null)
+              setSavedSearchOk(false)
               sessionStorage.removeItem('homesSearchResults')
               sessionStorage.removeItem('homesSearchFilters')
               sessionStorage.removeItem('homesSearchType')
               sessionStorage.removeItem('homesFilterType')
               sessionStorage.removeItem('homesAiQuery')
+              sessionStorage.removeItem('homesConversationKey')
+            }}
+            onConversationKeyChange={(key) => {
+              setConversationKey(key)
+              setSavedSearchOk(false)
+              if (key) sessionStorage.setItem('homesConversationKey', key)
+              else sessionStorage.removeItem('homesConversationKey')
             }}
           />
         )}
@@ -1013,18 +743,18 @@ function HomesPageInner() {
             <div className="relative order-dropdown-container">
               <button
                 onClick={() => setShowOrderDropdown(!showOrderDropdown)}
-                className="btn-primary px-6 py-3"
+                className="btn-secondary px-6 py-3"
               >
                 {getTranslation(language, 'order') || 'Order'}
               </button>
               {showOrderDropdown && (
-                <div className="absolute z-10 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl shadow-xl overflow-hidden">
+                <div className="absolute right-0 z-50 mt-2 w-64 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl overflow-hidden">
                   <button
                     onClick={() => {
                       setSortOrder('price-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceAscending') || 'Price Ascending'}</span>
                     {sortOrder === 'price-asc' && (
@@ -1036,7 +766,7 @@ function HomesPageInner() {
                       setSortOrder('price-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'priceDescending') || 'Price Descending'}</span>
                     {sortOrder === 'price-desc' && (
@@ -1048,7 +778,7 @@ function HomesPageInner() {
                       setSortOrder('size-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeAscending') || 'Size Ascending'}</span>
                     {sortOrder === 'size-asc' && (
@@ -1060,7 +790,7 @@ function HomesPageInner() {
                       setSortOrder('size-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'sizeDescending') || 'Size Descending'}</span>
                     {sortOrder === 'size-desc' && (
@@ -1072,7 +802,7 @@ function HomesPageInner() {
                       setSortOrder('date-asc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateAscending') || 'Date of Publish Ascending'}</span>
                     {sortOrder === 'date-asc' && (
@@ -1084,7 +814,7 @@ function HomesPageInner() {
                       setSortOrder('date-desc')
                       setShowOrderDropdown(false)
                     }}
-                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center justify-between"
                   >
                     <span>{getTranslation(language, 'dateDescending') || 'Date of Publish Descending'}</span>
                     {sortOrder === 'date-desc' && (
@@ -1099,32 +829,119 @@ function HomesPageInner() {
 
         {/* Results Header */}
         {(filterType && homes.length > 0) && (
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-[var(--text)]">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'availableProperties')} {searchType === 'rent' ? `(${getTranslation(language, 'rent')})` : `(${getTranslation(language, 'buy')})`}
               </h1>
               <p className="text-[var(--text-muted)] mt-2">
                 {homes.length} {homes.length === 1 ? getTranslation(language, 'listing') : getTranslation(language, 'listings')} {getTranslation(language, 'found')}
               </p>
+              {aiSearchError && (
+                <p className="text-sm text-amber-600 mt-1">{aiSearchError}</p>
+              )}
             </div>
-            {displayRole === 'owner' && (
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Save this search */}
+              {userRole === 'user' || userRole === 'both' ? (
+                savedSearchOk ? (
+                  <Link href="/homes/saved-searches" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30 hover:bg-[var(--accent)]/20 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {language === 'el' ? 'Αποθηκεύτηκε' : 'Saved'}
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => setShowSaveModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    {language === 'el' ? 'Αποθήκευση' : 'Save search'}
+                  </button>
+                )
+              ) : null}
+              {/* Map view button — carries current filters to the map page */}
               <Link
-                href="/homes/new"
-                className="btn-primary inline-flex items-center px-5 py-2 text-sm"
+                href={(() => {
+                  const params = new URLSearchParams({ type: searchType ?? 'rent' })
+                  if (manualFilters.minPrice) params.set('minPrice', manualFilters.minPrice)
+                  if (manualFilters.maxPrice) params.set('maxPrice', manualFilters.maxPrice)
+                  if (manualFilters.minBedrooms) params.set('minBedrooms', manualFilters.minBedrooms)
+                  if (selectedAreas.length > 0) params.set('area', selectedAreas[0])
+                  return `/homes/map?${params}`
+                })()}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)]/40 transition-colors"
               >
-                + {getTranslation(language, 'newListing')}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 13l4.553 2.276A1 1 0 0021 21.382V10.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9 7" />
+                </svg>
+                {language === 'el' ? 'Χάρτης' : 'Map view'}
               </Link>
-            )}
+              {displayRole === 'owner' && (
+                <Link
+                  href="/homes/new"
+                  className="btn-primary inline-flex items-center px-5 py-2 text-sm"
+                >
+                  + {getTranslation(language, 'newListing')}
+                </Link>
+              )}
+            </div>
           </div>
         )}
 
         {/* Homes Grid */}
-        {homes.length === 0 && filterType ? (
+        {loading && filterType ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-[var(--surface)] rounded-3xl overflow-hidden border border-[var(--border-subtle)] animate-pulse">
+                <div className="h-48 bg-[var(--ink-soft)]" />
+                <div className="p-6 space-y-3">
+                  <div className="h-5 bg-[var(--ink-soft)] rounded-xl w-3/4" />
+                  <div className="h-4 bg-[var(--ink-soft)] rounded-xl w-1/2" />
+                  <div className="h-4 bg-[var(--ink-soft)] rounded-xl w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : homes.length === 0 && filterType ? (
           <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-12 text-center shadow-xl border border-[var(--border-subtle)]">
-            <p className="text-xl text-[var(--text-muted)]">
+            <div className="text-5xl mb-4">🔍</div>
+            <p className="text-xl font-semibold text-[var(--text)] mb-2">
               {filterType === 'manual' ? getTranslation(language, 'noPropertiesFound') : getTranslation(language, 'noPropertiesFoundAi')}
             </p>
+            <p className="text-[var(--text-muted)] mb-6 max-w-sm mx-auto">
+              {filterType === 'manual'
+                ? language === 'el' ? 'Δοκιμάστε να διευρύνετε την αναζήτηση, να αλλάξετε πόλη ή να καταργήσετε κάποια φίλτρα.' : 'Try broadening your search, changing the city, or removing some filters.'
+                : language === 'el' ? 'Δοκιμάστε να περιγράψετε αυτό που ψάχνετε με διαφορετικό τρόπο.' : 'Try describing what you\'re looking for differently.'}
+            </p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {excludeInquired && (
+                <button
+                  onClick={() => { setExcludeInquired(false) }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-[var(--border-subtle)] text-[var(--text)] hover:bg-[var(--ink-soft)] transition-all"
+                >
+                  {language === 'el' ? '✕ Εμφάνιση αιτήσεων μου' : '✕ Show my inquiries'}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSearchType(null); setFilterType(null); setHomes([])
+                  setConversationKey(null); setSavedSearchOk(false)
+                  sessionStorage.removeItem('homesSearchResults')
+                  sessionStorage.removeItem('homesSearchFilters')
+                  sessionStorage.removeItem('homesSearchType')
+                  sessionStorage.removeItem('homesFilterType')
+                  sessionStorage.removeItem('homesAiQuery')
+                  sessionStorage.removeItem('homesConversationKey')
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
+              >
+                {language === 'el' ? 'Νέα αναζήτηση' : 'Start new search'}
+              </button>
+            </div>
           </div>
         ) : homes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1148,277 +965,64 @@ function HomesPageInner() {
                 return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
               }
               return 0
-            }).map((home) => {
-              const status = inquiryStatus[home.id]
-              const hasInquiry = status === 'inquired'
-              const isApproved = status === 'approved'
-              const isDismissed = status === 'dismissed'
-              
-              // Determine banner color and text
-              let bannerColor = ''
-              let bannerText = ''
-              if (hasInquiry) {
-                bannerColor = 'bg-orange-600 border-orange-800'
-                bannerText = getTranslation(language, 'inquiryMadeBanner')
-              } else if (isApproved) {
-                bannerColor = 'bg-green-600 border-green-800'
-                bannerText = getTranslation(language, 'approvedBanner')
-              } else if (isDismissed) {
-                bannerColor = 'bg-red-600 border-red-800'
-                bannerText = getTranslation(language, 'dismissedBanner')
-              }
-              
-              return (
-              <div
+            }).map((home) => (
+              <HomeCard
                 key={home.id}
-                  className={`relative bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
-                    status 
-                      ? 'border-[var(--border-subtle)] opacity-60' 
-                      : 'border-[var(--border-subtle)] hover:border-[var(--accent)]/35'
-                  }`}
-                >
-                  {/* AI Match Percentage Badge - Top Right */}
-                  {home.matchPercentage !== undefined && (
-                    <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
-                      <div
-                        className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
-                          home.incompatibilityReason
-                            ? 'border-red-700 bg-red-600/95 text-white'
-                            : home.matchPercentage >= 80
-                              ? 'border-green-600 bg-green-500/90 text-white'
-                              : home.matchPercentage >= 60
-                                ? 'border-yellow-600 bg-yellow-500/90 text-white'
-                                : 'border-orange-600 bg-orange-500/90 text-white'
-                        }`}
-                        title={home.incompatibilityReason || undefined}
-                      >
-                        {home.matchPercentage.toFixed(1)}% Match
-                      </div>
-                      {home.incompatibilityReason && (
-                        <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">
-                          {home.incompatibilityReason}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Sticker-style Status Banner - Horizontal through center */}
-                  {status && (
-                    <div className="absolute top-1/2 left-1/2 z-10 transform -translate-x-1/2 -translate-y-1/2 origin-center">
-                      <div 
-                        className={`relative ${bannerColor} text-white px-6 py-3 shadow-lg border-2 whitespace-nowrap`}
-                        style={{
-                          clipPath: 'polygon(2% 0%, 98% 0%, 100% 5%, 98% 10%, 100% 15%, 98% 20%, 100% 25%, 98% 30%, 100% 35%, 98% 40%, 100% 45%, 98% 50%, 100% 55%, 98% 60%, 100% 65%, 98% 70%, 100% 75%, 98% 80%, 100% 85%, 98% 90%, 100% 95%, 98% 100%, 2% 100%, 0% 95%, 2% 90%, 0% 85%, 2% 80%, 0% 75%, 2% 70%, 0% 65%, 2% 60%, 0% 55%, 2% 50%, 0% 45%, 2% 40%, 0% 35%, 2% 30%, 0% 25%, 2% 20%, 0% 15%, 2% 10%, 0% 5%)',
-                        }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg">
-                            {hasInquiry ? '🏷️' : isApproved ? '✅' : '❌'}
-                          </span>
-                          <p
-                            className={`text-sm font-black tracking-wide ${language === 'el' ? '' : 'uppercase'}`}
-                          >
-                            {language === 'el' ? greekUppercaseNoAnnotations(bannerText) : bannerText}
-                          </p>
-                        </div>
-                        {/* Sticker shine effect */}
-                        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {isDismissed ? (
-                    <div className="block cursor-not-allowed pointer-events-none">
-                      <div className="mb-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h2 className={`text-2xl font-bold flex-1 ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.title}</h2>
-                          <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
-                            home.listingType === 'rent'
-                              ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
-                              : 'border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] text-[var(--text)]'
-                          }`}>
-                            {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
-                          </span>
-                        </div>
-                        <p className={`flex items-center gap-1 ${
-                          status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          <span>📍</span>
-                          {home.area && (
-                            <>
-                              {getAreaName(home.area, allAreas, language)}, 
-                            </>
-                          )}
-                          {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
-                        </p>
-                      </div>
-
-                      {(home.description || home.descriptionGreek) && (
-                        <TranslatedDescription 
-                          description={home.description}
-                          descriptionGreek={home.descriptionGreek}
-                          className={`mb-4 line-clamp-2 ${
-                            status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                          }`}
-                        />
-                      )}
-
-                      <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
-                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
-                      }`}>
-                        <div>
-                          <p className={`text-3xl font-bold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            €{home.pricePerMonth.toLocaleString()}
-                          </p>
-                          <p className={`text-sm ${
-                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                          }`}>
-                            {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-semibold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            {home.bedrooms} <span className={`${
-                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                            }`}>{getTranslation(language, 'bedroomsShort')}</span>
-                          </p>
-                          <p className={`text-sm font-semibold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            {home.bathrooms} <span className={`${
-                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                            }`}>{getTranslation(language, 'bathroomsShort')}</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className={`pt-4 border-t ${
-                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
-                      }`}>
-                        <p className={`text-xs ${
-                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.owner.name || home.owner.email}</span>
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <Link
-                      href={`/homes/${home.key}`}
-                      className="block"
-                    >
-                      <div className="mb-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h2 className={`text-2xl font-bold flex-1 ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.title}</h2>
-                          <span className={`px-2 py-1 rounded-lg text-xs font-semibold ml-2 ${
-                            home.listingType === 'rent'
-                              ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)]'
-                              : 'border border-[var(--btn-secondary-border)] bg-[var(--btn-secondary-bg)] text-[var(--text)]'
-                          }`}>
-                            {home.listingType === 'rent' ? `🏠 ${getTranslation(language, 'rent')}` : `💰 ${getTranslation(language, 'buy')}`}
-                          </span>
-                        </div>
-                        <p className={`flex items-center gap-1 ${
-                          status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          <span>📍</span>
-                          {home.area && (
-                            <>
-                              {getAreaName(home.area, allAreas, language)}, 
-                            </>
-                          )}
-                          {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
-                        </p>
-                      </div>
-
-                      {(home.description || home.descriptionGreek) && (
-                        <TranslatedDescription 
-                          description={home.description}
-                          descriptionGreek={home.descriptionGreek}
-                          className={`mb-4 line-clamp-2 ${
-                            status ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                          }`}
-                        />
-                      )}
-
-                      <div className={`flex items-center justify-between mb-4 pt-4 border-t ${
-                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
-                      }`}>
-                        <div>
-                          <p className={`text-3xl font-bold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            €{home.pricePerMonth.toLocaleString()}
-                          </p>
-                          <p className={`text-sm ${
-                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                          }`}>
-                            {home.listingType === 'rent' ? getTranslation(language, 'perMonth') : getTranslation(language, 'totalPrice')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-semibold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            {home.bedrooms} <span className={`${
-                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                            }`}>{getTranslation(language, 'bedroomsShort')}</span>
-                          </p>
-                          <p className={`text-sm font-semibold ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>
-                            {home.bathrooms} <span className={`${
-                              hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                            }`}>{getTranslation(language, 'bathroomsShort')}</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Energy Class - Only if provided, styled like parking */}
-                      {home.energyClass && (
-                        <div className={`mb-4 pt-4 border-t ${
-                          status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
-                        }`}>
-                          <p className={`text-xs ${
-                            hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                          }`}>
-                            {getTranslation(language, 'energyClass')}: <span className={`font-medium ${
-                              status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                            }`}>{home.energyClass}</span>
-                          </p>
-                        </div>
-                      )}
-
-                      <div className={`pt-4 border-t ${
-                        status ? 'border-[var(--border-subtle)]' : 'border-[var(--border-subtle)]'
-                      }`}>
-                        <p className={`text-xs ${
-                          hasInquiry ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'
-                        }`}>
-                          {getTranslation(language, 'publishedBy')} <span className={`font-medium ${
-                            status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
-                          }`}>{home.owner.name || home.owner.email}</span>
-                        </p>
-                      </div>
-                    </Link>
-                  )}
-                </div>
-              )
-            })}
+                home={home}
+                status={inquiryStatus[home.id]}
+                language={language}
+                allAreas={allAreas}
+                areas={areas}
+                compareKeys={compareKeys}
+                onCompareToggle={key => setCompareKeys(prev =>
+                  prev.includes(key)
+                    ? prev.filter(k => k !== key)
+                    : prev.length < 3 ? [...prev, key] : prev
+                )}
+              />
+            ))}
           </div>
         ) : null}
       </div>
     </div>
+
+    {/* Compare bar — appears when 2+ homes are selected */}
+
+    {compareKeys.length >= 2 && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[var(--z-fixed)] flex items-center gap-3 rounded-2xl border border-[var(--accent)]/40 bg-[var(--ink-soft)] px-5 py-3 shadow-2xl backdrop-blur-xl max-w-[calc(100vw-2rem)]">
+        <span className="text-sm font-semibold text-[var(--text)]">
+          ⚖ {compareKeys.length} {language === 'el' ? 'επιλεγμένα' : 'selected'}
+        </span>
+        <button
+          onClick={() => router.push(`/homes/compare?keys=${compareKeys.join(',')}`)}
+          className="btn-primary rounded-xl px-4 py-2 text-sm"
+        >
+          {language === 'el' ? 'Σύγκριση' : 'Compare'}
+        </button>
+        <button
+          onClick={() => setCompareKeys([])}
+          className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+        >
+          {language === 'el' ? 'Ακύρωση' : 'Clear'}
+        </button>
+      </div>
+    )}
+
+    {/* Save Search Modal */}
+    {showSaveModal && filterType && (
+      <SaveSearchModal
+        type={filterType === 'ai' ? 'ai' : 'filter'}
+        filterParams={filterType === 'manual' ? { ...manualFilters, areas: selectedAreas } : undefined}
+        conversationKey={filterType === 'ai' ? (conversationKey ?? undefined) : undefined}
+        language={language}
+        onClose={() => setShowSaveModal(false)}
+        onSaved={() => {
+          setShowSaveModal(false)
+          setSavedSearchOk(true)
+        }}
+      />
+    )}
+    </>
   )
 }
 

@@ -21,12 +21,19 @@ export const translations = {
     // Navigation
     menu: 'Μενού',
     profile: 'Προφίλ',
+    myTeam: 'Η Ομάδα μου',
+    myRequests: 'Τα Αιτήματά μου',
     myListings: 'Οι Αγγελίες μου',
     manageListings: 'Διαχειριστείτε τις αγγελίες σας',
     noListings: 'Δεν έχετε δημοσιεύσει αγγελίες ακόμα',
     publishedOn: 'Δημοσιεύτηκε στις',
     publishProperty: 'Δημοσίευση Ακινήτου',
     searchProperties: 'Αναζήτηση Ακινήτων',
+    savedProperties: 'Αποθηκευμένα',
+    savedSearches: 'Αποθηκευμένες Αναζητήσεις',
+    dashboard: 'Πίνακας Ελέγχου',
+    analytics: 'Αναλυτικά',
+    mapView: 'Προβολή Χάρτη',
     inquiries: 'Αιτήματα ενδιαφέροντος',
     approvedInquiries: 'Εγκεκριμένα Αιτήματα',
     approvedInquiry: 'Εγκεκριμένο Αίτημα',
@@ -60,7 +67,6 @@ export const translations = {
     selectCityArea: 'Επιλέξτε περιοχή',
     distances: 'Αποστάσεις',
     closestMetro: 'Κοντινότερο Μετρό',
-    closestBus: 'Κοντινότερη Στάση Λεωφορείου',
     closestSchool: 'Κοντινότερο Σχολείο',
     closestHospital: 'Κοντινότερο Νοσοκομείο',
     closestPark: 'Κοντινότερο Πάρκο',
@@ -119,6 +125,9 @@ export const translations = {
     returnToApproved: 'Επιστροφή στις Εγκεκριμένες Καταχωρήσεις',
     viewFullListing: 'Προβολή πλήρους καταχώρησης',
     returnToInquiries: 'Επιστροφή στις Ερωτήσεις',
+    returnToCalendar: 'Επιστροφή στο Ημερολόγιο',
+    returnToMyInquiries: 'Επιστροφή στα Αιτήματά μου',
+    viewProperty: 'Προβολή Ακινήτου',
     edit: 'Επεξεργασία',
     noPhotos: 'Δεν υπάρχουν φωτογραφίες',
     owner: 'Ιδιοκτήτης',
@@ -176,10 +185,7 @@ export const translations = {
     approvedOn: 'Εγκρίθηκε στις',
     contactInformation: 'Στοιχεία Επικοινωνίας',
     sendContactInfo: 'Αποστολή Στοιχείων Επικοινωνίας',
-    calComUsername: 'Cal.com Όνομα Χρήστη',
-    calComUsernameHint: 'Το όνομα χρήστη σας στο Cal.com (π.χ., "john-doe" για cal.com/john-doe)',
     bookAppointment: 'Κράτηση Ραντεβού',
-    bookThroughCalCom: 'Κάντε κράτηση μέσω του Cal.com widget παραπάνω',
     createBookingManually: 'Δημιουργία Κράτησης Χειροκίνητα',
     createBooking: 'Δημιουργία Κράτησης',
     startTime: 'Ώρα Έναρξης',
@@ -188,7 +194,6 @@ export const translations = {
     location: 'Τοποθεσία',
     status: 'Κατάσταση',
     bookingCreated: 'Η κράτηση δημιουργήθηκε επιτυχώς!',
-    calComConnection: 'Σύνδεση Cal.com',
     connected: 'Συνδεδεμένο',
     notConnected: 'Μη συνδεδεμένο',
     afterApprovalSetAvailability: 'Μετά την έγκριση, θα μεταφερθείτε για να ορίσετε τη διαθεσιμότητά σας για αυτό το ακίνητο.',
@@ -215,6 +220,20 @@ export const translations = {
       'Π.χ. κωδικός θυροτηλεφώνου, όροφος, πού να παρκάρει, τι να φέρει μαζί του…',
     preAppointmentNotesHint:
       'Θα εμφανίζεται στον χρήστη όταν επιλέγει ώρα επίσκεψης (μαζί με τα στοιχεία επικοινωνίας σας).',
+    appointmentDuration: 'Διάρκεια ραντεβού',
+    minutes: 'λεπτά',
+    confirmTenant: 'Επιβεβαίωση ενοικιαστή',
+    confirmThisTenant: 'Επιβεβαίωση αυτού του ενοικιαστή',
+    tenantLabel: 'Ενοικιαστής',
+    moveInDate: 'Ημερομηνία εισόδου',
+    moveOutDate: 'Ημερομηνία εξόδου',
+    rentalDates: 'Ημερομηνίες ενοικίασης',
+    moveInLabel: 'Είσοδος',
+    moveOutLabel: 'Έξοδος',
+    confirmTenantDescription: 'Θα αποσταλεί ειδοποίηση στον ενοικιαστή για αποδοχή ή απόρριψη. Μόλις αποδεχτεί, η συμφωνία επιβεβαιώνεται και οι αξιολογήσεις ξεκλειδώνουν.',
+    sendToTenant: 'Αποστολή στον ενοικιαστή',
+    sending: 'Αποστολή...',
+    finalizationRequestSent: 'Αίτημα οριστικοποίησης εστάλη στον ενοικιαστή.',
     ownerMessageBeforeVisit: 'Μήνυμα από τον ιδιοκτήτη',
     ownerSharedForYourVisit: 'Στοιχεία που κοινοποιήθηκαν με την έγκριση',
     setAppointment: 'Ορισμός ραντεβού',
@@ -291,6 +310,7 @@ export const translations = {
     brokerOccupationLocked: 'Η Επάγγελμα ορίζεται αυτόματα για τους μεσίτες',
     dismissFinalization: 'Απόρριψη Οριστικοποίησης',
     dealDone: 'ΣΥΜΦΩΝΙΑ ΟΛΟΚΛΗΡΩΘΗΚΕ',
+    dealClosed: 'Η συμφωνία έκλεισε',
     propertyInformation: 'Πληροφορίες Ακινήτου',
     senderInformation: 'Πληροφορίες Αποστολέα',
     rateOwner: 'Αξιολόγηση Ιδιοκτήτη',
@@ -303,6 +323,22 @@ export const translations = {
     rated: 'Αξιολογήθηκε',
     rateNow: 'Αξιολόγηση Τώρα',
     rateAgain: 'Αξιολόγηση Ξανά',
+    rateYourExperience: 'Αξιολογήστε την εμπειρία σας',
+    rateYourTenants: 'Αξιολογήστε τους ενοικιαστές σας',
+    rateExperienceSubtitle: 'Οι αξιολογήσεις σας βοηθούν μελλοντικούς ενοικιαστές να λαμβάνουν τεκμηριωμένες αποφάσεις.',
+    rateTenantSubtitle: 'Οι αξιολογήσεις σας βοηθούν την κοινότητα να αναγνωρίζει αξιόπιστους ενοικιαστές.',
+    noPendingRatings: 'Δεν υπάρχουν εκκρεμείς αξιολογήσεις αυτή τη στιγμή.',
+    moveInRating: 'Αξιολόγηση εισόδου',
+    moveOutRating: 'Αξιολόγηση εξόδου',
+    moveIn: 'Είσοδος',
+    moveOut: 'Έξοδος',
+    postViewingRating: 'Αξιολόγηση μετά την επίσκεψη',
+    viewing: 'Επίσκεψη',
+    moveInExperience: 'Εμπειρία εισόδου',
+    moveOutExperience: 'Εμπειρία εξόδου',
+    shareExperiencePlaceholder: 'Μοιραστείτε την εμπειρία σας για να βοηθήσετε μελλοντικούς ενοικιαστές…',
+    shareTenantExperiencePlaceholder: 'Μοιραστείτε την εμπειρία σας με αυτόν τον ενοικιαστή (προαιρετικό)…',
+    unknownTenant: 'Άγνωστος',
     comment: 'Σχόλιο',
     commentPlaceholder: 'Γράψτε ένα σχόλιο (προαιρετικό)',
     submitRating: 'Υποβολή Αξιολόγησης',
@@ -331,6 +367,7 @@ export const translations = {
     notificationApproved: 'Το αίτημά σας για {propertyTitle} έχει εγκριθεί',
     notificationDismissed: 'Το αίτημά σας για {propertyTitle} έχει απορριφθεί',
     notificationRejected: 'Ο ιδιοκτήτης απέρριψε την προσφορά σας για {propertyTitle}. Το ακίνητο δεν είναι πλέον διαθέσιμο.',
+    notificationRejectedOwner: 'Ο χρήστης {userName} απέρριψε την οριστικοποίηση για {propertyTitle}',
     notificationFinalize: '{senderName} θέλει να οριστικοποιήσει τη συμφωνία για {propertyTitle}',
     notificationFinalizeGeneric: 'Κάποιος θέλει να οριστικοποιήσει τη συμφωνία για {propertyTitle}',
     notificationFinalizeRequest: 'Αίτημα οριστικοποίησης για {propertyTitle}',
@@ -339,6 +376,7 @@ export const translations = {
     notificationRateUser: 'Παρακαλούμε αξιολογήστε τον χρήστη για {propertyTitle}',
     notificationBookingReminder: 'Η κράτησή σας "{title}" είναι προγραμματισμένη για αύριο στις {time}',
     notificationOwnerBookingReminder: 'Έχετε {count} ραντεβού{plural} προγραμματισμένα για αύριο',
+    notificationNewListingMatch: 'Νέα αγγελία ταιριάζει με την αποθηκευμένη αναζήτησή σας: {propertyTitle}',
     notificationAvailabilitySet: 'Ο ιδιοκτήτης έχει ορίσει διαθεσιμότητα για {propertyTitle}. Κάντε κλικ για να επιλέξετε ώρα επισκεπτήματος.',
     notificationBookingCreated: 'Ο χρήστης {userName} έχει κλείσει ραντεβού για το {propertyTitle}',
     notificationBookingCreatedGeneric: 'Ένας χρήστης έχει κλείσει ραντεβού για το {propertyTitle}',
@@ -399,6 +437,7 @@ export const translations = {
     loading: 'Φόρτωση...',
     refresh: 'Ανανέωση',
     somethingWentWrong: 'Κάτι πήγε στραβά',
+    profileUnavailable: 'Δεν ήταν δυνατή η φόρτωση αυτού του προφίλ. Δοκιμάστε ξανά.',
     viewAll: 'Προβολή όλων',
     add: 'Προσθήκη',
     remove: 'Αφαίρεση',
@@ -432,9 +471,10 @@ export const translations = {
     placeholderCountry: 'Ελλάδα',
     placeholderSize: 'π.χ., 85',
     placeholderBedrooms: 'π.χ., 3',
+    placeholderFloor: 'π.χ., 2',
     placeholderYearBuilt: 'π.χ., 2010',
     placeholderYearRenovated: 'π.χ., 2020',
-    
+
     // Areas (common Greek areas)
     'Nea Smirni': 'Νέα Σμύρνη',
     'Kallithea': 'Καλλιθέα',
@@ -449,25 +489,71 @@ export const translations = {
     autonomous: 'Αυτόνομη',
     oil: 'Πετρέλαιο',
     'natural gas': 'Φυσικό Αέριο',
+    'Natural gas': 'Φυσικό Αέριο',
     electricity: 'Ηλεκτρική',
+    power: 'Ηλεκτρική',
     other: 'Άλλο',
     
-    // Vibe values
+    // Vibe values – all canonical system vibes (Title Case = DB-stored value, lowercase = alias)
+    // Note: 'central' (lowercase) is omitted to avoid collision with heating 'central: Κεντρική'
+    // Note: 'Student' (Title Case) is omitted to avoid collision with occupation Student: Φοιτητής
+    'Central': 'Κεντρικό',
+    'family': 'Οικογενειακό',
+    'Family': 'Οικογενειακό',
     'family-friendly': 'Οικογενειακό',
     'Family-friendly': 'Οικογενειακό',
+    'historic': 'Ιστορικό',
+    'Historic': 'Ιστορικό',
+    'reviving': 'Αναπτυσσόμενο',
+    'Reviving': 'Αναπτυσσόμενο',
+    'rural': 'Αγροτικό',
+    'Rural': 'Αγροτικό',
+    'student': 'Φοιτητικό',
+    'suburban': 'Προαστιακό',
+    'Suburban': 'Προαστιακό',
+    'upscale': 'Αριστοκρατικό',
+    'Upscale': 'Αριστοκρατικό',
+    'urban': 'Αστικό',
+    'Urban': 'Αστικό',
+    'waterfront': 'Παραλιακό',
+    'Waterfront': 'Παραλιακό',
+    'working-class': 'Λαϊκό',
+    'Working-Class': 'Λαϊκό',
+    'Working-class': 'Λαϊκό',
     'vibrant': 'Ζωντανό',
     'Vibrant': 'Ζωντανό',
     'quiet': 'Ήσυχο',
     'Quiet': 'Ήσυχο',
-    'upscale': 'Αριστοκρατικό',
-    'Upscale': 'Αριστοκρατικό',
     'touristic': 'Τουριστικό',
     'Touristic': 'Τουριστικό',
-    'historic': 'Ιστορικό',
-    'Historic': 'Ιστορικό',
-    'urban': 'Αστικό',
-    'Urban': 'Αστικό',
-    'student': 'Φοιτητικό',
+    'nightlife': 'Νυχτερινή Ζωή',
+    'Nightlife': 'Νυχτερινή Ζωή',
+    'residential': 'Οικιστικό',
+    'Residential': 'Οικιστικό',
+    'bohemian': 'Μποέμ',
+    'Bohemian': 'Μποέμ',
+    'gentrifying': 'Αναπτυσσόμενο',
+    'Gentrifying': 'Αναπτυσσόμενο',
+    'multicultural': 'Πολυπολιτισμικό',
+    'Multicultural': 'Πολυπολιτισμικό',
+    'industrial': 'Βιομηχανικό',
+    'Industrial': 'Βιομηχανικό',
+    'artistic': 'Καλλιτεχνικό',
+    'Artistic': 'Καλλιτεχνικό',
+    'up-and-coming': 'Αναδυόμενο',
+    'Up-and-coming': 'Αναδυόμενο',
+    'charming': 'Γοητευτικό',
+    'Charming': 'Γοητευτικό',
+    'academic': 'Ακαδημαϊκό',
+    'Academic': 'Ακαδημαϊκό',
+    'alternative': 'Εναλλακτικό',
+    'Alternative': 'Εναλλακτικό',
+    'authentic': 'Αυθεντικό',
+    'Authentic': 'Αυθεντικό',
+    'bustling': 'Πολυσύχναστο',
+    'Bustling': 'Πολυσύχναστο',
+    'commercial': 'Εμπορικό',
+    'Commercial': 'Εμπορικό',
     'Upscale, vibrant': 'Αριστοκρατικό, Ζωντανό',
     'Touristic, historic': 'Τουριστικό, Ιστορικό',
   },
@@ -491,12 +577,19 @@ export const translations = {
     // Navigation
     menu: 'Menu',
     profile: 'Profile',
+    myTeam: 'My Team',
+    myRequests: 'My Requests',
     myListings: 'My Listings',
     manageListings: 'Manage your listings',
     noListings: 'You have not published any listings yet',
     publishedOn: 'Published on',
     publishProperty: 'Publish Property',
     searchProperties: 'Search Properties',
+    savedProperties: 'Saved',
+    savedSearches: 'Saved Searches',
+    dashboard: 'Dashboard',
+    analytics: 'Analytics',
+    mapView: 'Map View',
     inquiries: 'Inquiries',
     approvedInquiries: 'Approved Inquiries',
     approvedInquiry: 'Approved Inquiry',
@@ -531,7 +624,6 @@ export const translations = {
     selectCityArea: 'Select area',
     distances: 'Distances',
     closestMetro: 'Closest Metro',
-    closestBus: 'Closest Bus Stop',
     closestSchool: 'Closest School',
     closestHospital: 'Closest Hospital',
     closestPark: 'Closest Park',
@@ -590,6 +682,9 @@ export const translations = {
     returnToApproved: 'Return to Approved Listings',
     viewFullListing: 'View full listing',
     returnToInquiries: 'Return to Inquiries',
+    returnToCalendar: 'Return to Calendar',
+    returnToMyInquiries: 'Return to My Inquiries',
+    viewProperty: 'View Property',
     edit: 'Edit',
     noPhotos: 'No photos',
     owner: 'Owner',
@@ -650,10 +745,7 @@ export const translations = {
     approvedOn: 'Approved on',
     contactInformation: 'Contact Information',
     sendContactInfo: 'Send Contact Information',
-    calComUsername: 'Cal.com Username',
-    calComUsernameHint: 'Your Cal.com username (e.g., "john-doe" for cal.com/john-doe)',
     bookAppointment: 'Book Appointment',
-    bookThroughCalCom: 'Book through Cal.com widget above',
     createBookingManually: 'Create Booking Manually',
     createBooking: 'Create Booking',
     startTime: 'Start Time',
@@ -662,7 +754,6 @@ export const translations = {
     location: 'Location',
     status: 'Status',
     bookingCreated: 'Booking created successfully!',
-    calComConnection: 'Cal.com Connection',
     connected: 'Connected',
     notConnected: 'Not connected',
     afterApprovalSetAvailability: 'After approval, you will be redirected to set your availability for this property.',
@@ -689,6 +780,20 @@ export const translations = {
       'e.g. door code, floor, parking, what to bring…',
     preAppointmentNotesHint:
       'Shown to the user when they pick a viewing time (together with your contact details).',
+    appointmentDuration: 'Appointment Duration',
+    minutes: 'minutes',
+    confirmTenant: 'Confirm tenant',
+    confirmThisTenant: 'Confirm this tenant',
+    tenantLabel: 'Tenant',
+    moveInDate: 'Move-in date',
+    moveOutDate: 'Move-out date',
+    rentalDates: 'Rental dates',
+    moveInLabel: 'Move-in',
+    moveOutLabel: 'Move-out',
+    confirmTenantDescription: 'A notification will be sent to the tenant to accept or decline. Once accepted, the deal is confirmed and ratings will unlock on schedule.',
+    sendToTenant: 'Send to tenant',
+    sending: 'Sending...',
+    finalizationRequestSent: 'Finalization request sent to tenant.',
     ownerMessageBeforeVisit: 'Message from the owner',
     ownerSharedForYourVisit: 'Details shared when your inquiry was approved',
     setAppointment: 'Set appointment',
@@ -751,6 +856,7 @@ export const translations = {
     confirmRejectFinalization: 'Are you sure you want to reject this finalization? The property will be removed from your search results.',
     dismissFinalization: 'Dismiss Finalization',
     dealDone: 'DEAL DONE',
+    dealClosed: 'Deal closed',
     propertyInformation: 'Property Information',
     senderInformation: 'Sender Information',
     rateOwner: 'Rate Owner',
@@ -760,6 +866,23 @@ export const translations = {
     noFinalizedInquiries: 'No finalized deals to rate',
     rated: 'Rated',
     rateNow: 'Rate Now',
+    rateAgain: 'Rate Again',
+    rateYourExperience: 'Rate your experience',
+    rateYourTenants: 'Rate your tenants',
+    rateExperienceSubtitle: 'Your ratings help future tenants make informed decisions.',
+    rateTenantSubtitle: 'Your ratings help the community identify reliable renters.',
+    noPendingRatings: 'No pending ratings right now.',
+    moveInRating: 'Move-in rating',
+    moveOutRating: 'Move-out rating',
+    moveIn: 'Move-in',
+    moveOut: 'Move-out',
+    postViewingRating: 'Post-viewing rating',
+    viewing: 'Viewing',
+    moveInExperience: 'Move-in experience',
+    moveOutExperience: 'Move-out experience',
+    shareExperiencePlaceholder: 'Share your experience to help future tenants…',
+    shareTenantExperiencePlaceholder: 'Share your experience with this tenant (optional)…',
+    unknownTenant: 'Unknown',
     comment: 'Comment',
     commentPlaceholder: 'Write a comment (optional)',
     submitRating: 'Submit Rating',
@@ -777,6 +900,7 @@ export const translations = {
     notificationApproved: 'Your inquiry for {propertyTitle} has been approved',
     notificationDismissed: 'Your inquiry for {propertyTitle} has been dismissed',
     notificationRejected: 'The owner rejected your offer for {propertyTitle}. The property is no longer available.',
+    notificationRejectedOwner: 'User {userName} rejected the finalization for {propertyTitle}',
     notificationFinalize: '{senderName} wants to finalize the deal for {propertyTitle}',
     notificationFinalizeGeneric: 'Someone wants to finalize the deal for {propertyTitle}',
     notificationFinalizeRequest: 'Finalization request for {propertyTitle}',
@@ -785,6 +909,7 @@ export const translations = {
     notificationRateUser: 'Please rate the user for {propertyTitle}',
     notificationBookingReminder: 'Your booking "{title}" is scheduled for tomorrow at {time}',
     notificationOwnerBookingReminder: 'You have {count} meeting{plural} scheduled for tomorrow',
+    notificationNewListingMatch: 'New listing matching your saved search: {propertyTitle}',
     notificationAvailabilitySet: 'The owner has set availability for {propertyTitle}. Click to select a viewing time.',
     notificationBookingCreated: 'User {userName} has booked an appointment for {propertyTitle}',
     notificationBookingCreatedGeneric: 'A user has booked an appointment for {propertyTitle}',
@@ -845,6 +970,7 @@ export const translations = {
     loading: 'Loading...',
     refresh: 'Refresh',
     somethingWentWrong: 'Something went wrong',
+    profileUnavailable: "Couldn't load this profile. Please try again.",
     viewAll: 'View all',
     add: 'Add',
     remove: 'Remove',
@@ -878,9 +1004,10 @@ export const translations = {
     placeholderCountry: 'Greece',
     placeholderSize: 'e.g., 85',
     placeholderBedrooms: 'e.g., 3',
+    placeholderFloor: 'e.g., 2',
     placeholderYearBuilt: 'e.g., 2010',
     placeholderYearRenovated: 'e.g., 2020',
-    
+
     // Areas (keep same for English)
     'Nea Smirni': 'Nea Smirni',
     'Kallithea': 'Kallithea',
@@ -894,32 +1021,77 @@ export const translations = {
     central: 'Central',
     autonomous: 'Autonomous',
     oil: 'Oil',
-    'natural gas': 'Natural Gas',
-    electricity: 'Electricity',
+    'natural gas': 'Natural gas',
+    'Natural gas': 'Natural gas',
+    electricity: 'Power',
+    power: 'Power',
     other: 'Other',
     
-    // Vibe values
+    // Vibe values – all canonical system vibes (Title Case = DB-stored value, lowercase = alias)
+    // Note: 'central' (lowercase) omitted — collision with heating; 'Student' Title Case omitted — collision with occupation
+    'Central': 'Central',
+    'family': 'Family-friendly',
+    'Family': 'Family-friendly',
     'family-friendly': 'Family-friendly',
     'Family-friendly': 'Family-friendly',
+    'historic': 'Historic',
+    'Historic': 'Historic',
+    'reviving': 'Up-and-coming',
+    'Reviving': 'Up-and-coming',
+    'rural': 'Rural',
+    'Rural': 'Rural',
+    'student': 'Student',
+    'suburban': 'Suburban',
+    'Suburban': 'Suburban',
+    'upscale': 'Upscale',
+    'Upscale': 'Upscale',
+    'urban': 'Urban',
+    'Urban': 'Urban',
+    'waterfront': 'Waterfront',
+    'Waterfront': 'Waterfront',
+    'working-class': 'Working-class',
+    'Working-Class': 'Working-class',
+    'Working-class': 'Working-class',
     'vibrant': 'Vibrant',
     'Vibrant': 'Vibrant',
     'quiet': 'Quiet',
     'Quiet': 'Quiet',
-    'upscale': 'Upscale',
-    'Upscale': 'Upscale',
     'touristic': 'Touristic',
     'Touristic': 'Touristic',
-    'historic': 'Historic',
-    'Historic': 'Historic',
-    'urban': 'Urban',
-    'Urban': 'Urban',
-    'student': 'Student',
+    'nightlife': 'Nightlife',
+    'Nightlife': 'Nightlife',
+    'residential': 'Residential',
+    'Residential': 'Residential',
+    'bohemian': 'Bohemian',
+    'Bohemian': 'Bohemian',
+    'gentrifying': 'Gentrifying',
+    'Gentrifying': 'Gentrifying',
+    'multicultural': 'Multicultural',
+    'Multicultural': 'Multicultural',
+    'industrial': 'Industrial',
+    'Industrial': 'Industrial',
+    'artistic': 'Artistic',
+    'Artistic': 'Artistic',
+    'up-and-coming': 'Up-and-coming',
+    'Up-and-coming': 'Up-and-coming',
+    'charming': 'Charming',
+    'Charming': 'Charming',
+    'academic': 'Academic',
+    'Academic': 'Academic',
+    'alternative': 'Alternative',
+    'Alternative': 'Alternative',
+    'authentic': 'Authentic',
+    'Authentic': 'Authentic',
+    'bustling': 'Bustling',
+    'Bustling': 'Bustling',
+    'commercial': 'Commercial',
+    'Commercial': 'Commercial',
     'Upscale, vibrant': 'Upscale, vibrant',
     'Touristic, historic': 'Touristic, historic',
   },
 } as const
 
-export type TranslationKey = keyof typeof translations.el
+type TranslationKey =keyof typeof translations.el
 
 export function getTranslation(language: Language, key: TranslationKey): string {
   const dict = translations[language] as Record<string, string>
@@ -992,6 +1164,11 @@ export function reverseTranslateValue(translatedValue: string | null | undefined
  * Convert a value to English (reverse translate from Greek to English key)
  * This ensures values are stored in English in the database
  */
+// Strip Greek (and other) accent/diacritic marks so that e.g. "πετρελεο" matches "πετρέλαιο"
+function _stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 // Levenshtein similarity for fuzzy Greek matching inside this module
 function _levenshteinSimilarity(a: string, b: string): number {
   const la = a.length, lb = b.length
@@ -1010,6 +1187,28 @@ function _levenshteinSimilarity(a: string, b: string): number {
   return 1 - row[lb] / Math.max(la, lb)
 }
 
+/** Canonical stored form: Title Case, with "electricity" mapped to "Power". */
+export function normalizeHeatingCategory(value: string | null | undefined): string | null {
+  if (!value || value.trim() === '') return null
+  const eng = (toEnglishValue(value) ?? value).trim().toLowerCase()
+  if (eng === 'central') return 'Central'
+  if (eng === 'autonomous') return 'Autonomous'
+  const raw = value.trim()
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
+}
+
+/** Canonical stored form: Title Case, with all electricity synonyms mapped to "Power". */
+export function normalizeHeatingAgent(value: string | null | undefined): string | null {
+  if (!value || value.trim() === '') return null
+  const eng = (toEnglishValue(value) ?? value).trim().toLowerCase()
+  if (eng === 'oil') return 'Oil'
+  if (eng === 'natural gas') return 'Natural gas'
+  if (eng === 'electricity' || eng === 'electric' || eng === 'power') return 'Power'
+  if (eng === 'other') return 'Other'
+  const raw = value.trim()
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
+}
+
 export function toEnglishValue(value: string | null | undefined): string | null {
   if (!value || value.trim() === '') return null
 
@@ -1024,11 +1223,13 @@ export function toEnglishValue(value: string | null | undefined): string | null 
     if ((greekValue as string).toLowerCase() === lower) return key
   }
 
-  // 3. Fuzzy match against Greek translation values (handles misspellings like πετρελειο→πετρέλαιο)
+  // 3. Fuzzy match against Greek translation values (handles misspellings like πετρελεο→πετρέλαιο)
+  // Compare with accents stripped so unaccented input still matches
+  const lowerStripped = _stripAccents(lower)
   let bestKey: string | null = null
   let bestScore = 0
   for (const [key, greekValue] of Object.entries(translations.el)) {
-    const score = _levenshteinSimilarity(lower, (greekValue as string).toLowerCase())
+    const score = _levenshteinSimilarity(lowerStripped, _stripAccents((greekValue as string).toLowerCase()))
     if (score > bestScore) { bestScore = score; bestKey = key }
   }
   if (bestScore >= 0.75) return bestKey

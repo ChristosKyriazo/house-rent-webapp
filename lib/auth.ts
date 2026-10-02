@@ -20,10 +20,10 @@ export async function getCurrentUser() {
     let cUser
     try {
       cUser = await currentUser()
-    } catch (clerkError: any) {
+    } catch (clerkError: unknown) {
       // Handle Clerk "Not Found" errors gracefully
       // This can happen if the user was deleted from Clerk but still has a session
-      if (clerkError?.status === 404 || clerkError?.message?.includes('Not Found')) {
+      if ((clerkError as { status?: number; message?: string })?.status === 404 || (clerkError as { message?: string })?.message?.includes('Not Found')) {
         console.warn('Clerk user not found, but session exists. User may have been deleted.')
         return null
       }
@@ -57,17 +57,20 @@ export async function getCurrentUser() {
         },
       })
       return user
-    } catch (createError: any) {
+    } catch (createError: unknown) {
       // Handle unique constraint violations
-      if (createError?.code === 'P2002') {
+      if ((createError as { code?: string })?.code === 'P2002') {
         // Check if it's email or clerkUserId conflict
-        const meta = createError?.meta as any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const meta = (createError as any)?.meta as { target?: string[] }
         if (meta?.target?.includes('email')) {
-          // User with this email already exists - try to link it to Clerk
+          // User with this email already exists - only link if the incoming Clerk
+          // account has a verified email matching the DB row, preventing account takeover.
+          const isVerified = cUser?.primaryEmailAddress?.verification?.status === 'verified' ||
+            cUser?.emailAddresses?.some(e => e.emailAddress === email && e.verification?.status === 'verified')
           user = await prisma.user.findUnique({ where: { email } })
           if (user) {
-            // Update existing user to link with Clerk if not already linked
-            if (!user.clerkUserId) {
+            if (!user.clerkUserId && isVerified) {
               user = await prisma.user.update({
                 where: { id: user.id },
                 data: { clerkUserId: userId },

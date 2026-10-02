@@ -6,7 +6,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -23,23 +23,85 @@ services:
       start_period: 30s
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_HOST: db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-house_rent}
+      PGBOUNCER_DATABASE: ${POSTGRES_DB:-house_rent}
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+      PGBOUNCER_MIN_POOL_SIZE: 5
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 128m
 
   app:
-    image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyria zo/house-rent-webapp:latest
+    image: ${APP_IMAGE}   # e.g. ghcr.io/christoskyriazo/house-rent-webapp:dev-latest
+                          # Tags produced by deploy.yml are `sha-<commit>` and `<branch>-latest`
+                          # (dev-latest / main-latest). There is no plain `:latest` tag.
     restart: unless-stopped
     expose:
       - "3000"            # internal only — Caddy proxies here, no direct public access
     depends_on:
       db:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
     env_file:
       - .env              # chmod 600 on the server; never committed to git
+    environment:
+      # Route through PgBouncer instead of directly to Postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB:-house_rent}
+      REDIS_URL: redis://redis:6379
     volumes:
       - uploads_data:/app/public/uploads
+    # prisma migrate deploy must run against Postgres directly (not via PgBouncer in transaction mode)
+    # so we keep a direct URL for migrations only
     command: >
-      sh -c "npx prisma migrate deploy && node server.js"
+      sh -c "DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-house_rent} node node_modules/prisma/build/index.js migrate deploy && node server.js"
     networks:
       - internal
+    deploy:
+      resources:
+        limits:
+          memory: 768m
 
   caddy:
     image: caddy:2-alpine
@@ -50,12 +112,18 @@ services:
       - "443:443/udp"     # HTTP/3 / QUIC
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - uploads_data:/srv/uploads:ro
       - caddy_data:/data          # stores TLS certificates — must be a named volume
       - caddy_config:/config
     networks:
       - internal
     depends_on:
       - app
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
 networks:
   internal:
@@ -63,6 +131,7 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:
   uploads_data:
   caddy_data:
   caddy_config:

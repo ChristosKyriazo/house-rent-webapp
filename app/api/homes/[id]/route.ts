@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { getUserRatings } from '@/lib/ratings'
+import { getHomeRatingScores } from '@/lib/ratings'
 import { calculatePropertyDistances, hasAddressChanged } from '@/lib/google-maps'
-import { toEnglishValue } from '@/lib/translations'
+import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
 import { resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { requestLogger } from '@/lib/logger'
+import { unauthorized } from '@/lib/api-utils'
 
 export async function GET(
   request: NextRequest,
@@ -27,10 +28,11 @@ export async function GET(
         owner: {
           select: {
             id: true,
-            email: true,
             name: true,
             role: true,
             createdAt: true,
+            brokerCategory: true,
+            parentBroker: { select: { name: true } },
           },
         },
       },
@@ -40,65 +42,75 @@ export async function GET(
       return NextResponse.json({ error: 'Home not found' }, { status: 404 })
     }
 
-    // Check if user has a rejected (dismissed) inquiry for this home
+    // Check visibility and user context
     try {
       const currentUser = await getCurrentUser()
+
       if (currentUser) {
-        const rejectedInquiry = await prisma.inquiry.findFirst({
-          where: {
-            userId: currentUser.id,
-            homeId: home.id,
-            dismissed: true,
-          },
-        })
-        
-        if (rejectedInquiry) {
+        // Owner always sees their own listing (even if hidden)
+        const isOwner = home.ownerId === currentUser.id
+
+        if (!isOwner) {
+          // Renter: block if the listing is hidden due to tier downgrade
+          if (home.overlimitHiddenAt) {
+            // Allow access if the renter has an active inquiry or booking (so
+            // existing threads and finalizations remain accessible).
+            const hasRelationship = await prisma.inquiry.findFirst({
+              where: { userId: currentUser.id, homeId: home.id },
+              select: { id: true },
+            })
+            if (!hasRelationship) {
+              return NextResponse.json(
+                { error: 'This listing is temporarily unavailable', overlimitHidden: true },
+                { status: 410 }
+              )
+            }
+          }
+
+          // Block renters with a dismissed inquiry
+          const rejectedInquiry = await prisma.inquiry.findFirst({
+            where: { userId: currentUser.id, homeId: home.id, dismissed: true },
+            select: { id: true },
+          })
+          if (rejectedInquiry) {
+            return NextResponse.json(
+              { error: 'This property is no longer available' },
+              { status: 403 }
+            )
+          }
+        }
+      } else {
+        // Unauthenticated: never serve a hidden listing
+        if (home.overlimitHiddenAt) {
           return NextResponse.json(
-            { error: 'This property is no longer available' },
-            { status: 403 }
+            { error: 'This listing is temporarily unavailable', overlimitHidden: true },
+            { status: 410 }
           )
         }
       }
-    } catch (error) {
-      // If user is not authenticated, continue normally
+    } catch {
+      // If auth check fails, fall through and serve the listing
     }
 
-    // Check if owner is a broker - if so, use house owner ratings instead of broker ratings
     const isBroker = home.owner.role === 'broker'
-    
-    let ratings
-    if (isBroker) {
-      // For brokers, get house owner ratings (ratings for this specific home)
-      const { getHouseOwnerRatings } = await import('@/lib/ratings')
-      const houseRatings = await getHouseOwnerRatings(home.id)
-      ratings = {
-        ownerRating: houseRatings.houseOwnerRating,
-        ownerCount: houseRatings.houseOwnerCount,
-        renterRating: null,
-        renterCount: 0,
-      }
-    } else {
-      // For regular owners, get their personal ratings
-      ratings = await getUserRatings(home.owner.id)
-    }
+    // Public agency attribution: a Default (child) broker's listing shows their agency (Main broker's name).
+    const agencyName = home.owner.brokerCategory === 'child' ? (home.owner.parentBroker?.name ?? null) : null
+    const homeRatings = await getHomeRatingScores(home.id)
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       home: {
         ...home,
         owner: {
           ...home.owner,
-          ratings: ratings,
-          isBroker: isBroker,
-        }
+          isBroker,
+          agencyName,
+        },
+        ratings: homeRatings,
       }
     }, { status: 200 })
   } catch (error) {
     log.error({ err: error }, 'Get home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -111,10 +123,7 @@ export async function PUT(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     // Check if user has owner role (brokers are treated like owners)
@@ -229,6 +238,7 @@ export async function PUT(
       ) || existingHome.country.trim().toLowerCase() !== englishCountry.trim().toLowerCase()
 
     // Prepare update data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       title: title.trim(),
       description: description?.trim() || null,
@@ -254,8 +264,8 @@ export async function PUT(
       // Allow 0 and negative numbers for ground floor and basement
       floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
       // Convert heating values to English before storing
-      heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-      heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+      heatingCategory: normalizeHeatingCategory(heatingCategory),
+      heatingAgent: normalizeHeatingAgent(heatingAgent),
       parking: parking === undefined || parking === null 
         ? null 
         : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
@@ -280,11 +290,12 @@ export async function PUT(
           englishCountry
         )
         
-        log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, bus: distanceResult.closestBus, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
+        log.info({ coordinates: distanceResult.propertyCoordinates, distances: { metro: distanceResult.closestMetro, school: distanceResult.closestSchool, hospital: distanceResult.closestHospital, park: distanceResult.closestPark, university: distanceResult.closestUniversity } }, 'Distance recalculation completed')
 
-        // Update distance fields
+        // Update distance fields and coordinates
+        updateData.latitude = distanceResult.propertyCoordinates?.lat ?? null
+        updateData.longitude = distanceResult.propertyCoordinates?.lng ?? null
         updateData.closestMetro = distanceResult.closestMetro
-        updateData.closestBus = distanceResult.closestBus
         updateData.closestSchool = distanceResult.closestSchool
         updateData.closestHospital = distanceResult.closestHospital
         updateData.closestPark = distanceResult.closestPark
@@ -302,17 +313,28 @@ export async function PUT(
       data: updateData,
     })
 
+    // Re-queue embedding only when a field that affects the text representation actually changed
+    const semanticFields = ['title', 'description', 'city', 'country', 'area', 'listingType', 'bedrooms', 'bathrooms', 'pricePerMonth', 'sizeSqMeters', 'parking', 'heatingCategory', 'heatingAgent', 'energyClass', 'yearBuilt', 'yearRenovated'] as const
+    const hasSemanticChange = semanticFields.some(f => {
+      const prev = (existingHome as Record<string, unknown>)[f]
+      const next = updateData[f]
+      return String(prev ?? '') !== String(next ?? '')
+    })
+    if (hasSemanticChange) {
+      prisma.embeddingQueue.upsert({
+        where: { homeId: existingHome.id },
+        create: { homeId: existingHome.id, status: 'pending' },
+        update: { status: 'pending', lastError: null },
+      }).catch((err) => log.error({ err, homeId: existingHome.id }, 'Failed to enqueue embedding update'))
+    }
+
     return NextResponse.json(
       { message: 'Home updated', home: updatedHome },
       { status: 200 }
     )
   } catch (error) {
     log.error({ err: error }, 'Update home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -325,10 +347,7 @@ export async function DELETE(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     // Check if user has owner role (brokers are treated like owners)
@@ -380,11 +399,7 @@ export async function DELETE(
     )
   } catch (error) {
     log.error({ err: error }, 'Delete home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 

@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface FinalizeNotification {
   id: number
@@ -13,6 +15,11 @@ interface FinalizeNotification {
   homeKey: string
   inquiryId: number | null
   createdAt: string
+}
+
+interface FinalizationDetails {
+  moveInDate: string | null
+  moveOutDate: string | null
 }
 
 interface FinalizeNotificationModalProps {
@@ -30,8 +37,11 @@ export default function FinalizeNotificationModal({
 }: FinalizeNotificationModalProps) {
   const { language } = useLanguage()
   const router = useRouter()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [home, setHome] = useState<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sender, setSender] = useState<any>(null)
+  const [finalizationDetails, setFinalizationDetails] = useState<FinalizationDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
@@ -49,6 +59,12 @@ export default function FinalizeNotificationModal({
         if (inquiryRes.ok) {
           const inquiryData = await inquiryRes.json()
           setHome(inquiryData.home)
+          if (inquiryData.inquiry?.finalization) {
+            setFinalizationDetails({
+              moveInDate: inquiryData.inquiry.finalization.moveInDate,
+              moveOutDate: inquiryData.inquiry.finalization.moveOutDate,
+            })
+          }
           
           // Determine sender: if notification is for owner, sender is user; if for user, sender is owner
           const profileRes = await fetch('/api/profile')
@@ -87,25 +103,8 @@ export default function FinalizeNotificationModal({
       })
 
       if (response.ok) {
-        onApprove()
-        // Redirect to rating page based on role
-        // Need to determine if current user is owner or user
-        const profileRes = await fetch('/api/profile')
-        if (profileRes.ok) {
-          const profileData = await profileRes.json()
-          if (profileData.user) {
-            const userRole = profileData.user.role || 'user'
-            if (userRole === 'owner' || userRole === 'both') {
-              router.push('/homes/rate-user')
-            } else {
-              router.push('/homes/rate-owner')
-            }
-          } else {
-            router.push('/homes/approved')
-          }
-        } else {
-          router.push('/homes/approved')
-        }
+        await onApprove()
+        router.push('/homes/approved')
       } else {
         const data = await response.json()
         setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
@@ -147,8 +146,8 @@ export default function FinalizeNotificationModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -188,10 +187,10 @@ export default function FinalizeNotificationModal({
                     {getTranslation(language, 'propertyInformation')}
                   </h3>
                   <div className="space-y-2 text-[var(--text-muted)]">
-                    <p><span className="font-semibold">{getTranslation(language, 'title')}:</span> {home.title}</p>
-                    {home.street && (
+                    <p><span className="font-semibold">{getTranslation(language, 'title')}:</span> {getHomeTitle(language, home)}</p>
+                    {getHomeStreet(language, home) && (
                       <p>
-                        <span className="font-semibold">{getTranslation(language, 'street')}:</span> {home.street}
+                        <span className="font-semibold">{getTranslation(language, 'street')}:</span> {getHomeStreet(language, home)}
                       </p>
                     )}
                     <p>
@@ -201,6 +200,21 @@ export default function FinalizeNotificationModal({
                       <span className="font-semibold">{getTranslation(language, 'pricePerMonth')}:</span> €{home.pricePerMonth?.toLocaleString()}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Move-in details */}
+              {finalizationDetails?.moveInDate && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-green-400 mb-2">{getTranslation(language, 'rentalDates')}</h3>
+                  <p className="text-[var(--text)]">
+                    {getTranslation(language, 'moveInLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveInDate).toLocaleDateString(localeFor(language), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                  </p>
+                  {finalizationDetails.moveOutDate && (
+                    <p className="text-[var(--text)] mt-1">
+                      {getTranslation(language, 'moveOutLabel')}: <span className="font-semibold">{new Date(finalizationDetails.moveOutDate).toLocaleDateString(localeFor(language), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    </p>
+                  )}
                 </div>
               )}
 

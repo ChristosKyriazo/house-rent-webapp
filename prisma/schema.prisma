@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["omitApi"]
 }
 
 datasource db {
@@ -16,31 +18,103 @@ model User {
   clerkUserId     String?   @unique
   title           String?
   occupation      String?
-  role            String    @default("user") // "owner", "user", or "both"
-  calComUsername  String?   // Cal.com username (optional, for direct link)
-  calComAccessToken String? // Cal.com OAuth access token
-  calComRefreshToken String? // Cal.com OAuth refresh token
-  calComTokenExpiresAt DateTime? // When the access token expires
+  role            String    @default("user") // "owner", "user", "both", or "broker"
+  subscriptionTier String   @default("free") // "free" | "plus" | "pro"
+  viberAlertsActive Boolean @default(false)  // paid Viber/SMS push alerts (renter one-time purchase)
+  verified        Boolean   @default(false)  // verified owner/broker badge
+  // --- Broker hierarchy (Main / Default brokers) ---
+  brokerCategory  String    @default("standalone") // "standalone" | "parent" (Main) | "child" (Default under a Main). Only meaningful when role = "broker".
+  parentBrokerId  Int?      // set when this broker is a "child" under a Main broker
+  parentBroker    User?     @relation("BrokerHierarchy", fields: [parentBrokerId], references: [id], onDelete: SetNull)
+  childBrokers    User[]    @relation("BrokerHierarchy")
+  sentInvitations     TeamInvitation[] @relation("InvitationSender")
+  receivedInvitations TeamInvitation[] @relation("InvitationRecipient")
+  boostRequestsMade     BoostRequest[] @relation("BoostRequester")
+  boostRequestsApproved BoostRequest[] @relation("BoostApprover")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   homes           Home[]
-  ratingsReceived Rating[]       @relation("RatedUser")
-  ratingsGiven    Rating[]       @relation("Rater")
+  ratingsGiven          Rating[]        @relation("RatingGiven")
+  ratingsReceived       Rating[]        @relation("RatingReceived")
+  landlordFinalizations Finalization[]  @relation("LandlordFinalizations")
+  tenantFinalizations   Finalization[]  @relation("TenantFinalizations")
   inquiries       Inquiry[]
   notifications   Notification[] @relation
   bookingsAsUser  Booking[]      @relation("UserBookings")
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
+  bulkUploadJobs  BulkUploadJob[]
+  savedHomes      SavedHome[]
+  savedSearches   SavedSearch[]
+  transactions    Transaction[]
+  aiSearchCount          Int       @default(0)
+  aiSearchMonthlyCount   Int       @default(0)
+  aiSearchMonthlyResetAt DateTime?
+  aiSearchPackCount      Int       @default(0)
 
+  @@index([parentBrokerId])
+  @@index([brokerCategory])
   @@map("users")
+}
+
+// Broker team invitations: a Main (parent) broker invites another broker to join as a "child" (Default) under them.
+model TeamInvitation {
+  id             Int      @id @default(autoincrement())
+  key            String   @unique @default(cuid())
+  inviterUserId  Int
+  inviteeEmail   String
+  inviteeUserId  Int?     // resolved once the invitee has an account
+  token          String   @unique // crypto.randomBytes(32).toString('hex') — used in the /join-team link
+  message        String?  // optional note from the inviter
+  tier           String   @default("pro") // "free" | "plus" | "pro" — plan the Main broker assigned this invitee; applied to the child on accept
+  status         String   @default("pending") // "pending" | "accepted" | "declined" | "expired" | "revoked"
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  decidedAt      DateTime?
+  inviter        User     @relation("InvitationSender",    fields: [inviterUserId], references: [id], onDelete: Cascade)
+  invitee        User?    @relation("InvitationRecipient", fields: [inviteeUserId],  references: [id], onDelete: SetNull)
+
+  @@index([inviterUserId, status])
+  @@index([inviteeEmail])
+  @@map("team_invitations")
+}
+
+// One-off paid boost that a Default (child) broker requests from their Main (parent) broker, who approves & pays or rejects.
+// Also used to record a Main broker's proactive boost of a child's listing (status starts "approved"/"paid", no request step).
+model BoostRequest {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique @default(cuid())
+  homeId                Int
+  requesterId           Int      // the child broker whose listing this is
+  approverId            Int      // the Main (parent) broker who pays
+  amountCents           Int
+  days                  Int      // boost duration in days (e.g. 30)
+  note                  String?  // child's note to the Main broker
+  status                String   @default("pending") // "pending" | "approved" | "rejected" | "expired" | "paid"
+  decisionNote          String?  // Main broker's reason on reject
+  proactive             Boolean  @default(false) // true when the Main broker initiated (push), not the child (pull)
+  stripePaymentIntentId String?
+  createdAt             DateTime @default(now())
+  decidedAt            DateTime?
+  home                  Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  requester             User     @relation("BoostRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  approver              User     @relation("BoostApprover",  fields: [approverId],  references: [id], onDelete: Cascade)
+
+  @@index([approverId, status])
+  @@index([requesterId, status])
+  @@index([homeId])
+  @@map("boost_requests")
 }
 
 model Home {
   id                Int      @id @default(autoincrement())
   key               String   @unique @default(cuid())
   title             String
+  titleGreek        String?
   description       String?
   descriptionGreek  String?
   street            String?
+  streetGreek       String?
   city              String
   country           String
   area              String?  // City area (e.g., "Nea Smirni")
@@ -57,26 +131,39 @@ model Home {
   availableFrom     DateTime
   photos            String?  // JSON array of photo file paths/URLs
   finalized         Boolean  @default(false) // Whether any inquiry for this home has been finalized
-  promotedUntil     DateTime? // Standard promotion expiry
-  premiumPromotedUntil DateTime? // Premium promotion expiry
+  slotPromoted      Boolean   @default(false) // using one of the owner's subscription promotion slots
+  slotPromotedUntil DateTime?                 // expiry: 7 days (Plus) or 30 days (Pro) from activation
+  promotedUntil     DateTime? // Pay-per-boost expiry (€1.99 / 7 days or €4.99 / 30 days)
+  premiumPromotedUntil DateTime? // Legacy — no longer used in new promotion model
+  latitude          Float?   // Geocoded latitude (stored from Google Maps at creation)
+  longitude         Float?   // Geocoded longitude (stored from Google Maps at creation)
   closestMetro      Float?   // Distance to closest metro (in km or minutes)
-  closestBus        Float?   // Distance to closest bus stop (in km or minutes)
   closestSchool     Float?   // Distance to closest school (in km or minutes)
   closestHospital   Float?  // Distance to closest hospital (in km or minutes)
   closestPark       Float?   // Distance to closest park (in km or minutes)
   closestUniversity Float?   // Distance to closest university (in km or minutes)
   parking           Boolean? // Whether parking is available (yes/no)
   energyClass       String?  // Energy class: "A+", "A", "B", "C", "D", "E", "F", "G"
+  overlimitHiddenAt DateTime? // Set when hidden due to tier downgrade; null = visible to renters
   embedding         Json?    // text-embedding-3-small vector (1536 floats) for semantic search
-  photoTags         String?  // JSON array of visual feature tags extracted from photos by AI vision
+  photoTagsArray    String[] @default([])  // Visual feature tags (GIN indexed)
   ownerId           Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   inquiries         Inquiry[]
   availabilities    Availability[]
+  bookings          Booking[]
+  embeddingQueue    EmbeddingQueue?
+  savedBy           SavedHome[]
+  listingViews      ListingView[]
+  ratings           Rating[]
+  finalizations     Finalization[]
+  boostRequests     BoostRequest[]
 
   @@index([finalized])
+  @@index([finalized, city, listingType])
+  @@index([overlimitHiddenAt])
 
   @@index([city])
   @@index([ownerId])
@@ -85,23 +172,70 @@ model Home {
   @@map("homes")
 }
 
-model Rating {
-  id          Int      @id @default(autoincrement())
-  key         String   @unique @default(cuid())
-  raterId     Int
-  ratedUserId Int
-  type        String
-  score       Int
-  comment     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  ratedUser   User     @relation("RatedUser", fields: [ratedUserId], references: [id], onDelete: Cascade)
-  rater       User     @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
+model Finalization {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique @default(cuid())
+  inquiryId     Int       @unique
+  homeId        Int
+  landlordId    Int
+  tenantId      Int
+  moveInDate    DateTime
+  moveOutDate   DateTime?
+  status        String    @default("pending_tenant") // "pending_tenant" | "confirmed" | "declined" | "cancelled"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  inquiry       Inquiry   @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  home          Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  landlord      User      @relation("LandlordFinalizations", fields: [landlordId], references: [id], onDelete: Cascade)
+  tenant        User      @relation("TenantFinalizations", fields: [tenantId], references: [id], onDelete: Cascade)
+  ratings       Rating[]
 
-  // Removed unique constraint to allow multiple ratings between same users over time
+  @@index([homeId])
+  @@index([landlordId])
+  @@index([tenantId])
+  @@map("finalizations")
+}
+
+// type values and their scores shape:
+//   "viewing_tenant"  → { experience: 1-5 }                             owner/broker rates tenant after viewing
+//   "viewing_broker"  → { punctual: 1-5, helpful: 1-5, listingMatch: 1-5 }  tenant rates broker after viewing
+//   "movein_house"    → { accuracy: 1-5, condition: 1-5, handover: 1-5 }     tenant rates house 3 days after move-in
+//   "moveout_house"   → { overallCondition: 1-5, recommend: 1-5, ownerFair: 1-5, moveoutHandling: 1-5 }  tenant rates house at move-out
+//   "moveout_tenant"  → { propertyCare: 1-5, rulesPayment: 1-5, wouldRentAgain: 1-5 }  owner rates tenant at move-out
+model Rating {
+  id              Int           @id @default(autoincrement())
+  key             String        @unique @default(cuid())
+  type            String
+  raterId         Int
+  ratedUserId     Int?          // set for viewing_broker, viewing_tenant, moveout_tenant
+  ratedHomeId     Int?          // set for movein_house, moveout_house
+  bookingId       Int?          // context for viewing-stage ratings
+  finalizationId  Int?          // context for movein/moveout ratings
+  scores          Json          // dimension scores, shape depends on type
+  comment         String?       // only for moveout_house and moveout_tenant
+  // Mutual-blind reveal: null = always visible; future timestamp = hidden until then.
+  // Set on moveout_* ratings — cleared to now() when the paired rating is also submitted.
+  revealAt        DateTime?
+  // Dispute flag: rated party can flag a suspicious or retaliatory rating for review
+  flagged         Boolean       @default(false)
+  flagReason      String?
+  flaggedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  rater           User          @relation("RatingGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  ratedUser       User?         @relation("RatingReceived", fields: [ratedUserId], references: [id], onDelete: Cascade)
+  ratedHome       Home?         @relation(fields: [ratedHomeId], references: [id], onDelete: Cascade)
+  booking         Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  finalization    Finalization? @relation(fields: [finalizationId], references: [id], onDelete: SetNull)
+
   @@index([ratedUserId])
+  @@index([ratedHomeId])
+  @@index([raterId])
   @@index([type])
-  @@index([raterId, ratedUserId, type]) // Index for efficient queries
+  @@index([bookingId])
+  @@index([finalizationId])
+  @@index([revealAt])
+  @@index([flagged])
   @@map("ratings")
 }
 
@@ -117,8 +251,9 @@ model Inquiry {
   contactInfo String?  // JSON string with contact information (name, email, phone, timeSchedule, useContactPerson)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  home        Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home         Home          @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  finalization Finalization?
 
   @@unique([userId, homeId])
   @@index([userId])
@@ -126,6 +261,7 @@ model Inquiry {
   @@index([approved])
   @@index([dismissed])
   @@index([finalized])
+  @@index([userId, approved, finalized])
   @@map("inquiries")
 }
 
@@ -193,11 +329,14 @@ model AISearchLog {
   homesCountAfterFilter  Int     // Number of homes after filtering
   finalHomesCount       Int     // Final number of homes returned
   descriptionPhotoScore  Float?  // Combined description and photo matching bonus score (0-5%)
+  clickedHomeId         Int?    // First home the user clicked after seeing results
   error                 String? // Error message if any
+  conversationKey       String? // SearchConversation.key — groups every turn of one conversational search. Null for one-shot searches.
   createdAt             DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
+  @@index([conversationKey])
   @@map("ai_search_logs")
 }
 
@@ -239,6 +378,7 @@ model Booking {
   key             String   @unique @default(cuid())
   userId          Int      // User who has the booking (attendee)
   ownerId         Int      // Owner/broker who created the booking
+  homeId          Int?     // Direct link to the listing this booking is for
   inquiryId       Int?     // Related inquiry (if booking is from an inquiry)
   availabilityId  Int?     // Related availability slot that was booked
   calComBookingId String?  // Cal.com booking ID (if synced from Cal.com)
@@ -250,16 +390,82 @@ model Booking {
   status          String   @default("scheduled") // "scheduled", "completed", "cancelled"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
-  owner           User     @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  user            User          @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
+  owner           User          @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  home            Home?         @relation(fields: [homeId], references: [id], onDelete: SetNull)
   availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
+  ratings         Rating[]
 
   @@index([userId])
   @@index([ownerId])
+  @@index([homeId])
   @@index([startTime])
   @@index([status])
   @@index([availabilityId])
   @@map("bookings")
+}
+
+model EmbeddingQueue {
+  id        Int      @id @default(autoincrement())
+  homeId    Int      @unique
+  status    String   @default("pending") // pending | processing | completed | failed
+  failCount Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("embedding_queue")
+}
+
+model SearchLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  queryType   String   // "browse" | "ai_search" | "filter_search"
+  filters     Json?
+  resultCount Int
+  executionMs Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([queryType, createdAt])
+  @@map("search_logs")
+}
+
+model ListingView {
+  id              Int      @id @default(autoincrement())
+  userId          Int?
+  sessionId       String?  // anonymous session ID (client-generated UUID in sessionStorage, cleared on tab close)
+  homeId          Int
+  source          String?  // "direct" | "browse" | "ai_search" | "filter_search" | "map" | "saved" | "compare"
+  durationSeconds Int?     // time on page in seconds, sent by client on page leave via sendBeacon
+  viewedAt        DateTime @default(now())
+  home            Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([homeId, viewedAt])
+  @@index([userId])
+  @@index([homeId, source])
+  @@map("listing_views")
+}
+
+model BulkUploadJob {
+  id        String   @id @default(cuid())
+  userId    Int
+  status    String   @default("pending") // pending | processing | completed | failed
+  progress  Int      @default(0)
+  total     Int      @default(0)
+  filePath  String   @default("")
+  options   Json     @default("{}")      // { useAIDescription, confirmedNewAreas, photosByIndex }
+  results   Json?                        // array of { row, title, key }
+  errors    Json?                        // array of error strings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("bulk_upload_jobs")
 }
 
 model SearchConversation {
@@ -268,6 +474,8 @@ model SearchConversation {
   userId             Int?
   messages           Json     @default("[]") // Array of {role, content} objects
   accumulatedFilters Json     @default("{}") // Merged filters across all turns
+  pendingNumeric     Json?    // Bound fields the last question asked about, e.g. ["maxPrice"] — lets a bare "600" bind deterministically
+  askedSlots         Json?    // Dialogue-policy slot ids already asked, so a declined question is never repeated
   embedding          Json?    // text-embedding-3-small vector of the conversation intent
   listingMode        String?  // "rent" | "buy"
   createdAt          DateTime @default(now())
@@ -276,4 +484,77 @@ model SearchConversation {
   @@index([userId])
   @@index([createdAt])
   @@map("search_conversations")
+}
+
+// Threads of the AI Usage Assistant chatbot. One row per conversation; the full
+// transcript lives in `messages` as JSON (same pattern as SearchConversation).
+// `scope` records whether the thread was opened by an admin (can ask about any
+// user) or a normal user (own data only) — captured at creation for auditing.
+model AssistantConversation {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @default(cuid())
+  userId    Int      // who is chatting (owner of this thread)
+  scope     String   // "admin" | "self"
+  title     String?  // derived from the first user message, for the thread list
+  messages  Json     @default("[]") // [{ role: "user"|"assistant", content, createdAt }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("assistant_conversations")
+}
+
+model Transaction {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique @default(cuid())
+  userId                Int
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripePaymentIntentId String?  @unique
+  stripeSubscriptionId  String?
+  stripeCustomerId      String?
+  stripeEventId         String?  @unique  // for webhook deduplication
+  amount                Int      // in cents
+  currency              String   @default("eur")
+  status                String   // "succeeded" | "failed" | "refunded"
+  subscriptionTier      String?  // tier granted by this payment
+  createdAt             DateTime @default(now())
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@map("transactions")
+}
+
+model SavedHome {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  homeId    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  home      Home     @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, homeId])
+  @@index([userId])
+  @@index([homeId])
+  @@map("saved_homes")
+}
+
+model SavedSearch {
+  id                   Int       @id @default(autoincrement())
+  key                  String    @unique @default(cuid())
+  userId               Int
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String?
+  type                 String    // "filter" | "ai"
+  filterParams         Json?     // snapshot of manual filter criteria
+  queryText            String?   // original AI query (for display)
+  queryEmbedding       Json?     // text-embedding-3-small vector snapshot
+  minMatchPercent      Int?      // AI threshold 0–100 (default 70)
+  notificationsEnabled Boolean   @default(true)
+  lastNotifiedAt       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([notificationsEnabled])
+  @@map("saved_searches")
 }

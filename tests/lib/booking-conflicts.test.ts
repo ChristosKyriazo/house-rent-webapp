@@ -8,6 +8,7 @@ function makeTx(userCount: number, ownerCount: number) {
         .mockResolvedValueOnce(userCount)
         .mockResolvedValueOnce(ownerCount),
     },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
 }
 
@@ -44,6 +45,7 @@ describe('findBookingConflicts', () => {
 
   it('passes excludeBookingId as id: { not: ... } in both queries', async () => {
     const mockCount = vi.fn().mockResolvedValue(0)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tx = { booking: { count: mockCount } } as any
 
     await findBookingConflicts({ tx, ...base, excludeBookingId: 99 })
@@ -56,6 +58,7 @@ describe('findBookingConflicts', () => {
 
   it('omits id filter when excludeBookingId is not provided', async () => {
     const mockCount = vi.fn().mockResolvedValue(0)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tx = { booking: { count: mockCount } } as any
 
     await findBookingConflicts({ tx, ...base })
@@ -67,6 +70,7 @@ describe('findBookingConflicts', () => {
 
   it('queries with correct time overlap conditions', async () => {
     const mockCount = vi.fn().mockResolvedValue(0)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tx = { booking: { count: mockCount } } as any
 
     await findBookingConflicts({ tx, ...base })

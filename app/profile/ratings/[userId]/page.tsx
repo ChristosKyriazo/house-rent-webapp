@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import StarRating from '@/app/components/StarRating'
+import { localeFor } from '@/lib/format'
 
 interface Rating {
   id: number
@@ -97,7 +98,7 @@ export default function UserRatingsPage() {
             <span>←</span>
             <span>{getTranslation(language, 'goBack')}</span>
           </button>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'allRatings')}
           </h1>
           <p className="text-[var(--text-muted)]">
@@ -117,8 +118,8 @@ export default function UserRatingsPage() {
                 className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-3 mb-2">
                       <Link
                         href={`/profile?userId=${rating.rater.id}&role=${rating.rater.role}`}
                         className="text-xl font-bold text-[var(--text)] hover:text-[var(--accent)] underline transition-colors cursor-pointer"
@@ -132,7 +133,7 @@ export default function UserRatingsPage() {
                     </div>
                     <p className="text-sm text-[var(--text-muted)]">
                       {new Date(rating.createdAt).toLocaleDateString(
-                        language === 'el' ? 'el-GR' : 'en-US',
+                        localeFor(language),
                         { year: 'numeric', month: 'long', day: 'numeric' }
                       )}
                     </p>

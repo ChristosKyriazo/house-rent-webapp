@@ -1,12 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Outfit } from "next/font/google";
 import "./globals.css";
 import NavBar from "./components/NavBar";
 import LanguageProviderWrapper from "./components/LanguageProviderWrapper";
 import ConditionalLanguageToggle from "./components/ConditionalLanguageToggle";
 import NavBarWrapper from "./components/NavBarWrapper";
+import OverlimitBanner from "./components/OverlimitBanner";
 import OTPCursorFix from "./components/OTPCursorFix";
 import AtmosphereBackground from "./components/visual/AtmosphereBackground";
+import AppFooter from "./components/AppFooter";
+import HtmlLangUpdater from "./components/HtmlLangUpdater";
 import { ClerkProvider } from "@clerk/nextjs";
 
 const fraunces = Fraunces({
@@ -22,8 +25,13 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "House Rent Webapp",
-  description: "Find your perfect rental or list your property",
+  title: "Kaparro",
+  description: "Find your ideal home — rent or buy with Kaparro",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -34,13 +42,16 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html
-        lang="en"
+        lang="el"
+        suppressHydrationWarning
         className={`${fraunces.variable} ${outfit.variable} bg-[var(--canvas)]`}
       >
         <body
+          suppressHydrationWarning
           className={`relative min-h-screen font-sans antialiased bg-[var(--canvas)] text-[var(--text)] selection:bg-[var(--accent)]/25 selection:text-[var(--text)]`}
         >
           <LanguageProviderWrapper>
+            <HtmlLangUpdater />
             <AtmosphereBackground />
             <div className="relative z-10 min-h-screen">
               <OTPCursorFix />
@@ -48,8 +59,10 @@ export default function RootLayout({
               <NavBarWrapper>
                 <NavBar />
               </NavBarWrapper>
+              <OverlimitBanner />
               {/* z-0 keeps page layers below --z-chrome nav (stacking contexts from transforms would otherwise hide the burger) */}
               <main className="relative z-0 min-h-screen">{children}</main>
+              <AppFooter />
             </div>
           </LanguageProviderWrapper>
         </body>

@@ -5,6 +5,8 @@ const { mockPrisma } = vi.hoisted(() => {
     inquiry: { findUnique: vi.fn(), update: vi.fn() },
     notification: { create: vi.fn(), updateMany: vi.fn() },
     booking: { findFirst: vi.fn() },
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockPrisma)),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
   return { mockPrisma }
 })

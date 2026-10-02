@@ -1,0 +1,1 @@
+ALTER TABLE "homes" DROP COLUMN IF EXISTS "closestBus";

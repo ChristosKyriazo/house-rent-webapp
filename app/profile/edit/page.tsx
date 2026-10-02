@@ -5,13 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue, translateRole } from '@/lib/translations'
-import { useClerk } from '@clerk/nextjs'
-
-
 export default function EditProfilePage() {
   const router = useRouter()
   const { language } = useLanguage()
-  const { signOut } = useClerk()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -80,7 +76,7 @@ export default function EditProfilePage() {
 
       // Success - force a full page reload to ensure NavBar gets updated role
       window.location.href = '/profile'
-    } catch (err) {
+    } catch {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)
@@ -109,8 +105,9 @@ export default function EditProfilePage() {
         return
       }
 
-      // Account deleted successfully, sign out and redirect
-      await signOut({ redirectUrl: '/login' })
+      // Clerk user is already deleted server-side, so signOut would fail.
+      // Force a hard redirect to /login — Clerk will see no valid session.
+      window.location.href = '/login'
     } catch (err) {
       console.error('Error deleting account:', err)
       setError(getTranslation(language, 'somethingWentWrong'))
@@ -130,9 +127,9 @@ export default function EditProfilePage() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-[var(--text)]">{getTranslation(language, 'editProfileTitle')}</h1>
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-4 sm:p-8 shadow-xl border border-[var(--border-subtle)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text)]">{getTranslation(language, 'editProfileTitle')}</h1>
             <Link
               href="/profile"
               className="px-4 py-2 text-sm text-[var(--text)] hover:text-[var(--accent)] transition-colors"
@@ -267,19 +264,22 @@ export default function EditProfilePage() {
 
           {/* Delete Account Confirmation Modal */}
           {showDeleteConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)}>
+              <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="text-center mb-6">
                   <div className="text-6xl mb-4">⚠️</div>
                   <h2 className="text-2xl font-bold text-red-400 mb-4">
                     {getTranslation(language, 'deleteAccount')}
                   </h2>
-                  <p className="text-red-300 font-semibold text-lg mb-2">
+                  <p className="text-red-300 font-semibold text-lg mb-4">
                     {getTranslation(language, 'deleteAccountConfirm')}
                   </p>
-                  <p className="text-[var(--text-muted)] text-sm">
-                    {getTranslation(language, 'deleteAccountDescription')}
-                  </p>
+                  <ul className="text-left text-sm text-[var(--text-muted)] space-y-2 mb-4 bg-red-500/10 rounded-xl p-4 border border-red-500/20">
+                    <li>❌ {language === 'el' ? 'Όλες οι καταχωρήσεις σας θα αποκρυφτούν' : 'All your listings will be hidden'}</li>
+                    <li>❌ {language === 'el' ? 'Ενεργές αιτήσεις θα ακυρωθούν' : 'Active inquiries will be cancelled'}</li>
+                    <li>❌ {language === 'el' ? 'Τα ραντεβού σας θα διαγραφούν' : 'Your bookings will be deleted'}</li>
+                    <li>❌ {language === 'el' ? 'Αυτή η ενέργεια δεν αναιρείται' : 'This action cannot be undone'}</li>
+                  </ul>
                 </div>
                 <div className="flex gap-4">
                   <button

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx playwright *)",
+      "Bash(npm run test:e2e*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; ext=\"${f##*.}\"; if [[ \"$ext\" == \"ts\" || \"$ext\" == \"tsx\" ]]; then npx eslint --fix \"$f\" 2>/dev/null || true; fi; }"
+          }
+        ]
+      }
+    ]
+  }
+}

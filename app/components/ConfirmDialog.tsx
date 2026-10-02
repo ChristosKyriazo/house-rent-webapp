@@ -29,15 +29,17 @@ export default function ConfirmDialog({
 
   const confirmClass =
     variant === 'danger'
-      ? 'bg-red-600 hover:bg-red-700 text-white'
+      ? 'btn-danger min-h-[44px]'
       : 'bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover-bg)] text-[var(--btn-primary-fg)]'
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'confirm-dialog-title' : undefined}
+      onClick={onCancel}
     >
       <div
         className="bg-[var(--ink-soft)] rounded-3xl p-8 max-w-md w-full border border-[var(--border-subtle)] shadow-2xl animate-scaleIn"
@@ -53,11 +55,11 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="px-5 py-2.5 rounded-xl font-semibold text-[var(--text)] border border-[var(--border-subtle)] hover:bg-[var(--ink-soft)] transition-all"
+            className="px-5 py-2.5 min-h-[44px] rounded-xl font-semibold text-[var(--text)] border border-[var(--border-subtle)] hover:bg-[var(--ink-soft)] transition-all"
           >
             {cancelLabel ?? getTranslation(language, 'cancel')}
           </button>
-          <button type="button" onClick={onConfirm} className={`px-5 py-2.5 rounded-xl font-semibold transition-all ${confirmClass}`}>
+          <button type="button" onClick={onConfirm} className={`px-5 py-2.5 min-h-[44px] rounded-xl font-semibold transition-all ${confirmClass}`}>
             {confirmLabel ?? getTranslation(language, 'confirm')}
           </button>
         </div>

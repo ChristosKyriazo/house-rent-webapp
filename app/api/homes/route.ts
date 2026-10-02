@@ -4,11 +4,15 @@ import { getCurrentUser } from '@/lib/auth'
 import { calculatePropertyDistances } from '@/lib/google-maps'
 import { removeGreekAccents, resolveCountryToEnglishCanonical, resolveCityToEnglishCanonical, resolveAreaToEnglishCanonical } from '@/lib/utils'
 import { generateHouseDescriptions } from '@/lib/house-description-generator'
-import { toEnglishValue } from '@/lib/translations'
-import { validateBody } from '@/lib/api-utils'
+import { toEnglishValue, normalizeHeatingCategory, normalizeHeatingAgent } from '@/lib/translations'
+import { validateBody, unauthorized } from '@/lib/api-utils'
 import { createHomeSchema } from '@/lib/schemas'
+import { getListingLimit, checkTier } from '@/lib/subscription'
 import { checkMapsLimit, checkAiDescriptionLimit } from '@/lib/rate-limit'
 import { analyzePhotosForTags, parsePhotoTags } from '@/lib/photo-vision'
+import { processEmbeddingQueue } from '@/lib/bulk-upload-processor'
+import { generateEmbedding, buildHomeText } from '@/lib/embeddings'
+import { matchSavedSearches } from '@/lib/saved-search-matcher'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
 
@@ -19,8 +23,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     
     // Build filter object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {}
-    
+
     // Map 'buy' (from search UI) to sale listings (stored as "sale"; legacy rows may use "sell")
     const listingType = searchParams.get('listingType')
     if (listingType) {
@@ -122,15 +127,15 @@ export async function GET(request: NextRequest) {
       where.area = { in: areas }
     }
 
-    // Exclude finalized houses from search results (owners may see their own listings when browsing)
+    // Exclude finalized and overlimit-hidden houses from renter search results
     let currentUser = null
     try {
       currentUser = await getCurrentUser()
-      // Always exclude finalized houses from search
       where.finalized = false
-    } catch (error) {
-      // If getCurrentUser fails (user not logged in), still exclude finalized houses
+      where.overlimitHiddenAt = null
+    } catch {
       where.finalized = false
+      where.overlimitHiddenAt = null
     }
 
     // Always exclude homes where user has dismissed (rejected) inquiries
@@ -228,12 +233,19 @@ export async function GET(request: NextRequest) {
     // Note: We'll apply exclude filters in JavaScript after city/country filtering
     // to ensure they work correctly with the JavaScript-based filtering
 
+    // Bounded scan: the 1536-float embedding column is omitted (it dominated
+    // per-row memory), and the row count is capped so a single request can't
+    // load the whole table. City/country matching still happens in JS below —
+    // beyond MAX_SCAN rows, only the newest MAX_SCAN listings are searchable.
+    const MAX_SCAN = 2000
     let homes = await prisma.home.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      take: MAX_SCAN,
+      omit: { embedding: true },
       include: {
         owner: {
-          select: { id: true, email: true, name: true },
+          select: { id: true, name: true, createdAt: true, subscriptionTier: true },
         },
       },
     })
@@ -399,28 +411,61 @@ export async function GET(request: NextRequest) {
       homes = homes.filter(home => !excludeHomeIds.includes(home.id))
     }
 
-    return NextResponse.json({ homes }, { status: 200 })
+    // Promotion ranking: Pro slot → Plus slot → Pay-per-boost active → Normal
+    // Slot is only active if slotPromotedUntil is null (legacy) or in the future
+    const now = new Date()
+    homes.sort((a, b) => {
+      const rank = (h: typeof a) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const slotActive = h.slotPromoted && (!(h as any).slotPromotedUntil || (h as any).slotPromotedUntil > now)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (slotActive) return (h.owner as any)?.subscriptionTier === 'pro' ? 0 : 1
+        if (h.promotedUntil && h.promotedUntil > now) return 2
+        return 3
+      }
+      const diff = rank(a) - rank(b)
+      if (diff !== 0) return diff
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
+
+    // Pagination — default 50, max 200
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200)
+    const skip = Math.max(parseInt(searchParams.get('skip') || '0', 10), 0)
+    const total = homes.length
+    // Embedding vector is already omitted at the query level
+    const paginatedHomes = homes.slice(skip, skip + limit)
+
+    // Log search for analytics (fire-and-forget)
+    const searchLogUser = await getCurrentUser().catch(() => null)
+    prisma.searchLog.create({
+      data: {
+        userId: searchLogUser?.id ?? null,
+        queryType: 'browse',
+        filters: Object.fromEntries(searchParams.entries()),
+        resultCount: total,
+      },
+    }).catch(() => {})
+
+    return NextResponse.json(
+      { homes: paginatedHomes, total, hasMore: skip + limit < total },
+      { status: 200, headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
+    )
   } catch (error) {
     log.error({ err: error }, 'List homes error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // POST /api/homes - create a new home listing for the logged-in user
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
+  let subscriptionTier: string | null = null
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
+    subscriptionTier = user.subscriptionTier
 
     // Check if user has owner role (brokers are treated like owners)
     const userRole = user.role || 'user'
@@ -429,6 +474,18 @@ export async function POST(request: NextRequest) {
         { error: 'Only owners can create listings' },
         { status: 403 }
       )
+    }
+
+    const listingLimit = getListingLimit(user.subscriptionTier ?? 'free')
+    if (listingLimit < Number.MAX_SAFE_INTEGER) {
+      const activeCount = await prisma.home.count({ where: { ownerId: user.id } })
+      if (activeCount >= listingLimit) {
+        const requiredTier = (user.subscriptionTier ?? 'free') === 'free' ? 'plus' : 'pro'
+        return NextResponse.json(
+          { error: 'subscription_required', requiredTier, message: `Your plan allows up to ${listingLimit} listing${listingLimit === 1 ? '' : 's'}.` },
+          { status: 402 }
+        )
+      }
     }
 
     const rawBody = await request.json()
@@ -452,6 +509,7 @@ export async function POST(request: NextRequest) {
     const {
       title,
       description,
+      descriptionGreek,
       street,
       city,
       country,
@@ -505,24 +563,26 @@ export async function POST(request: NextRequest) {
 
     // Calculate distances using Google Maps API (7 API calls: 1 geocoding + 6 places in parallel)
     let distances: {
+      latitude: number | null
+      longitude: number | null
       closestMetro: number | null
-      closestBus: number | null
       closestSchool: number | null
       closestHospital: number | null
       closestPark: number | null
       closestUniversity: number | null
     } = {
+      latitude: null,
+      longitude: null,
       closestMetro: null,
-      closestBus: null,
       closestSchool: null,
       closestHospital: null,
       closestPark: null,
       closestUniversity: null,
     }
 
-    let distanceDetails: any = null
+    let _distanceDetails: unknown = null
 
-    if (!checkMapsLimit(user.id)) {
+    if (!await checkMapsLimit(user.id)) {
       return NextResponse.json({ error: 'Too many requests. Please wait before creating another listing.' }, { status: 429 })
     }
 
@@ -535,18 +595,19 @@ export async function POST(request: NextRequest) {
         englishCountry
       )
       
-      // Extract just the distances for database storage
+      // Extract distances and coordinates for database storage
       distances = {
         closestMetro: distanceResult.closestMetro,
-        closestBus: distanceResult.closestBus,
         closestSchool: distanceResult.closestSchool,
         closestHospital: distanceResult.closestHospital,
         closestPark: distanceResult.closestPark,
         closestUniversity: distanceResult.closestUniversity,
+        latitude: distanceResult.propertyCoordinates?.lat ?? null,
+        longitude: distanceResult.propertyCoordinates?.lng ?? null,
       }
       
       // Store full details for logging/verification
-      distanceDetails = distanceResult
+      _distanceDetails = distanceResult
       
       log.info({ coordinates: distanceResult.propertyCoordinates, distances }, 'Distance calculation completed')
     } catch (error) {
@@ -577,14 +638,17 @@ export async function POST(request: NextRequest) {
         photoTagsList = await analyzePhotosForTags(photoPaths, openai)
       }
     }
-    const photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
+    const _photoTagsJson = photoTagsList.length > 0 ? JSON.stringify(photoTagsList) : null
 
     // Generate descriptions using AI only if useAIDescription is explicitly checked
     let finalDescription = description?.trim() || null
-    let finalDescriptionGreek: string | null = null
+    let finalDescriptionGreek: string | null = descriptionGreek?.trim() || null
 
     if (useAIDescription) {
-      if (!checkAiDescriptionLimit(user.id)) {
+      const tierBlock = checkTier(user.subscriptionTier ?? 'free', 'plus')
+      if (tierBlock) return tierBlock
+
+      if (!await checkAiDescriptionLimit(user.id)) {
         return NextResponse.json({ error: 'Too many AI description requests. Please wait before trying again.' }, { status: 429 })
       }
 
@@ -601,12 +665,11 @@ export async function POST(request: NextRequest) {
         sizeSqMeters: sizeSqMeters ? Number(sizeSqMeters) : null,
         yearBuilt: resolveYear(yearBuilt),
         yearRenovated: resolveYear(yearRenovated),
-        heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-        heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+        heatingCategory: normalizeHeatingCategory(heatingCategory),
+        heatingAgent: normalizeHeatingAgent(heatingAgent),
         parking: resolveParking(parking),
         energyClass: resolveEnergyClass(energyClass),
         closestMetro: distances.closestMetro,
-        closestBus: distances.closestBus,
         closestSchool: distances.closestSchool,
         closestHospital: distances.closestHospital,
         closestPark: distances.closestPark,
@@ -624,11 +687,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retry logic for SQLite database locks
-    const createHomeWithRetry = async (maxRetries = 3, delay = 100) => {
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          return await prisma.home.create({
+    // Re-check the listing limit atomically with the create — the early check
+    // above is a fast-fail only; two parallel POSTs could both pass it.
+    const home = await prisma.$transaction(async (tx) => {
+      if (listingLimit < Number.MAX_SAFE_INTEGER) {
+        const activeCount = await tx.home.count({ where: { ownerId: user.id } })
+        if (activeCount >= listingLimit) throw new Error('LISTING_LIMIT')
+      }
+      return tx.home.create({
       data: {
         title: title.trim(),
         description: finalDescription,
@@ -653,9 +719,8 @@ export async function POST(request: NextRequest) {
         bathrooms: Number(bathrooms || 0),
         // Allow 0 and negative numbers for ground floor and basement
         floor: floor !== null && floor !== undefined && String(floor).trim() !== '' ? Number(floor) : null,
-              // Convert heating values to English before storing
-              heatingCategory: heatingCategory ? toEnglishValue(heatingCategory.trim()) : null,
-              heatingAgent: heatingAgent ? toEnglishValue(heatingAgent.trim()) : null,
+              heatingCategory: normalizeHeatingCategory(heatingCategory),
+              heatingAgent: normalizeHeatingAgent(heatingAgent),
               parking: parking === undefined || parking === null 
                 ? null 
                 : (parking === true || parking === 'true' ? true : parking === false || parking === 'false' ? false : null),
@@ -664,10 +729,11 @@ export async function POST(request: NextRequest) {
         yearRenovated: resolveYear(yearRenovated),
         availableFrom: availableFromDate,
               photos: (photos as string | null | undefined) || null,
-              photoTags: photoTagsJson,
-              // Distance values from Google Maps API
+              photoTagsArray: photoTagsList,
+              // Distance values and coordinates from Google Maps API
+              latitude: distances.latitude,
+              longitude: distances.longitude,
               closestMetro: distances.closestMetro,
-              closestBus: distances.closestBus,
               closestSchool: distances.closestSchool,
               closestHospital: distances.closestHospital,
               closestPark: distances.closestPark,
@@ -676,53 +742,57 @@ export async function POST(request: NextRequest) {
               energyClass: energyClass ? toEnglishValue(energyClass.trim())?.toUpperCase() || energyClass.trim().toUpperCase() : null,
         ownerId: user.id,
       },
+      })
+    }, { isolationLevel: 'Serializable' })
+
+    // Enqueue embedding record so the queue retry system can pick it up on failure
+    await prisma.embeddingQueue.upsert({
+      where: { homeId: home.id },
+      create: { homeId: home.id, status: 'pending' },
+      update: { status: 'pending', failCount: 0, lastError: null },
     })
-        } catch (error: any) {
-          const isLockError = error?.code === 'SQLITE_BUSY' || 
-                             error?.message?.includes('database is locked') ||
-                             error?.message?.includes('timeout')
-          
-          if (isLockError && attempt < maxRetries) {
-            const waitTime = delay * Math.pow(2, attempt - 1) // Exponential backoff
-            log.warn({ attempt, maxRetries, waitTime }, 'Database lock detected, retrying')
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-            continue
-          }
-          throw error
+
+    if (openai) {
+      // Generate embedding inline in background (fast: ~200ms) then match saved searches.
+      // Fire-and-forget so the HTTP response is not delayed.
+      ;(async () => {
+        try {
+          const embedding = await generateEmbedding(buildHomeText(home), openai)
+          await prisma.home.update({ where: { id: home.id }, data: { embedding } })
+          // Also write the native vector column — without this, listings created through the
+          // UI were invisible to the pgvector path in AI search and only ever scored through
+          // the JS cosine fallback.
+          await prisma.$executeRawUnsafe(
+            `UPDATE homes SET "embeddingVec" = $1::vector WHERE id = $2`,
+            `[${embedding.join(',')}]`,
+            home.id
+          ).catch(() => {}) // silently skip if extension not yet installed
+          await prisma.embeddingQueue.update({ where: { homeId: home.id }, data: { status: 'completed' } })
+          await matchSavedSearches(home, embedding, prisma)
+        } catch (err) {
+          log.error({ err }, 'Inline embedding failed — falling back to queue')
+          processEmbeddingQueue(home.id, openai, prisma).catch((e) =>
+            log.error({ e }, 'Queue retry also failed')
+          )
         }
-      }
-      throw new Error('Failed to create home after retries')
+      })()
     }
 
-    const home = await createHomeWithRetry()
-
-    return NextResponse.json(
-      { message: 'Home created', home },
-      { status: 201 }
-    )
-  } catch (error: any) {
-    log.error({ err: error }, 'Create home error')
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    
-    // Check for database lock/timeout errors
-    const isLockError = error?.code === 'SQLITE_BUSY' || 
-                       error?.message?.includes('database is locked') ||
-                       error?.message?.includes('timeout') ||
-                       error?.message?.includes('Operations timed out')
-    
-    if (isLockError) {
+    return NextResponse.json({ message: 'Home created', home }, { status: 201 })
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'LISTING_LIMIT') {
+      const listingLimit = getListingLimit(subscriptionTier ?? 'free')
+      const requiredTier = (subscriptionTier ?? 'free') === 'free' ? 'plus' : 'pro'
       return NextResponse.json(
-        { 
-          error: 'Database is currently locked', 
-          details: 'The database is being accessed by another application (e.g., DBeaver). Please close any database tools and try again.' 
-        },
-        { status: 503 } // Service Unavailable
+        { error: 'subscription_required', requiredTier, message: `Your plan allows up to ${listingLimit} listing${listingLimit === 1 ? '' : 's'}.` },
+        { status: 402 }
       )
     }
-    
-    return NextResponse.json(
-      { error: 'Internal server error', details: errorMessage },
-      { status: 500 }
-    )
+    // Serializable isolation can abort one of two concurrent creates — ask the client to retry
+    if (error instanceof Error && 'code' in error && (error as { code?: string }).code === 'P2034') {
+      return NextResponse.json({ error: 'Please try again' }, { status: 409 })
+    }
+    log.error({ err: error }, 'Create home error')
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

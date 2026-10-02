@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -16,6 +16,17 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   app:
     build: .
     restart: unless-stopped
@@ -24,8 +35,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/house_rent
+      REDIS_URL: redis://redis:6379
       NODE_ENV: production
       # Mount the rest of your secrets via a .env file or Docker secrets:
       # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ...
@@ -40,3 +54,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

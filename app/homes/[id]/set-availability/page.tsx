@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface AvailabilitySlot {
   date: string
@@ -13,7 +14,7 @@ interface AvailabilitySlot {
   endTime: string
 }
 
-export default function SetAvailabilityPage() {
+function SetAvailabilityPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -53,13 +54,20 @@ export default function SetAvailabilityPage() {
         if (profileRes.ok) {
           const profileData = await profileRes.json()
           const u = profileData?.user
-          if (u) {
-            setOwnerDetails((prev) => ({
-              ...prev,
-              name: u.name || '',
-              email: u.email || '',
-            }))
+          if (!u) {
+            router.push('/login')
+            return
           }
+          const role = (u.role || 'user').toLowerCase()
+          if (role !== 'owner' && role !== 'broker' && role !== 'both') {
+            router.push('/homes')
+            return
+          }
+          setOwnerDetails((prev) => ({
+            ...prev,
+            name: u.name || '',
+            email: u.email || '',
+          }))
         }
       } catch (error) {
         console.error('Error fetching home:', error)
@@ -177,7 +185,7 @@ export default function SetAvailabilityPage() {
           >
             ← {getTranslation(language, 'back')}
           </Link>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'setAvailability')}
           </h1>
           {home && (
@@ -196,8 +204,9 @@ export default function SetAvailabilityPage() {
               <h2 className="text-xl font-semibold text-[var(--text)] mb-4">Contact and Scheduling Details</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Name</label>
+                  <label htmlFor="owner-name" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Name</label>
                   <input
+                    id="owner-name"
                     type="text"
                     value={ownerDetails.name}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, name: e.target.value })}
@@ -205,8 +214,9 @@ export default function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Email</label>
+                  <label htmlFor="owner-email" className="block text-sm font-medium text-[var(--text-muted)] mb-2">Email</label>
                   <input
+                    id="owner-email"
                     type="email"
                     value={ownerDetails.email}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, email: e.target.value })}
@@ -214,8 +224,9 @@ export default function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Phone</label>
+                  <label htmlFor="owner-phone" className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'phone')}</label>
                   <input
+                    id="owner-phone"
                     type="text"
                     value={ownerDetails.phone}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, phone: e.target.value })}
@@ -223,16 +234,16 @@ export default function SetAvailabilityPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Appointment Duration</label>
+                  <label htmlFor="owner-appt-duration" className="block text-sm font-medium text-[var(--text-muted)] mb-2">{getTranslation(language, 'appointmentDuration')}</label>
                   <select
+                    id="owner-appt-duration"
                     value={ownerDetails.appointmentThresholdMinutes}
                     onChange={(e) => setOwnerDetails({ ...ownerDetails, appointmentThresholdMinutes: Number(e.target.value) })}
                     className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   >
-                    <option value={15}>15 minutes</option>
-                    <option value={30}>30 minutes</option>
-                    <option value={45}>45 minutes</option>
-                    <option value={60}>60 minutes</option>
+                    {[15, 30, 45, 60].map(m => (
+                      <option key={m} value={m}>{m} {getTranslation(language, 'minutes')}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="md:col-span-2">
@@ -316,13 +327,13 @@ export default function SetAvailabilityPage() {
               <div className="space-y-2">
                 {slots.map((slot, index) => (
                   <div
-                    key={index}
+                    key={slot.date + slot.startTime}
                     className="flex items-center justify-between p-3 bg-[var(--ink-soft)]/50 rounded-xl border border-[var(--border-subtle)]"
                   >
-                    <div className="flex items-center gap-4 text-[var(--text)]">
-                      <span className="font-semibold">
+                    <div className="flex items-center gap-2 sm:gap-4 text-[var(--text)] min-w-0">
+                      <span className="font-semibold truncate">
                         {new Date(slot.date).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
+                          localeFor(language),
                           {
                             weekday: 'short',
                             year: 'numeric',
@@ -375,6 +386,14 @@ export default function SetAvailabilityPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function SetAvailabilityPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] animate-spin" /></div>}>
+      <SetAvailabilityPage />
+    </Suspense>
   )
 }
 

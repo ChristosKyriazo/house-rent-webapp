@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { localeFor } from '@/lib/format'
 
 interface Inquiry {
   id: number
@@ -20,6 +21,7 @@ interface Inquiry {
   }
   approved: boolean
   dismissed: boolean
+  finalized: boolean
   createdAt: string
 }
 
@@ -27,9 +29,12 @@ interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
+  finalized?: boolean
 }
 
 export default function HomeInquiriesPage() {
@@ -43,6 +48,11 @@ export default function HomeInquiriesPage() {
   const [areas, setAreas] = useState<Array<{ city: string | null; cityGreek: string | null; country: string | null; countryGreek: string | null }>>([])
   const [highlightedInquiryId, setHighlightedInquiryId] = useState<number | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [confirmingInquiry, setConfirmingInquiry] = useState<Inquiry | null>(null)
+  const [moveInDate, setMoveInDate] = useState('')
+  const [moveOutDate, setMoveOutDate] = useState('')
+  const [finalizing, setFinalizing] = useState(false)
+  const [backHref, setBackHref] = useState('/homes/inquiries')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,6 +64,9 @@ export default function HomeInquiriesPage() {
         const inquiryIdParam = searchParams.get('inquiryId')
         if (inquiryIdParam) {
           setHighlightedInquiryId(parseInt(inquiryIdParam))
+        }
+        if (searchParams.get('from') === 'approved') {
+          setBackHref('/homes/approved')
         }
         
         const response = await fetch(`/api/inquiries/${homeKey}`)
@@ -138,10 +151,40 @@ export default function HomeInquiriesPage() {
     }
   }
 
+  const handleConfirmTenant = async () => {
+    if (!home || !confirmingInquiry || !moveInDate || finalizing) return
+    setFinalizing(true)
+    try {
+      const res = await fetch(`/api/inquiries/${home.key}/${confirmingInquiry.id}/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          moveInDate: new Date(moveInDate).toISOString(),
+          moveOutDate: moveOutDate ? new Date(moveOutDate).toISOString() : undefined,
+        }),
+      })
+      if (res.ok) {
+        setNotification({ type: 'success', message: getTranslation(language, 'finalizationRequestSent') })
+        setConfirmingInquiry(null)
+        setMoveInDate('')
+        setMoveOutDate('')
+        const refreshed = await fetch(`/api/inquiries/${home.key}`)
+        if (refreshed.ok) setInquiries((await refreshed.json()).inquiries || [])
+      } else {
+        const data = await res.json()
+        setNotification({ type: 'error', message: data.error || 'Failed to send finalization.' })
+      }
+    } catch {
+      setNotification({ type: 'error', message: 'Something went wrong.' })
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
   // Find the first unapproved and not dismissed inquiry (oldest)
   const unapprovedInquiries = inquiries.filter(inq => !inq.approved && !inq.dismissed)
   const currentInquiry = unapprovedInquiries.length > 0 ? unapprovedInquiries[0] : null
-  const currentIndex = currentInquiry ? inquiries.findIndex(inq => inq.id === currentInquiry.id) : -1
+  const _currentIndex = currentInquiry ? inquiries.findIndex(inq => inq.id === currentInquiry.id) : -1
 
   if (loading) {
     return (
@@ -161,7 +204,7 @@ export default function HomeInquiriesPage() {
         {/* Header */}
         <div className="mb-8">
           <Link
-            href="/homes/inquiries"
+            href={backHref}
             className="text-[var(--text-muted)] hover:text-[var(--text)] mb-4 inline-block transition-colors"
           >
             ← {getTranslation(language, 'back')}
@@ -170,12 +213,12 @@ export default function HomeInquiriesPage() {
             href={`/homes/${home.key}?from=inquiries`}
             className="block group"
           >
-            <h1 className="text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
-              {home.title}
+            <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
+              {getHomeTitle(language, home)}
             </h1>
           </Link>
           <p className="text-[var(--text-muted)]">
-            {home.street && `${home.street}, `}
+            {getHomeStreet(language, home) && `${getHomeStreet(language, home)}, `}
             {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
           </p>
         </div>
@@ -189,8 +232,8 @@ export default function HomeInquiriesPage() {
         ) : (
           <>
             {unapprovedInquiries.length === 0 && inquiries.length > 0 && (
-              <div className="bg-green-500/20 border border-green-500/50 rounded-2xl p-4 mb-6 text-center">
-                <p className="text-green-400 font-semibold">
+              <div className="bg-[var(--status-success-bg)] border border-[var(--status-success)] rounded-2xl p-4 mb-6 text-center">
+                <p className="text-[var(--status-success)] font-semibold">
                   {getTranslation(language, 'allInquiriesProcessed')}
                 </p>
               </div>
@@ -198,7 +241,7 @@ export default function HomeInquiriesPage() {
           <div className="space-y-4">
             {inquiries
               .filter(inq => !inq.dismissed) // Filter out dismissed inquiries
-              .map((inquiry, index) => {
+              .map((inquiry, _index) => {
               const isCurrent = inquiry.id === currentInquiry?.id
               const isApproved = inquiry.approved
               const isGrayedOut = !isCurrent && !isApproved
@@ -212,15 +255,15 @@ export default function HomeInquiriesPage() {
                     isGrayedOut
                       ? 'border-[var(--border-subtle)] opacity-50'
                       : isApproved
-                      ? 'border-green-500/50'
+                      ? 'border-[var(--status-success)]'
                       : isHighlighted
                       ? 'border-yellow-500/70 ring-4 ring-yellow-500/30'
                       : 'border-[var(--border-subtle)]'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-3 mb-3">
                         <Link
                           href={`/profile?userId=${inquiry.user.id}&role=${inquiry.user.role || 'user'}`}
                           className="text-xl font-bold text-[var(--text)] hover:text-[var(--accent)] underline transition-colors cursor-pointer"
@@ -228,7 +271,7 @@ export default function HomeInquiriesPage() {
                           {inquiry.user.name || inquiry.user.email.split('@')[0]}
                         </Link>
                         {isApproved && (
-                          <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-semibold">
+                          <span className="bg-[var(--status-success-bg)] text-[var(--status-success)] px-3 py-1 rounded-full text-sm font-semibold">
                             {getTranslation(language, 'approved')}
                           </span>
                         )}
@@ -237,7 +280,7 @@ export default function HomeInquiriesPage() {
                       <p className="text-[var(--text-muted)] text-xs mt-2">
                         {getTranslation(language, 'inquiryDate')}:{' '}
                         {new Date(inquiry.createdAt).toLocaleDateString(
-                          language === 'el' ? 'el-GR' : 'en-US',
+                          localeFor(language),
                           {
                             year: 'numeric',
                             month: 'short',
@@ -249,36 +292,45 @@ export default function HomeInquiriesPage() {
                       </p>
                     </div>
 
-                    {!isApproved && (
-                      <div className="flex items-center gap-3 ml-4">
-                        {isCurrent ? (
-                          <>
-                            <button
-                              onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
-                              disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {processingId === inquiry.id
-                                ? getTranslation(language, 'loading')
-                                : getTranslation(language, 'approve')}
-                            </button>
-                            <button
-                              onClick={() => handleDismiss(inquiry.id)}
-                              disabled={processingId === inquiry.id}
-                              className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {processingId === inquiry.id
-                                ? getTranslation(language, 'loading')
-                                : getTranslation(language, 'dismiss')}
-                            </button>
-                          </>
-                        ) : (
-                          <p className="text-[var(--text)]/50 text-sm italic">
-                            {getTranslation(language, 'pendingApproval')}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      {isApproved && !inquiry.finalized && !home.finalized && (
+                        <button
+                          onClick={() => setConfirmingInquiry(inquiry)}
+                          className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all font-semibold text-sm"
+                        >
+                          {getTranslation(language, 'confirmTenant')}
+                        </button>
+                      )}
+                      {isApproved && inquiry.finalized && (
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-full text-sm font-semibold">
+                          {getTranslation(language, 'dealClosed')}
+                        </span>
+                      )}
+                      {!isApproved && (
+                        <>
+                          {isCurrent ? (
+                            <>
+                              <button
+                                onClick={() => router.push(`/homes/${home.key}/set-availability?inquiryId=${inquiry.id}`)}
+                                disabled={processingId === inquiry.id}
+                                className="px-6 py-3 bg-[var(--status-success)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {processingId === inquiry.id ? getTranslation(language, 'loading') : getTranslation(language, 'approve')}
+                              </button>
+                              <button
+                                onClick={() => handleDismiss(inquiry.id)}
+                                disabled={processingId === inquiry.id}
+                                className="px-6 py-3 bg-[var(--status-error)] hover:opacity-90 text-white rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {processingId === inquiry.id ? getTranslation(language, 'loading') : getTranslation(language, 'dismiss')}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="text-[var(--text)]/50 text-sm italic">{getTranslation(language, 'pendingApproval')}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -295,6 +347,70 @@ export default function HomeInquiriesPage() {
           language={language}
           onClose={() => setNotification(null)}
         />
+      )}
+
+      {/* Confirm tenant modal */}
+      {confirmingInquiry && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setConfirmingInquiry(null)}>
+          <div className="bg-[var(--ink-soft)] rounded-3xl shadow-2xl border border-[var(--border-subtle)] max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-[var(--text)]">{getTranslation(language, 'confirmThisTenant')}</h2>
+              <button onClick={() => setConfirmingInquiry(null)} className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl">×</button>
+            </div>
+
+            <div className="bg-[var(--ink-soft)]/50 rounded-xl p-4 border border-[var(--border-subtle)] mb-6">
+              <p className="text-sm text-[var(--text-muted)] mb-1">{getTranslation(language, 'tenantLabel')}</p>
+              <p className="font-semibold text-[var(--text)]">{confirmingInquiry.user.name || confirmingInquiry.user.email.split('@')[0]}</p>
+              <p className="text-sm text-[var(--text-muted)]">{confirmingInquiry.user.email}</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label htmlFor="move-in-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'moveInDate')} <span className="text-red-400">*</span></label>
+                <input
+                  id="move-in-date"
+                  type="date"
+                  value={moveInDate}
+                  onChange={e => setMoveInDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+              <div>
+                <label htmlFor="move-out-date" className="block text-sm font-medium text-[var(--text-muted)] mb-1">{getTranslation(language, 'moveOutDate')} <span className="text-[var(--text-muted)] font-normal">({getTranslation(language, 'optional')})</span></label>
+                <input
+                  id="move-out-date"
+                  type="date"
+                  value={moveOutDate}
+                  onChange={e => setMoveOutDate(e.target.value)}
+                  min={moveInDate || new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-xl text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-muted)] mb-6">
+              {getTranslation(language, 'confirmTenantDescription')}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmingInquiry(null)}
+                disabled={finalizing}
+                className="flex-1 px-4 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl font-semibold transition-all disabled:opacity-50"
+              >
+                {getTranslation(language, 'cancel')}
+              </button>
+              <button
+                onClick={handleConfirmTenant}
+                disabled={finalizing || !moveInDate}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50"
+              >
+                {finalizing ? getTranslation(language, 'sending') : getTranslation(language, 'sendToTenant')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -1,53 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { badRequest, parsePositiveInt, serverError } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
+import { getUserScore, getBrokerScore } from '@/lib/ratings'
 
-// GET: Get all individual ratings for a specific user by type
+// GET: Aggregate score for a user or broker profile
+// ?kind=tenant  → viewing_tenant + moveout_tenant ratings received
+// ?kind=broker  → viewing_broker ratings received
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> | { userId: string } }
 ) {
   const log = requestLogger(request)
   try {
-    const resolvedParams = await Promise.resolve(params)
-    const userId = parsePositiveInt(resolvedParams.userId)
-    if (!userId) {
-      return badRequest('Invalid user ID')
+    const { userId: rawId } = await Promise.resolve(params)
+    const userId = parsePositiveInt(rawId)
+    if (!userId) return badRequest('Invalid user ID')
+
+    const kind = request.nextUrl.searchParams.get('kind') ?? 'tenant'
+
+    if (kind === 'broker') {
+      const result = await getBrokerScore(userId)
+      return NextResponse.json(result)
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const type = searchParams.get('type') // 'owner' or 'renter'
-
-    if (!type || (type !== 'owner' && type !== 'renter')) {
-      return badRequest('Type parameter is required and must be "owner" or "renter"')
-    }
-
-    // Fetch all ratings for this user with the specified type
-    const ratings = await prisma.rating.findMany({
-      where: {
-        ratedUserId: userId,
-        type: type,
-      },
-      include: {
-        rater: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc', // Most recent first
-      },
-    })
-
-    return NextResponse.json({ ratings }, { status: 200 })
+    const result = await getUserScore(userId)
+    return NextResponse.json(result)
   } catch (error) {
     log.error({ err: error }, 'Get user ratings error')
     return serverError()
   }
 }
-

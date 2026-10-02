@@ -24,12 +24,12 @@ export default function StarRating({ rating, size = 'base', showNumber = false }
   const partialStarFill = hasPartialStar ? (clampedRating % 1) * 100 : 0
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 shrink-0">
       {[...Array(5)].map((_, i) => {
         if (i < fullStars) {
           // Fully filled star
           return (
-            <span key={i} className={`${starSize} text-yellow-400`}>
+            <span key={i} className={`${starSize} text-[var(--accent)]`}>
               ⭐
             </span>
           )
@@ -41,7 +41,7 @@ export default function StarRating({ rating, size = 'base', showNumber = false }
               <span className="absolute inset-0 text-[var(--text)]/30" style={{ display: 'block' }}>⭐</span>
               {/* Yellow foreground star with width-based clipping */}
               <span
-                className="absolute inset-0 text-yellow-400"
+                className="absolute inset-0 text-[var(--accent)]"
                 style={{ 
                   display: 'block',
                   width: `${partialStarFill}%`,

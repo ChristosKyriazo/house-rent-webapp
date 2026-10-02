@@ -4,14 +4,18 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { getTranslation, translateValue } from '@/lib/translations'
-import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { getTranslation } from '@/lib/translations'
+import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { SkeletonList } from '@/app/components/SkeletonCard'
+import { localeFor } from '@/lib/format'
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   street: string | null
+  streetGreek?: string | null
   city: string
   country: string
   area: string | null
@@ -100,8 +104,11 @@ export default function UserInquiriesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center">
-        <p className="text-[var(--text)]">{getTranslation(language, 'loading')}</p>
+      <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8 h-10 w-48 rounded-xl bg-[var(--ink-soft)] animate-pulse" />
+          <SkeletonList count={4} />
+        </div>
       </div>
     )
   }
@@ -110,7 +117,7 @@ export default function UserInquiriesPage() {
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'inquiries')}
           </h1>
           <p className="text-[var(--text-muted)]">
@@ -137,15 +144,16 @@ export default function UserInquiriesPage() {
             {homes.map((home) => (
               <Link
                 key={home.id}
-                href={`/homes/${home.key}`}
+                href={`/homes/${home.key}?from=my-inquiries`}
                 className="block bg-[var(--surface)] backdrop-blur-sm rounded-3xl overflow-hidden shadow-xl border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 transition-all group"
               >
                 {/* Photo */}
                 {home.photos && home.photos.length > 0 ? (
                   <div className="relative h-48 w-full overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={home.photos[0]}
-                      alt={home.title}
+                      alt={getHomeTitle(language, home)}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     />
                   </div>
@@ -158,10 +166,10 @@ export default function UserInquiriesPage() {
                 {/* Content */}
                 <div className="p-6">
                   <h2 className="text-xl font-bold text-[var(--text)] mb-2 group-hover:text-[var(--accent)] transition-colors">
-                    {home.title}
+                    {getHomeTitle(language, home)}
                   </h2>
                   <p className="text-[var(--text-muted)] text-sm mb-3">
-                    📍 {home.street && `${home.street}, `}
+                    📍 {getHomeStreet(language, home) && `${getHomeStreet(language, home)}, `}
                     {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     {home.area && ` • ${getAreaName(home.area, areas, language)}`}
                   </p>
@@ -191,7 +199,7 @@ export default function UserInquiriesPage() {
                   <p className="text-[var(--text-muted)] text-xs">
                     {getTranslation(language, 'inquiryDate')}:{' '}
                     {new Date(home.inquiryDate).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         year: 'numeric',
                         month: 'short',

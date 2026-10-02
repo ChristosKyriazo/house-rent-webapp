@@ -9,6 +9,7 @@ import {
   unauthorized,
 } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
+import { createNotification } from '@/lib/services/notification-service'
 
 // GET: Get all inquiries for the current user
 export async function GET(request: NextRequest) {
@@ -106,6 +107,15 @@ export async function POST(request: NextRequest) {
       return badRequest('Owners cannot create inquiries on their own properties')
     }
 
+    // Check if any inquiry for this home is already finalized (rented/sold)
+    const finalizedExists = await prisma.inquiry.findFirst({
+      where: { homeId: parsedHomeId, finalized: true },
+      select: { id: true },
+    })
+    if (finalizedExists) {
+      return NextResponse.json({ error: 'This property is no longer available' }, { status: 409 })
+    }
+
     const inquiry = await prisma.inquiry.create({
       data: {
         userId: user.id,
@@ -115,14 +125,12 @@ export async function POST(request: NextRequest) {
 
     // Create notification for the owner
     try {
-      await prisma.notification.create({
-        data: {
-          recipientId: home.owner.id,
-          role: 'owner',
-          type: 'inquiry',
-          homeKey: home.key,
-          userId: user.id,
-        },
+      await createNotification({
+        recipientId: home.owner.id,
+        role: 'owner',
+        type: 'inquiry',
+        homeKey: home.key,
+        userId: user.id,
       })
     } catch (error) {
       log.error({ err: error }, 'Failed to create notification')
@@ -130,11 +138,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ inquiry }, { status: 201 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error({ err: error }, 'Create inquiry error')
-    
+
     // Handle Prisma unique constraint violation
-    if (error?.code === 'P2002') {
+    if ((error as { code?: string })?.code === 'P2002') {
       return NextResponse.json(
         { error: 'Inquiry already exists' },
         { status: 400 }

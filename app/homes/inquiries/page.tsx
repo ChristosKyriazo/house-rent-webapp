@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
-import { getCityName, getCountryName } from '@/lib/area-utils'
+import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 
 interface HomeWithInquiries {
   home: {
     id: number
     key: string
     title: string
+    titleGreek?: string | null
     street: string | null
+    streetGreek?: string | null
     city: string
     country: string
   }
@@ -128,10 +130,10 @@ export default function OwnerInquiriesPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
-                      {home.title}
+                      {getHomeTitle(language, home)}
                     </h2>
                     <p className="text-[var(--text-muted)]">
-                      {home.street && `${home.street}, `}
+                      {getHomeStreet(language, home) && `${getHomeStreet(language, home)}, `}
                       {getCityName(home.city, areas, language)}, {getCountryName(home.country, areas, language)}
                     </p>
                   </div>

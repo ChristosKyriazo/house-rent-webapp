@@ -11,6 +11,7 @@ const mockPrisma = {
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any
 
 vi.mock('@/lib/auth', () => ({

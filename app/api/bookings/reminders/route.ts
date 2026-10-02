@@ -12,6 +12,11 @@ import { requestLogger } from '@/lib/logger'
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
   try {
+    const cronSecret = request.headers.get('x-cron-secret')
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const now = new Date()
     const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
     const tomorrow = new Date(now)

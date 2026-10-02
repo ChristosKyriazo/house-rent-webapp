@@ -5,12 +5,13 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
-import { findMostSimilarArea, getAreaName } from '@/lib/area-utils'
+import { findMostSimilarArea, getAreaName, getHomeTitle } from '@/lib/area-utils'
 
 interface Home {
   id: number
   key: string
   title: string
+  titleGreek?: string | null
   description: string | null
   street: string | null
   city: string
@@ -77,6 +78,10 @@ export default function EditHomePage() {
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
+  const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
 
   // Check user role and ownership on mount
   useEffect(() => {
@@ -166,7 +171,7 @@ export default function EditHomePage() {
     }
     
     checkAccess()
-  }, [params.id, router, language])
+  }, [params.id, router])
 
   // Fetch all areas on mount for similarity matching and set area display
   useEffect(() => {
@@ -227,6 +232,26 @@ export default function EditHomePage() {
       setAreaSuggestions([])
       setShowAreaDropdown(false)
     }
+  }
+
+  const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
+
+  const searchCities = async (query: string) => {
+    if (query.length < 1) { setCitySuggestions([]); return }
+    try {
+      const params = new URLSearchParams({ q: query, limit: '10' })
+      if (formData.country) params.append('country', formData.country)
+      const res = await fetch(`/api/cities/search?${params.toString()}`)
+      if (res.ok) setCitySuggestions((await res.json()).cities || [])
+    } catch { /* ignore */ }
+  }
+
+  const searchCountries = async (query: string) => {
+    if (query.length < 1) { setCountrySuggestions([]); return }
+    try {
+      const res = await fetch(`/api/countries/search?q=${encodeURIComponent(query)}&limit=10`)
+      if (res.ok) setCountrySuggestions((await res.json()).countries || [])
+    } catch { /* ignore */ }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -349,11 +374,11 @@ export default function EditHomePage() {
 
       // Read response body as text first (can only be read once)
       const responseText = await response.text()
-      let data: any = {}
-      
+      let data: { error?: string; details?: string; [key: string]: unknown } = {}
+
       try {
         data = responseText ? JSON.parse(responseText) : {}
-      } catch (parseError) {
+      } catch {
         console.error('Failed to parse JSON response:', responseText)
         setError(getTranslation(language, 'updateListingFailed'))
         return
@@ -374,7 +399,7 @@ export default function EditHomePage() {
       }
 
       router.push(`/homes/${home?.key || homeId}?from=my-listings`)
-    } catch (err) {
+    } catch {
       setError(getTranslation(language, 'somethingWentWrong'))
     } finally {
       setSaving(false)
@@ -441,10 +466,10 @@ export default function EditHomePage() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-4 sm:p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-3xl font-bold text-[var(--text)]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'editListing')}
               </h1>
               <Link
@@ -537,10 +562,11 @@ export default function EditHomePage() {
                 {photos.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative group">
+                      <div key={photo} className="relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={photo}
-                          alt={`Photo ${index + 1}`}
+                          alt={`${index + 1}`}
                           className="w-full h-32 object-cover rounded-xl border border-[var(--border-subtle)]"
                         />
                         <button
@@ -597,27 +623,86 @@ export default function EditHomePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              {/* City autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   required
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, city: q })
+                    if (q.length > 0) { setShowCityDropdown(true); searchCities(q) }
+                    else { setShowCityDropdown(false); setCitySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.city.length > 0) { setShowCityDropdown(true); searchCities(formData.city) } }}
+                  onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCity')}
                 />
+                {showCityDropdown && citySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {citySuggestions.map((city) => {
+                      const display = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
+                      return (
+                        <button
+                          key={city.city + '-' + city.country}
+                          type="button"
+                          onClick={() => {
+                            const displayCountry = (isGreekInput(formData.city) || language === 'el') && city.countryGreek ? city.countryGreek : city.country
+                            setFormData(prev => ({ ...prev, city: display, country: prev.country || displayCountry }))
+                            setShowCityDropdown(false)
+                            setCitySuggestions([])
+                          }}
+                          className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        >
+                          <div className="font-medium">{display}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <div>
+              {/* Country autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   required
                   value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, country: q })
+                    if (q.length > 0) { setShowCountryDropdown(true); searchCountries(q) }
+                    else { setShowCountryDropdown(false); setCountrySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.country.length > 0) { setShowCountryDropdown(true); searchCountries(formData.country) } }}
+                  onBlur={() => setTimeout(() => setShowCountryDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCountry')}
                 />
+                {showCountryDropdown && countrySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((country) => {
+                      const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
+                      return (
+                        <button
+                          key={country.country}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, country: display }))
+                            setShowCountryDropdown(false)
+                            setCountrySuggestions([])
+                          }}
+                          className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                        >
+                          <div className="font-medium">{display}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -691,8 +776,7 @@ export default function EditHomePage() {
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          // Store English name in formData, but display translated name
-                          const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          const displayName = (isGreekInput(areaSearchQuery) || language === 'el') && area.nameGreek ? area.nameGreek : area.name
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
@@ -708,7 +792,7 @@ export default function EditHomePage() {
                         }}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                        <div className="font-medium">{(isGreekInput(areaSearchQuery) || language === 'el') && area.nameGreek ? area.nameGreek : area.name}</div>
                         {(area.city || area.country) && (
                           <div className="text-sm text-[var(--text-muted)]">
                             {[area.city, area.country].filter(Boolean).join(', ')}
@@ -808,7 +892,7 @@ export default function EditHomePage() {
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder={getTranslation(language, 'placeholderBedrooms')}
+                  placeholder={getTranslation(language, 'placeholderFloor')}
                 />
               </div>
               <div>
@@ -912,8 +996,8 @@ export default function EditHomePage() {
 
       {/* Delete Listing Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-[var(--ink-soft)] border-4 border-red-500 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="text-6xl mb-4">⚠️</div>
               <h2 className="text-2xl font-bold text-red-400 mb-4">
@@ -924,7 +1008,7 @@ export default function EditHomePage() {
               </p>
               {home && (
                 <p className="text-[var(--text-muted)] text-sm">
-                  {getTranslation(language, 'listingDetails')}: <strong>{home.title}</strong>
+                  {getTranslation(language, 'listingDetails')}: <strong>{getHomeTitle(language, home)}</strong>
                 </p>
               )}
             </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requestLogger } from '@/lib/logger'
+import { unauthorized } from '@/lib/api-utils'
 
 // GET: Get scheduled bookings for a specific home (for owners/brokers)
 export async function GET(
@@ -12,7 +13,7 @@ export async function GET(
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const resolvedParams = await Promise.resolve(params)

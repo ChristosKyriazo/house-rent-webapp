@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { createNotification } from '@/lib/services/notification-service'
 
 export class InquiryManagementError extends Error {
   status: number
@@ -62,87 +63,58 @@ export async function manageInquiryApproval({
     }
     if (contactInfo) updateData.contactInfo = JSON.stringify(contactInfo)
 
-    await prisma.inquiry.update({
-      where: { id: inquiry.id },
-      data: updateData,
+    await prisma.$transaction(async tx => {
+      await tx.inquiry.update({ where: { id: inquiry.id }, data: updateData })
+
+      if (inquiryWithDetails) {
+        await createNotification({
+          recipientId: inquiryWithDetails.user.id,
+          role: 'user',
+          type: 'approved',
+          homeKey: inquiryWithDetails.home.key,
+          ownerKey: inquiryWithDetails.home.owner.key,
+        }, tx)
+        await tx.notification.updateMany({
+          where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
+          data: { deleted: true },
+        })
+        await tx.notification.updateMany({
+          where: {
+            homeKey: inquiryWithDetails.home.key,
+            type: 'inquiry',
+            recipientId: inquiryWithDetails.user.id,
+            deleted: false,
+          },
+          data: { deleted: true },
+        })
+      }
     })
-
-    if (inquiryWithDetails) {
-      try {
-        await prisma.notification.create({
-          data: {
-            recipientId: inquiryWithDetails.user.id,
-            role: 'user',
-            type: 'approved',
-            homeKey: inquiryWithDetails.home.key,
-            ownerKey: inquiryWithDetails.home.owner.key,
-          },
-        })
-      } catch (error) {
-        console.error('Failed to create notification:', error)
-      }
-
-      try {
-        await prisma.notification.updateMany({
-          where: {
-            homeKey: inquiryWithDetails.home.key,
-            type: 'inquiry',
-            recipientId: actorId,
-            deleted: false,
-          },
-          data: { deleted: true },
-        })
-        await prisma.notification.updateMany({
-          where: {
-            homeKey: inquiryWithDetails.home.key,
-            type: 'inquiry',
-            recipientId: inquiryWithDetails.user.id,
-            deleted: false,
-          },
-          data: { deleted: true },
-        })
-      } catch (error) {
-        console.error('Failed to clear inquiry notifications:', error)
-      }
-    }
 
     return { message: 'Inquiry approved', approved: true }
   }
 
-  await prisma.inquiry.update({
-    where: { id: inquiry.id },
-    data: { dismissed: true, approved: false },
-  })
+  await prisma.$transaction(async tx => {
+    await tx.inquiry.update({ where: { id: inquiry.id }, data: { dismissed: true, approved: false } })
 
-  if (inquiryWithDetails) {
-    try {
-      await prisma.notification.updateMany({
-        where: {
-          homeKey: inquiryWithDetails.home.key,
-          type: 'inquiry',
-          recipientId: actorId,
-          deleted: false,
-        },
+    if (inquiryWithDetails) {
+      await tx.notification.updateMany({
+        where: { homeKey: inquiryWithDetails.home.key, type: 'inquiry', recipientId: actorId, deleted: false },
         data: { deleted: true },
       })
-      await prisma.notification.create({
-        data: {
-          recipientId: inquiryWithDetails.user.id,
-          role: 'user',
-          type: 'dismissed',
-          homeKey: inquiryWithDetails.home.key,
-          ownerKey: inquiryWithDetails.home.owner.key,
-        },
-      })
-    } catch (error) {
-      console.error('Failed to process dismiss notifications:', error)
+      await createNotification({
+        recipientId: inquiryWithDetails.user.id,
+        role: 'user',
+        type: 'dismissed',
+        homeKey: inquiryWithDetails.home.key,
+        ownerKey: inquiryWithDetails.home.owner.key,
+      }, tx)
     }
-  }
+  })
 
   return { message: 'Inquiry dismissed' }
 }
 
-export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: number, actorRole?: string | null) {
+export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: number, _actorRole?: string | null) {
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     include: {
@@ -159,22 +131,18 @@ export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: numb
 
   if (!inquiry) throw new InquiryManagementError('Inquiry not found', 404)
 
-  const normalizedRole = (actorRole || 'user').toLowerCase()
-  const isOwner = actorId === inquiry.home.ownerId || normalizedRole === 'broker' || normalizedRole === 'both'
-  if (!isOwner) throw new InquiryManagementError('Only owners and brokers can reject inquiries', 403)
+  if (actorId !== inquiry.home.ownerId) {
+    throw new InquiryManagementError('Only the home owner can reject inquiries', 403)
+  }
 
   const scheduledBooking = await prisma.booking.findFirst({
     where: { inquiryId: inquiry.id, status: 'scheduled' },
   })
   if (!scheduledBooking) throw new InquiryManagementError('Can only reject after a scheduled meeting', 400)
 
-  await prisma.inquiry.update({
-    where: { id: inquiry.id },
-    data: { dismissed: true },
-  })
-
-  await prisma.notification.create({
-    data: {
+  await prisma.$transaction(async tx => {
+    await tx.inquiry.update({ where: { id: inquiry.id }, data: { dismissed: true } })
+    await createNotification({
       recipientId: inquiry.user.id,
       role: 'user',
       type: 'rejected',
@@ -182,6 +150,6 @@ export async function rejectInquiryAfterMeeting(inquiryId: number, actorId: numb
       userId: inquiry.userId,
       ownerKey: inquiry.home.owner.key,
       inquiryId: inquiry.id,
-    },
+    }, tx)
   })
 }

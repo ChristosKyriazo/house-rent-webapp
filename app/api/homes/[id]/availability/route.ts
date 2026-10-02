@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
+import { createNotification } from '@/lib/services/notification-service'
 
 // GET: Get availability for a home
 export async function GET(
@@ -34,11 +35,15 @@ export async function GET(
     const today = new Date()
     today.setHours(0, 0, 0, 0) // Set to start of today
     
+    const maxDate = new Date(today)
+    maxDate.setDate(today.getDate() + 365)
+
     const availabilities = await prisma.availability.findMany({
       where: {
         homeId: home.id,
         date: {
-          gte: today, // Only future dates (including today)
+          gte: today,
+          lte: maxDate,
         },
       },
       orderBy: {
@@ -302,14 +307,12 @@ export async function POST(
     // Create notifications for each user
     await Promise.all(
       approvedInquiries.map((inquiry) =>
-        prisma.notification.create({
-          data: {
-            recipientId: inquiry.userId,
-            role: 'user',
-            type: 'availability_set',
-            homeKey: homeKey,
-            ownerKey: owner?.key || null,
-          },
+        createNotification({
+          recipientId: inquiry.userId,
+          role: 'user',
+          type: 'availability_set',
+          homeKey: homeKey,
+          ownerKey: owner?.key || null,
         })
       )
     )

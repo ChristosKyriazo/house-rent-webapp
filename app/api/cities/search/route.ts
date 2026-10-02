@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build base where clause for country filter
-    let countryFilter: any = null
+    let countryFilter: Record<string, unknown> | null = null
     if (country && country.trim().length > 0) {
       const countryValue = country.trim()
       const countryExists = await prisma.area.findFirst({
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all areas (or filtered by country)
-    let allAreas = await prisma.area.findMany({
+    const allAreas = await prisma.area.findMany({
       where: countryFilter ? { AND: [countryFilter] } : undefined,
       select: {
         city: true,

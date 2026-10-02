@@ -1,6 +1,7 @@
 import { getCurrentUser } from '@/lib/auth'
 import HamburgerMenu from './HamburgerMenu'
 import RoleInitializer from './RoleInitializer'
+import * as Sentry from '@sentry/nextjs'
 
 // Force dynamic rendering to ensure fresh auth state
 export const dynamic = 'force-dynamic'
@@ -14,14 +15,16 @@ export default async function NavBar() {
     }
 
     const userRole = (user.role || 'user').toLowerCase()
+    const subscriptionTier = (user.subscriptionTier ?? 'free') as string
+    const brokerCategory = (user.brokerCategory ?? 'standalone') as string
     return (
       <>
-        <RoleInitializer userRole={userRole} />
-        <HamburgerMenu userRole={userRole} />
+        <RoleInitializer userRole={userRole} brokerCategory={brokerCategory} />
+        <HamburgerMenu userRole={userRole} subscriptionTier={subscriptionTier} brokerCategory={brokerCategory} />
       </>
     )
   } catch (error) {
-    console.error('NavBar error:', error)
+    Sentry.captureException(error)
     return null
   }
 }

@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useLanguage } from '@/app/contexts/LanguageContext'
-import { useRole } from '@/app/contexts/RoleContext'
+
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import Link from 'next/link'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import { localeFor } from '@/lib/format'
 
 interface Booking {
   id: number
@@ -33,7 +35,9 @@ interface Booking {
   home?: {
     key: string
     title: string
+    titleGreek?: string | null
     street?: string
+    streetGreek?: string | null
     city?: string
     country?: string
   }
@@ -169,7 +173,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleTimeString(localeFor(language), {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -177,7 +181,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleDateString(localeFor(language), {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -186,8 +190,6 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
   }
 
   const otherPerson = isOwner ? booking.user : booking.owner
-  const ratingType = isOwner ? 'renter' : 'owner'
-  
   // For user viewing broker: use house ratings, otherwise use person ratings
   const relevantRating = isUserViewing && isBroker 
     ? houseRatings?.houseOwnerRating 
@@ -273,16 +275,16 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
                   href={`/homes/${booking.home.key}`}
                   className="text-[var(--text)] hover:text-[var(--accent)] underline"
                 >
-                  {booking.home.title}
+                  {getHomeTitle(language, booking.home)}
                 </Link>
               </div>
-              {(booking.home.street || booking.home.city || booking.home.country) && (
+              {(getHomeStreet(language, booking.home) || booking.home.city || booking.home.country) && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
                     {getTranslation(language, 'address')}
                   </label>
                   <p className="text-[var(--text)]">
-                    {[booking.home.street, booking.home.city, booking.home.country]
+                    {[getHomeStreet(language, booking.home), booking.home.city, booking.home.country]
                       .filter(Boolean)
                       .join(', ')}
                   </p>

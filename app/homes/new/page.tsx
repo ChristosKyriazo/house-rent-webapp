@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import UpgradeGate from '@/app/components/UpgradeGate'
 import { getTranslation, translateValue } from '@/lib/translations'
 import { findMostSimilarArea } from '@/lib/area-utils'
 import * as XLSX from 'xlsx'
+import ConfirmDialog from '@/app/components/ConfirmDialog'
 
 export default function NewHomePage() {
   const router = useRouter()
@@ -36,12 +38,18 @@ export default function NewHomePage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingRole, setCheckingRole] = useState(true)
+  const [subscriptionTier, setSubscriptionTier] = useState<string>('free')
   const [areaSuggestions, setAreaSuggestions] = useState<Array<{ id: number; key: string; name: string; nameGreek: string | null; city: string | null; country: string | null }>>([])
   const [showAreaDropdown, setShowAreaDropdown] = useState(false)
   const [areaSearchQuery, setAreaSearchQuery] = useState('')
   const [allAreas, setAllAreas] = useState<Array<{ id: number; name: string; nameGreek: string | null }>>([])
-  const [searchingAreas, setSearchingAreas] = useState(false)
+  const [_searchingAreas, setSearchingAreas] = useState(false)
   const [areaSelectedFromDropdown, setAreaSelectedFromDropdown] = useState(false)
+  const [addingArea, setAddingArea] = useState(false)
+  const [showAddAreaOption, setShowAddAreaOption] = useState(false)
+  const [newAreaMode, setNewAreaMode] = useState(false)
+  const [newAreaNameEl, setNewAreaNameEl] = useState('')
+  const [newAreaNameEn, setNewAreaNameEn] = useState('')
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
   const [bulkUploadLoading, setBulkUploadLoading] = useState(false)
   const [bulkUploadError, setBulkUploadError] = useState('')
@@ -52,10 +60,20 @@ export default function NewHomePage() {
   const [excelInputKey, setExcelInputKey] = useState(0)
   const [areaValidating, setAreaValidating] = useState(false)
   const [unknownAreas, setUnknownAreas] = useState<Array<{ rowIndex: number; rowNumber: number; areaInput: string; suggestion: string | null }>>([])
-  const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'rejected'>>({})
-  const [homeCount, setHomeCount] = useState<number>(0)
+  const [areaDecisions, setAreaDecisions] = useState<Record<number, 'confirmed' | 'new' | 'rejected'>>({})
+  const [areaCustomNames, setAreaCustomNames] = useState<Record<number, string>>({})
+  const [areaEditingNew, setAreaEditingNew] = useState<Record<number, boolean>>({})
+  const [_homeCount, setHomeCount] = useState<number>(0)
+  const [citySuggestions, setCitySuggestions] = useState<Array<{ city: string; cityGreek: string | null; country: string; countryGreek: string | null }>>([])
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [countrySuggestions, setCountrySuggestions] = useState<Array<{ country: string; countryGreek: string | null }>>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
   const [useAIDescription, setUseAIDescription] = useState(false)
   const [useAIDescriptionBulk, setUseAIDescriptionBulk] = useState(false)
+  const [bulkJobId, setBulkJobId] = useState<string | null>(null)
+  const [bulkJobProgress, setBulkJobProgress] = useState(0)
+  const [bulkJobTotal, setBulkJobTotal] = useState(0)
+  const [confirmBulkClose, setConfirmBulkClose] = useState(false)
 
   // Check user role on mount
   useEffect(() => {
@@ -71,6 +89,7 @@ export default function NewHomePage() {
           router.push('/profile')
           return
         }
+        setSubscriptionTier(data.user.subscriptionTier ?? 'free')
         // Fetch home count
         fetch('/api/homes/my-listings')
           .then((res) => res.json())
@@ -87,6 +106,52 @@ export default function NewHomePage() {
         router.push('/login')
       })
   }, [router])
+
+  // Poll job status while a bulk upload is processing
+  useEffect(() => {
+    if (!bulkJobId) return
+
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs/${bulkJobId}/status`)
+        if (!res.ok) return
+        const status = await res.json()
+
+        setBulkJobProgress(status.progress)
+        setBulkJobTotal(status.total)
+
+        if (status.status === 'completed') {
+          clearInterval(poll)
+          setBulkJobId(null)
+          setBulkUploadLoading(false)
+          const created = (status.results as unknown[])?.length || 0
+          if (status.errors?.length > 0) {
+            setBulkUploadError(
+              language === 'el'
+                ? `Δημιουργήθηκαν ${created} ακίνητα. Σφάλματα: ${(status.errors as string[]).join(', ')}`
+                : `Created ${created} homes. Errors: ${(status.errors as string[]).join(', ')}`
+            )
+          } else {
+            setBulkUploadSuccess(
+              language === 'el'
+                ? `Επιτυχής δημιουργία ${created} ακινήτων!`
+                : `Successfully created ${created} homes!`
+            )
+          }
+          setTimeout(() => router.push('/homes/my-listings'), 2000)
+        } else if (status.status === 'failed') {
+          clearInterval(poll)
+          setBulkJobId(null)
+          setBulkUploadLoading(false)
+          setBulkUploadError(
+            language === 'el' ? 'Σφάλμα κατά την επεξεργασία' : 'Processing failed. Please try again.'
+          )
+        }
+      } catch { /* ignore transient network errors during polling */ }
+    }, 2000)
+
+    return () => clearInterval(poll)
+  }, [bulkJobId, language, router])
 
   // Fetch all areas on mount for similarity matching
   useEffect(() => {
@@ -133,22 +198,87 @@ export default function NewHomePage() {
         const data = await response.json()
         const areas = data.areas || []
         setAreaSuggestions(areas)
-        // Update dropdown visibility based on results
-        // Only show if there are actual suggestions
-        const shouldShow = areas.length > 0
-        setShowAreaDropdown(shouldShow)
+        const hasResults = areas.length > 0
+        const canAdd = !hasResults && query.trim().length >= 2
+        setShowAddAreaOption(canAdd)
+        setShowAreaDropdown(hasResults || canAdd)
       } else {
-        // If API call fails, hide dropdown and clear suggestions
         setAreaSuggestions([])
+        setShowAddAreaOption(false)
         setShowAreaDropdown(false)
       }
     } catch (error) {
       console.error('Error searching areas:', error)
       setAreaSuggestions([])
+      setShowAddAreaOption(false)
       setShowAreaDropdown(false)
     } finally {
       setSearchingAreas(false)
     }
+  }
+
+  const openNewAreaForm = () => {
+    const typed = areaSearchQuery.trim()
+    if (isGreekInput(typed)) {
+      setNewAreaNameEl(typed)
+      setNewAreaNameEn('')
+    } else {
+      setNewAreaNameEn(typed)
+      setNewAreaNameEl('')
+    }
+    setShowAreaDropdown(false)
+    setShowAddAreaOption(false)
+    setNewAreaMode(true)
+  }
+
+  const handleAddArea = async () => {
+    const nameEl = newAreaNameEl.trim()
+    const nameEn = newAreaNameEn.trim()
+    if (!nameEl && !nameEn) return
+    setAddingArea(true)
+    try {
+      const res = await fetch('/api/areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nameEn || undefined,
+          nameGreek: nameEl || undefined,
+          city: formData.city || undefined,
+          country: formData.country || undefined,
+        }),
+      })
+      if (res.ok) {
+        const { area } = await res.json()
+        setAllAreas(prev => [...prev, { id: area.id, name: area.name, nameGreek: area.nameGreek }])
+        setFormData(prev => ({ ...prev, area: area.name }))
+        setAreaSearchQuery(nameEl || nameEn)
+        setNewAreaMode(false)
+        setNewAreaNameEl('')
+        setNewAreaNameEn('')
+        setAreaSelectedFromDropdown(true)
+      }
+    } catch { /* ignore */ }
+    finally { setAddingArea(false) }
+  }
+
+  const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
+
+  const searchCities = async (query: string) => {
+    if (query.length < 1) { setCitySuggestions([]); return }
+    try {
+      const params = new URLSearchParams({ q: query, limit: '10' })
+      if (formData.country) params.append('country', formData.country)
+      const res = await fetch(`/api/cities/search?${params.toString()}`)
+      if (res.ok) setCitySuggestions((await res.json()).cities || [])
+    } catch { /* ignore */ }
+  }
+
+  const searchCountries = async (query: string) => {
+    if (query.length < 1) { setCountrySuggestions([]); return }
+    try {
+      const res = await fetch(`/api/countries/search?q=${encodeURIComponent(query)}&limit=10`)
+      if (res.ok) setCountrySuggestions((await res.json()).countries || [])
+    } catch { /* ignore */ }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,50 +361,23 @@ export default function NewHomePage() {
     setError('')
     setLoading(true)
 
-    // Always ensure we have a valid area name from the database
+    // formData.area is always set to the canonical DB name when user selects from dropdown
+    // or via fuzzy match on blur. Trust it directly; stale allAreas cache is not used here.
     let finalArea: string | null = null
-    
-    // First, check if formData.area is already a valid area name from the database
-    // This should be the case if user clicked on a suggestion from the dropdown
     if (formData.area && formData.area.trim().length > 0) {
-      const isValidArea = allAreas.some(a => a.name === formData.area.trim())
-      if (isValidArea) {
-        // formData.area is already a valid area name, use it directly (user selected from dropdown)
-        finalArea = formData.area.trim()
-      } else {
-        // formData.area exists but is not a valid area name, try to find closest match
-        // But only if user didn't explicitly select from dropdown (shouldn't happen, but safety check)
-        const mostSimilar = findMostSimilarArea(formData.area, allAreas)
-        if (mostSimilar) {
-          finalArea = mostSimilar.name
-        }
-      }
-    }
-    
-    // If we still don't have a valid area, try matching from areaSearchQuery
-    // This is a fallback for when user typed but didn't select
-    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
-      // First try exact match by display name (Greek or English)
-      const matchedArea = allAreas.find(a => 
-        a.name === areaSearchQuery.trim() || 
+      finalArea = formData.area.trim()
+    } else if (areaSearchQuery && areaSearchQuery.trim().length > 0) {
+      // User typed but never triggered a selection — try fuzzy match against cached list
+      const matchedArea = allAreas.find(a =>
+        a.name === areaSearchQuery.trim() ||
         (a.nameGreek && a.nameGreek === areaSearchQuery.trim())
       )
       if (matchedArea) {
         finalArea = matchedArea.name
       } else {
-        // Last resort: try similarity matching
         const mostSimilar = findMostSimilarArea(areaSearchQuery, allAreas)
-        if (mostSimilar) {
-          finalArea = mostSimilar.name
-        }
+        finalArea = mostSimilar ? mostSimilar.name : areaSearchQuery.trim()
       }
-    }
-    
-    // Only use what they typed if no match was found and we have something
-    // But prefer to leave it null if no valid match
-    if (!finalArea && areaSearchQuery && areaSearchQuery.trim().length > 0) {
-      // Last resort: use what they typed (but this shouldn't happen if they clicked a suggestion)
-      finalArea = areaSearchQuery.trim()
     }
 
     try {
@@ -294,7 +397,7 @@ export default function NewHomePage() {
         }),
       })
 
-      let data: any = {}
+      let data: { error?: string; details?: string; home?: { key: string }; [key: string]: unknown } = {}
       const contentType = response.headers.get('content-type')
       const hasJsonContent = contentType && contentType.includes('application/json')
       
@@ -328,12 +431,19 @@ export default function NewHomePage() {
       }
 
       if (!response.ok) {
-        // Show detailed error message if available
-        const errorMsg = data.details 
+        if (response.status === 402) {
+          const limitMsg = data?.message
+            ? `${data.message} ${language === 'el' ? 'Αναβαθμίστε για να δημοσιεύσετε περισσότερες αγγελίες.' : 'Upgrade to publish more listings.'}`
+            : (language === 'el' ? 'Έχετε φτάσει το όριο αγγελιών. Αναβαθμίστε για να συνεχίσετε.' : 'You\'ve reached your listing limit. Upgrade to continue.')
+          setError(limitMsg)
+          setTimeout(() => router.push('/upgrade'), 3000)
+          return
+        }
+        const errorMsg = data.details
           ? `${data.error || getTranslation(language, 'createListingFailed')}: ${data.details}`
           : data.error || getTranslation(language, 'createListingFailed')
         setError(errorMsg)
-        console.error('Create listing error:', { 
+        console.error('Create listing error:', {
           status: response.status, 
           statusText: response.statusText,
           data,
@@ -344,7 +454,7 @@ export default function NewHomePage() {
       }
 
       // Redirect to the newly created home's detail page
-      router.push(`/homes/${data.home.key}?from=my-listings`)
+      router.push(`/homes/${data.home?.key}?from=my-listings`)
     } catch (err) {
       console.error('Error creating listing:', err)
       setError(err instanceof Error ? err.message : getTranslation(language, 'somethingWentWrong'))
@@ -353,22 +463,44 @@ export default function NewHomePage() {
     }
   }
 
+  function closeBulkModal() {
+    setShowBulkUploadModal(false)
+    setBulkUploadError('')
+    setBulkUploadSuccess('')
+    setParsedHouses([])
+    setExcelFile(null)
+    setHousePhotos({})
+    setExcelInputKey(prev => prev + 1)
+    setUnknownAreas([])
+    setAreaDecisions({})
+  }
+
+  function requestBulkClose() {
+    if (parsedHouses.length > 0) {
+      setConfirmBulkClose(true)
+    } else {
+      closeBulkModal()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-8 shadow-xl border border-[var(--border-subtle)]">
+        <div className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-4 sm:p-8 shadow-xl border border-[var(--border-subtle)]">
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <h1 className="text-3xl font-bold text-[var(--text)]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text)]">
                 {getTranslation(language, 'createListing')}
               </h1>
-              <button
-                type="button"
-                onClick={() => setShowBulkUploadModal(true)}
-                className="px-4 py-2 bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--canvas-mid)] hover:border-[var(--accent)]/45 transition-all text-sm font-semibold"
-              >
-                {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
-              </button>
+              <UpgradeGate requiredTier="plus" currentTier={subscriptionTier} feature="bulk-upload" mode="drawer">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkUploadModal(true)}
+                  className="px-4 py-2 bg-[var(--ink-soft)] text-[var(--text)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--canvas-mid)] hover:border-[var(--accent)]/45 transition-all text-sm font-semibold"
+                >
+                  {language === 'el' ? '📄 Δημοσίευση από Αρχείο' : '📄 Publish by File'}
+                </button>
+              </UpgradeGate>
             </div>
             <p className="text-[var(--text-muted)]">
               {getTranslation(language, 'listingDetails')}
@@ -453,10 +585,11 @@ export default function NewHomePage() {
                 {photos.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo, index) => (
-                      <div key={index} className="relative group">
+                      <div key={photo} className="relative group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={photo}
-                          alt={`Photo ${index + 1}`}
+                          alt={`${index + 1}`}
                           className="w-full h-32 object-cover rounded-xl border border-[var(--border-subtle)]"
                         />
                         <button
@@ -513,27 +646,86 @@ export default function NewHomePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              {/* City autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'city')}</label>
                 <input
                   type="text"
                   required
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, city: q })
+                    if (q.length > 0) { setShowCityDropdown(true); searchCities(q) }
+                    else { setShowCityDropdown(false); setCitySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.city.length > 0) { setShowCityDropdown(true); searchCities(formData.city) } }}
+                  onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCity')}
                 />
+                {showCityDropdown && citySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {citySuggestions.map((city) => (
+                      <button
+                        key={city.city + '-' + city.country}
+                        type="button"
+                        onClick={() => {
+                          const displayCity = (isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city
+                          const displayCountry = (isGreekInput(formData.city) || language === 'el') && city.countryGreek ? city.countryGreek : city.country
+                          setFormData(prev => ({
+                            ...prev,
+                            city: displayCity,
+                            country: prev.country || displayCountry,
+                          }))
+                          setShowCityDropdown(false)
+                          setCitySuggestions([])
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                      >
+                        <div className="font-medium">{(isGreekInput(formData.city) || language === 'el') && city.cityGreek ? city.cityGreek : city.city}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              {/* Country autocomplete */}
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text)] mb-2">{getTranslation(language, 'country')}</label>
                 <input
                   type="text"
                   required
                   value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setFormData({ ...formData, country: q })
+                    if (q.length > 0) { setShowCountryDropdown(true); searchCountries(q) }
+                    else { setShowCountryDropdown(false); setCountrySuggestions([]) }
+                  }}
+                  onFocus={() => { if (formData.country.length > 0) { setShowCountryDropdown(true); searchCountries(formData.country) } }}
+                  onBlur={() => setTimeout(() => setShowCountryDropdown(false), 200)}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'placeholderCountry')}
                 />
+                {showCountryDropdown && countrySuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((country) => (
+                      <button
+                        key={country.country}
+                        type="button"
+                        onClick={() => {
+                          const display = (isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country
+                          setFormData(prev => ({ ...prev, country: display }))
+                          setShowCountryDropdown(false)
+                          setCountrySuggestions([])
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--canvas-mid)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
+                      >
+                        <div className="font-medium">{(isGreekInput(formData.country) || language === 'el') && country.countryGreek ? country.countryGreek : country.country}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -555,9 +747,10 @@ export default function NewHomePage() {
                       searchAreas(query)
                     } else {
                       setShowAreaDropdown(false)
+                      setShowAddAreaOption(false)
                       setAreaSuggestions([])
                       setFormData({ ...formData, area: '' })
-                      setAreaSelectedFromDropdown(false) // Reset flag when clearing
+                      setAreaSelectedFromDropdown(false)
                     }
                   }}
                   onFocus={() => {
@@ -575,9 +768,9 @@ export default function NewHomePage() {
                     // Delay to allow click on dropdown items
                     setTimeout(() => {
                       setShowAreaDropdown(false)
-                      // If user explicitly selected from dropdown, don't override their choice
+                      setShowAddAreaOption(false)
                       if (areaSelectedFromDropdown) {
-                        setAreaSelectedFromDropdown(false) // Reset flag
+                        setAreaSelectedFromDropdown(false)
                         return
                       }
                       // If user typed but didn't select, try to find most similar
@@ -608,7 +801,7 @@ export default function NewHomePage() {
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
                   placeholder={getTranslation(language, 'selectCityArea')}
                 />
-                {showAreaDropdown && areaSuggestions.length > 0 && (
+                {showAreaDropdown && (areaSuggestions.length > 0 || showAddAreaOption) && (
                   <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-subtle)] rounded-2xl shadow-xl max-h-60 overflow-y-auto">
                     {areaSuggestions.map((area) => (
                       <button
@@ -617,13 +810,12 @@ export default function NewHomePage() {
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
-                          // Store English name in formData, but display translated name
-                          const displayName = language === 'el' && area.nameGreek ? area.nameGreek : area.name
+                          const displayName = isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name
                           setFormData(prev => ({ ...prev, area: area.name }))
                           setAreaSearchQuery(displayName)
                           setShowAreaDropdown(false)
-                          setAreaSelectedFromDropdown(true) // Mark that user explicitly selected from dropdown
-                          // Ensure the area is set correctly
+                          setShowAddAreaOption(false)
+                          setAreaSelectedFromDropdown(true)
                           setTimeout(() => {
                             setFormData(prev => {
                               if (prev.area !== area.name) {
@@ -635,7 +827,7 @@ export default function NewHomePage() {
                         }}
                         className="w-full px-4 py-3 text-left text-[var(--text)] hover:bg-[var(--ink-soft)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                       >
-                        <div className="font-medium">{language === 'el' && area.nameGreek ? area.nameGreek : area.name}</div>
+                        <div className="font-medium">{isGreekInput(areaSearchQuery) && area.nameGreek ? area.nameGreek : area.name}</div>
                         {(area.city || area.country) && (
                           <div className="text-sm text-[var(--text-muted)]">
                             {[area.city, area.country].filter(Boolean).join(', ')}
@@ -643,6 +835,78 @@ export default function NewHomePage() {
                         )}
                       </button>
                     ))}
+                    {showAddAreaOption && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          openNewAreaForm()
+                        }}
+                        className="w-full px-4 py-3 text-left text-[var(--accent)] hover:bg-[var(--canvas-mid)] transition-colors flex items-center gap-2"
+                      >
+                        <span className="text-lg leading-none">+</span>
+                        <span className="font-medium">
+                          {language === 'el'
+                            ? `Προσθήκη "${areaSearchQuery}" ως νέα περιοχή`
+                            : `Add "${areaSearchQuery}" as a new area`}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Two-column new-area form */}
+                {newAreaMode && (
+                  <div className="absolute z-50 w-full mt-2 bg-[var(--ink-soft)] border border-[var(--border-default)] rounded-2xl shadow-xl p-4 space-y-3">
+                    <p className="text-sm font-semibold text-[var(--text)]">
+                      {language === 'el' ? 'Καταχώρηση νέας περιοχής' : 'Register new area'}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">
+                          {language === 'el' ? 'Ελληνικό όνομα' : 'Greek name'}
+                        </label>
+                        <input
+                          type="text"
+                          value={newAreaNameEl}
+                          onChange={e => setNewAreaNameEl(e.target.value)}
+                          placeholder="π.χ. Νέα Σμύρνη"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wide">
+                          {language === 'el' ? 'Αγγλικό όνομα' : 'English name'}
+                        </label>
+                        <input
+                          type="text"
+                          value={newAreaNameEn}
+                          onChange={e => setNewAreaNameEn(e.target.value)}
+                          placeholder="e.g. Nea Smyrni"
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={addingArea || (!newAreaNameEl.trim() && !newAreaNameEn.trim())}
+                        onClick={handleAddArea}
+                        className="btn-primary px-4 py-2 text-sm disabled:opacity-40"
+                      >
+                        {addingArea
+                          ? (language === 'el' ? 'Προσθήκη...' : 'Adding...')
+                          : (language === 'el' ? 'Καταχώρηση' : 'Register')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setNewAreaMode(false); setNewAreaNameEl(''); setNewAreaNameEn('') }}
+                        className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors border border-[var(--border-subtle)] rounded-xl"
+                      >
+                        {language === 'el' ? 'Ακύρωση' : 'Cancel'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -735,7 +999,7 @@ export default function NewHomePage() {
                   value={formData.floor}
                   onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
                   className="w-full px-4 py-3 border border-[var(--border-subtle)] bg-[var(--ink-soft)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all text-[var(--text)] placeholder:text-[var(--text)]/50"
-                  placeholder={getTranslation(language, 'placeholderBedrooms')}
+                  placeholder={getTranslation(language, 'placeholderFloor')}
                 />
               </div>
               <div>
@@ -828,24 +1092,15 @@ export default function NewHomePage() {
 
       {/* Bulk Upload Modal */}
       {showBulkUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={requestBulkClose}>
+          <div className="bg-[var(--ink-soft)] border-4 border-[var(--border-subtle)] rounded-3xl p-8 max-w-4xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-[var(--text)]">
                 {language === 'el' ? 'Δημοσίευση από Αρχείο Excel' : 'Publish from Excel File'}
               </h2>
               <button
-                onClick={() => {
-                  setShowBulkUploadModal(false)
-                  setBulkUploadError('')
-                  setBulkUploadSuccess('')
-                  setParsedHouses([])
-                  setExcelFile(null)
-                  setHousePhotos({})
-                  setExcelInputKey(prev => prev + 1)
-                  setUnknownAreas([])
-                  setAreaDecisions({})
-                }}
+                type="button"
+                onClick={requestBulkClose}
                 className="text-[var(--text-muted)] hover:text-[var(--text)] text-2xl"
               >
                 ×
@@ -896,13 +1151,23 @@ export default function NewHomePage() {
                     <input
                       key={excelInputKey}
                       type="file"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.numbers"
                       className="hidden"
                       onChange={async (e) => {
                         const file = e.target.files?.[0]
                         if (!file) return
 
                         setBulkUploadError('')
+
+                        if (file.name.toLowerCase().endsWith('.numbers')) {
+                          setBulkUploadError(
+                            language === 'el'
+                              ? 'Τα αρχεία Apple Numbers δεν υποστηρίζονται άμεσα. Στο Numbers επιλέξτε Αρχείο → Εξαγωγή ως → Excel (.xlsx) και ανεβάστε το αρχείο Excel.'
+                              : 'Apple Numbers files cannot be uploaded directly. In Numbers, choose File → Export To → Excel (.xlsx), then upload the exported file.'
+                          )
+                          return
+                        }
+
                         setExcelFile(file)
 
                         try {
@@ -910,7 +1175,7 @@ export default function NewHomePage() {
                           const workbook = XLSX.read(arrayBuffer, { type: 'array' })
                           const sheetName = workbook.SheetNames[0]
                           const worksheet = workbook.Sheets[sheetName]
-                          const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+                          const data = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
 
                           if (data.length === 0) {
                             setBulkUploadError(language === 'el' ? 'Το αρχείο Excel είναι άδειο' : 'Excel file is empty')
@@ -951,7 +1216,7 @@ export default function NewHomePage() {
                           } finally {
                             setAreaValidating(false)
                           }
-                        } catch (err) {
+                        } catch {
                           setBulkUploadError(language === 'el' ? 'Σφάλμα ανάγνωσης αρχείου Excel' : 'Error reading Excel file')
                           setExcelFile(null)
                         }
@@ -1003,14 +1268,19 @@ export default function NewHomePage() {
                       uploadFormData.append('excelFile', excelFile)
                       uploadFormData.append('useAIDescription', useAIDescriptionBulk ? 'true' : 'false')
 
-                      // Include areas confirmed by owner (to be added to DB)
+                      // Include areas confirmed by owner.
+                      // 'confirmed' → use the matched suggestion (maps to existing DB area).
+                      // 'new' → use the owner-supplied custom name (processor will create it).
                       const confirmedNewAreas = unknownAreas
-                        .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed')
+                        .filter(ua => areaDecisions[ua.rowIndex] === 'confirmed' || areaDecisions[ua.rowIndex] === 'new')
                         .map(ua => {
                           const house = parsedHouses.find(h => h.rowIndex === ua.rowIndex)
+                          const area = areaDecisions[ua.rowIndex] === 'new'
+                            ? (areaCustomNames[ua.rowIndex] || ua.areaInput)
+                            : (ua.suggestion ?? ua.areaInput)
                           return {
                             rowIndex: ua.rowIndex,
-                            area: ua.areaInput,
+                            area,
                             city: house?.city || undefined,
                             country: house?.country || undefined,
                           }
@@ -1041,29 +1311,14 @@ export default function NewHomePage() {
                         return
                       }
 
-                      if (data.errors && data.errors.length > 0) {
-                        setBulkUploadError(
-                          language === 'el'
-                            ? `Δημιουργήθηκαν ${data.created} ακίνητα. Σφάλματα: ${data.errors.join(', ')}`
-                            : `Created ${data.created} homes. Errors: ${data.errors.join(', ')}`
-                        )
-                      } else {
-                        setBulkUploadSuccess(
-                          language === 'el'
-                            ? `Επιτυχής δημιουργία ${data.created} ακινήτων!`
-                            : `Successfully created ${data.created} homes!`
-                        )
-                      }
-
-                      // Redirect to my listings after 2 seconds
-                      setTimeout(() => {
-                        router.push('/homes/my-listings')
-                      }, 2000)
-                    } catch (err) {
+                      // Job created — polling useEffect takes over from here
+                      setBulkJobId(data.jobId)
+                      setBulkJobProgress(0)
+                      setBulkJobTotal(parsedHouses.length)
+                    } catch {
                       setBulkUploadError(
                         language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'
                       )
-                    } finally {
                       setBulkUploadLoading(false)
                     }
                   }}
@@ -1108,7 +1363,7 @@ export default function NewHomePage() {
 
                   <div className="space-y-4 max-h-[400px] overflow-y-auto">
                     {parsedHouses.map((house, index) => (
-                      <div key={index} className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]">
+                      <div key={house.rowIndex} className="bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--border-subtle)]">
                         <div className="mb-3">
                           <h3 className="text-[var(--text)] font-semibold">
                             {house.title || `House ${index + 1}`}
@@ -1123,56 +1378,151 @@ export default function NewHomePage() {
                           const ua = unknownAreas.find(u => u.rowIndex === house.rowIndex)
                           if (!ua) return null
                           const decision = areaDecisions[house.rowIndex]
+                          const isEditingNew = areaEditingNew[house.rowIndex]
+                          const customName = areaCustomNames[house.rowIndex] ?? ua.areaInput
+
+                          const undoButton = (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAreaDecisions(prev => { const n = { ...prev }; delete n[house.rowIndex]; return n })
+                                setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))
+                              }}
+                              className="text-xs underline underline-offset-2 opacity-60 hover:opacity-100 transition-opacity ml-2"
+                            >
+                              {language === 'el' ? 'Αναίρεση' : 'Undo'}
+                            </button>
+                          )
+
                           if (decision === 'confirmed') {
                             return (
-                              <div className="mb-3 px-3 py-2 bg-green-50/80 border border-green-200 rounded-xl text-sm text-green-700">
-                                {language === 'el'
-                                  ? `✓ Η περιοχή "${ua.areaInput}" θα προστεθεί στη βάση δεδομένων`
-                                  : `✓ Area "${ua.areaInput}" will be added to the database`}
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-success-bg)] border border-[var(--status-success)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-success)] font-medium">
+                                  {language === 'el'
+                                    ? `✓ Αντιστοιχίστηκε στην υπάρχουσα περιοχή "${ua.suggestion}"`
+                                    : `✓ Mapped to existing area "${ua.suggestion}"`}
+                                </span>
+                                {undoButton}
                               </div>
                             )
                           }
+
+                          if (decision === 'new') {
+                            return (
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-success-bg)] border border-[var(--status-success)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-success)] font-medium">
+                                  {language === 'el'
+                                    ? `✓ Νέα περιοχή "${areaCustomNames[house.rowIndex]}" θα καταχωρηθεί στη βάση`
+                                    : `✓ New area "${areaCustomNames[house.rowIndex]}" will be registered`}
+                                </span>
+                                {undoButton}
+                              </div>
+                            )
+                          }
+
                           if (decision === 'rejected') {
                             return (
-                              <div className="mb-3 px-3 py-2 bg-red-50/80 border border-red-200 rounded-xl text-sm text-red-700">
-                                {language === 'el'
-                                  ? `✗ Παρακαλώ διορθώστε την περιοχή "${ua.areaInput}" στο Excel και ανεβάστε ξανά`
-                                  : `✗ Please correct the area "${ua.areaInput}" in your Excel and re-upload`}
+                              <div className="mb-3 px-4 py-3 bg-[var(--status-error-bg)] border border-[var(--status-error)]/30 rounded-xl text-sm flex items-center justify-between">
+                                <span className="text-[var(--status-error)]">
+                                  {language === 'el'
+                                    ? `✗ Διορθώστε "${ua.areaInput}" στο Excel και ανεβάστε ξανά`
+                                    : `✗ Please correct "${ua.areaInput}" in your Excel and re-upload`}
+                                </span>
+                                {undoButton}
                               </div>
                             )
                           }
+
+                          // Pending — no decision yet
                           return (
-                            <div className="mb-3 px-3 py-3 bg-yellow-50/80 border border-yellow-200 rounded-xl text-sm">
-                              <p className="text-yellow-800 font-medium mb-1">
-                                {ua.suggestion
-                                  ? (language === 'el'
-                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε. Εννοείτε "${ua.suggestion}";`
-                                    : `⚠ Area "${ua.areaInput}" not found. Did you mean "${ua.suggestion}"?`)
-                                  : (language === 'el'
-                                    ? `⚠ Η περιοχή "${ua.areaInput}" δεν βρέθηκε στη βάση δεδομένων`
-                                    : `⚠ Area "${ua.areaInput}" was not found in the database`)}
-                              </p>
-                              <p className="text-yellow-700 mb-2">
-                                {language === 'el'
-                                  ? 'Είστε σίγουροι ότι αυτή είναι η σωστή περιοχή;'
-                                  : 'Are you sure this is the correct area name?'}
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
-                                  className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold transition-colors"
-                                >
-                                  {language === 'el' ? 'Ναι, είναι σωστό' : "Yes, it's correct"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
-                                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-colors"
-                                >
-                                  {language === 'el' ? 'Όχι, θα το διορθώσω' : "No, I'll fix it"}
-                                </button>
+                            <div className="mb-3 px-4 py-3 bg-[var(--status-warning-bg)] border border-[var(--status-warning)]/30 rounded-xl text-sm space-y-3">
+                              <div>
+                                <p className="font-semibold text-[var(--text)]">
+                                  {language === 'el' ? '⚠ Περιοχή δεν αναγνωρίστηκε' : '⚠ Area not recognised'}
+                                </p>
+                                <p className="text-[var(--text-muted)] mt-0.5">
+                                  {ua.suggestion
+                                    ? (language === 'el'
+                                      ? `Πληκτρολογήσατε "${ua.areaInput}" — η πλησιέστερη αντιστοιχία είναι "${ua.suggestion}"`
+                                      : `You entered "${ua.areaInput}" — closest match is "${ua.suggestion}"`)
+                                    : (language === 'el'
+                                      ? `Η περιοχή "${ua.areaInput}" δεν βρέθηκε στη βάση δεδομένων`
+                                      : `"${ua.areaInput}" was not found in the database`)}
+                                </p>
                               </div>
+
+                              {isEditingNew || !ua.suggestion ? (
+                                // New area name input (shown when no suggestion, or user chose to register new)
+                                <div className="space-y-2">
+                                  <label className="block text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                                    {language === 'el' ? 'Όνομα νέας περιοχής' : 'New area name'}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={customName}
+                                    onChange={e => setAreaCustomNames(prev => ({ ...prev, [house.rowIndex]: e.target.value }))}
+                                    className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--surface)] text-[var(--text)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                                    placeholder={ua.areaInput}
+                                  />
+                                  <div className="flex gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      disabled={!customName.trim()}
+                                      onClick={() => {
+                                        if (!areaCustomNames[house.rowIndex]) {
+                                          setAreaCustomNames(prev => ({ ...prev, [house.rowIndex]: customName }))
+                                        }
+                                        setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'new' }))
+                                        setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))
+                                      }}
+                                      className="px-4 py-1.5 bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 text-[var(--ink)] rounded-lg text-xs font-semibold transition-opacity"
+                                    >
+                                      {language === 'el' ? 'Καταχώρηση νέας περιοχής' : 'Register new area'}
+                                    </button>
+                                    {isEditingNew && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: false }))}
+                                        className="px-4 py-1.5 border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text)] rounded-lg text-xs font-semibold transition-colors"
+                                      >
+                                        {language === 'el' ? 'Ακύρωση' : 'Cancel'}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
+                                      className="px-4 py-1.5 border border-[var(--status-error)]/40 text-[var(--status-error)] hover:bg-[var(--status-error-bg)] rounded-lg text-xs font-semibold transition-colors"
+                                    >
+                                      {language === 'el' ? 'Θα το διορθώσω στο Excel' : 'Correct in Excel'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                // Suggestion exists — show primary actions
+                                <div className="flex gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'confirmed' }))}
+                                    className="px-4 py-1.5 bg-[var(--status-success)] hover:opacity-90 text-white rounded-lg text-xs font-semibold transition-opacity"
+                                  >
+                                    {language === 'el' ? `Χρήση "${ua.suggestion}"` : `Use "${ua.suggestion}"`}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaEditingNew(prev => ({ ...prev, [house.rowIndex]: true }))}
+                                    className="px-4 py-1.5 border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-lg text-xs font-semibold transition-colors"
+                                  >
+                                    {language === 'el' ? 'Καταχώρηση υπό διαφορετικό όνομα' : 'Register under a different name'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAreaDecisions(prev => ({ ...prev, [house.rowIndex]: 'rejected' }))}
+                                    className="px-4 py-1.5 border border-[var(--status-error)]/40 text-[var(--status-error)] hover:bg-[var(--status-error-bg)] rounded-lg text-xs font-semibold transition-colors"
+                                  >
+                                    {language === 'el' ? 'Θα το διορθώσω στο Excel' : 'Correct in Excel'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )
                         })()}
@@ -1209,6 +1559,22 @@ export default function NewHomePage() {
                     ))}
                   </div>
 
+                  {bulkJobId && (
+                    <div className="pt-2 pb-1">
+                      <p className="text-sm text-[var(--text-muted)] mb-2">
+                        {language === 'el'
+                          ? `Επεξεργασία ${bulkJobProgress} από ${bulkJobTotal} ακίνητα...`
+                          : `Processing ${bulkJobProgress} of ${bulkJobTotal} homes...`}
+                      </p>
+                      <div className="w-full bg-[var(--border-subtle)] rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-[var(--accent)] h-2 rounded-full transition-all duration-500"
+                          style={{ width: bulkJobTotal > 0 ? `${Math.round((bulkJobProgress / bulkJobTotal) * 100)}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap justify-end gap-4 pt-4">
                     <button
                       type="button"
@@ -1222,6 +1588,7 @@ export default function NewHomePage() {
                         setExcelInputKey(prev => prev + 1)
                         setUnknownAreas([])
                         setAreaDecisions({})
+                        setBulkJobId(null)
                       }}
                       className="min-w-[8rem] px-6 py-3 bg-[var(--ink-soft)] text-[var(--text)] rounded-xl hover:bg-[var(--ink-soft)] transition-all font-semibold text-sm border border-[var(--border-subtle)]"
                     >
@@ -1231,17 +1598,20 @@ export default function NewHomePage() {
                       type="submit"
                       disabled={
                         bulkUploadLoading ||
+                        !!bulkJobId ||
                         areaValidating ||
                         unknownAreas.some(ua => !areaDecisions[ua.rowIndex]) ||
                         unknownAreas.some(ua => areaDecisions[ua.rowIndex] === 'rejected')
                       }
                       className="min-w-[8rem] px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl hover:bg-[var(--btn-primary-hover-bg)] transition-colors font-semibold text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {bulkUploadLoading
-                        ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
-                        : areaValidating
-                          ? (language === 'el' ? 'Έλεγχος...' : 'Checking...')
-                          : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
+                      {bulkJobId
+                        ? (language === 'el' ? 'Επεξεργασία...' : 'Processing...')
+                        : bulkUploadLoading
+                          ? (language === 'el' ? 'Ανέβασμα...' : 'Uploading...')
+                          : areaValidating
+                            ? (language === 'el' ? 'Έλεγχος...' : 'Checking...')
+                            : (language === 'el' ? 'Ανέβασμα' : 'Upload')}
                     </button>
                   </div>
                 </form>
@@ -1250,6 +1620,21 @@ export default function NewHomePage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmBulkClose}
+        title={language === 'el' ? 'Ακύρωση εισαγωγής;' : 'Discard import?'}
+        message={
+          language === 'el'
+            ? 'Έχετε αγγελίες έτοιμες για δημοσίευση. Αν κλείσετε τώρα θα χαθούν. Θέλετε να συνεχίσετε;'
+            : 'You have listings ready to publish. Closing now will discard them. Are you sure?'
+        }
+        confirmLabel={language === 'el' ? 'Κλείσιμο' : 'Discard'}
+        onConfirm={() => { setConfirmBulkClose(false); closeBulkModal() }}
+        onCancel={() => setConfirmBulkClose(false)}
+        language={language}
+        variant="danger"
+      />
     </div>
   )
 }

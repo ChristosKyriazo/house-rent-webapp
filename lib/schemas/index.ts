@@ -2,9 +2,9 @@ import { z } from 'zod'
 
 // ── Shared primitives ──────────────────────────────────────────────────────────
 
-export const positiveInt = z.coerce.number().int().positive()
-export const nonEmptyString = z.string().min(1)
-export const isoDate = z.string().datetime({ offset: true }).or(z.string().refine(s => !isNaN(Date.parse(s)), { message: 'Invalid date' }))
+const positiveInt =z.coerce.number().int().positive()
+const nonEmptyString =z.string().min(1)
+const isoDate =z.string().datetime({ offset: true }).or(z.string().refine(s => !isNaN(Date.parse(s)), { message: 'Invalid date' }))
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ export const createBookingSchema = z.object({
 export const createHomeSchema = z.object({
   title: nonEmptyString.max(200),
   description: z.string().optional(),
+  descriptionGreek: z.string().optional(),
   street: z.string().optional(),
   city: nonEmptyString,
   country: nonEmptyString,
@@ -54,12 +55,55 @@ export const createInquirySchema = z.object({
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 
-export const createRatingSchema = z.object({
-  ratedUserId: positiveInt,
-  type: z.enum(['owner', 'renter']),
-  score: z.number().int().min(1).max(5),
-  comment: z.string().max(1000).optional(),
-})
+const starScore = z.number().int().min(1).max(5)
+
+export const createRatingSchema = z.discriminatedUnion('type', [
+  // Owner or broker rates tenant after viewing
+  z.object({
+    type: z.literal('viewing_tenant'),
+    ratedUserId: positiveInt,
+    bookingId: positiveInt,
+    scores: z.object({ experience: starScore }),
+    comment: z.string().max(400).optional(),
+  }),
+  // Tenant rates broker after viewing
+  z.object({
+    type: z.literal('viewing_broker'),
+    ratedUserId: positiveInt,
+    bookingId: positiveInt,
+    scores: z.object({ punctual: starScore, helpful: starScore, listingMatch: starScore }),
+    comment: z.string().max(400).optional(),
+  }),
+  // Tenant rates house at move-in (+3 days)
+  z.object({
+    type: z.literal('movein_house'),
+    ratedHomeId: positiveInt,
+    finalizationId: positiveInt,
+    scores: z.object({ accuracy: starScore, condition: starScore, handover: starScore }),
+    comment: z.string().max(150).optional(),
+  }),
+  // Tenant rates house at move-out
+  z.object({
+    type: z.literal('moveout_house'),
+    ratedHomeId: positiveInt,
+    finalizationId: positiveInt,
+    scores: z.object({
+      overallCondition: starScore,
+      recommend: starScore,
+      ownerFair: starScore,
+      moveoutHandling: starScore,
+    }),
+    comment: z.string().max(400).optional(),
+  }),
+  // Owner rates tenant at move-out
+  z.object({
+    type: z.literal('moveout_tenant'),
+    ratedUserId: positiveInt,
+    finalizationId: positiveInt,
+    scores: z.object({ propertyCare: starScore, rulesPayment: starScore, wouldRentAgain: starScore }),
+    comment: z.string().max(400).optional(),
+  }),
+])
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 

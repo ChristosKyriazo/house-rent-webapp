@@ -1,5 +1,26 @@
 name: Deploy
 
+# Three environments, one pipeline:
+#
+#   local        feature/*   localhost:3000, own Postgres on 5432   (no deploy)
+#   QA/staging   dev         dev.kaparro.com                        (gated, see below)
+#   production   main        kaparro.com                            (always on)
+#
+# ── QA is configured but not provisioned ────────────────────────────────────
+# There is no QA server yet. Every push to `dev` still runs CI and builds and
+# pushes a real image tagged for staging — so the day a box exists, activation
+# is "set two values and re-run", not "write a pipeline". The deploy itself is
+# gated behind the repo variable DEPLOY_STAGING_ENABLED, which defaults to
+# false.
+#
+# This gate is not cosmetic. Until it existed, SERVER_HOST_STAGING and
+# SERVER_HOST_PROD pointed at the same box, so a push to `dev` deployed to
+# kaparro.com and the post-deploy E2E suite wrote into the production database.
+#
+# Gates are repo-level variables on purpose: environment-scoped variables are
+# not resolved when a job-level `if:` is evaluated, so an environment variable
+# would read as empty and silently skip (or run) the wrong thing.
+
 on:
   push:
     branches: [main, dev]
@@ -9,18 +30,89 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-push:
-    name: Build & push image
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  plan:
+    name: Resolve target
+    needs: ci
     runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.p.outputs.target }}
+      enabled: ${{ steps.p.outputs.enabled }}
+      host_name: ${{ steps.p.outputs.host_name }}
+      app_origin: ${{ steps.p.outputs.app_origin }}
+    steps:
+      - id: p
+        name: Decide where this commit is going
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            target=production
+            host_name=kaparro.com
+            # Production defaults to ENABLED: never make a live deploy depend on
+            # someone having remembered to set a variable.
+            enabled="${{ vars.DEPLOY_PRODUCTION_ENABLED || 'true' }}"
+          else
+            target=staging
+            host_name=dev.kaparro.com
+            # QA defaults to DISABLED: no server exists, and the old fallback
+            # behaviour was to deploy onto the production box.
+            enabled="${{ vars.DEPLOY_STAGING_ENABLED || 'false' }}"
+          fi
+          {
+            echo "target=$target"
+            echo "enabled=$enabled"
+            echo "host_name=$host_name"
+            echo "app_origin=https://$host_name"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "### Deploy plan" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | \`$target\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Host | $host_name |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Deploy enabled | \`$enabled\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  build-push:
+    name: Build & push image (${{ needs.plan.outputs.target }})
+    needs: plan
+    runs-on: ubuntu-latest
+    # The image is built from THIS environment's secrets. NEXT_PUBLIC_* values
+    # are baked into the bundle at build time, so one image cannot serve two
+    # environments: without this, QA and production shared a single Clerk
+    # publishable key (and QA ran against the live Clerk instance).
+    #
+    # Consequence to know: if the production environment has required
+    # reviewers, this build waits for that approval too, not just the deploy.
+    environment: ${{ needs.plan.outputs.target }}
     permissions:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ steps.meta.outputs.version }}
-      full_image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+      image_tag: ${{ steps.img.outputs.tag }}
+      # Deliberately the immutable sha- tag, NOT <branch>-latest. Deploying a
+      # mutable tag makes rollback meaningless: re-pinning `dev-latest` just
+      # re-selects whatever was pushed last, which is the broken build.
+      full_image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.img.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Compute immutable image tag
+        id: img
+        # The environment suffix matters now that the image is built per
+        # environment: the same commit produces two different images, so a bare
+        # sha- tag would have them overwrite each other in the registry.
+        run: |
+          short=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "tag=sha-${short}-${{ needs.plan.outputs.target }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -35,14 +127,14 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix=sha-
+            type=raw,value=${{ steps.img.outputs.tag }}
             type=raw,value=${{ github.ref_name }}-latest
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -50,51 +142,297 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-            CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
-            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # NOTE: DATABASE_URL and CLERK_SECRET_KEY are deliberately NOT build args.
+          # The Dockerfile provides safe build-time placeholders; real values are
+          # written to the server's .env by the deploy job below and never baked
+          # into any image layer.
+
+  deploy-skipped:
+    name: Deploy skipped (${{ needs.plan.outputs.target }} not provisioned)
+    needs: [plan, build-push]
+    if: needs.plan.outputs.enabled != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain
+        run: |
+          echo "::notice::${{ needs.plan.outputs.target }} deploy is disabled — image ${{ needs.build-push.outputs.full_image }} was built and pushed but not deployed."
+          {
+            echo "### ${{ needs.plan.outputs.target }} deploy skipped"
+            echo ""
+            echo "The image is built and waiting in GHCR:"
+            echo ""
+            echo "    ${{ needs.build-push.outputs.full_image }}"
+            echo ""
+            echo "To activate this environment:"
+            echo ""
+            echo "1. Provision the server (docs/OPERATIONS.md → Server provisioning)"
+            echo "2. Set the \`${{ needs.plan.outputs.target }}\` environment secrets, including a"
+            echo "   \`SERVER_HOST_*\` that is **not** the production host"
+            echo "3. Set the repo variable \`DEPLOY_STAGING_ENABLED=true\`"
+            echo "4. Re-run this workflow"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
-    name: Deploy to server
+    name: Deploy to ${{ needs.plan.outputs.target }}
     runs-on: ubuntu-latest
-    needs: build-push
-    # Deploy main → production server, dev → staging server
-    # Add SERVER_HOST_STAGING / SERVER_HOST_PROD secrets in GitHub repo settings
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    needs: [plan, build-push]
+    if: needs.plan.outputs.enabled == 'true'
+    environment: ${{ needs.plan.outputs.target }}
 
     steps:
-      - name: Deploy via SSH
+      - uses: actions/checkout@v5
+
+      - name: Refuse to deploy QA onto the production host
+        # Cheap insurance against the exact misconfiguration this pipeline was
+        # built to undo. A shared host means a `dev` push lands on kaparro.com.
+        if: needs.plan.outputs.target == 'staging'
+        env:
+          STAGING_HOST: ${{ secrets.SERVER_HOST_STAGING }}
+          PROD_HOST: ${{ secrets.SERVER_HOST_PROD }}
+        run: |
+          if [ -z "$STAGING_HOST" ]; then
+            echo "::error::SERVER_HOST_STAGING is empty — set it in the staging environment."
+            exit 1
+          fi
+          if [ "$STAGING_HOST" = "$PROD_HOST" ]; then
+            echo "::error::SERVER_HOST_STAGING equals SERVER_HOST_PROD. QA and production would share one box, one database and one Caddy. Provision a separate server."
+            exit 1
+          fi
+          echo "Staging host is distinct from production."
+
+      - name: Sync this environment's Caddyfile to the server
+        # Caddyfile.staging serves only dev.kaparro.com; Caddyfile.production
+        # serves only kaparro.com + www. A single shared Caddyfile is what gave
+        # production a second hostname on the QA domain.
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ needs.plan.outputs.target == 'production' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: Caddyfile.${{ needs.plan.outputs.target }}
+          target: /opt/house-rent/
+          strip_components: 0
+
+      - name: Write .env and deploy
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ github.ref_name == 'main' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
+          host: ${{ needs.plan.outputs.target == 'production' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
             cd /opt/house-rent
 
-            # Pull the new image
+            # The compose file mounts ./Caddyfile — put this environment's copy there.
+            cp "Caddyfile.${{ needs.plan.outputs.target }}" Caddyfile
+
+            # ── Write .env atomically from CI/CD secrets ──────────────────────
+            # Write to a temp file first; chmod before any data lands in it;
+            # then rename atomically so the running container never sees a partial file.
+            tmp=$(mktemp .env.XXXXXX)
+            chmod 600 "$tmp"
+
+            # The GITHUB_ACTIONS_ENV_EOF delimiter is single-quoted so the server
+            # shell performs zero expansion — GitHub Actions has already substituted
+            # all ${{ secrets.* }} expressions before this script is sent over SSH.
+            cat > "$tmp" << 'GITHUB_ACTIONS_ENV_EOF'
+            # Auto-generated by GitHub Actions — do not edit manually.
+            # Rotate a secret by updating it in GitHub → Settings → Environments
+            # and pushing any commit to redeploy.
+
+            APP_IMAGE=${{ needs.build-push.outputs.full_image }}
+
+            # This environment's own public origin. Consumed by lib/api-utils.ts
+            # appOrigin() for Stripe success/cancel redirects and invite links,
+            # so production never hands a user a link into QA.
+            APP_ORIGIN=${{ needs.plan.outputs.app_origin }}
+
+            # ── Database ──────────────────────────────────────────────────────
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+
+            # ── Clerk auth ────────────────────────────────────────────────────
+            # QA must use its own Clerk instance (pk_test/sk_test). Sharing the
+            # live instance means QA sign-ups create real production users.
+            CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+
+            # ── Observability (optional — leave blank if no Sentry account) ───
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
+            # ── Third-party APIs ──────────────────────────────────────────────
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
+
+            # ── Stripe ───────────────────────────────────────────────────────
+            # QA must use test-mode keys and its OWN webhook endpoint/signing
+            # secret — a webhook endpoint is bound to one URL.
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+            STRIPE_PRICE_ID_PLUS=${{ secrets.STRIPE_PRICE_ID_PLUS }}
+            STRIPE_PRICE_ID_PRO=${{ secrets.STRIPE_PRICE_ID_PRO }}
+
+            # ── Admin allowlist ──────────────────────────────────────────────
+            # Without these, /admin is unreachable in this environment: lib/admin.ts
+            # treats an empty allowlist as "nobody is an admin".
+            ADMIN_CLERK_IDS=${{ secrets.ADMIN_CLERK_IDS }}
+            ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}
+
+            # ── Cron ─────────────────────────────────────────────────────────
+            # Required by /api/bookings/reminders — the route 401s every request
+            # while this is unset, so booking reminders never send.
+            CRON_SECRET=${{ secrets.CRON_SECRET }}
+
+            # ── Feature flags ────────────────────────────────────────────────
+            # Absent or "true" = enabled; "false" disables without a redeploy.
+            FEATURE_AI_SEARCH=${{ vars.FEATURE_AI_SEARCH || 'true' }}
+            FEATURE_BOOKINGS=${{ vars.FEATURE_BOOKINGS || 'true' }}
+            FEATURE_USAGE_ASSISTANT=${{ vars.FEATURE_USAGE_ASSISTANT || 'true' }}
+            FEATURE_VIBER_ALERTS=${{ vars.FEATURE_VIBER_ALERTS || 'false' }}
+            NEXT_PUBLIC_FEATURE_VIBER_ALERTS=${{ vars.FEATURE_VIBER_ALERTS || 'false' }}
+
+            # ── App config ────────────────────────────────────────────────────
+            LOG_LEVEL=info
+            GITHUB_ACTIONS_ENV_EOF
+
+            mv "$tmp" .env
+
+            # ── Record the currently running image, for rollback ──────────────
+            # Capture the image *ID* (sha256), not .Config.Image: the latter is
+            # whatever tag it was started with, and `dev-latest` is mutable —
+            # `docker compose pull` below repoints it at the new build, so
+            # re-pinning that tag would "roll back" to the broken image.
+            # Tag the ID so the layers survive the pull and compose can name it.
+            PREVIOUS_IMAGE=""
+            PREVIOUS_IMAGE_ID=$(docker compose -f docker-compose.prod.yml ps -q app 2>/dev/null \
+              | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null | head -1)
+            if [ -n "$PREVIOUS_IMAGE_ID" ]; then
+              docker tag "$PREVIOUS_IMAGE_ID" house-rent-rollback:previous
+              PREVIOUS_IMAGE=house-rent-rollback:previous
+              echo "Previous image: ${PREVIOUS_IMAGE_ID} (tagged ${PREVIOUS_IMAGE})"
+            else
+              echo "Previous image: <none, first deploy> — rollback unavailable"
+            fi
+
+            # ── Pull new image ────────────────────────────────────────────────
             echo "${{ secrets.GITHUB_TOKEN }}" | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose -f docker-compose.prod.yml pull app
 
-            # Update APP_IMAGE in .env so compose knows which tag to use
-            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${{ needs.build-push.outputs.full_image }}|" .env
-
-            # Rolling restart: only recreate the app container, leave DB and Caddy running
+            # ── Rolling restart (app only — DB and Caddy keep running) ────────
             docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
 
-            # Wait for the health endpoint
+            # ── Reload Caddy if Caddyfile changed ─────────────────────────────
+            # caddy reload validates the new config first — a bad Caddyfile will NOT
+            # take down the running server; it will keep serving the old config.
+            # It must not be silent, though: a rejected Caddyfile is also one
+            # Caddy cannot START with, so the next container restart is an outage.
+            docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
+              --config /etc/caddy/Caddyfile --adapter caddyfile \
+              || echo "::error::Caddy rejected the new Caddyfile and is still serving the OLD config. Caddy will not start with this file — fix it before the container restarts."
+
+            # ── Roll back to the previous image and fail the deploy ───────────
+            rollback() {
+              echo "::error::$1"
+              if [ -z "$PREVIOUS_IMAGE" ]; then
+                echo "No previous image recorded — cannot roll back automatically."
+                echo "Recent app logs:"
+                docker compose -f docker-compose.prod.yml logs --tail 50 app || true
+                exit 1
+              fi
+              echo "Rolling back to $PREVIOUS_IMAGE ..."
+              echo "Failing container's logs:"
+              docker compose -f docker-compose.prod.yml logs --tail 50 app || true
+              # Rewrite APP_IMAGE in .env so the rollback survives a container restart.
+              # NOTE: the NEXT deploy regenerates .env and will bring the bad image
+              # straight back — push a revert commit, do not rely on this pin.
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${PREVIOUS_IMAGE}|" .env
+              docker compose -f docker-compose.prod.yml up -d --no-deps app
+              echo "Rolled back. Push a revert commit — the pin does not survive the next deploy."
+              exit 1
+            }
+
+            # ── How we talk to the app ────────────────────────────────────────
+            # NOT via http://localhost. Caddy 308-redirects every :80 request to
+            # HTTPS, and `curl -f` only fails on 4xx/5xx — so a 308 with an empty
+            # body is a curl SUCCESS. The old `curl -sf http://localhost/api/healthz`
+            # check therefore passed the instant Caddy was up, whether or not the
+            # app worked at all. It never verified anything.
+            #
+            # --resolve pins the public hostname to the loopback address, so the
+            # request goes through Caddy's real site block: routing, TLS
+            # termination and the app are all exercised. -k because the origin
+            # certificate is a Cloudflare origin cert, not publicly trusted.
+            SMOKE_HOST="${{ needs.plan.outputs.host_name }}"
+            fetch_code() {
+              curl -sk -o /dev/null -w '%{http_code}' \
+                --resolve "${SMOKE_HOST}:443:127.0.0.1" --max-time 20 \
+                "https://${SMOKE_HOST}$1" 2>/dev/null || echo 000
+            }
+
+            # ── Liveness: is the process answering? ───────────────────────────
+            HEALTHY=0
             for i in $(seq 1 30); do
-              if curl -sf http://localhost:3000/api/healthz > /dev/null; then
-                echo "App is healthy"
-                exit 0
+              if [ "$(fetch_code /api/healthz)" = "200" ]; then
+                echo "App is live"
+                HEALTHY=1
+                break
               fi
               echo "Waiting for app... ($i/30)"
               sleep 3
             done
-            echo "App failed to become healthy — rolling back"
-            docker compose -f docker-compose.prod.yml up -d --no-deps app \
-              --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(cat .previous_image_tag)
-            exit 1
+            [ "$HEALTHY" = "1" ] || rollback "App failed to become live within 90s"
+
+            # ── Readiness: can it actually reach the database? ────────────────
+            # healthz only proves the Node process is answering. A failed
+            # migration or a dead pool passes healthz and fails here.
+            READY=0
+            for i in $(seq 1 10); do
+              body=$(curl -sk --resolve "${SMOKE_HOST}:443:127.0.0.1" --max-time 20 \
+                "https://${SMOKE_HOST}/api/readyz" 2>/dev/null || true)
+              case "$body" in
+                *'"db":"connected"'*)
+                  echo "App is ready (database connected)"
+                  READY=1
+                  break
+                  ;;
+              esac
+              echo "Waiting for database readiness... ($i/10)"
+              sleep 3
+            done
+            [ "$READY" = "1" ] || rollback "App is live but never became ready — database not connected"
+
+            # ── Smoke: do real pages actually render? ─────────────────────────
+            for path in / /homes; do
+              code=$(fetch_code "$path")
+              if [ "$code" != "200" ]; then
+                rollback "Smoke test failed: ${path} returned HTTP ${code} (expected 200)"
+              fi
+              echo "  ${path} → ${code}"
+            done
+
+            echo "Deploy verified: live, ready, and serving pages."
+
+  e2e:
+    # QA only. Browser-level smoke against the environment we just shipped to,
+    # so UAT is known-good before anyone promotes it to main.
+    #
+    # Deliberately does NOT run against production: these specs write data.
+    # Skipped entirely while QA is unprovisioned — running it against
+    # dev.kaparro.com when that hostname resolved to the production box is how
+    # test listings reached the production database.
+    name: Post-deploy E2E (QA)
+    needs: [plan, deploy]
+    if: needs.plan.outputs.target == 'staging' && needs.plan.outputs.enabled == 'true'
+    uses: ./.github/workflows/e2e.yml
+    with:
+      base_url: https://dev.kaparro.com
+      suite: smoke
+    secrets: inherit

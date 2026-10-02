@@ -1,10 +1,26 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import security from "eslint-plugin-security";
+
+import prettierConfig from "eslint-config-prettier";
 
 const eslintConfig = defineConfig([
+  globalIgnores(['.claude/**']),
   ...nextVitals,
   ...nextTs,
+  {
+    ...security.configs.recommended,
+    rules: {
+      ...security.configs.recommended.rules,
+      // High false-positive rules — obj[key] is idiomatic TS, not a real injection risk
+      "security/detect-object-injection": "off",
+      // Non-literal fs paths are unavoidable in upload handlers; paths are sanitised before use
+      "security/detect-non-literal-fs-filename": "off",
+      // Non-literal RegExp: low value, many legitimate uses
+      "security/detect-non-literal-regexp": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -53,6 +69,23 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  // jsx-a11y: accessibility rules for JSX (warn only — enforces best practices without blocking CI)
+  // Plugin is already registered by eslint-config-next/core-web-vitals; rules only here.
+  {
+    rules: {
+      "jsx-a11y/alt-text": "warn",
+      "jsx-a11y/anchor-has-content": "warn",
+      "jsx-a11y/aria-props": "warn",
+      "jsx-a11y/aria-role": "warn",
+      "jsx-a11y/img-redundant-alt": "warn",
+      "jsx-a11y/interactive-supports-focus": "warn",
+      "jsx-a11y/label-has-associated-control": "warn",
+      "jsx-a11y/no-noninteractive-element-interactions": "warn",
+    },
+  },
+
+  // Prettier must come last — disables all ESLint rules that conflict with formatting
+  prettierConfig,
 ]);
 
 export default eslintConfig;

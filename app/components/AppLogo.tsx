@@ -39,7 +39,7 @@ export default function AppLogo({ className = '' }: AppLogoProps) {
         </svg>
       </span>
       <span className="font-display hidden text-[0.8125rem] font-semibold tracking-tight text-[var(--text)] sm:inline">
-        House Rent
+        Kaparro
       </span>
     </Link>
   )

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { validateBody } from '@/lib/api-utils'
+import { validateBody, unauthorized } from '@/lib/api-utils'
 import { setRoleSchema } from '@/lib/schemas'
 import { requestLogger } from '@/lib/logger'
 
@@ -12,10 +12,7 @@ export async function POST(request: NextRequest) {
     const { userId } = await auth()
     
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return unauthorized()
     }
 
     const rawBody = await request.json()
@@ -35,7 +32,7 @@ export async function POST(request: NextRequest) {
       let cUser
       try {
         cUser = await currentUser()
-      } catch (clerkError: any) {
+      } catch (clerkError: unknown) {
         log.error({ err: clerkError }, 'Error fetching Clerk user')
         return NextResponse.json(
           { error: 'Failed to fetch user information' },
@@ -71,9 +68,9 @@ export async function POST(request: NextRequest) {
             occupation: role === 'broker' ? 'Broker' : null, // Auto-set occupation for brokers
           },
         })
-      } catch (createError: any) {
+      } catch (createError: unknown) {
         // Handle race condition - user might have been created by another request
-        if (createError?.code === 'P2002') {
+        if ((createError as { code?: string })?.code === 'P2002') {
           user = await prisma.user.findUnique({
             where: { clerkUserId: userId },
           })
@@ -88,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Update user role (or create was already done with correct role)
     // If setting role to broker, also set occupation to "Broker"
-    const updateData: any = { role }
+    const updateData: { role: string; occupation?: string } = { role }
     if (role === 'broker') {
       updateData.occupation = 'Broker'
     }
@@ -96,6 +93,7 @@ export async function POST(request: NextRequest) {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: updateData,
+      select: { id: true, email: true, role: true, name: true },
     })
 
     return NextResponse.json(

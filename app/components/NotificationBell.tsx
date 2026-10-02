@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { useUser } from '@clerk/nextjs'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useRole } from '../contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
 import FinalizeNotificationModal from './FinalizeNotificationModal'
+import { localeFor } from '@/lib/format'
 
 interface Notification {
   id: number
@@ -20,6 +22,14 @@ interface Notification {
     | 'booking_reminder'
     | 'rate'
     | 'rejected'
+    | 'new_listing_match'
+    | 'boost_request'
+    | 'boost_approved'
+    | 'boost_declined'
+    | 'team_invite'
+    | 'team_invite_accepted'
+    | 'team_removed'
+    | 'team_left'
   message: string
   homeKey: string
   inquiryId: number | null
@@ -31,6 +41,7 @@ export default function NotificationBell() {
   const router = useRouter()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
+  const { isSignedIn, isLoaded } = useUser()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -40,6 +51,10 @@ export default function NotificationBell() {
   const notificationRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const languageRef = useRef(language)
+
+  // Keep languageRef in sync so polling fetch always uses the current language without restarting the interval
+  languageRef.current = language
 
   // Determine display role
   const displayRole = (actualRole === 'both' && selectedRole) 
@@ -47,13 +62,17 @@ export default function NotificationBell() {
     : (actualRole || 'user')
 
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+
     let inFlight = false
+    let abortController: AbortController | null = null
 
     const fetchNotifications = async () => {
       if (inFlight) return
       inFlight = true
+      abortController = new AbortController()
       try {
-        const response = await fetch(`/api/notifications?language=${language}`)
+        const response = await fetch(`/api/notifications?language=${languageRef.current}`, { signal: abortController.signal })
         if (response && response.ok) {
           const data = await response.json()
           setNotifications(data.notifications || [])
@@ -68,11 +87,13 @@ export default function NotificationBell() {
           setNotifications([])
           setUnviewedCount(0)
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
         setNotifications([])
         setUnviewedCount(0)
       } finally {
         inFlight = false
+        abortController = null
         setLoading(false)
       }
     }
@@ -117,11 +138,12 @@ export default function NotificationBell() {
 
     return () => {
       if (intervalId !== null) clearInterval(intervalId)
+      abortController?.abort()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)
     }
-  }, [language])
+  }, [isLoaded, isSignedIn])
 
   // Position fixed panel under bell (portal) — avoids overflow:hidden on chrome dock clipping the dropdown
   useLayoutEffect(() => {
@@ -192,9 +214,12 @@ export default function NotificationBell() {
   const handleNotificationClick = async (notification: Notification) => {
     setIsOpen(false)
 
-    // Finalize: open modal; still remove from dropdown so the bell matches “already seen”
+    // Finalize: open modal WITHOUT deleting the notification yet.
+    // Deleting it here would set deleted=true on the DB record, which breaks the
+    // waitingForFinalization check in the approved-inquiry API and causes the
+    // finalization buttons to disappear from the home page after a refresh.
+    // The notification is removed in handleFinalizeApprove / handleFinalizeDismiss instead.
     if (notification.type === 'finalize') {
-      await removeFromBell(notification)
       setFinalizeNotification(notification)
       return
     }
@@ -213,8 +238,17 @@ export default function NotificationBell() {
       return
     }
 
-    if (notification.type === 'dismissed' || notification.type === 'rejected') {
+    if (notification.type === 'dismissed') {
       router.push('/homes/my-inquiries')
+      return
+    }
+
+    if (notification.type === 'rejected') {
+      if (displayRole === 'owner' || (actualRole === 'both' && selectedRole === 'owner')) {
+        router.push(notification.homeKey ? `/homes/inquiries/${notification.homeKey}` : '/homes/my-listings')
+      } else {
+        router.push('/homes/my-inquiries')
+      }
       return
     }
 
@@ -252,12 +286,41 @@ export default function NotificationBell() {
       return
     }
 
+    if (notification.type === 'booking_reminder') {
+      router.push('/homes/calendar')
+      return
+    }
+
     if (notification.type === 'rate') {
       if (displayRole === 'owner' || (actualRole === 'both' && selectedRole === 'owner')) {
         router.push('/homes/rate-user')
       } else {
         router.push('/homes/rate-owner')
       }
+      return
+    }
+
+    if (notification.type === 'new_listing_match') {
+      router.push(notification.homeKey ? `/homes/${notification.homeKey}` : '/homes/saved-searches')
+      return
+    }
+
+    // Broker team notifications
+    if (notification.type === 'boost_request') {
+      router.push('/homes/agency/requests')
+      return
+    }
+    if (notification.type === 'boost_approved' || notification.type === 'boost_declined' || notification.type === 'team_removed') {
+      router.push('/homes/agency/requests')
+      return
+    }
+    if (notification.type === 'team_invite') {
+      router.push('/profile')
+      return
+    }
+    if (notification.type === 'team_invite_accepted' || notification.type === 'team_left') {
+      router.push('/homes/agency')
+      return
     }
   }
 
@@ -267,11 +330,8 @@ export default function NotificationBell() {
 
   const handleFinalizeApprove = async () => {
     if (finalizeNotification) {
-      // Idempotent: already soft-deleted when the bell row was clicked
       try {
-        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
-          method: 'DELETE',
-        })
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, { method: 'DELETE' })
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
@@ -283,9 +343,7 @@ export default function NotificationBell() {
   const handleFinalizeDismiss = async () => {
     if (finalizeNotification) {
       try {
-        await fetch(`/api/notifications?id=${finalizeNotification.id}`, {
-          method: 'DELETE',
-        })
+        await fetch(`/api/notifications?id=${finalizeNotification.id}`, { method: 'DELETE' })
       } catch (error) {
         console.error('Error deleting notification:', error)
       }
@@ -302,35 +360,38 @@ export default function NotificationBell() {
     }
   }
 
-  // Mark all notifications as viewed when bell is opened
-  const handleBellClick = async (e: React.MouseEvent) => {
+  // Mark all notifications as viewed when bell panel is CLOSED (after user has seen them)
+  const markAllViewedOnClose = async () => {
+    if (unviewedCount === 0) return
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllAsViewed: true }),
+      })
+      if (response.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, viewed: true })))
+        setUnviewedCount(0)
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const handleBellClick = (e: React.MouseEvent) => {
     // Do not preventDefault — breaks tap/click on Safari (especially iOS)
     e.stopPropagation()
-
-    const wasOpen = isOpen
+    const willClose = isOpen
     setIsOpen(!isOpen)
-    
-    // If opening the bell (not closing), mark all as viewed
-    if (!wasOpen && unviewedCount > 0) {
-      try {
-        const response = await fetch('/api/notifications', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ markAllAsViewed: true }),
-        })
-        if (response.ok) {
-          // Update local state to mark all as viewed
-          setNotifications(notifications.map(n => ({ ...n, viewed: true })))
-          setUnviewedCount(0)
-        }
-      } catch (error) {
-        console.error('Error marking notifications as viewed:', error)
-      }
+    // Mark as viewed only when the user closes the panel (they've seen the notifications)
+    if (willClose) {
+      markAllViewedOnClose()
     }
   }
 
   // Always render the notification bell - don't hide it
   return (
+    <>
     <div className="relative pointer-events-auto" ref={notificationRef} style={{ isolation: 'isolate' }}>
       <button
         ref={buttonRef}
@@ -417,7 +478,7 @@ export default function NotificationBell() {
                         </p>
                         <p className="mt-1 text-xs text-[var(--text-muted)]">
                           {new Date(notification.createdAt).toLocaleDateString(
-                            language === 'el' ? 'el-GR' : 'en-US',
+                            localeFor(language),
                             {
                               month: 'short',
                               day: 'numeric',
@@ -444,16 +505,6 @@ export default function NotificationBell() {
           document.body
         )}
 
-      {/* Finalize Notification Modal */}
-      {finalizeNotification && (
-        <FinalizeNotificationModal
-          notification={finalizeNotification}
-          onClose={handleFinalizeClose}
-          onApprove={handleFinalizeApprove}
-          onDismiss={handleFinalizeDismiss}
-        />
-      )}
-
       <style jsx global>{`
         @keyframes fadeIn {
           from {
@@ -470,6 +521,21 @@ export default function NotificationBell() {
         }
       `}</style>
     </div>
+
+    {/* Finalize modal rendered via portal at body level so it is fully
+        centred and unaffected by the bell's isolation/stacking context */}
+    {finalizeNotification &&
+      typeof document !== 'undefined' &&
+      createPortal(
+        <FinalizeNotificationModal
+          notification={finalizeNotification}
+          onClose={handleFinalizeClose}
+          onApprove={handleFinalizeApprove}
+          onDismiss={handleFinalizeDismiss}
+        />,
+        document.body
+      )}
+    </>
   )
 }
 

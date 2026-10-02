@@ -3,11 +3,27 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { extractFiltersHybrid } from '@/lib/filter-extraction'
 import { removeGreekAccents } from '@/lib/utils'
-import { createLocationMaps, matchesLocation, getLocationVariations, calculateDistanceScore, getDistanceFields, calculateVibeScore, calculateSafetyScore, calculateParkingScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
-import { checkAiSearchLimit } from '@/lib/rate-limit'
+import { createLocationMaps, createLocationResolver, matchesLocation, getLocationVariations, getDistanceFields, calculateVibeScore, calculateDescriptionBonus, calculatePhotoBonus, calculateDisqualifiers, inferStudentContext, applyStudentTransitBoost } from '@/lib/ai-search-helpers'
+import { checkAiSearchLimit, checkEmbeddingLimit } from '@/lib/rate-limit'
 import OpenAI from 'openai'
 import { requestLogger } from '@/lib/logger'
+import { features } from '@/lib/features'
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings'
+import { redisGet, redisSet } from '@/lib/redis'
+import {
+  scoreHome,
+  rankScore,
+  normalizeDistance,
+  normalizeSafety,
+  normalizeVibe,
+  normalizeParking,
+  normalizeDescriptionBonus,
+  normalizeDescriptionPenalty,
+  normalizePhoto,
+  VIBE_WEIGHT_LOCATION_PREFERENCE,
+  type HomeComponents,
+} from '@/lib/search/score-home'
+import { semanticScore, SEM_NEUTRAL } from '@/lib/search/calibration'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -16,8 +32,8 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 
 // --- Semantic query caches (server-instance scoped) ---
 
-/** Reuse embedding vectors for identical query strings to avoid duplicate OpenAI calls */
-const embeddingTextCache = new Map<string, number[]>()
+/** Reuse embedding vectors for identical query strings (LRU, max 200 entries) */
+const embeddingTextCache = new Map<string, { vec: number[]; ts: number }>()
 
 interface CachedSearchResult {
   embedding: number[]
@@ -28,11 +44,19 @@ interface CachedSearchResult {
 const searchResultCache: CachedSearchResult[] = []
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 const SEARCH_CACHE_MAX_ENTRIES = 100
-const SEARCH_CACHE_SIM_THRESHOLD = 0.90
+const SEARCH_CACHE_SIM_THRESHOLD = 0.78
+
+/** Added to the fit (0..1 scale) when a listing sits in an area the user named. */
+const PREFERRED_AREA_BONUS = 0.12
 
 // POST /api/homes/ai-search - AI-powered home search with match percentages
 export async function POST(request: NextRequest) {
   const log = requestLogger(request)
+
+  if (!features.aiSearch) {
+    return NextResponse.json({ error: 'AI search is currently disabled' }, { status: 503 })
+  }
+
   // Initialize logging variables
   let userId: number | null = null
   let filterExtractionPrompt: string | null = null
@@ -51,11 +75,14 @@ export async function POST(request: NextRequest) {
   let avgDescriptionPhotoScore: number | null = null
   let errorMessage: string | null = null
   let userQuery: string = 'unknown'
+  // Declared out here so the error path below can log it too
+  let conversationKey: string | null = null
 
   try {
     const body = await request.json()
     const { query, type, excludeInquired, excludeApproved, preExtractedFilters } = body
     userQuery = query || (preExtractedFilters ? '[conversational]' : 'unknown')
+    conversationKey = typeof body.conversationKey === 'string' ? body.conversationKey : null
 
     if (!preExtractedFilters && (!query || !query.trim())) {
       return NextResponse.json(
@@ -72,39 +99,76 @@ export async function POST(request: NextRequest) {
         userId = user.id
         appUserOccupation = user.occupation ?? null
 
-        if (!checkAiSearchLimit(user.id)) {
+        if (!await checkAiSearchLimit(user.id)) {
           return NextResponse.json(
             { error: 'Too many AI search requests. Please wait before searching again.' },
             { status: 429 }
           )
         }
       }
-    } catch (error) {
+    } catch {
       // User not logged in, continue without userId
     }
 
     // --- Semantic cache: generate embedding early, check for similar recent queries ---
+    //
+    // The embedding is generated for the conversational path too. It previously was not:
+    // the gate here excluded `preExtractedFilters`, and the chat UI sent the literal
+    // string "[conversational]" as its query — so `queryEmbedding` stayed null, the
+    // 0.30-weight semantic component was never expressed, and the description and photo
+    // keyword bonuses matched that placeholder against listing text and scored nothing.
+    // Over half the weight table was inert in the only search UI in real use. The chat now
+    // sends a canonical intent string (`lib/search/intent-text.ts`) and is embedded like
+    // any other query.
+    //
+    // The *result* cache still only serves single-turn searches: it is keyed on the query
+    // alone, and conversational results additionally depend on `preExtractedFilters`.
     let queryEmbedding: number[] | null = null
-    if (openai && process.env.OPENAI_API_KEY && query && query.trim() && !preExtractedFilters) {
+    const resultCacheEligible = !preExtractedFilters && !excludeInquired && !excludeApproved
+    if (openai && process.env.OPENAI_API_KEY && query && query.trim()) {
       try {
         const normalizedQuery = query.trim()
         // Reuse embedding for the exact same query text
-        queryEmbedding = embeddingTextCache.get(normalizedQuery) ?? null
+        const cached = embeddingTextCache.get(normalizedQuery)
+        if (cached) {
+          cached.ts = Date.now() // refresh LRU timestamp
+          queryEmbedding = cached.vec
+        }
         if (!queryEmbedding) {
+          if (userId && !await checkEmbeddingLimit(userId)) {
+            return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
+          }
           queryEmbedding = await generateEmbedding(normalizedQuery, openai)
-          if (embeddingTextCache.size >= 500) embeddingTextCache.clear()
-          embeddingTextCache.set(normalizedQuery, queryEmbedding)
+          if (embeddingTextCache.size >= 200) {
+            // Evict least-recently-used entry
+            let lruKey: string | null = null
+            let lruTs = Infinity
+            for (const [k, v] of embeddingTextCache) {
+              if (v.ts < lruTs) { lruTs = v.ts; lruKey = k }
+            }
+            if (lruKey) embeddingTextCache.delete(lruKey)
+          }
+          embeddingTextCache.set(normalizedQuery, { vec: queryEmbedding, ts: Date.now() })
         }
 
-        // Only check cache when results aren't user-specific (no exclusion filters)
-        if (!excludeInquired && !excludeApproved) {
+        // Only check cache when results aren't user-specific and aren't filter-driven
+        if (resultCacheEligible) {
+          // Try Redis cache first (shared across instances, survives restarts)
+          const { createHash } = await import('crypto')
+          const queryHash = createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16)
+          const redisCacheKey = `ai-search:${type || 'any'}:${queryHash}`
+          const redisHit = await redisGet<{ homes: unknown[]; message: string }>(redisCacheKey)
+          if (redisHit) {
+            log.info('Serving AI search from Redis cache')
+            return NextResponse.json(redisHit, { status: 200 })
+          }
+
+          // Fall back to in-memory semantic cache
           const now = Date.now()
-          // Evict stale entries
           let i = searchResultCache.length
           while (i--) {
             if (now - searchResultCache[i].ts > SEARCH_CACHE_TTL_MS) searchResultCache.splice(i, 1)
           }
-          // Find most similar cached query
           let bestSim = 0
           let bestEntry: CachedSearchResult | null = null
           for (const entry of searchResultCache) {
@@ -113,7 +177,7 @@ export async function POST(request: NextRequest) {
             if (sim > bestSim) { bestSim = sim; bestEntry = entry }
           }
           if (bestEntry && bestSim >= SEARCH_CACHE_SIM_THRESHOLD) {
-            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from semantic cache')
+            log.info({ similarity: Math.round(bestSim * 1000) / 1000 }, 'Serving AI search from in-memory cache')
             return NextResponse.json(bestEntry.result, { status: 200 })
           }
         }
@@ -124,33 +188,22 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Extract hard filters — skip if pre-extracted filters are provided (conversational mode)
     const listingMode = type === 'buy' || type === 'rent' ? type : undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let extractedFiltersResult: any
 
     if (preExtractedFilters) {
       extractedFiltersResult = { ...preExtractedFilters, confidence: preExtractedFilters.confidence ?? 0.9 }
     } else {
-      // Check if OpenAI is available
-      if (!openai) {
-        errorMessage = 'OpenAI package not installed'
-        return NextResponse.json(
-          { error: 'OpenAI package not installed. Please run: npm install openai' },
-          { status: 500 }
-        )
+      // When OpenAI is unavailable fall back to unfiltered results (recency-sorted) rather than hard error
+      if (!openai || !process.env.OPENAI_API_KEY) {
+        extractedFiltersResult = { confidence: 0 }
+      } else {
+        extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
       }
-
-      // Check if OpenAI API key is configured
-      if (!process.env.OPENAI_API_KEY) {
-        errorMessage = 'OpenAI API key not configured'
-        return NextResponse.json(
-          { error: 'OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file' },
-          { status: 500 }
-        )
-      }
-
-      extractedFiltersResult = await extractFiltersHybrid(query, openai, { listingMode })
     }
     
     // Extract the filters (reasoning is extracted but not returned to client)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let extractedFilters: any = {}
     
     // Handle new format with reasoning
@@ -166,20 +219,75 @@ export async function POST(request: NextRequest) {
     delete extractedFilters.filterExtractionResponse
     
     // Capture filter extraction data for logging
-    filterExtractionPrompt = (extractedFiltersResult as any).filterExtractionPrompt || null
-    filterExtractionResponse = (extractedFiltersResult as any).filterExtractionResponse || null
-    
+    filterExtractionPrompt = (extractedFiltersResult as Record<string, unknown>).filterExtractionPrompt as string | null || null
+    filterExtractionResponse = (extractedFiltersResult as Record<string, unknown>).filterExtractionResponse as string | null || null
+
+    // Canonicalize locations before anything else reads them. The model echoes the
+    // user's own spelling ("Nea Smirni", "νεα σμυρνη", "Halandri") but every filter
+    // below compares against the DB by exact, accent-folded string.
+    const allAreas = await prisma.area.findMany({
+      select: {
+        name: true,
+        nameGreek: true,
+        city: true,
+        cityGreek: true,
+        country: true,
+        countryGreek: true,
+        district: true,
+      },
+    })
+    const locationResolver = createLocationResolver(allAreas)
+
+    if (typeof extractedFilters.city === 'string') {
+      const resolvedCity = locationResolver.resolveCity(extractedFilters.city)
+      if (resolvedCity) {
+        extractedFilters.city = resolvedCity
+      } else if (!extractedFilters.area) {
+        // Not a known city — the model often puts an area name here ("Nea Smirni")
+        const resolvedAsArea = locationResolver.resolveArea(extractedFilters.city)
+        if (resolvedAsArea) {
+          extractedFilters.area = resolvedAsArea
+          extractedFilters.city = null
+        }
+      }
+    }
+
+    // The city (resolved just above) disambiguates areas whose name two cities share
+    const cityHint = typeof extractedFilters.city === 'string' ? extractedFilters.city : null
+
+    if (typeof extractedFilters.area === 'string') {
+      extractedFilters.area = locationResolver.resolveArea(extractedFilters.area, cityHint) ?? extractedFilters.area
+    }
+
+    if (typeof extractedFilters.country === 'string') {
+      extractedFilters.country = locationResolver.resolveCountry(extractedFilters.country) ?? extractedFilters.country
+    }
+
+    if (Array.isArray(extractedFilters.preferredAreas)) {
+      extractedFilters.preferredAreas = extractedFilters.preferredAreas.map(
+        (name: string) => locationResolver.resolveArea(name, cityHint) ?? name
+      )
+    }
+
+    if (Array.isArray(extractedFilters.districts)) {
+      extractedFilters.districts = extractedFilters.districts.map(
+        (name: string) => locationResolver.resolveDistrict(name) ?? name
+      )
+    }
+
     // Separate filters into hard filters, soft filters, and distances for logging
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hardFilters: any = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const softFilters: any = {}
     
     // Hard filters: city, country, area, districts, listingType, price, bedrooms, bathrooms, size, parking (if not soft), floor, yearBuilt, yearRenovated, heatingCategory, heatingAgent
     if (extractedFilters.city !== undefined && extractedFilters.city !== null) hardFilters.city = extractedFilters.city
     if (extractedFilters.country !== undefined && extractedFilters.country !== null) hardFilters.country = extractedFilters.country
     if (extractedFilters.area !== undefined && extractedFilters.area !== null) hardFilters.area = extractedFilters.area
-    if ((extractedFilters as any).districts !== undefined && (extractedFilters as any).districts !== null) hardFilters.districts = (extractedFilters as any).districts
+    if (extractedFilters.districts !== undefined && extractedFilters.districts !== null) hardFilters.districts = extractedFilters.districts
     if (extractedFilters.listingType !== undefined && extractedFilters.listingType !== null) hardFilters.listingType = extractedFilters.listingType
-    if ((extractedFilters as any).listingtype !== undefined && (extractedFilters as any).listingtype !== null) hardFilters.listingtype = (extractedFilters as any).listingtype
+    if (extractedFilters.listingtype !== undefined && extractedFilters.listingtype !== null) hardFilters.listingtype = extractedFilters.listingtype
     if (extractedFilters.minPrice !== undefined && extractedFilters.minPrice !== null) hardFilters.minPrice = extractedFilters.minPrice
     if (extractedFilters.maxPrice !== undefined && extractedFilters.maxPrice !== null) hardFilters.maxPrice = extractedFilters.maxPrice
     if (extractedFilters.minBedrooms !== undefined && extractedFilters.minBedrooms !== null) hardFilters.minBedrooms = extractedFilters.minBedrooms
@@ -189,7 +297,7 @@ export async function POST(request: NextRequest) {
     if (extractedFilters.minSize !== undefined && extractedFilters.minSize !== null) hardFilters.minSize = extractedFilters.minSize
     if (extractedFilters.maxSize !== undefined && extractedFilters.maxSize !== null) hardFilters.maxSize = extractedFilters.maxSize
     // Parking is hard filter only if not a soft preference
-    if (extractedFilters.parking !== undefined && extractedFilters.parking !== null && (extractedFilters as any).parkingSoftPreference !== true) {
+    if (extractedFilters.parking !== undefined && extractedFilters.parking !== null && extractedFilters.parkingSoftPreference !== true) {
       hardFilters.parking = extractedFilters.parking
     }
     if (extractedFilters.minFloor !== undefined && extractedFilters.minFloor !== null) hardFilters.minFloor = extractedFilters.minFloor
@@ -205,10 +313,26 @@ export async function POST(request: NextRequest) {
     if (extractedFilters.preferredAreas !== undefined && extractedFilters.preferredAreas !== null) softFilters.preferredAreas = extractedFilters.preferredAreas
     if (extractedFilters.vibePreference !== undefined && extractedFilters.vibePreference !== null) softFilters.vibePreference = extractedFilters.vibePreference
     if (extractedFilters.Safety !== undefined && extractedFilters.Safety !== null) softFilters.Safety = extractedFilters.Safety
-    if ((extractedFilters as any).parkingSoftPreference !== undefined && (extractedFilters as any).parkingSoftPreference !== null) {
-      softFilters.parkingSoftPreference = (extractedFilters as any).parkingSoftPreference
+    if (extractedFilters.parkingSoftPreference !== undefined && extractedFilters.parkingSoftPreference !== null) {
+      softFilters.parkingSoftPreference = extractedFilters.parkingSoftPreference
     }
     
+    // When confidence is low, widen distance categories so ambiguous queries don't over-filter
+    const extractionConfidence = (extractedFiltersResult as Record<string, unknown>).confidence as number ?? 0.9
+    if (extractionConfidence < 0.7) {
+      const widen = (cat: string | null | undefined) => {
+        if (cat === 'Essential') return 'Strong'
+        if (cat === 'Strong') return 'Not important'
+        return cat
+      }
+      extractedFilters.Metro = widen(extractedFilters.Metro)
+      extractedFilters.Bus = widen(extractedFilters.Bus)
+      extractedFilters.University = widen(extractedFilters.University)
+      extractedFilters.School = widen(extractedFilters.School)
+      extractedFilters.Hospital = widen(extractedFilters.Hospital)
+      extractedFilters.Park = widen(extractedFilters.Park)
+    }
+
     // Extract individual distance categories
     metroCategory = extractedFilters.Metro !== undefined && extractedFilters.Metro !== null ? extractedFilters.Metro : null
     busCategory = extractedFilters.Bus !== undefined && extractedFilters.Bus !== null ? extractedFilters.Bus : null
@@ -220,20 +344,9 @@ export async function POST(request: NextRequest) {
     hardFiltersJson = Object.keys(hardFilters).length > 0 ? JSON.stringify(hardFilters) : null
     softFiltersJson = Object.keys(softFilters).length > 0 ? JSON.stringify(softFilters) : null
 
-    // TEST LOG - DELETE AFTER: Show AI JSON response
-    console.log('\n========== AI FILTER EXTRACTION JSON ==========')
-    console.log('Hard Filters:', hardFiltersJson)
-    console.log('Soft Filters:', softFiltersJson)
-    console.log('Metro:', metroCategory)
-    console.log('Bus:', busCategory)
-    console.log('School:', schoolCategory)
-    console.log('Hospital:', hospitalCategory)
-    console.log('Park:', parkCategory)
-    console.log('University:', universityCategory)
-    console.log('================================================\n')
-
     // Step 2: Build database query with extracted filters
-    let where: any = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {}
 
     // Match /api/homes: exclude finalized listings from browse
     where.finalized = false
@@ -244,7 +357,7 @@ export async function POST(request: NextRequest) {
     } else if (type === 'rent') {
       where.listingType = 'rent'
     } else {
-      const listingTypeFilter = extractedFilters.listingType || (extractedFilters as any).listingtype
+      const listingTypeFilter = extractedFilters.listingType || extractedFilters.listingtype
       if (listingTypeFilter) {
         const listingTypeLower = String(listingTypeFilter).toLowerCase()
         if (listingTypeLower === 'buy' || listingTypeLower === 'sale' || listingTypeLower === 'sell') {
@@ -291,7 +404,7 @@ export async function POST(request: NextRequest) {
     // Parking is a HARD FILTER - if user mentions parking, filter database to only show matching homes
     // UNLESS it's marked as a soft preference (e.g., "parking would be nice but not essential")
     if (extractedFilters.parking !== undefined && extractedFilters.parking !== null) {
-      const isSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+      const isSoftPreference = extractedFilters.parkingSoftPreference === true
       if (!isSoftPreference) {
         // Only apply as hard filter if NOT a soft preference
         where.parking = extractedFilters.parking
@@ -302,14 +415,6 @@ export async function POST(request: NextRequest) {
     // NOTE: Do NOT filter by heatingCategory or heatingAgent if user requests them
     // Instead, include all houses (even with null values) and let AI penalize missing info in match percentage
     // This allows houses with missing information to still appear in results, just with lower scores
-
-    // if (extractedFilters.heatingCategory && extractedFilters.heatingCategory !== null) {
-    //   where.heatingCategory = extractedFilters.heatingCategory
-    // }
-
-    // if (extractedFilters.heatingAgent && extractedFilters.heatingAgent !== null) {
-    //   where.heatingAgent = extractedFilters.heatingAgent
-    // }
 
     if (extractedFilters.minFloor !== undefined && extractedFilters.minFloor !== null) {
       where.floor = { ...where.floor, gte: extractedFilters.minFloor }
@@ -343,27 +448,14 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: {
         owner: {
-          select: { id: true, email: true, name: true },
+          select: { id: true, name: true },
         },
       },
     })
-    
+
     homesCountBeforeFilter = homes.length
 
     // Step 4: Apply city/area/country filters with Greek/English matching
-    // Always fetch areas for matching (needed for Greek/English translation and district filtering)
-    const allAreas = await prisma.area.findMany({
-      select: {
-        name: true,
-        nameGreek: true,
-        city: true,
-        cityGreek: true,
-        country: true,
-        countryGreek: true,
-        district: true,
-      },
-    })
-
     // Create bidirectional maps for matching (English <-> Greek)
     const { cityMap, countryMap, areaNameMap } = createLocationMaps(allAreas)
 
@@ -391,7 +483,7 @@ export async function POST(request: NextRequest) {
           homes = await prisma.home.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, email: true, name: true } } },
+            include: { owner: { select: { id: true, name: true } } },
           })
       }
       }
@@ -433,15 +525,15 @@ export async function POST(request: NextRequest) {
           homes = await prisma.home.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, email: true, name: true } } },
+            include: { owner: { select: { id: true, name: true } } },
           })
         }
       }
     }
 
     // Filter homes by districts (hard filter - multiple districts = OR condition)
-    if ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) {
-      const requestedDistricts = (extractedFilters as any).districts as string[]
+    if (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) {
+      const requestedDistricts = extractedFilters.districts as string[]
       
       // Get available districts from DB, filtered by city if city is provided
       let availableDistricts = allAreas
@@ -517,7 +609,7 @@ export async function POST(request: NextRequest) {
             if (user) {
               currentUserId = user.id
             }
-          } catch (error) {
+          } catch {
             // User not logged in, can't exclude
           }
         }
@@ -547,7 +639,7 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          let excludeHomeIds: number[] = []
+          const excludeHomeIds: number[] = []
 
           if (excludeInquired) {
             // Exclude homes where user has inquired (not dismissed, not finalized)
@@ -620,10 +712,10 @@ export async function POST(request: NextRequest) {
     // Soft criteria: distance categories, vibe preference
     // If ONLY hard filters are present, all matching properties should get 100%
     
-    const hasHardFilters = 
+    const hasHardFilters =
       extractedFilters.city || extractedFilters.country || extractedFilters.area ||
-      ((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) ||
-      extractedFilters.listingType || (extractedFilters as any).listingtype ||
+      (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) ||
+      extractedFilters.listingType || extractedFilters.listingtype ||
       extractedFilters.minPrice || extractedFilters.maxPrice ||
       extractedFilters.minBedrooms || extractedFilters.maxBedrooms ||
       extractedFilters.minBathrooms || extractedFilters.maxBathrooms ||
@@ -637,8 +729,8 @@ export async function POST(request: NextRequest) {
     // Check if country is the ONLY hard filter - if so, return nothing
     const onlyCountryFilter = extractedFilters.country && 
       !extractedFilters.city && !extractedFilters.area &&
-      !((extractedFilters as any).districts && Array.isArray((extractedFilters as any).districts) && (extractedFilters as any).districts.length > 0) &&
-      !extractedFilters.listingType && !(extractedFilters as any).listingtype &&
+      !(extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) &&
+      !extractedFilters.listingType && !extractedFilters.listingtype &&
       !extractedFilters.minPrice && !extractedFilters.maxPrice &&
       !extractedFilters.minBedrooms && !extractedFilters.maxBedrooms &&
       !extractedFilters.minBathrooms && !extractedFilters.maxBathrooms &&
@@ -650,7 +742,7 @@ export async function POST(request: NextRequest) {
       !extractedFilters.minYearRenovated && !extractedFilters.maxYearRenovated
     
     // Check if we have soft criteria (distance categories, safety, vibe preference, or parking soft preference)
-    const parkingSoftPreference = (extractedFilters as any).parkingSoftPreference === true
+    const parkingSoftPreference = extractedFilters.parkingSoftPreference === true
     const hasSoftCriteria = 
       (extractedFilters.Metro && extractedFilters.Metro !== 'Not mentioned') ||
       (extractedFilters.Bus && extractedFilters.Bus !== 'Not mentioned') ||
@@ -669,21 +761,48 @@ export async function POST(request: NextRequest) {
       ? applyStudentTransitBoost(extractedFilters as Record<string, unknown>)
       : extractedFilters
     
-    // If we have hard filters but NO soft criteria, all matching properties get 100%
-    const shouldForce100 = hasHardFilters && !effectiveSoftCriteria
+    // Hard filters and nothing else: every returned listing satisfies the query completely,
+    // so there is no match signal to report — we order by intrinsic quality and show no
+    // percentage at all rather than inventing one out of unrelated attributes.
+    const hardFiltersOnly = hasHardFilters && !effectiveSoftCriteria
 
-    // PROGRAMMATIC MATCH CALCULATION (replaces AI match calculation)
-    // Calculate match percentages based on distance scores and vibe matching
-    const matchMap = new Map<number, number>()
-    
-    if (shouldForce100) {
-      // Score by intrinsic home quality so identical-filter results still have different percentages
+    // ABSOLUTE MATCH CALCULATION
+    // Every component below normalises to [0,1] independently of the rest of the result
+    // set, and they are aggregated once at the end by `scoreHome`. Keeping the components
+    // separate (rather than mutating a running score) is what lets the saved-search
+    // matcher reuse the exact same maths on a single new listing.
+    /** homeId → per-component [0,1] scores */
+    const componentsMap = new Map<number, HomeComponents>()
+    /** homeId → [0,1] bonus for sitting in an explicitly preferred area */
+    const areaBonusMap = new Map<number, number>()
+    /** homeId → [0,1] penalty from a description that contradicts the query */
+    const penaltyMap = new Map<number, number>()
+    /** homeId → [0,1] description/photo evidence, applied as bonuses outside the mean */
+    const descriptionBonusScoreMap = new Map<number, number>()
+    const photoBonusScoreMap = new Map<number, number>()
+    /** homeId → intrinsic quality, ordering only, used when `hardFiltersOnly` */
+    const intrinsicRankMap = new Map<number, number>()
+
+    const getComponents = (homeId: number): HomeComponents => {
+      let c = componentsMap.get(homeId)
+      if (!c) {
+        c = {}
+        componentsMap.set(homeId, c)
+      }
+      return c
+    }
+
+    if (hardFiltersOnly) {
+      // Order by intrinsic home quality so identical-filter results still have a stable,
+      // non-arbitrary sequence. This number is never shown as a match percentage.
       const energyBonus: Record<string, number> = { 'A+': 22, A: 18, B: 13, C: 9, D: 5, E: 2, F: 1, G: 0 }
       homes.forEach(home => {
         let score = 55 // base
         // Energy class (0-22 pts)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         score += energyBonus[(home as any).energyClass || ''] ?? 4
         // Recency — take the best of yearBuilt / yearRenovated (0-15 pts)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const yr = Math.max((home as any).yearBuilt || 0, (home as any).yearRenovated || 0)
         if (yr >= 2020) score += 15
         else if (yr >= 2015) score += 12
@@ -694,18 +813,22 @@ export async function POST(request: NextRequest) {
         // Price efficiency — closer to budget midpoint = better (0-8 pts)
         const maxP = extractedFilters.maxPrice as number | undefined
         const minP = extractedFilters.minPrice as number | undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (maxP && (home as any).pricePerMonth) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ratio = (home as any).pricePerMonth / maxP
           if (ratio < 0.55) score += 8
           else if (ratio < 0.70) score += 6
           else if (ratio < 0.82) score += 4
           else if (ratio < 0.92) score += 2
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } else if (minP && maxP && (home as any).pricePerMonth) {
           const mid = (minP + maxP) / 2
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const dist = Math.abs((home as any).pricePerMonth - mid) / (maxP - minP)
           score += Math.max(0, Math.round((1 - dist) * 6))
         }
-        matchMap.set(home.id, Math.min(100, score))
+        intrinsicRankMap.set(home.id, Math.min(100, score))
       })
     } else {
       // Calculate scores programmatically
@@ -718,326 +841,49 @@ export async function POST(request: NextRequest) {
         d.category && d.category !== 'Not important' && d.category !== 'Not mentioned' && d.category !== null
       )
       
-      // TEST LOG - DELETE AFTER: Show calculation inputs
-      console.log('\n========== CALCULATION INPUTS ==========')
-      console.log('Student context (boost metro/bus/uni):', studentContext)
-      console.log('Vibe Preference:', vibePreference)
-      console.log('Safety Category:', safetyCategory)
-      console.log('Distances to Consider:', distancesToConsider.map(d => ({ field: d.name, category: d.category })))
-      console.log('========================================\n')
-
-      // Calculate raw scores for each home
-      const rawScores = new Map<number, number>()
-      let minScore = Infinity
-      let maxScore = -Infinity
-      
-      // TEST LOG - DELETE AFTER: Track calculation details
-      const calculationDetails: Array<{
-        homeId: number
-        homeTitle: string
-        distanceScores: Array<{ field: string; distance: number | null; score: number }>
-        avgDistanceScore: number
-        safety: number | null
-        safetyScore: number
-        parking: boolean | null
-        parkingScore: number
-        propertyVibes: string[]
-        vibeScore: number
-        rawScore: number
-        finalScaledScore?: number
-      }> = []
-      
+      // Per-home component scores. Each is absolute and in [0,1]: it depends only on this
+      // home and this query, never on the other results. A component left unset was not
+      // expressed by the query and is skipped by `scoreHome` rather than scored as 0.
       homes.forEach((home) => {
-        let rawScore = 0 // Start from 0, build up
-        
-        // Calculate distance scores with priority logic for Metro/Bus
-        let totalDistanceScore = 0
-        let distanceCount = 0
-        const distanceScores: Array<{ field: string; distance: number | null; score: number }> = []
-        
-        // Check if both Metro and Bus are Essential or Strong
-        const metroInfo = distancesToConsider.find(d => d.field === 'closestMetro')
-        const busInfo = distancesToConsider.find(d => d.field === 'closestBus')
-        const hasMetro = !!metroInfo
-        const hasBus = !!busInfo
-        const bothEssential = hasMetro && hasBus && 
-          metroInfo?.category === 'Essential' && busInfo?.category === 'Essential'
-        const bothStrong = hasMetro && hasBus && 
-          metroInfo?.category === 'Strong' && busInfo?.category === 'Strong'
-        
-        if (bothEssential || bothStrong) {
-          // Priority logic: 
-          // 1. If Metro <= 2km, prioritize Metro
-          // 2. If Metro > 2km and Bus <= 2km, prioritize Bus
-          // 3. If both > 2km, treat them equally (average)
-          const threshold = 2.0 // Same threshold for both Essential and Strong
-          
-          const metroDistance = home[metroInfo!.field] as number | null
-          const busDistance = home[busInfo!.field] as number | null
-          
-          const metroScore = calculateDistanceScore(metroDistance, metroInfo!.category)
-          const busScore = calculateDistanceScore(busDistance, busInfo!.category)
-          
-          // Determine how to combine Metro and Bus scores
-          if (metroDistance !== null && busDistance !== null) {
-            if (metroDistance <= threshold) {
-              // Metro <= 2km: prioritize Metro (80% metro, 20% bus)
-              totalDistanceScore = (metroScore * 0.8) + (busScore * 0.2)
-              distanceCount = 1
-            } else if (metroDistance > threshold && busDistance <= threshold) {
-              // Metro > 2km and Bus <= 2km: prioritize Bus (70% bus, 30% metro)
-              totalDistanceScore = (busScore * 0.7) + (metroScore * 0.3)
-              distanceCount = 1
-            } else {
-              // Both > 2km: treat equally (average them)
-              totalDistanceScore = metroScore + busScore
-              distanceCount = 2
-            }
-          } else if (metroDistance === null && busDistance !== null) {
-            // Only Bus available
-            totalDistanceScore = busScore
-            distanceCount = 1
-          } else if (busDistance === null && metroDistance !== null) {
-            // Only Metro available
-            totalDistanceScore = metroScore
-            distanceCount = 1
-          } else {
-            // Both null
-            totalDistanceScore = 0
-            distanceCount = 0
-          }
-          
-          // Store both for logging
-          distanceScores.push({ 
-            field: metroInfo!.name, 
-            distance: metroDistance, 
-            score: metroScore 
-          })
-          distanceScores.push({ 
-            field: busInfo!.name, 
-            distance: busDistance, 
-            score: busScore 
-          })
-          
-          // Add other distance types (School, Hospital, Park, University) normally
-          for (const distanceInfo of distancesToConsider) {
-            if (distanceInfo.field !== 'closestMetro' && distanceInfo.field !== 'closestBus') {
-              const distance = home[distanceInfo.field] as number | null
-              const score = calculateDistanceScore(distance, distanceInfo.category)
-              totalDistanceScore += score
-              distanceScores.push({ field: distanceInfo.name, distance, score })
-              if (distance !== null && distance !== undefined) {
-                distanceCount++
-              }
-            }
-          }
-        } else {
-          // Normal calculation: average all distance scores
-          for (const distanceInfo of distancesToConsider) {
-            const distance = home[distanceInfo.field] as number | null
-            const score = calculateDistanceScore(distance, distanceInfo.category)
-            totalDistanceScore += score
-            distanceScores.push({ field: distanceInfo.name, distance, score })
-            if (distance !== null && distance !== undefined) {
-              distanceCount++
-            }
-          }
-        }
-        
-        // Average distance scores if multiple distances, otherwise use the single score
-        const avgDistanceScore = distanceCount > 0 ? totalDistanceScore / distanceCount : 0
-        
-        // Calculate safety score
+        const components = getComponents(home.id)
         const areaData = home.area ? areaSafetyVibeMap.get(home.area) : null
-        const safety = areaData?.safety || null
-        const safetyScore = calculateSafetyScore(safety, safetyCategory)
-        
-        // Calculate vibe score
-        const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
-        const vibeScore = calculateVibeScore(vibePreference, propertyVibes)
-        
-        // Calculate parking score (only if it's a soft preference)
-        const parkingScore = calculateParkingScore(home.parking, parkingSoftPreference)
-        
-        // Combine distance, safety, vibe, and parking scores
-        // If location preference is mentioned, vibe gets 40% weight
-        // Adjust based on what exists
-        const hasDistance = distancesToConsider.length > 0
-        const hasSafety = safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned'
-        const hasVibe = !!vibePreference
-        const hasParking = parkingSoftPreference
-        const hasLocationPreference = (extractedFilters as any).hasLocationPreference === true
-        
-        // Count how many components we have
-        const componentCount = [hasDistance, hasSafety, hasVibe, hasParking].filter(Boolean).length
-        
-        // If location preference is mentioned, vibe gets 40% weight
-        if (hasLocationPreference && hasVibe) {
-          if (componentCount === 4) {
-            // All four with location preference: Distance 50%, Safety 5%, Vibe 40%, Parking 5%
-            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.05) + (vibeScore * 0.4) + (parkingScore * 0.05)
-          } else if (hasDistance && hasSafety && hasVibe) {
-            // Distance + Safety + Vibe with location: Distance 50%, Safety 10%, Vibe 40%
-            rawScore = (avgDistanceScore * 0.5) + (safetyScore * 0.1) + (vibeScore * 0.4)
-          } else if (hasDistance && hasVibe && hasParking) {
-            // Distance + Vibe + Parking with location: Distance 50%, Vibe 40%, Parking 10%
-            rawScore = (avgDistanceScore * 0.5) + (vibeScore * 0.4) + (parkingScore * 0.1)
-          } else if (hasSafety && hasVibe && hasParking) {
-            // Safety + Vibe + Parking with location: Safety 20%, Vibe 40%, Parking 40%
-            rawScore = (safetyScore * 0.2) + (vibeScore * 0.4) + (parkingScore * 0.4)
-          } else if (hasDistance && hasVibe) {
-            // Distance + Vibe with location: Distance 60%, Vibe 40%
-            rawScore = (avgDistanceScore * 0.6) + (vibeScore * 0.4)
-          } else if (hasSafety && hasVibe) {
-            // Safety + Vibe with location: Safety 60%, Vibe 40%
-            rawScore = (safetyScore * 0.6) + (vibeScore * 0.4)
-          } else if (hasVibe && hasParking) {
-            // Vibe + Parking with location: Vibe 40%, Parking 60%
-            rawScore = (vibeScore * 0.4) + (parkingScore * 0.6)
-          } else if (hasVibe) {
-            // Only vibe with location preference: 100% Vibe
-            rawScore = vibeScore
-          } else {
-            // Fallback (shouldn't happen)
-            rawScore = avgDistanceScore || safetyScore || parkingScore || 50
-          }
-        } else {
-          // No location preference - use original weighting
-          if (componentCount === 4) {
-            // All four: Distance 70%, Safety 10%, Vibe 10%, Parking 10%
-            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.1) + (vibeScore * 0.1) + (parkingScore * 0.1)
-          } else if (hasDistance && hasSafety && hasVibe) {
-            // Distance + Safety + Vibe: 80% Distance, 10% Safety, 10% Vibe
-            rawScore = (avgDistanceScore * 0.8) + (safetyScore * 0.1) + (vibeScore * 0.1)
-          } else if (hasDistance && hasSafety && hasParking) {
-            // Distance + Safety + Parking: 70% Distance, 20% Safety, 10% Parking
-            rawScore = (avgDistanceScore * 0.7) + (safetyScore * 0.2) + (parkingScore * 0.1)
-          } else if (hasDistance && hasVibe && hasParking) {
-            // Distance + Vibe + Parking: 75% Distance, 15% Vibe, 10% Parking
-            rawScore = (avgDistanceScore * 0.75) + (vibeScore * 0.15) + (parkingScore * 0.1)
-          } else if (hasSafety && hasVibe && hasParking) {
-            // Safety + Vibe + Parking: 60% Safety, 25% Vibe, 15% Parking
-            rawScore = (safetyScore * 0.6) + (vibeScore * 0.25) + (parkingScore * 0.15)
-          } else if (hasDistance && hasSafety) {
-            // Distance + Safety: 60% Distance, 40% Safety
-            rawScore = (avgDistanceScore * 0.6) + (safetyScore * 0.4)
-          } else if (hasDistance && hasVibe) {
-            // Distance + Vibe: 80% Distance, 20% Vibe
-            rawScore = (avgDistanceScore * 0.8) + (vibeScore * 0.2)
-          } else if (hasDistance && hasParking) {
-            // Distance + Parking: 85% Distance, 15% Parking
-            rawScore = (avgDistanceScore * 0.85) + (parkingScore * 0.15)
-          } else if (hasSafety && hasVibe) {
-            // Safety + Vibe: 70% Safety, 30% Vibe
-            rawScore = (safetyScore * 0.7) + (vibeScore * 0.3)
-          } else if (hasSafety && hasParking) {
-            // Safety + Parking: 75% Safety, 25% Parking
-            rawScore = (safetyScore * 0.75) + (parkingScore * 0.25)
-          } else if (hasVibe && hasParking) {
-            // Vibe + Parking: 70% Vibe, 30% Parking
-            rawScore = (vibeScore * 0.7) + (parkingScore * 0.3)
-          } else if (hasDistance) {
-            // Only distance
-            rawScore = avgDistanceScore
-          } else if (hasSafety) {
-            // Only safety
-            rawScore = safetyScore
-          } else if (hasVibe) {
-            // Only vibe
-            rawScore = vibeScore
-          } else if (hasParking) {
-            // Only parking
-            rawScore = parkingScore
-          } else {
-            // No soft criteria (shouldn't happen, but fallback)
-            rawScore = 50
-          }
-        }
-        
-        rawScores.set(home.id, rawScore)
-        minScore = Math.min(minScore, rawScore)
-        maxScore = Math.max(maxScore, rawScore)
-        
-        // TEST LOG - DELETE AFTER: Store calculation details
-        calculationDetails.push({
-          homeId: home.id,
-          homeTitle: home.title.substring(0, 50),
-          distanceScores,
-          avgDistanceScore,
-          safety,
-          safetyScore,
-          parking: home.parking,
-          parkingScore,
-          propertyVibes,
-          vibeScore,
-          rawScore,
-        })
-      })
-      
-      // Scale all scores to 0-100 range
-      const scoreRange = maxScore - minScore
-      
-      // TEST LOG - DELETE AFTER: Show scaling info
-      console.log('\n========== SCALING INFO ==========')
-      console.log('Min Raw Score:', minScore)
-      console.log('Max Raw Score:', maxScore)
-      console.log('Score Range:', scoreRange)
-      console.log('==================================\n')
-      
-      homes.forEach((home) => {
-        const rawScore = rawScores.get(home.id) || 50
-        
-        // Map to 30-95% range: avoids extreme 0%/100% spread when scores are close
-        let scaledScore = scoreRange > 0
-          ? 30 + ((rawScore - minScore) / scoreRange) * 65
-          : 70 // All same score → neutral 70%
 
-        scaledScore = Math.max(0, Math.min(100, scaledScore))
-        
-        // No 99% cap - allow 100% if the scaled score reaches it
-        // The scoring system is now granular enough to show differences naturally
-        
-        matchMap.set(home.id, scaledScore)
-        
-        // TEST LOG - DELETE AFTER: Update calculation details with final score
-        const detail = calculationDetails.find(d => d.homeId === home.id)
-        if (detail) {
-          detail.finalScaledScore = scaledScore
+        // Proximity — mean over every distance the query asked about. Missing data gets an
+        // explicit prior inside `normalizeDistance`, so an ungeocoded listing can never
+        // outrank one we know is close.
+        if (distancesToConsider.length > 0) {
+          let total = 0
+          for (const distanceInfo of distancesToConsider) {
+            total += normalizeDistance(home[distanceInfo.field] as number | null, distanceInfo.category)
+          }
+          components.distance = total / distancesToConsider.length
+        }
+
+        if (safetyCategory && safetyCategory !== 'Not important' && safetyCategory !== 'Not mentioned') {
+          components.safety = normalizeSafety(areaData?.safety ?? null)
+        }
+
+        if (vibePreference) {
+          const propertyVibes = areaData?.vibe ? areaData.vibe.split(',').map(v => v.trim()) : []
+          components.vibe = normalizeVibe(calculateVibeScore(vibePreference, propertyVibes))
+        }
+
+        if (parkingSoftPreference) {
+          components.parking = normalizeParking(home.parking)
         }
       })
-      
-      // TEST LOG - DELETE AFTER: Show all calculation details
-      console.log('\n========== CALCULATION DETAILS FOR EACH HOME ==========')
-      calculationDetails.forEach(detail => {
-        console.log(`\nHome ID: ${detail.homeId} - ${detail.homeTitle}`)
-        console.log('  Distance Scores:')
-        detail.distanceScores.forEach(ds => {
-          console.log(`    ${ds.field}: ${ds.distance !== null ? ds.distance + 'km' : 'null'} → Score: ${ds.score}`)
-        })
-        console.log(`  Average Distance Score: ${detail.avgDistanceScore.toFixed(2)}`)
-        console.log(`  Safety: ${detail.safety !== null ? detail.safety : 'null'} → Safety Score: ${detail.safetyScore.toFixed(2)}`)
-        console.log(`  Parking: ${detail.parking !== null ? detail.parking : 'null'} → Parking Score: ${detail.parkingScore.toFixed(2)}`)
-        console.log(`  Property Vibes: [${detail.propertyVibes.join(', ')}]`)
-        console.log(`  Vibe Score: ${detail.vibeScore.toFixed(2)}`)
-        console.log(`  Raw Score: ${detail.rawScore.toFixed(2)}`)
-        console.log(`  Final Scaled Score: ${detail.finalScaledScore?.toFixed(2)}%`)
-      })
-      console.log('\n======================================================\n')
     }
 
-    // Distance scoring is now handled in the programmatic calculation above
-    
     // Post-process: Apply preferred areas bonus
     // If user mentions areas as preferences (e.g., "like Filothei, Psychiko"), boost properties in those areas
-    // SKIP if shouldForce100 (only hard filters, no soft criteria) - all should be 100%
-    if (!shouldForce100) {
+    // Skipped when only hard filters were given — there is no percentage to boost.
+    if (!hardFiltersOnly) {
       const preferredAreas = extractedFilters.preferredAreas
       
       if (preferredAreas && Array.isArray(preferredAreas) && preferredAreas.length > 0) {
-        // Get area name map for Greek/English matching
-        const allAreas = await prisma.area.findMany()
+        // Get area name map for Greek/English matching (reuses the areas fetched above)
         const areaNameMap = new Map<string, Set<string>>()
-        
+
         allAreas.forEach(area => {
           if (area.name) {
             const nameLower = area.name.toLowerCase()
@@ -1092,46 +938,24 @@ export async function POST(request: NextRequest) {
               )
             
             if (isPreferred) {
-        const currentScore = matchMap.get(home.id) || 50
-              const bonus = 12 // Bonus for being in a preferred area
-              const finalScore = Math.min(100, Math.max(0, currentScore + bonus))
-              matchMap.set(home.id, finalScore)
+              areaBonusMap.set(home.id, PREFERRED_AREA_BONUS)
             }
           }
         })
       }
     }
     
-    // Parking: If hard filter, database is already filtered. If soft preference, it's included in scoring above.
-    
-    // Distance, safety, and vibe matching are now handled in the programmatic calculation above
+    // Parking: If hard filter, database is already filtered. If soft preference, it's a component above.
 
     // Post-process: Apply description bonus + disqualifier detection
     // Analyze descriptions to match user query features (e.g., "new stove", "backyard", "big balcony")
-    // This bonus is applied after all other scores are calculated
     /** homeId → incompatibility reason when description explicitly prohibits what user wants */
     const disqualifierMap = new Map<number, string>()
-    if (!shouldForce100) {
+    if (!hardFiltersOnly) {
       // Calculate description bonus for each home
       const descriptionScores: number[] = []
       const descriptionBonusMap = new Map<number, number>()
-      const descriptionPenaltyMap = new Map<number, number>()
-      const descriptionDetails: Array<{
-        homeId: number
-        homeTitle: string
-        description: string | null
-        bonus: number
-        penalty: number
-      }> = []
-      
-      // TEST LOG - DELETE AFTER: Show description matching info
-      console.log('\n========== DESCRIPTION MATCHING ==========')
-      console.log('User Query:', query)
-      console.log('Checking descriptions for matching features...\n')
-      
-      let extractedKeywords: string[] = []
-      const descriptionResults = new Map<number, { bonus: number; penalty: number; extractedKeywords: string[]; matchedKeywords: string[]; hasNewMention: boolean }>()
-      
+
       for (const home of homes) {
         const result = calculateDescriptionBonus(
           query,
@@ -1140,133 +964,51 @@ export async function POST(request: NextRequest) {
           home.yearRenovated
         )
 
-        // Check for hard incompatibilities (e.g. user wants pets, listing says no pets)
         const disqualifier = calculateDisqualifiers(query, home.description)
         if (disqualifier) {
           disqualifierMap.set(home.id, disqualifier)
-          matchMap.set(home.id, 0)
-        }
-
-        // Store extracted keywords from first home (they're the same for all)
-        if (extractedKeywords.length === 0) {
-          extractedKeywords = result.extractedKeywords
         }
 
         descriptionScores.push(result.bonus)
         descriptionBonusMap.set(home.id, result.bonus)
-        descriptionPenaltyMap.set(home.id, result.penalty)
-        descriptionResults.set(home.id, result)
-        
-        // TEST LOG - DELETE AFTER: Store description details
-        descriptionDetails.push({
-          homeId: home.id,
-          homeTitle: home.title.substring(0, 50),
-          description: home.description ? home.description.substring(0, 200) : null,
-          bonus: result.bonus,
-          penalty: result.penalty,
-        })
+
+        if (disqualifierMap.has(home.id)) continue
+
+        // A description that speaks to the query is evidence *for* a listing; one that
+        // explicitly denies what was asked for is evidence against it. Both sit outside
+        // the weighted mean — the bonus so that a listing which simply doesn't mention the
+        // feature is not punished for it, and both so the mean's denominator stays a pure
+        // function of the query rather than of the listing.
+        if (result.bonus > 0) {
+          descriptionBonusScoreMap.set(home.id, normalizeDescriptionBonus(result.bonus))
+        }
+        if (result.penalty < 0) {
+          penaltyMap.set(home.id, normalizeDescriptionPenalty(result.penalty))
+        }
       }
-      
-      // TEST LOG - DELETE AFTER: Show description scores for each home
-      console.log('Extracted Keywords from Query:', extractedKeywords.length > 0 ? extractedKeywords.join(', ') : 'None found')
-      console.log('\nDescription Scores:')
-      descriptionDetails.forEach(detail => {
-        const result = descriptionResults.get(detail.homeId)!
-        console.log(`  Home ID: ${detail.homeId} - ${detail.homeTitle}`)
-        console.log(`    Description: ${detail.description || 'null'}`)
-        console.log(`    Matched Keywords: ${result.matchedKeywords.length > 0 ? result.matchedKeywords.join(', ') : 'None'}`)
-        console.log(`    Description Bonus: ${detail.bonus.toFixed(2)}%`)
-        if (detail.penalty < 0) {
-          console.log(`    Description Penalty: ${detail.penalty.toFixed(2)}%`)
-        }
-        if (result.hasNewMention) {
-          console.log(`    Year-based scoring: Built ${homes.find(h => h.id === detail.homeId)?.yearBuilt || 'N/A'}, Renovated ${homes.find(h => h.id === detail.homeId)?.yearRenovated || 'N/A'}`)
-        }
-      })
-      console.log('==========================================\n')
-      
+
       // Check if any homes have description bonus
       const hasAnyDescriptionBonus = descriptionScores.some(score => score > 0)
-      
-      // Apply bonuses and penalties (skip disqualified homes — their score is locked at 0)
-      homes.forEach(home => {
-        if (disqualifierMap.has(home.id)) return
-        const bonus = descriptionBonusMap.get(home.id) || 0
-        const penalty = descriptionPenaltyMap.get(home.id) || 0
-        const currentScore = matchMap.get(home.id) || 0
 
-        let finalScore = currentScore
 
-        // Apply penalty first (for negative mentions)
-        if (penalty < 0) {
-          finalScore = Math.max(0, finalScore + penalty) // penalty is already negative
-        }
-
-        // Apply bonus
-        if (bonus > 0) {
-          finalScore = Math.min(100, finalScore + bonus)
-        } else if (hasAnyDescriptionBonus && bonus === 0 && penalty === 0) {
-          // Penalize houses without bonus when others have it (only if no explicit penalty)
-          const maxBonus = Math.max(...descriptionScores)
-          const relativePenalty = Math.min(maxBonus * 0.5, 10) // Penalty up to 50% of max bonus or 10%, whichever is smaller
-          finalScore = Math.max(0, finalScore - relativePenalty)
-        }
-
-        matchMap.set(home.id, finalScore)
-      })
-      
-      // If some homes have bonus and others don't, show in logs
-      if (hasAnyDescriptionBonus) {
-        
-        // TEST LOG - DELETE AFTER: Show description bonus application
-        console.log('\n========== DESCRIPTION BONUS APPLICATION ==========')
-        const maxBonus = Math.max(...descriptionScores)
-        console.log(`Max Description Bonus: ${maxBonus.toFixed(2)}%`)
-        console.log(`Homes with bonus: ${descriptionScores.filter(s => s > 0).length}`)
-        console.log(`Homes with penalty: ${Array.from(descriptionPenaltyMap.values()).filter(p => p < 0).length}`)
-        console.log(`Homes without bonus: ${descriptionScores.filter(s => s === 0).length}`)
-        homes.forEach(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          const penalty = descriptionPenaltyMap.get(home.id) || 0
-          const beforeScore = matchMap.get(home.id) || 0
-          const afterScore = matchMap.get(home.id) || 0
-          if (bonus > 0) {
-            console.log(`  Home ${home.id}: +${bonus.toFixed(2)}% bonus → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          } else if (penalty < 0) {
-            console.log(`  Home ${home.id}: ${penalty.toFixed(2)}% penalty (negative mention) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          } else if (hasAnyDescriptionBonus) {
-            const relativePenalty = Math.min(maxBonus * 0.5, 10)
-            console.log(`  Home ${home.id}: -${relativePenalty.toFixed(2)}% penalty (no match) → ${beforeScore.toFixed(2)}% → ${afterScore.toFixed(2)}%`)
-          }
-        })
-        console.log('==================================================\n')
-      } else {
-        // No homes have bonus, just apply scores as normal
-        homes.forEach(home => {
-          const bonus = descriptionBonusMap.get(home.id) || 0
-          if (bonus > 0) {
-            const currentScore = matchMap.get(home.id) || 0
-            const finalScore = Math.min(100, currentScore + bonus)
-            matchMap.set(home.id, finalScore)
-          }
-        })
-        
-        // TEST LOG - DELETE AFTER: Show that no description matches found
-        console.log('\n========== DESCRIPTION MATCHING ==========')
-        console.log('No description matches found for any homes')
-        console.log('==========================================\n')
-      }
-      
       // Apply photo tag bonus — visual features confirmed in photos that match user query
       // Skip disqualified homes to keep their score locked at 0
       homes.forEach(home => {
         if (disqualifierMap.has(home.id)) return
-        const photoBonus = calculatePhotoBonus(userQuery, (home as any).photoTags)
+        // photoTagsArray is the canonical column; JSON-stringify it for calculatePhotoBonus compatibility
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const tagsRaw = Array.isArray((home as any).photoTagsArray) && (home as any).photoTagsArray.length > 0
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ? JSON.stringify((home as any).photoTagsArray)
+          : null
+        const photoBonus = calculatePhotoBonus(userQuery, tagsRaw)
         if (photoBonus > 0) {
-          const cur = matchMap.get(home.id) || 0
-          matchMap.set(home.id, Math.min(100, cur + photoBonus))
+          photoBonusScoreMap.set(home.id, normalizePhoto(photoBonus))
         }
       })
+
+      // Recency is applied in `rankScore` below, never to the displayed fit — freshness is
+      // a merchandising decision, not evidence that a listing answers the query.
 
       // Calculate average description score for logging
       if (descriptionScores.length > 0) {
@@ -1280,13 +1022,6 @@ export async function POST(request: NextRequest) {
         homes = homes.filter(home => {
           const bonus = descriptionBonusMap.get(home.id) || 0
           return bonus > 0
-        })
-        // Update matchMap to only include filtered homes
-        const filteredHomeIds = new Set(homes.map(h => h.id))
-        matchMap.forEach((score, homeId) => {
-          if (!filteredHomeIds.has(homeId)) {
-            matchMap.delete(homeId)
-          }
         })
       }
       
@@ -1313,7 +1048,7 @@ export async function POST(request: NextRequest) {
         )
       }
     } else {
-      // If shouldForce100 but only country filter, return nothing
+      // Hard filters only, but only a country was given — too broad to be useful.
       if (onlyCountryFilter) {
         return NextResponse.json(
           {
@@ -1324,79 +1059,121 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Even in force-100 path, still detect hard incompatibilities in descriptions
+      // Still detect hard incompatibilities in descriptions
       if (query) {
         for (const home of homes) {
           const disqualifier = calculateDisqualifiers(query, home.description)
           if (disqualifier) {
             disqualifierMap.set(home.id, disqualifier)
-            matchMap.set(home.id, 0)
           }
         }
       }
     }
 
-    // Semantic similarity boost using stored home embeddings
-    // Reuse the queryEmbedding already generated at the top of this handler
-    // Skip disqualified homes so we don't accidentally lift them above 0%
-    if (queryEmbedding) {
-      for (const home of homes) {
-        if (disqualifierMap.has(home.id)) continue
-        const stored = (home as any).embedding
-        if (!Array.isArray(stored)) continue
-        const sim = cosineSimilarity(queryEmbedding, stored as number[])
-        // sim is 0-1; boost up to +8 points for very high similarity
-        const bonus = Math.round(sim * 8)
-        if (bonus > 0) {
-          const cur = matchMap.get(home.id) || 0
-          matchMap.set(home.id, Math.min(100, cur + bonus))
-        }
-      }
-    }
+    // Semantic similarity — the single strongest signal we have, and a first-class
+    // component rather than the ~0-4 point afterthought it used to be. pgvector when the
+    // column is populated, JS cosine over the JSON column otherwise.
+    if (homes.length > 0 && !hardFiltersOnly) {
+      const candidates = homes.filter(h => !disqualifierMap.has(h.id))
+      /** Homes the in-database query actually returned a similarity for. */
+      const scoredByPgvector = new Set<number>()
 
-    // Semantic similarity boost using stored home embeddings
-    if (openai && process.env.OPENAI_API_KEY && userQuery && userQuery !== '[conversational]') {
-      try {
-        const queryEmbedding = await generateEmbedding(userQuery, openai)
-        for (const home of homes) {
+      // `semantic` is expressed unconditionally — a home we cannot compare gets the neutral
+      // prior rather than dropping the term. Dropping it would change the denominator of
+      // the weighted mean, and a fit is only comparable to another fit when both were
+      // computed over the same expressed set. That is what `minMatchPercent` relies on.
+      for (const home of candidates) {
+        getComponents(home.id).semantic = SEM_NEUTRAL
+      }
+
+      if (queryEmbedding && candidates.length > 0) {
+        try {
+          const vectorStr = `[${queryEmbedding.join(',')}]`
+          const pgResults = await prisma.$queryRawUnsafe<Array<{ id: number; sim: number }>>(
+            `SELECT id, 1 - ("embeddingVec" <=> $1::vector) AS sim
+             FROM homes
+             WHERE id = ANY($2::int[]) AND "embeddingVec" IS NOT NULL`,
+            vectorStr,
+            candidates.map(h => h.id)
+          )
+          for (const { id, sim } of pgResults) {
+            scoredByPgvector.add(id)
+            getComponents(id).semantic = semanticScore(sim)
+          }
+        } catch {
+          // pgvector not yet available — everything falls through to JS cosine
+        }
+
+        // Per-home coverage, not a global flag: `embeddingVec` is only written by the bulk
+        // uploader and the re-embed job, so a single bulk-uploaded home in the result set
+        // used to mark pgvector "used" and silently strip the semantic signal from every
+        // normally-created listing.
+        for (const home of candidates) {
+          if (scoredByPgvector.has(home.id)) continue
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const stored = (home as any).embedding
-          if (!Array.isArray(stored)) continue
-          const sim = cosineSimilarity(queryEmbedding, stored as number[])
-          // sim is 0-1; boost up to +8 points for very high similarity
-          const bonus = Math.round(sim * 8)
-          if (bonus > 0) {
-            const cur = matchMap.get(home.id) || 0
-            matchMap.set(home.id, Math.min(100, cur + bonus))
-          }
+          getComponents(home.id).semantic = Array.isArray(stored)
+            ? semanticScore(cosineSimilarity(queryEmbedding, stored as number[]))
+            : SEM_NEUTRAL
         }
-      } catch {
-        // non-fatal — skip semantic boost if embedding fails
       }
     }
 
-    // Attach match percentages and safety to homes and sort by match percentage (highest first)
-    // Disqualified homes (0%) sort to the bottom
+    // Final aggregation. `matchPercentage` is the absolute fit and is what the user sees;
+    // `rankScore` adds freshness and is only ever used to order the list.
+    // When only hard filters were given every result satisfies the query completely, so we
+    // report no percentage at all and let the UI say "matches your filters".
+    const vibeWeightOverride = extractedFilters.hasLocationPreference === true && extractedFilters.vibePreference
+      ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
+      : undefined
+
     const homesWithMatches = homes.map(home => {
       const incompatibilityReason = disqualifierMap.get(home.id) ?? undefined
+      const disqualified = incompatibilityReason !== undefined
+
+      const fit = hardFiltersOnly
+        ? null
+        : scoreHome(componentsMap.get(home.id) ?? {}, {
+            descriptionBonus: descriptionBonusScoreMap.get(home.id),
+            photoBonus: photoBonusScoreMap.get(home.id),
+            penalty: penaltyMap.get(home.id),
+            areaBonus: areaBonusMap.get(home.id),
+            disqualified,
+            weights: vibeWeightOverride,
+          })
+
+      const base = hardFiltersOnly
+        ? (disqualified ? 0 : intrinsicRankMap.get(home.id) ?? 50)
+        : fit ?? 0
+
       return {
         ...home,
         embedding: undefined, // strip from response
-        matchPercentage: matchMap.get(home.id) ?? 0,
+        matchPercentage: fit,
         incompatibilityReason,
         safety: extractedFilters.Safety || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        _rank: disqualified ? -1 : rankScore(base, (home as any).createdAt),
       }
-    }).sort((a, b) => b.matchPercentage - a.matchPercentage)
+    })
+      .sort((a, b) => b._rank - a._rank)
+      .map(({ _rank, ...home }) => home)
 
     finalHomesCount = homesWithMatches.length
     homesCountAfterFilter = homes.length
 
-    // Store in semantic cache for future similar queries
-    if (queryEmbedding && !excludeInquired && !excludeApproved) {
+    // Store in cache for future similar queries (Redis + in-memory)
+    if (queryEmbedding && resultCacheEligible) {
+      const cacheResult = { homes: homesWithMatches, message: 'AI search completed' }
+      // Redis (shared, persists across deploys)
+      const redisCacheKey = `ai-search:${type || 'any'}:${queryEmbedding.slice(0, 8).join(',')}`
+      redisSet(redisCacheKey, cacheResult, SEARCH_CACHE_TTL_MS / 1000).catch(() => {})
+      // In-memory fallback
       if (searchResultCache.length >= SEARCH_CACHE_MAX_ENTRIES) searchResultCache.shift()
       searchResultCache.push({
         embedding: queryEmbedding,
         type: type || undefined,
-        result: { homes: homesWithMatches, message: 'AI search completed' },
+        result: cacheResult,
         ts: Date.now(),
       })
     }
@@ -1421,6 +1198,7 @@ export async function POST(request: NextRequest) {
         finalHomesCount,
         descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
+        conversationKey,
       },
     }).catch((logError) => {
       log.error({ err: logError }, 'Failed to log AI search to database')
@@ -1457,6 +1235,7 @@ export async function POST(request: NextRequest) {
         finalHomesCount,
         descriptionPhotoScore: avgDescriptionPhotoScore,
         error: errorMessage,
+        conversationKey,
       },
     }).catch((logError) => {
       log.error({ err: logError }, 'Failed to log AI search error to database')

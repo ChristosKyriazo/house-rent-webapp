@@ -38,19 +38,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (displayRole === 'owner') {
-      // Owner view: Get all approved inquiries for homes owned by the user
-      const ownerHomes = await prisma.home.findMany({
-        where: { ownerId: user.id },
-        select: { id: true },
-      })
-
-      const homeIds = ownerHomes.map(home => home.id)
-
+      // Owner view — single query via nested relation (eliminates the prior N+1)
       const inquiries = await prisma.inquiry.findMany({
         where: {
-          homeId: { in: homeIds },
+          home: { ownerId: user.id },
           approved: true,
-          finalized: false, // Exclude finalized inquiries
+          finalized: false,
+          dismissed: false,
         },
         select: {
           id: true,
@@ -72,7 +66,9 @@ export async function GET(request: NextRequest) {
               id: true,
               key: true,
               title: true,
+              titleGreek: true,
               street: true,
+              streetGreek: true,
               city: true,
               country: true,
               area: true,
@@ -83,6 +79,7 @@ export async function GET(request: NextRequest) {
               listingType: true,
               photos: true,
               ownerId: true,
+              finalized: true,
             },
           },
         },
@@ -104,6 +101,8 @@ export async function GET(request: NextRequest) {
         },
       })
       const pendingFinalizationInquiryIds = new Set(pendingFinalizations.map(n => n.inquiryId).filter((id): id is number => id !== null))
+
+      const homeIds = inquiries.map(inq => inq.home.id)
 
       // Get all bookings for these inquiries, including inquiryId=null rows tied via availability.homeId + renter
       const bookings = await prisma.booking.findMany({
@@ -170,7 +169,7 @@ export async function GET(request: NextRequest) {
           try {
             const parsed = JSON.parse(inquiry.home.photos)
             photos = Array.isArray(parsed) ? parsed : []
-          } catch (e) {
+          } catch {
             photos = []
           }
         }
@@ -180,7 +179,7 @@ export async function GET(request: NextRequest) {
         if (inquiry.contactInfo) {
           try {
             contactInfo = JSON.parse(inquiry.contactInfo)
-          } catch (e) {
+          } catch {
             contactInfo = null
           }
         }
@@ -232,6 +231,7 @@ export async function GET(request: NextRequest) {
             listingType: inquiry.home.listingType,
             photos: photos,
             ownerId: inquiry.home.ownerId,
+            finalized: inquiry.home.finalized,
           },
           user: {
             id: inquiry.user.id,
@@ -255,6 +255,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           approved: true,
           finalized: false,
+          dismissed: false,
         },
         select: {
           id: true,
@@ -278,6 +279,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           approved: true,
           finalized: false,
+          dismissed: false,
           homeId: { in: Array.from(validHomeIds) },
         },
         include: {
@@ -380,7 +382,7 @@ export async function GET(request: NextRequest) {
           try {
             const parsed = JSON.parse(home.photos)
             photos = Array.isArray(parsed) ? parsed : []
-          } catch (e) {
+          } catch {
             photos = []
           }
         }
@@ -390,7 +392,7 @@ export async function GET(request: NextRequest) {
         if (inquiry.contactInfo) {
           try {
             contactInfo = JSON.parse(inquiry.contactInfo)
-          } catch (e) {
+          } catch {
             contactInfo = null
           }
         }
@@ -442,6 +444,7 @@ export async function GET(request: NextRequest) {
             listingType: home.listingType,
             photos: photos,
             ownerId: home.ownerId,
+            finalized: home.finalized,
           },
           owner: {
             id: home.owner.id,

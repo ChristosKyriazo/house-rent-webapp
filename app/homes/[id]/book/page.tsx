@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle } from '@/lib/area-utils'
 import {
   parseAppointmentThresholdMinutes,
   parseContactInfo,
   type ParsedOwnerContactInfo,
 } from '@/lib/appointment-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface Availability {
   id: number
@@ -33,7 +35,7 @@ interface TimeSlot {
   isBooked: boolean
 }
 
-export default function BookPage() {
+function BookPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -45,6 +47,7 @@ export default function BookPage() {
     id: number
     key: string
     title: string
+    titleGreek?: string | null
     street?: string | null
     city: string
     country: string
@@ -278,7 +281,7 @@ export default function BookPage() {
         const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
-          const hasOverlappingBooking = av.bookings.some((booking: any) => {
+          const hasOverlappingBooking = av.bookings.some((booking: { startTime: string; endTime: string }) => {
             const bookingStart = new Date(booking.startTime)
             const bookingEnd = new Date(booking.endTime)
             return (slotStart < bookingEnd && slotEnd > bookingStart)
@@ -290,17 +293,16 @@ export default function BookPage() {
       })
 
       if (!matchingAvailability) {
-        throw new Error('Time slot not available')
+        throw new Error(language === 'el' ? 'Η ώρα δεν είναι διαθέσιμη' : 'Time slot not available')
       }
 
       // Create start and end times based on owner threshold
-      const [hour, minute] = selectedTimeSlot.split(':').map(Number)
       const startDateTime = new Date(`${selectedDate}T${selectedTimeSlot}:00`)
       const endDateTime = new Date(startDateTime.getTime() + appointmentDurationMinutes * 60 * 1000)
 
       // Validate dates
       if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
-        throw new Error('Invalid date/time')
+        throw new Error(language === 'el' ? 'Μη έγκυρη ημερομηνία/ώρα' : 'Invalid date/time')
       }
 
       const response = await fetch('/api/bookings', {
@@ -320,7 +322,7 @@ export default function BookPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to book slot')
+        throw new Error(errorData.error || (language === 'el' ? 'Αποτυχία κράτησης' : 'Failed to book slot'))
       }
 
       // Mark availability as booked (or create a new availability record for the remaining time)
@@ -417,7 +419,7 @@ export default function BookPage() {
               {getTranslation(language, 'upcomingAppointments')}
             </Link>
           </div>
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-2">
             {getTranslation(language, 'bookViewing')}
           </h1>
           {home && (
@@ -425,7 +427,7 @@ export default function BookPage() {
               href={`/homes/${home.key}`}
               className="mt-4 block rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-5 shadow-sm transition-colors hover:border-[var(--accent)]/40 hover:bg-[var(--ink-soft)]"
             >
-              <p className="font-display text-xl font-semibold text-[var(--text)]">{home.title}</p>
+              <p className="font-display text-xl font-semibold text-[var(--text)]">{getHomeTitle(language, home)}</p>
               {addressLine ? (
                 <p className="mt-2 text-sm text-[var(--text-muted)]">
                   <span className="font-medium text-[var(--text)]/90">
@@ -534,9 +536,9 @@ export default function BookPage() {
                   key={date}
                   className="bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-[var(--border-subtle)]"
                 >
-                  <h2 className="text-2xl font-bold text-[var(--text)] mb-4">
+                  <h2 className="text-lg sm:text-2xl font-bold text-[var(--text)] mb-4">
                     {new Date(date).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',
@@ -546,8 +548,8 @@ export default function BookPage() {
                     )}
                   </h2>
                   
-                  <div className="flex items-center gap-4">
-                    <label className="text-[var(--text-muted)] font-medium min-w-[120px]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                    <label className="text-[var(--text-muted)] font-medium sm:min-w-[120px]">
                       {getTranslation(language, 'selectTime')}:
                     </label>
                     <select
@@ -592,7 +594,7 @@ export default function BookPage() {
                   <p className="text-[var(--text)] mb-2">
                     <strong>{getTranslation(language, 'selectedDate')}:</strong>{' '}
                     {new Date(selectedDate).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',
@@ -635,6 +637,14 @@ export default function BookPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function BookPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[var(--ink-soft)] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-[var(--accent)]/25 border-t-[var(--accent)] animate-spin" /></div>}>
+      <BookPage />
+    </Suspense>
   )
 }
 

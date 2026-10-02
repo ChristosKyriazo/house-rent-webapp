@@ -36,7 +36,7 @@ try {
   } else {
     console.log('✅ No processes found locking the database\n');
   }
-} catch (error) {
+} catch {
   console.log('⚠️  Could not check for locking processes\n');
 }
 
@@ -54,7 +54,7 @@ console.log('⚙️  Setting SQLite busy_timeout to 30 seconds...');
 try {
   execSync(`sqlite3 "${dbPath}" "PRAGMA busy_timeout = 30000;"`, { encoding: 'utf-8' });
   console.log('✅ Busy timeout set successfully\n');
-} catch (error) {
+} catch {
   console.log('⚠️  Could not set busy_timeout (this is OK if using Prisma)\n');
 }
 

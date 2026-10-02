@@ -58,27 +58,6 @@ export function GraphicWelcome({ className = '' }: SvgProps) {
   )
 }
 
-/** Search: rings + axes (discovery). */
-export function GraphicSearch({ className = '' }: SvgProps) {
-  return (
-    <svg className={`text-[color:var(--graphic-stroke)] ${className}`} viewBox="0 0 560 320" fill="none" aria-hidden>
-      <circle cx="280" cy="160" r="120" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <circle cx="280" cy="160" r="80" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <circle cx="280" cy="160" r="40" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      <path
-        d="M280 40 V280 M40 160 H520"
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        strokeWidth="1"
-        strokeDasharray="4 8"
-        vectorEffect="non-scaling-stroke"
-      />
-      <path d="M360 100 L440 60" stroke="currentColor" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <circle cx="400" cy="120" r="48" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
-}
-
 /** Auth: portal frame (access). */
 export function GraphicAuth({ className = '' }: SvgProps) {
   return (

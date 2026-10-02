@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
+import { getHomeTitle } from '@/lib/area-utils'
 import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointment-utils'
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
+import { localeFor } from '@/lib/format'
 
 interface Booking {
   id: number
@@ -36,7 +37,9 @@ interface Booking {
   home?: {
     key: string
     title: string
+    titleGreek?: string | null
     street?: string
+    streetGreek?: string | null
     city?: string
     country?: string
   }
@@ -44,7 +47,6 @@ interface Booking {
 }
 
 export default function CalendarPage() {
-  const router = useRouter()
   const { language } = useLanguage()
   const { selectedRole, actualRole } = useRole()
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -123,7 +125,7 @@ export default function CalendarPage() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString(language === 'el' ? 'el-GR' : 'en-US', {
+    return date.toLocaleTimeString(localeFor(language), {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -161,10 +163,10 @@ export default function CalendarPage() {
     const start = weekDays[0]
     const end = weekDays[6]
     
-    return `${start.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    return `${start.toLocaleDateString(localeFor(language), {
       month: 'short',
       day: 'numeric',
-    })} - ${end.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+    })} - ${end.toLocaleDateString(localeFor(language), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -180,7 +182,7 @@ export default function CalendarPage() {
   }
 
   const days = getDaysInMonth(selectedDate)
-  const monthName = selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', { month: 'long', year: 'numeric' })
+  const monthName = selectedDate.toLocaleDateString(localeFor(language), { month: 'long', year: 'numeric' })
   const weekDays = language === 'el' 
     ? ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -190,16 +192,16 @@ export default function CalendarPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[var(--text)] mb-4">
+          <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-4">
             {getTranslation(language, 'calendar')}
           </h1>
-          
+
           {/* View Toggle */}
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="flex gap-2 bg-[var(--surface)] rounded-xl p-1">
               <button
                 onClick={() => setView('day')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'day'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -209,7 +211,7 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={() => setView('week')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'week'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -219,7 +221,7 @@ export default function CalendarPage() {
               </button>
               <button
                 onClick={() => setView('month')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
                   view === 'month'
                     ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] font-semibold'
                     : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -253,8 +255,8 @@ export default function CalendarPage() {
               >
                 ←
               </button>
-              <h2 className="text-2xl font-bold text-[var(--text)]">
-                {selectedDate.toLocaleDateString(language === 'el' ? 'el-GR' : 'en-US', {
+              <h2 className="text-base sm:text-2xl font-bold text-[var(--text)] text-center flex-1 mx-2 truncate">
+                {selectedDate.toLocaleDateString(localeFor(language), {
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
@@ -300,10 +302,10 @@ export default function CalendarPage() {
                             <p>👤 {getTranslation(language, 'with')}: {booking.owner.name || booking.owner.email}</p>
                             {booking.home && (
                               <Link
-                                href={`/homes/${booking.home.key}`}
+                                href={`/homes/${booking.home.key}?from=calendar`}
                                 className="text-[var(--text)] hover:text-[var(--accent)] underline"
                               >
-                                🏠 {booking.home.title}
+                                🏠 {getHomeTitle(language, booking.home)}
                               </Link>
                             )}
                           </div>
@@ -312,8 +314,8 @@ export default function CalendarPage() {
                           booking.status === 'scheduled'
                             ? 'bg-blue-500/20 text-blue-400'
                             : booking.status === 'completed'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-red-500/20 text-red-400'
+                            ? 'bg-[var(--status-success-bg)] text-[var(--status-success)]'
+                            : 'bg-[var(--status-error-bg)] text-[var(--status-error)]'
                         }`}>
                           {booking.status}
                         </span>
@@ -354,7 +356,8 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-2">
+            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="grid grid-cols-7 gap-2 min-w-[560px]">
               {getWeekDays(selectedDate).map((day, index) => {
                 const dayBookings = getBookingsForDate(day)
                 const isToday = day.toDateString() === new Date().toDateString()
@@ -362,7 +365,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`border border-[var(--border-subtle)] rounded-xl p-3 min-h-[200px] ${
+                    className={`border border-[var(--border-subtle)] rounded-xl p-3 min-h-[80px] sm:min-h-[200px] ${
                       isToday ? 'bg-[var(--btn-primary-bg)]/10 border-[var(--border-subtle)]' : 'bg-[var(--ink-soft)]/50'
                     }`}
                   >
@@ -388,6 +391,7 @@ export default function CalendarPage() {
                 )
               })}
             </div>
+            </div>
           </div>
         )}
 
@@ -412,7 +416,8 @@ export default function CalendarPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="grid grid-cols-7 gap-1 min-w-[320px]">
               {/* Week Day Headers */}
               {weekDays.map(day => (
                 <div key={day} className="text-center text-sm font-semibold text-[var(--text-muted)] py-2">
@@ -459,6 +464,7 @@ export default function CalendarPage() {
                   </div>
                 )
               })}
+            </div>
             </div>
           </div>
         )}
@@ -523,6 +529,7 @@ function RescheduleModal({
   onSuccess: () => void
   language: 'el' | 'en'
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [availabilities, setAvailabilities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [rescheduling, setRescheduling] = useState(false)
@@ -572,6 +579,7 @@ function RescheduleModal({
   }, [homeKey])
 
   // Generate half-hour time slots
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const generateTimeSlots = (availability: any) => {
     const slots: Array<{ time: string; availabilityId: number; isBooked: boolean }> = []
     const [startHour, startMin] = availability.startTime.split(':').map(Number)
@@ -607,6 +615,7 @@ function RescheduleModal({
       // Check if any booking overlaps with this time slot (excluding the current booking being rescheduled)
       // First check bookings for this specific home
       if (!isBooked && availability.bookings && availability.bookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.bookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -634,6 +643,7 @@ function RescheduleModal({
       
       // Also check all user/owner bookings across all properties (if available)
       if (!isBooked && availability.allUserAndOwnerBookings && availability.allUserAndOwnerBookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.allUserAndOwnerBookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -661,6 +671,7 @@ function RescheduleModal({
       
       // Also check all user/owner bookings across all properties (if available)
       if (!isBooked && availability.allUserAndOwnerBookings && availability.allUserAndOwnerBookings.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         isBooked = availability.allUserAndOwnerBookings.some((b: any) => {
           // Exclude the current booking being rescheduled
           if (b.id === booking.id) return false
@@ -750,6 +761,7 @@ function RescheduleModal({
     try {
       const dateStr = selectedDate
       const currentBookingId = booking.id
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const matchingAvailability = availabilities.find((av: any) => {
         const avDateStr = av.date.includes('T') ? av.date.split('T')[0] : av.date
         if (avDateStr !== dateStr) return false
@@ -773,6 +785,7 @@ function RescheduleModal({
         const slotEnd = new Date(slotStart.getTime() + appointmentDurationMinutes * 60 * 1000)
         
         if (av.bookings && av.bookings.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hasOverlappingBooking = av.bookings.some((b: any) => {
             // Exclude the current booking being rescheduled
             if (b.id === currentBookingId) return false
@@ -803,19 +816,6 @@ function RescheduleModal({
         return true
       })
       
-      console.log('Reschedule - Finding availability:', {
-        selectedDate: dateStr,
-        selectedTimeSlot,
-        availabilitiesCount: availabilities.length,
-        matchingAvailability: matchingAvailability ? {
-          id: matchingAvailability.id,
-          date: matchingAvailability.date,
-          startTime: matchingAvailability.startTime,
-          endTime: matchingAvailability.endTime,
-          bookingsCount: matchingAvailability.bookings?.length || 0,
-        } : null,
-      })
-
       if (!matchingAvailability) {
         throw new Error('Time slot not available')
       }
@@ -888,7 +888,7 @@ function RescheduleModal({
           </p>
           <p className="text-[var(--text)]">
             {new Date(booking.startTime).toLocaleDateString(
-              language === 'el' ? 'el-GR' : 'en-US',
+              localeFor(language),
               {
                 weekday: 'long',
                 year: 'numeric',
@@ -896,7 +896,7 @@ function RescheduleModal({
                 day: 'numeric',
               }
             )} at {new Date(booking.startTime).toLocaleTimeString(
-              language === 'el' ? 'el-GR' : 'en-US',
+              localeFor(language),
               { hour: '2-digit', minute: '2-digit' }
             )}
           </p>
@@ -917,7 +917,7 @@ function RescheduleModal({
                 >
                   <h3 className="text-lg font-semibold text-[var(--text)] mb-3">
                     {new Date(date).toLocaleDateString(
-                      language === 'el' ? 'el-GR' : 'en-US',
+                      localeFor(language),
                       {
                         weekday: 'long',
                         year: 'numeric',
@@ -969,13 +969,13 @@ function RescheduleModal({
         )}
 
         {selectedDate && selectedTimeSlot && (
-          <div className="mt-6 bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-green-500/50">
+          <div className="mt-6 bg-[var(--ink-soft)]/50 rounded-2xl p-4 border border-[var(--status-success)]">
             <p className="text-[var(--text)] mb-2">
               <strong>{getTranslation(language, 'newBookingTime')}:</strong>
             </p>
             <p className="text-[var(--text)]">
               {new Date(selectedDate).toLocaleDateString(
-                language === 'el' ? 'el-GR' : 'en-US',
+                localeFor(language),
                 {
                   weekday: 'long',
                   year: 'numeric',

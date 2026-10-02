@@ -1,10 +1,20 @@
 name: CI
 
+# The fast gate. Runs on every feature-branch push (so you get a red X within
+# ~3 minutes of pushing), on PRs into dev/main, and — via workflow_call — as the
+# blocking first job of deploy.yml so a broken commit never reaches a server.
 on:
   push:
-    branches: [main, dev]
+    branches-ignore: [main, dev] # pushes to main/dev come in through deploy.yml
   pull_request:
     branches: [main, dev]
+  workflow_call:
+
+# A newer push to the same branch cancels the older run. Never applied to
+# deploy-triggered runs, which must always complete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
 
 jobs:
   ci:
@@ -12,12 +22,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          # Must match .nvmrc, package.json engines, and the Dockerfile.
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies

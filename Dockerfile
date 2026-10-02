@@ -1,4 +1,6 @@
-FROM node:20-alpine AS base
+# Keep in lockstep with .nvmrc, package.json "engines", and ci.yml, which all
+# read 22.18.0. A split here means production runs a runtime nobody develops on.
+FROM node:22.18.0-alpine AS base
 
 # ── deps: install all dependencies ──────────────────────────────────────────
 FROM base AS deps
@@ -16,11 +18,24 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build — supply placeholder env vars so Next.js can resolve at build time
+# Build — only NEXT_PUBLIC_* vars are embedded in the client bundle and must be
+# real values at build time. All other secrets are injected at runtime via .env.
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
+ARG NEXT_PUBLIC_SENTRY_DSN=
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+# Explicit ENV so Next.js build picks them up and Docker cache-busts correctly when values change
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+# Verify Maps key is present at build time (prints key length, not the key itself)
+RUN echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY length: ${#NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}"
+# Clerk needs a key with valid format during build-time module init; the placeholder
+# is never used at runtime — docker-compose.prod.yml injects the real value via .env.
 ARG CLERK_SECRET_KEY=sk_test_placeholder
-ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/house_rent
+ENV CLERK_SECRET_KEY=$CLERK_SECRET_KEY
+# DATABASE_URL is NOT needed at build time: prisma generate uses the schema file,
+# not an actual DB connection. It is intentionally absent here.
 RUN npm run build
 
 # ── runner: minimal production image ────────────────────────────────────────
@@ -30,7 +45,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs && \
+RUN apk add --no-cache openssl && \
+    addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
@@ -38,6 +54,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 

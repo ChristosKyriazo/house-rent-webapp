@@ -6,11 +6,12 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { useRole } from '@/app/contexts/RoleContext'
 import { getTranslation } from '@/lib/translations'
-import { getAreaName, getCityName, getCountryName } from '@/lib/area-utils'
+import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
+import { localeFor } from '@/lib/format'
 
 interface ApprovedInquiry {
   id: number
-  home: { key: string; title: string; street: string | null; city: string; country: string; area: string | null }
+  home: { key: string; title: string; titleGreek?: string | null; street: string | null; streetGreek?: string | null; city: string; country: string; area: string | null; finalized?: boolean }
   user?: { name: string | null; email: string }
   owner?: { name: string | null; email: string }
   contactInfo: { phone?: string; timeFrame?: string; appointmentThresholdMinutes?: number } | null
@@ -50,8 +51,9 @@ export default function ApprovedInquiriesPage() {
           return
         }
 
-        const role = (profileData.user.role || 'user').toLowerCase()
-        const ownerView = role === 'owner' || role === 'broker' || role === 'both'
+        // Use displayRole (respects selectedRole for 'both' users) rather than raw DB role
+        const ownerView = displayRole === 'owner' || displayRole === 'broker' ||
+          (displayRole === 'both' && (profileData.user.role === 'owner' || profileData.user.role === 'broker'))
         setIsOwner(ownerView)
 
         const approvedRes = await fetch(`/api/inquiries/approved?role=${ownerView ? 'owner' : 'user'}`, {
@@ -98,7 +100,7 @@ export default function ApprovedInquiriesPage() {
   return (
     <div className="min-h-screen bg-[var(--ink-soft)] py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold text-[var(--text)] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
+        <h1 className="text-2xl sm:text-4xl font-bold text-[var(--text)] mb-8">{getTranslation(language, 'approvedInquiries')}</h1>
         {approvedInquiries.length === 0 ? (
           <div className="bg-[var(--surface)] rounded-3xl p-10 border border-[var(--border-subtle)] text-center text-[var(--text-muted)]">
             {getTranslation(language, 'noApprovedInquiries')}
@@ -114,9 +116,22 @@ export default function ApprovedInquiriesPage() {
               const showScheduled = appointment !== null || serverSaysScheduled
               return (
                 <div key={inq.id} className="bg-[var(--surface)] rounded-3xl p-6 border border-[var(--border-subtle)]">
-                  <h2 className="text-2xl font-bold text-[var(--text)]">{inq.home.title}</h2>
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <Link
+                      href={`/homes/${inq.home.key}?from=approved`}
+                      className="group min-w-0"
+                    >
+                      <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors break-words">{getHomeTitle(language, inq.home)}</h2>
+                    </Link>
+                    <Link
+                      href={`/homes/${inq.home.key}?from=approved`}
+                      className="self-start shrink-0 px-4 py-1.5 text-sm font-semibold rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] hover:bg-[var(--btn-primary-hover-bg)] transition-all"
+                    >
+                      {getTranslation(language, 'viewProperty') || 'View Property'}
+                    </Link>
+                  </div>
                   <p className="text-[var(--text-muted)] text-sm mt-1">
-                    {inq.home.street ? `${inq.home.street}, ` : ''}
+                    {getHomeStreet(language, inq.home) ? `${getHomeStreet(language, inq.home)}, ` : ''}
                     {getCityName(inq.home.city, areas, language)}, {getCountryName(inq.home.country, areas, language)}
                     {inq.home.area ? ` • ${getAreaName(inq.home.area, areas, language)}` : ''}
                   </p>
@@ -132,39 +147,133 @@ export default function ApprovedInquiriesPage() {
                     </div>
                   )}
 
-                  {showScheduled ? (
-                    <div className="mt-4 text-green-300 text-sm bg-green-600/20 border border-green-500/50 rounded-xl p-3 space-y-1">
-                      {appointment ? (
-                        <>
-                          {appointment.status === 'completed' || inq.status === 'pre_finalization'
-                            ? `${getTranslation(language, 'completed')}: `
-                            : `${getTranslation(language, 'scheduled')}: `}
-                          {new Date(appointment.startTime).toLocaleString(language === 'el' ? 'el-GR' : 'en-US')}
-                        </>
+                  {/* Next step banner + action button */}
+                  {inq.status === 'awaiting_finalization' ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-yellow-500/15 border border-yellow-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">⚡</span>
+                        <div>
+                          <p className="text-sm font-semibold text-yellow-300">{language === 'el' ? 'Οριστικοποίηση σε εξέλιξη' : 'Finalization in progress'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Αίτημα στάλθηκε στον ενοικιαστή — αναμένεται αποδοχή.' : 'Request sent to tenant — awaiting their acceptance.'}</p>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/homes/inquiries/${inq.home.key}?from=approved`}
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-sm font-semibold transition-colors border border-yellow-500/30"
+                      >
+                        {language === 'el' ? 'Προβολή →' : 'View →'}
+                      </Link>
+                    </div>
+                  ) : inq.status === 'pre_finalization' ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-blue-500/15 border border-blue-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">🤝</span>
+                        <div>
+                          <p className="text-sm font-semibold text-blue-300">{language === 'el' ? 'Επόμενο βήμα: Αποστολή προσφοράς' : 'Next step: Send finalization offer'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Η επίσκεψη ολοκληρώθηκε. Μπορείτε να οριστικοποιήσετε.' : 'Viewing done. Confirm the tenant to close the deal.'}</p>
+                        </div>
+                      </div>
+                      {inq.home.finalized ? (
+                        <span className="self-start shrink-0 px-3 py-1.5 rounded-full bg-purple-500/20 text-purple-300 text-sm font-semibold">
+                          {language === 'el' ? 'Ολοκληρώθηκε' : 'Deal closed'}
+                        </span>
                       ) : (
-                        <>
-                          <p>
-                            {inq.status === 'pre_finalization'
-                              ? getTranslation(language, 'completed')
-                              : getTranslation(language, 'scheduled')}
-                          </p>
-                          <Link
-                            href="/homes/calendar"
-                            className="inline-block text-[var(--text)] underline font-medium hover:text-white"
-                          >
-                            {getTranslation(language, 'scheduledBookings')}
-                          </Link>
-                        </>
+                        <Link
+                          href={`/homes/inquiries/${inq.home.key}?from=approved`}
+                          className="self-start shrink-0 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-sm font-semibold transition-colors border border-blue-500/30"
+                        >
+                          {language === 'el' ? 'Οριστικοποίηση →' : 'Finalize →'}
+                        </Link>
                       )}
                     </div>
-                  ) : (
-                    !isOwner && (
-                      <div className="mt-4">
-                        <Link href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`} className="inline-block px-5 py-2.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] rounded-xl font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
-                          {getTranslation(language, 'viewAvailableSlots')}
-                        </Link>
+                  ) : inq.status === 'waiting_for_schedule' ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">📅</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">
+                            {isOwner
+                              ? (language === 'el' ? 'Αναμονή κράτησης από ενοικιαστή' : 'Waiting for tenant to book')
+                              : (language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Book your viewing')}
+                          </p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            {isOwner
+                              ? (language === 'el' ? 'Έχετε ορίσει διαθεσιμότητα. Αναμένετε κράτηση.' : 'Slots available — waiting for the tenant to pick one.')
+                              : (language === 'el' ? 'Ο ιδιοκτήτης έχει ορίσει θέσεις επίσκεψης.' : 'The owner has set available time slots.')}
+                          </p>
+                        </div>
                       </div>
-                    )
+                      {!isOwner && (
+                        <Link
+                          href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
+                          className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                        >
+                          {language === 'el' ? 'Κράτηση →' : 'Book →'}
+                        </Link>
+                      )}
+                    </div>
+                  ) : showScheduled ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-green-600/15 border border-green-500/40">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">✅</span>
+                        <div className="text-sm text-green-300">
+                          {appointment ? (
+                            <>
+                              <p className="font-semibold">
+                                {appointment.status === 'completed' || (inq.status as string) === 'pre_finalization'
+                                  ? (language === 'el' ? 'Επίσκεψη ολοκληρώθηκε' : 'Viewing completed')
+                                  : (language === 'el' ? 'Επίσκεψη προγραμματισμένη' : 'Viewing scheduled')}
+                              </p>
+                              <p className="text-xs text-green-400/70 mt-0.5">{new Date(appointment.startTime).toLocaleString(localeFor(language))}</p>
+                            </>
+                          ) : (
+                            <p className="font-semibold">
+                              {(inq.status as string) === 'pre_finalization'
+                                ? (language === 'el' ? 'Επίσκεψη ολοκληρώθηκε' : 'Viewing completed')
+                                : (language === 'el' ? 'Επίσκεψη προγραμματισμένη' : 'Viewing scheduled')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Link
+                        href="/homes/calendar"
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-green-600/20 text-green-300 hover:bg-green-600/30 text-sm font-semibold transition-colors border border-green-500/30"
+                      >
+                        {language === 'el' ? 'Ημερολόγιο →' : 'Calendar →'}
+                      </Link>
+                    </div>
+                  ) : isOwner && inq.status === 'approved' ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">📅</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Ορίστε διαθεσιμότητα' : 'Next step: Set availability'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Προσθέστε χρόνους επίσκεψης για τον ενδιαφερόμενο.' : 'Add viewing slots so the tenant can schedule.'}</p>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/homes/${inq.home.key}/set-availability`}
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                      >
+                        {language === 'el' ? 'Ορισμός →' : 'Set slots →'}
+                      </Link>
+                    </div>
+                  ) : !isOwner && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between p-4 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">🏠</span>
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--text)]">{language === 'el' ? 'Επόμενο βήμα: Κλείστε επίσκεψη' : 'Next step: Schedule a viewing'}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{language === 'el' ? 'Επιλέξτε ώρα από τις διαθέσιμες θέσεις.' : 'Pick an available time slot from the owner.'}</p>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/homes/${inq.home.key}/book?inquiryId=${inq.id}`}
+                        className="self-start shrink-0 px-4 py-2 rounded-xl bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 text-sm font-semibold transition-colors border border-[var(--accent)]/30"
+                      >
+                        {language === 'el' ? 'Κράτηση →' : 'Book →'}
+                      </Link>
+                    </div>
                   )}
                 </div>
               )

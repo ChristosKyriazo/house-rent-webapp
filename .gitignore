@@ -35,6 +35,13 @@ yarn-error.log*
 !.env.example
 !.env.staging.example
 !.env.production.example
+!.env.test.example
+
+# playwright auth sessions and shared test state
+tests/e2e/.auth/
+tests/e2e/fixtures/state.json
+playwright-report/
+test-results/
 
 # database
 *.db
@@ -57,3 +64,5 @@ next-env.d.ts
 
 # user-uploaded files (stored on server, not in repo)
 /public/uploads/
+backup-*.sql
+.claude/worktrees/
