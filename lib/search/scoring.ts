@@ -12,58 +12,6 @@ const DISTINCT_VIBES =[
   'Working-Class',
 ]
 
-export function calculateDistanceScore(
-  distance: number | null,
-  category: string | null | undefined
-): number {
-  if (distance === null || distance === undefined) return 0
-
-  if (!category || category === 'Not important' || category === 'Not mentioned') {
-    return distance <= 10 ? 0 : -5
-  }
-
-  let distanceScore = 0
-
-  if (category === 'Essential') {
-    if (distance <= 0.5) {
-      distanceScore = 60 - (distance / 0.5) * 10
-    } else if (distance <= 1.0) {
-      distanceScore = 50 - ((distance - 0.5) / 0.5) * 10
-    } else if (distance <= 2.0) {
-      distanceScore = 40 - ((distance - 1.0) / 1.0) * 10
-    } else if (distance <= 3.0) {
-      distanceScore = 30 - ((distance - 2.0) / 1.0) * 10
-    } else if (distance <= 5.0) {
-      distanceScore = 20 - ((distance - 3.0) / 2.0) * 10
-    } else if (distance <= 10.0) {
-      distanceScore = 10 - ((distance - 5.0) / 5.0) * 10
-    } else {
-      distanceScore = -10 - ((distance - 10.0) / 10.0) * 5
-    }
-  } else if (category === 'Strong') {
-    if (distance <= 1.0) {
-      distanceScore = 40 - (distance / 1.0) * 5
-    } else if (distance <= 2.0) {
-      distanceScore = 35 - ((distance - 1.0) / 1.0) * 5
-    } else if (distance <= 3.0) {
-      distanceScore = 30 - ((distance - 2.0) / 1.0) * 10
-    } else if (distance <= 5.0) {
-      distanceScore = 20 - ((distance - 3.0) / 2.0) * 10
-    } else if (distance <= 10.0) {
-      distanceScore = 10 - ((distance - 5.0) / 5.0) * 10
-    } else {
-      distanceScore = -5 - ((distance - 10.0) / 10.0) * 3
-    }
-  } else if (category === 'Avoid') {
-    if (distance <= 2.0) distanceScore = -30
-    else if (distance <= 5.0) distanceScore = -15
-    else if (distance <= 10.0) distanceScore = 5
-    else distanceScore = 20
-  }
-
-  return distanceScore
-}
-
 export function calculateVibeScore(
   vibePreference: string | null | undefined,
   propertyVibes: string[]
@@ -149,123 +97,23 @@ export function calculateVibeScore(
     }
   }
 
-  // Priority weights: 1→1.0, 2→0.5, 3→0.33
-  // Proportional scoring: 50 (neutral baseline) + weighted match ratio * 50
-  // This avoids the asymmetry where a secondary-only match scored unfairly low.
-  const priorityWeight = (p: number) => (p === 1 ? 1.0 : p === 2 ? 0.5 : 0.33)
+  // Best match wins, discounted by how far down the preference list it sits. A mismatch is
+  // a real negative — the area is known and it is not what was asked for — so it scores well
+  // below the 40 used when the area simply has no vibe data. It used to score 50, above
+  // "unknown", which made a beach-lover's inland listing look like a coin toss.
+  //
+  // Labels are compared without "-friendly" and separators, because the area data says
+  // "family-friendly" where this mapping says "family" — they never matched before.
+  const canon = (v: string) => v.toLowerCase().replace(/[\s_-]*friendly$/, '').replace(/[\s_-]+/g, ' ').trim()
+  const propertyCanon = new Set(propertyVibesLower.map(canon))
 
-  const isVibeMatch = (vibe: string) =>
-    propertyVibesLower.some(pv => {
-      const pvNorm = pv.replace(/[-_]/g, ' ')
-      const vibeNorm = vibe.replace(/[-_]/g, ' ')
-      return pv === vibe || pvNorm === vibeNorm
-    })
-
-  const totalWeight = matchedVibes.reduce((sum, { priority }) => sum + priorityWeight(priority), 0)
-  const matchedWeight = matchedVibes.reduce(
-    (sum, { vibe, priority }) => sum + (isVibeMatch(vibe) ? priorityWeight(priority) : 0),
-    0
-  )
-
-  if (totalWeight === 0) return 50
-  const ratio = matchedWeight / totalWeight
-  return Math.max(0, Math.min(100, 50 + ratio * 50))
+  const PRIORITY_SCORE: Record<number, number> = { 1: 100, 2: 80, 3: 60 }
+  let best = 0
+  for (const { vibe, priority } of matchedVibes) {
+    if (propertyCanon.has(canon(vibe))) best = Math.max(best, PRIORITY_SCORE[priority] ?? 60)
+  }
+  return best > 0 ? best : VIBE_MISMATCH
 }
 
-export function calculateSafetyScore(
-  safety: number | null,
-  category: string | null | undefined
-): number {
-  if (safety === null || safety === undefined) return 0
-  if (!category || category === 'Not important' || category === 'Not mentioned') return 0
-
-  let safetyScore = 0
-
-  if (category === 'Essential') {
-    if (safety >= 9.5) {
-      safetyScore = 60 - ((safety - 9.5) / 0.5) * 10
-    } else if (safety >= 9.0) {
-      safetyScore = 50 - ((safety - 9.0) / 0.5) * 5
-    } else if (safety >= 8.5) {
-      safetyScore = 45 - ((safety - 8.5) / 0.5) * 5
-    } else if (safety >= 8.0) {
-      safetyScore = 40 - ((safety - 8.0) / 0.5) * 5
-    } else if (safety >= 7.5) {
-      safetyScore = 35 - ((safety - 7.5) / 0.5) * 5
-    } else if (safety >= 7.0) {
-      safetyScore = 30 - ((safety - 7.0) / 0.5) * 10
-    } else if (safety >= 6.0) {
-      safetyScore = 20 - ((safety - 6.0) / 1.0) * 20
-    } else {
-      safetyScore = -10 - ((6.0 - safety) / 2.0) * 10
-    }
-  } else if (category === 'Strong') {
-    if (safety >= 9.0) {
-      safetyScore = 40 - ((safety - 9.0) / 1.0) * 5
-    } else if (safety >= 8.0) {
-      safetyScore = 35 - ((safety - 8.0) / 1.0) * 5
-    } else if (safety >= 7.5) {
-      safetyScore = 30 - ((safety - 7.5) / 0.5) * 5
-    } else if (safety >= 7.0) {
-      safetyScore = 25 - ((safety - 7.0) / 0.5) * 10
-    } else if (safety >= 6.0) {
-      safetyScore = 15 - ((safety - 6.0) / 1.0) * 15
-    } else {
-      safetyScore = -5 - ((6.0 - safety) / 2.0) * 5
-    }
-  }
-
-  return safetyScore
-}
-
-export function calculateParkingScore(hasParking: boolean | null, isSoftPreference: boolean): number {
-  if (!isSoftPreference) return 0
-  if (hasParking === true) return 30
-  if (hasParking === false) return -15
-  return -5
-}
-
-export function calculatePhotoBonus(userQuery: string, photoTagsRaw: string | null | undefined): number {
-  if (!userQuery || !photoTagsRaw) return 0
-
-  let tags: string[]
-  try {
-    const parsed = JSON.parse(photoTagsRaw)
-    tags = Array.isArray(parsed) ? parsed.map(t => String(t).toLowerCase()) : []
-  } catch {
-    return 0
-  }
-  if (tags.length === 0) return 0
-
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PHOTO_TAG_SYNONYMS } = require('../photo-vision') as { PHOTO_TAG_SYNONYMS: Record<string, string[]> }
-
-  const queryLower = userQuery.toLowerCase()
-  const stopWords = new Set([
-    'i', 'want', 'need', 'looking', 'for', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-    'θελω', 'θέλω', 'χρειάζομαι', 'ψάχνω', 'για', 'το', 'τη', 'τον', 'τα', 'της', 'των', 'με', 'σε', 'από', 'προς', 'και', 'ή', 'αλλά',
-  ])
-  const queryWords = queryLower
-    .replace(/[^\p{L}\s]/gu, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !stopWords.has(w))
-
-  const matchedTags = new Set<string>()
-
-  for (const word of queryWords) {
-    for (const tag of tags) {
-      if (tag.includes(word) || word.includes(tag)) matchedTags.add(tag)
-    }
-  }
-
-  for (const [phrase, expandedTags] of Object.entries(PHOTO_TAG_SYNONYMS)) {
-    if (queryLower.includes(phrase)) {
-      for (const et of expandedTags) {
-        if (tags.includes(et)) matchedTags.add(et)
-      }
-    }
-  }
-
-  if (matchedTags.size === 0) return 0
-  return Math.min(12, 6 + (matchedTags.size - 1) * 3)
-}
+/** Known area vibe, and not one the user asked for. */
+export const VIBE_MISMATCH = 20

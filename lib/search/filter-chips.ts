@@ -12,12 +12,16 @@
  */
 
 import { BOUND_PAIRS, isMinBound } from './numeric-bounds'
+import { FEATURE_TEXT, sanitizeFeatures } from './features'
 
 export interface FilterChip {
   /** Stable key for React and for removal. */
   id: string
   label: string
-  /** Filter fields this chip owns — removing the chip deletes all of them. */
+  /**
+   * Filter fields this chip owns — removing the chip deletes all of them. `features:<id>`
+   * removes that one id from the `features` list instead of the whole list.
+   */
   fields: string[]
 }
 
@@ -132,6 +136,10 @@ export function buildFilterChips(filters: Filters | null | undefined, isEl: bool
     chips.push({ id: 'vibePreference', label: vibe, fields: ['vibePreference', 'hasLocationPreference'] })
   }
 
+  for (const id of sanitizeFeatures(filters.features)) {
+    chips.push({ id: `feature:${id}`, label: FEATURE_TEXT[id][lang], fields: [`${FEATURE_PREFIX}${id}`] })
+  }
+
   return chips
 }
 
@@ -139,9 +147,20 @@ export function buildFilterChips(filters: Filters | null | undefined, isEl: bool
  * Remove a chip's fields. Returns a new object — the caller keeps the old one for the
  * optimistic-update rollback path.
  */
+const FEATURE_PREFIX = 'features:'
+
 export function removeChipFields(filters: Filters, fields: string[]): Filters {
   const next = { ...filters }
-  for (const field of fields) delete next[field]
+  for (const field of fields) {
+    if (field.startsWith(FEATURE_PREFIX)) {
+      const id = field.slice(FEATURE_PREFIX.length)
+      const remaining = sanitizeFeatures(next.features).filter(f => f !== id)
+      if (remaining.length > 0) next.features = remaining
+      else delete next.features
+    } else {
+      delete next[field]
+    }
+  }
   return next
 }
 

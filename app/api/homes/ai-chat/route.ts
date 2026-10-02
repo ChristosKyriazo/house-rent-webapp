@@ -65,7 +65,7 @@ const ALLOWED_FILTER_FIELDS = new Set([
   'minYearBuilt', 'maxYearBuilt', 'minYearRenovated', 'maxYearRenovated',
   'parking', 'parkingSoftPreference', 'heatingCategory', 'heatingAgent',
   'Metro', 'Bus', 'School', 'Hospital', 'Park', 'University', 'Safety',
-  'vibePreference', 'hasLocationPreference', 'confidence',
+  'vibePreference', 'hasLocationPreference', 'confidence', 'features',
 ])
 
 function sanitizeFilters(input: Record<string, unknown>): Record<string, unknown> {

@@ -12,6 +12,7 @@ import {
 import { buildIntentText, hasUsableIntent } from '@/lib/search/intent-text'
 import { selectNextQuestion, ALL_SLOT_FIELDS } from '@/lib/search/dialogue-policy'
 import { buildQuestion, closingLine } from '@/lib/search/question-templates'
+import { FEATURE_IDS, sanitizeFeatures } from '@/lib/search/features'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -50,6 +51,8 @@ interface ConversationalFilters {
   Safety?: string | null
   preferredAreas?: string[] | null
   vibePreference?: string | null
+  /** Must-have features and household facts, accumulated as a set (lib/search/features.ts). */
+  features?: string[] | null
   confidence?: number
 }
 
@@ -65,6 +68,8 @@ interface ConversationalAIResponse {
   filters: ConversationalFilters
   /** Fields the user explicitly dropped or reversed this turn. */
   clearFields?: string[]
+  /** Individual features the user dropped this turn ("a balcony isn't essential after all"). */
+  removedFeatures?: string[]
   assistantMessage: string
 }
 
@@ -118,13 +123,16 @@ function buildResponseSchema(): Record<string, unknown> {
     properties[field] = { type: ['boolean', 'string', 'null'] }
   }
   properties.preferredAreas = { type: ['array', 'null'], items: { type: 'string' } }
+  // An enum, so a feature can only be one the evidence matcher knows how to look for.
+  properties.features = { type: ['array', 'null'], items: { type: 'string', enum: [...FEATURE_IDS] } }
 
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['filters', 'clearFields', 'assistantMessage'],
+    required: ['filters', 'clearFields', 'removedFeatures', 'assistantMessage'],
     properties: {
       assistantMessage: { type: 'string' },
+      removedFeatures: { type: 'array', items: { type: 'string', enum: [...FEATURE_IDS] } },
       clearFields: {
         type: 'array',
         items: {
@@ -135,6 +143,7 @@ function buildResponseSchema(): Record<string, unknown> {
             ...CATEGORY_FILTER_FIELDS,
             ...BOOLEAN_FILTER_FIELDS,
             'preferredAreas',
+            'features',
           ],
         },
       },
@@ -147,6 +156,7 @@ function buildResponseSchema(): Record<string, unknown> {
           ...CATEGORY_FILTER_FIELDS,
           ...BOOLEAN_FILTER_FIELDS,
           'preferredAreas',
+          'features',
         ],
         properties,
       },
@@ -334,6 +344,16 @@ export async function processAIChatTurn(
   const incoming = aiResponse.filters ?? {}
   const mergedFilters: ConversationalFilters = mergeFilters(accumulated, incoming)
 
+  // Features accumulate as a set: a turn that mentions a fireplace adds it to the balcony
+  // asked for earlier rather than replacing it. Removal is per feature.
+  const removedFeatures = new Set(sanitizeFeatures(aiResponse.removedFeatures))
+  const features = sanitizeFeatures([
+    ...sanitizeFeatures(accumulated.features),
+    ...sanitizeFeatures(incoming.features),
+  ]).filter(id => !removedFeatures.has(id))
+  if (features.length > 0) mergedFilters.features = features
+  else delete mergedFilters.features
+
   // Explicit removals. `clearFields` is a first-class list in the response schema rather
   // than a "CLEAR" sentinel smuggled into a value slot, so "actually I don't need parking"
   // removes the filter reliably instead of depending on the model remembering a magic
@@ -384,7 +404,10 @@ export async function processAIChatTurn(
   // again; that is what stops the assistant looping on a question someone declined.
   const askedBefore = conversation?.askedSlots ?? []
   const next = selectNextQuestion(mergedFilters as Record<string, unknown>, askedBefore)
-  const replyInGreek = isGreek(userMessage) || (userMessage.trim().length < 3 && isGreek(acknowledgement))
+  // Follow the language the model replied in. It mirrors the user per the prompt — including
+  // Greeklish → Greek script — which a script test on the user's own message cannot see:
+  // Greeklish users got a Greek acknowledgement followed by an English question.
+  const replyInGreek = isGreek(acknowledgement) || (!acknowledgement.trim() && isGreek(userMessage))
 
   const followUpQuestion = next.exhausted
     ? undefined

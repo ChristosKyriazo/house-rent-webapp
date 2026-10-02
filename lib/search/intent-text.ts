@@ -19,6 +19,8 @@
  * would put the two vectors in different regions of the space.
  */
 
+import { FEATURE_TEXT, sanitizeFeatures } from './features'
+
 type Filters = Record<string, unknown>
 
 function num(value: unknown): number | null {
@@ -95,6 +97,11 @@ export function buildIntentText(filters: Filters | null | undefined): string {
 
   const vibe = str(filters.vibePreference)
   if (vibe) parts.push(`${vibe} neighbourhood`)
+
+  // Must-haves and household facts, phrased so listing-evidence recognises each one — this
+  // is how a chat answer like "we have a dog" reaches the pet disqualifier and the
+  // "pets welcome" evidence.
+  for (const id of sanitizeFeatures(filters.features)) parts.push(FEATURE_TEXT[id].intent)
 
   return parts.filter(Boolean).join(', ')
 }

@@ -7,9 +7,10 @@ import {
   normalizeSafety,
   normalizeVibe,
   normalizeParking,
-  normalizeDescriptionBonus,
-  normalizeDescriptionPenalty,
-  normalizePhoto,
+  normalizeHeating,
+  evidenceScoreOptions,
+  HEATING_UNKNOWN,
+  DESCRIPTION_PENALTY_MAX,
   COMPONENT_WEIGHTS,
   DESCRIPTION_BONUS_MAX,
   PHOTO_BONUS_MAX,
@@ -89,10 +90,51 @@ describe('component normalisers stay in [0,1]', () => {
     expect(normalizeParking(null)).toBeGreaterThan(normalizeParking(false))
   })
 
-  it('description and photo saturate rather than overflow', () => {
-    expect(normalizeDescriptionBonus(1000)).toBe(1)
-    expect(normalizeDescriptionPenalty(-1000)).toBe(1)
-    expect(normalizePhoto(1000)).toBe(1)
+  it('heating: match beats unknown beats known mismatch, and is unexpressed when not asked', () => {
+    const want = { heatingCategory: 'autonomous', heatingAgent: 'natural gas' }
+    expect(normalizeHeating({ heatingCategory: 'autonomous', heatingAgent: 'natural gas' }, want)).toBe(1)
+    expect(normalizeHeating({ heatingCategory: null, heatingAgent: null }, want)).toBe(HEATING_UNKNOWN)
+    expect(normalizeHeating({ heatingCategory: 'central', heatingAgent: 'oil' }, want)).toBe(0)
+    expect(normalizeHeating({ heatingCategory: 'autonomous', heatingAgent: 'oil' }, want)).toBe(0.5)
+    expect(normalizeHeating({ heatingCategory: 'central' }, {})).toBeUndefined()
+  })
+
+  it('heating tolerates spelling variants of the same fuel', () => {
+    expect(normalizeHeating({ heatingAgent: 'Natural Gas' }, { heatingAgent: 'gas' })).toBe(1)
+  })
+})
+
+describe('evidenceScoreOptions', () => {
+  const base = { requested: [], confirmed: [], contradicted: [], confirmedInPhotos: [], disqualifier: null }
+
+  it('turns evidence into fractions of what was asked', () => {
+    const opts = evidenceScoreOptions({
+      ...base,
+      requested: ['balcony', 'fireplace'],
+      confirmed: ['balcony'],
+      contradicted: ['fireplace'],
+      confirmedInPhotos: ['balcony'],
+    })
+    expect(opts.descriptionBonus).toBe(0.5)
+    expect(opts.photoBonus).toBe(0.5)
+    expect(opts.penalty).toBeCloseTo(0.5 * DESCRIPTION_PENALTY_MAX, 6)
+  })
+
+  it('a disqualifier overrides everything', () => {
+    expect(evidenceScoreOptions({ ...base, requested: ['balcony'], confirmed: ['balcony'], disqualifier: 'No pets allowed' }))
+      .toEqual({ disqualified: true })
+  })
+
+  it('asks for nothing → adjusts nothing', () => {
+    expect(evidenceScoreOptions(base)).toEqual({})
+  })
+
+  it('a contradicted feature lowers the fit but cannot zero a strong match on its own', () => {
+    const strong = scoreHome({ semantic: 0.9, distance: 0.9 }, evidenceScoreOptions({
+      ...base, requested: ['balcony'], contradicted: ['balcony'],
+    }))
+    expect(strong).toBeGreaterThan(55)
+    expect(strong).toBeLessThan(scoreHome({ semantic: 0.9, distance: 0.9 }))
   })
 })
 
