@@ -39,6 +39,9 @@ jobs:
     name: Resolve target
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # the QA gate below reads dev's Deploy runs
     outputs:
       target: ${{ steps.p.outputs.target }}
       enabled: ${{ steps.p.outputs.enabled }}
@@ -76,6 +79,50 @@ jobs:
           echo "| Target | \`$target\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Host | $host_name |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Deploy enabled | \`$enabled\` |" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Promotion order: dev → QA → production ──────────────────────────
+      # Production only ships code QA has already run. Compared by TREE, not
+      # commit SHA: merging the release PR creates a new merge commit on main
+      # whose content is identical to the dev commit QA deployed.
+      - uses: actions/checkout@v5
+        if: github.ref_name == 'main'
+        with:
+          fetch-depth: 0
+
+      - name: Production only ships what QA already deployed
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # While QA has no server there is nothing to have verified on. Ship
+          # anyway — main must stay current — but say so loudly in the run.
+          if [ "${{ vars.DEPLOY_STAGING_ENABLED }}" != "true" ]; then
+            echo "::warning::QA is not provisioned — this production deploy was NOT verified on QA first."
+            echo "| QA verification | ⚠️ skipped — QA not provisioned |" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          want=$(git rev-parse 'HEAD^{tree}')
+          # Fully green Deploy runs on dev (CI + QA deploy + post-deploy E2E),
+          # newest first. A green run from before QA existed has no successful
+          # "Deploy to staging" job, so it does not count.
+          runs=$(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?branch=dev&event=push&status=success&per_page=50" \
+            --jq '.workflow_runs[] | "\(.id) \(.head_sha)"')
+          while read -r id sha; do
+            [ -n "$sha" ] || continue
+            [ "$(git rev-parse "$sha^{tree}" 2>/dev/null)" = "$want" ] || continue
+            deployed=$(gh api "repos/$REPO/actions/runs/$id/jobs" \
+              --jq '[.jobs[] | select(.name == "Deploy to staging" and .conclusion == "success")] | length')
+            if [ "$deployed" -gt 0 ]; then
+              echo "Verified on QA: ${sha} (run ${id})"
+              echo "| QA verification | ✅ \`${sha::7}\` deployed to QA in run ${id} |" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done <<< "$runs"
+
+          echo "::error::This code has not been deployed to QA successfully. Push it to dev, let the QA deploy finish, then merge the release PR."
+          exit 1
 
   build-push:
     name: Build & push image (${{ needs.plan.outputs.target }})
@@ -474,3 +521,62 @@ jobs:
       base_url: https://dev.kaparro.com
       suite: smoke
     secrets: inherit
+
+  release-pr:
+    # Step two of the promotion: once dev has finished its run (QA deployed and
+    # smoke-tested — or, while QA has no server, built and skipped), open or
+    # refresh the dev → main release PR. A human merges it; production then
+    # deploys, and the plan job's QA gate checks the code really went through QA.
+    name: Open release PR (dev → main)
+    needs: [plan, build-push, deploy, deploy-skipped, e2e]
+    if: >-
+      always() && github.ref_name == 'dev' &&
+      needs.build-push.result == 'success' &&
+      (needs.deploy.result == 'success' || needs.deploy-skipped.result == 'success') &&
+      needs.e2e.result != 'failure' && needs.e2e.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Open or update the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          IMAGE: ${{ needs.build-push.outputs.full_image }}
+        run: |
+          ahead=$(gh api "repos/$REPO/compare/main...dev" --jq .ahead_by)
+          if [ "$ahead" = "0" ]; then
+            echo "main already contains everything on dev — no release PR needed."
+            exit 0
+          fi
+
+          if [ "${{ needs.plan.outputs.enabled }}" = "true" ]; then
+            qa="✅ Deployed to QA (https://dev.kaparro.com) and smoke-tested. Check it there before merging."
+          else
+            qa="⚠️ QA is not provisioned — built as \`$IMAGE\` but **not deployed anywhere**. Merging ships straight to production."
+          fi
+
+          body=$(cat <<BODY
+          Promotes \`dev\` @ \`${GITHUB_SHA::7}\` to production (kaparro.com).
+
+          **QA:** $qa
+
+          **Commits:** $ahead ahead of \`main\` — see the Commits tab.
+
+          Merging deploys to production. The production run refuses code that QA has not deployed (once QA exists).
+
+          _Opened automatically by the Deploy workflow after the \`dev\` pipeline finished._
+          BODY
+          )
+
+          num=$(gh pr list -R "$REPO" --base main --head dev --state open --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh pr edit "$num" -R "$REPO" --body "$body"
+            echo "Updated release PR #$num"
+          elif gh pr create -R "$REPO" --base main --head dev \
+                 --title "release: promote dev to production" --body "$body"; then
+            echo "Opened release PR"
+          else
+            echo "::warning::Could not open the release PR. Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it by hand: https://github.com/$REPO/compare/main...dev"
+          fi
