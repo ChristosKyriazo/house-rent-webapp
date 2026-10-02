@@ -1,0 +1,56 @@
+# Production Caddy config — serves ONLY kaparro.com and www.kaparro.com.
+#
+# deploy.yml scp's this file to /opt/house-rent/Caddyfile on the production
+# server. There is deliberately NO dev.kaparro.com block here: that hostname
+# belongs to the QA box, and serving it from production is how QA traffic
+# reached the production database.
+#
+# Production — kaparro.com
+kaparro.com, www.kaparro.com {
+    tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
+
+    # Redirect www → apex
+    @www host www.kaparro.com
+    redir @www https://kaparro.com{uri} permanent
+
+    # Rate limiting — protect API endpoints from abuse
+    @api path /api/*
+    rate_limit @api {
+        zone api_zone {
+            key {remote_host}
+            events 120
+            window 1m
+        }
+    }
+
+    handle /uploads/* {
+        root * /srv
+        file_server
+    }
+
+    handle {
+        reverse_proxy app:3000
+    }
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        # Content-Security-Policy is set by the Next.js app (next.config.ts) —
+        # do NOT also set it here: two CSP headers make browsers enforce the
+        # intersection of both policies.
+        -Server
+    }
+
+    encode gzip
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 7
+        }
+    }
+}

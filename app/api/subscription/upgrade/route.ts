@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { unauthorized, badRequest } from '@/lib/api-utils'
+import { appOrigin, unauthorized, badRequest } from '@/lib/api-utils'
 import { getSlotLimit, getListingLimit, TIER_RANK } from '@/lib/subscription'
 import { getStripe, STRIPE_PRICES } from '@/lib/stripe'
 import { getChildCount, isMainBroker } from '@/lib/broker-hierarchy'
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
+    const origin = appOrigin(request)
 
     const session = await getStripe().checkout.sessions.create({
       mode: 'subscription',

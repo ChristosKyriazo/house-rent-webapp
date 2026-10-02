@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { badRequest, forbidden, serverError, unauthorized } from '@/lib/api-utils'
+import { appOrigin, badRequest, forbidden, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
 import {
   INVITE_TTL_DAYS,
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
+    const origin = appOrigin(request)
     return NextResponse.json(
       { invitation, inviteUrl: `${origin}/join-team?token=${token}` },
       { status: 201 }

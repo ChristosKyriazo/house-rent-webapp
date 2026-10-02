@@ -2,6 +2,12 @@ name: E2E
 
 # Playwright against a real deployed environment — never localhost.
 #
+# ⚠️ This workflow needs a deployed QA environment. While QA is unprovisioned
+# (repo variable DEPLOY_STAGING_ENABLED is not "true") there is nothing to test
+# against, so the run becomes a visible no-op: it annotates a warning and says
+# so in the job summary rather than failing the release PR, and rather than
+# quietly pointing a data-writing suite at production.
+#
 # Two rungs of the ladder:
 #   • smoke ("public" project, no credentials) runs after every staging deploy
 #   • full  (all 6 projects) runs on a PR from dev → main, i.e. the release gate
@@ -54,21 +60,47 @@ jobs:
       TEST_BOTH_PASSWORD: ${{ secrets.TEST_BOTH_PASSWORD }}
 
     steps:
+      - name: Is there a QA environment to test against?
+        id: gate
+        run: |
+          if [ "${{ vars.DEPLOY_STAGING_ENABLED }}" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::QA is not provisioned (DEPLOY_STAGING_ENABLED is not 'true') — no E2E ran. This release gate is currently inert."
+            {
+              echo "### E2E skipped — no QA environment"
+              echo ""
+              echo "\`DEPLOY_STAGING_ENABLED\` is not \`true\`, so there is no deployed"
+              echo "QA environment to test against."
+              echo ""
+              echo "**This means the \`dev\` → \`main\` release gate is not testing anything.**"
+              echo "Browser-level regressions will reach production unnoticed until QA exists."
+              echo ""
+              echo "Running the suite against production is not an option: the specs write data."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/checkout@v5
+        if: steps.gate.outputs.run == 'true'
 
       - name: Set up Node.js
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         run: npm ci
 
       - name: Install Playwright browsers
+        if: steps.gate.outputs.run == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Decide which projects to run
+        if: steps.gate.outputs.run == 'true'
         id: scope
         run: |
           suite="${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }}"
@@ -84,10 +116,11 @@ jobs:
           fi
 
       - name: Run Playwright
+        if: steps.gate.outputs.run == 'true'
         run: npx playwright test ${{ steps.scope.outputs.args }}
 
       - name: Upload report
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_id }}

@@ -7,7 +7,12 @@ import type { Page } from '@playwright/test'
 
 config({ path: path.resolve(__dirname, '../../.env.test') })
 
-const BASE_URL = process.env.E2E_BASE_URL ?? 'https://dev.kaparro.com'
+// Localhost by default, deliberately. This used to default to
+// https://dev.kaparro.com — a hostname that resolved to the PRODUCTION box —
+// so `npm run test:e2e` wrote test listings, inquiries and bookings into the
+// production database. Point it at a deployed environment explicitly:
+//   E2E_BASE_URL=https://dev.kaparro.com npm run test:e2e
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
 const AUTH_DIR = path.join(__dirname, '.auth')
 
 function cfHeaders(): Record<string, string> {

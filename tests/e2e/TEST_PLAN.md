@@ -3,7 +3,9 @@
 > Ask Claude to run any test by its ID (e.g. "run test L-3") and watch the video in `test-results/videos/`.
 >
 > For what the app actually does — features, routes, roles, data model — see [docs/APP.md](../../docs/APP.md).
-> Tests run against `https://dev.kaparro.com` by default; override with `E2E_BASE_URL`.
+> Tests run against `http://localhost:3000` by default; set `E2E_BASE_URL` to
+> target a deployed environment. Note QA is not provisioned yet, so there is no
+> deployed environment to point at — run against a local dev server.
 
 ---
 

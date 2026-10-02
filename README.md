@@ -23,13 +23,22 @@ A two-sided Greek property marketplace for rentals and sales — listings, AI-as
 
 ## The three environments
 
-| | Local | UAT / staging | Production |
+| | Local | QA / staging | Production |
 |---|---|---|---|
 | Branch | `feature/*` | `dev` | `main` |
 | URL | localhost:3000 | dev.kaparro.com | kaparro.com |
-| Database | your own Postgres on **5432**, seeded with fake data | staging DB (real-ish data) | production DB |
+| Database | your own Postgres on **5432**, seeded with fake data | QA DB — **does not exist yet** | production DB |
+| Status | ✅ real | ⏸ configured, not provisioned | ✅ real |
 
-Local development runs against **your own database**. Nothing you do locally can affect UAT.
+Local development runs against **your own database**. Nothing you do locally can affect QA or production.
+
+> **QA has no server yet.** A push to `dev` runs CI and builds a real
+> `sha-<commit>-staging` image, then stops — the deploy is gated behind the repo
+> variable `DEPLOY_STAGING_ENABLED` (default `false`). Activation is a checklist,
+> not a code change: [docs/OPERATIONS.md → Activating QA](./docs/OPERATIONS.md#activating-qa).
+>
+> Consequence worth knowing: until QA exists, the `dev` → `main` E2E release gate
+> has nothing to run against and no-ops with a warning.
 
 ### The port that will bite you
 
@@ -143,7 +152,7 @@ There is deliberately **no** `NEXT_PUBLIC_STRIPE_*` key — checkout sessions ar
 | `CRON_SECRET` | value for the `x-cron-secret` header on cron-triggered endpoints |
 | `FEATURE_AI_SEARCH`, `FEATURE_BOOKINGS` | set to `"false"` to disable; absent = enabled |
 | `OPENAI_FILTER_MODEL`, `OPENAI_VISION_MODEL`, `OPENAI_HOUSE_DESCRIPTION_MODEL`, `OPENAI_COMPATIBILITY_MODEL` | per-task model overrides |
-| `E2E_BASE_URL` | Playwright target (defaults to `https://dev.kaparro.com`) |
+| `E2E_BASE_URL` | Playwright target (defaults to `http://localhost:3000`) |
 
 ---
 
@@ -184,7 +193,7 @@ npm test
 
 Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functions 60, lines 60.
 
-**E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`https://dev.kaparro.com`** by default, not localhost — set `E2E_BASE_URL` to point elsewhere, and put credentials in `.env.test`.
+**E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`http://localhost:3000`** by default; set `E2E_BASE_URL` to target a deployed environment, and put credentials in `.env.test`. The default used to be `https://dev.kaparro.com` — a hostname that resolved to the production box — so these data-writing specs ran against production.
 
 **Where E2E runs in CI:**
 
@@ -192,8 +201,8 @@ Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functi
 |---|---|
 | push to `feature/*` | none — fast gate only (lint, typecheck, unit, build) |
 | PR into `dev` | none — fast gate only |
-| merge to `dev` | smoke (`public` project) against dev.kaparro.com, after the deploy |
-| **PR `dev` → `main`** | **full suite** against dev.kaparro.com — the release gate |
+| merge to `dev` | smoke (`public` project) after the deploy — **skipped while QA is unprovisioned** |
+| **PR `dev` → `main`** | **full suite** against QA — the release gate, **inert until QA exists** |
 | merge to `main` | in-deploy smoke (liveness, readiness, page render) with auto-rollback |
 
 ---
@@ -227,7 +236,7 @@ Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS
 
 1. Branch from `dev`: `feature/*` for product work, `hardening/*` for reliability work.
 2. Small commits, push, open a **PR into `dev`**.
-3. Merging to `dev` **deploys to staging** (dev.kaparro.com).
+3. Merging to `dev` builds a QA image. It **does not deploy** until QA is provisioned and `DEPLOY_STAGING_ENABLED=true`.
 4. Promote `dev` → `main` with `git merge --ff-only dev` when a release candidate is ready.
 5. Never work directly on `main` — pushing it deploys to production immediately.
 

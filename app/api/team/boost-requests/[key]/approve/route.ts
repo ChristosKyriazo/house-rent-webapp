@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
+import { appOrigin, badRequest, forbidden, notFound, serverError, unauthorized } from '@/lib/api-utils'
 import { requestLogger } from '@/lib/logger'
 import { getStripe } from '@/lib/stripe'
 
@@ -25,7 +25,7 @@ export async function POST(
     if (boostRequest.approverId !== user.id) return forbidden('This request is not addressed to you')
     if (boostRequest.status !== 'pending') return badRequest('This request has already been decided')
 
-    const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
+    const origin = appOrigin(request)
     const session = await getStripe().checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],

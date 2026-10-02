@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getStripe, AI_PACKS, type AiPackSize } from '@/lib/stripe'
-import { unauthorized } from '@/lib/api-utils'
+import { appOrigin, unauthorized } from '@/lib/api-utils'
 import { FREE_MONTHLY_LIMIT, PAID_MONTHLY_LIMIT, isPaidTier, getMonthlyReset } from '@/lib/ai-usage-limits'
 
 // GET /api/ai-prompt-usage — return current usage state for the logged-in user
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const origin = request.headers.get('origin') ?? 'https://dev.kaparro.com'
+    const origin = appOrigin(request)
 
     // Resolve the caller's path against our own origin and keep it only if it
     // stayed there. A bare prefix check would pass "//evil.com" and "/\evil.com",

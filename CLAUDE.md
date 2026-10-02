@@ -48,7 +48,7 @@ npm run lint             # ESLint (flat config, eslint.config.mjs)
 npm run lint:fix         # Auto-fix lint issues
 npm test                 # Vitest unit tests (SQLite — no database needed)
 npm run test:integration # Vitest, tests/api only
-npm run test:e2e         # Playwright (runs against dev.kaparro.com by default)
+npm run test:e2e         # Playwright (localhost:3000 by default — set E2E_BASE_URL for a deployed env)
 npm run db:setup         # local DB from nothing: up + migrate + seed
 npm run db:up            # start local Postgres + Redis
 npm run db:nuke          # delete local volumes (full reset)
@@ -72,14 +72,19 @@ Never run `prisma migrate dev` against the production or staging DB — it promp
 
 ## Deploy flow
 
-- Push to **`dev`** → builds Docker image → deploys to **staging** (dev.kaparro.com)
-- Push to **`main`** → deploys to **production** (kaparro.com)
+Three environments: **local** (`feature/*`, localhost:3000), **QA** (`dev`, dev.kaparro.com), **production** (`main`, kaparro.com).
+
+- **QA is configured but not provisioned.** There is no QA server yet. A push to `dev` runs CI and builds + pushes a real `sha-<commit>-staging` image, then stops: the deploy is gated behind the repo variable `DEPLOY_STAGING_ENABLED`, which defaults to `false`. The run reports *why* it stopped in the job summary. Activation steps: [docs/OPERATIONS.md](./docs/OPERATIONS.md#activating-qa).
+- Push to **`main`** → deploys to **production** (kaparro.com). Enabled by default.
 - Never push directly to `main` — it triggers the production pipeline immediately.
-- Image tags are `sha-<commit>` and `<branch>-latest` (`dev-latest` / `main-latest`). **There is no plain `:latest`.**
+- **Until QA exists, the `dev` → `main` E2E release gate is inert.** `e2e.yml` has nothing to test against, so it annotates a warning and no-ops rather than failing the PR. It will not catch browser-level regressions.
+- The image is built **per environment** (`build-push` declares `environment:`), because `NEXT_PUBLIC_*` values are baked into the bundle at build time. One image genuinely cannot serve two environments — that is why the immutable tag carries an environment suffix: `sha-<commit>-staging` / `sha-<commit>-production`, plus `<branch>-latest`. **There is no plain `:latest`.**
+- `Caddyfile.staging` and `Caddyfile.production` are separate, each serving only its own hostname; `deploy.yml` scp's the right one and copies it to `/opt/house-rent/Caddyfile`. A single shared Caddyfile gave production a second public hostname on the QA domain.
+- The deploy **refuses to run** if `SERVER_HOST_STAGING` equals `SERVER_HOST_PROD`. They did, which is why `dev` pushes were landing on kaparro.com and the E2E suite was writing into the production database.
 - The deploy only restarts the app container; DB, pgbouncer, Redis and Caddy keep running.
 - **`/opt/house-rent/.env` is regenerated wholesale from GitHub secrets on every deploy.** Hand edits do not survive.
 - Deploy verification (liveness → readiness → page smoke) must go over **HTTPS with `curl --resolve <host>:443:127.0.0.1`**. Caddy 308-redirects all port-80 traffic, and `curl -f` treats a 308 as success, so any `http://localhost` health check silently passes without testing the app.
-- `APP_IMAGE` deploys the immutable `sha-<short>` tag, never `dev-latest` — rollback to a mutable tag is a no-op.
+- `APP_IMAGE` deploys the immutable `sha-<short>-<env>` tag, never `dev-latest` — rollback to a mutable tag is a no-op.
 
 ## Payments (Stripe)
 
@@ -105,9 +110,10 @@ Use the predicates in `lib/broker-hierarchy.ts` rather than comparing `brokerCat
 - **Background jobs** (e.g. `BulkUploadJob`) use fire-and-forget async functions. This works because the app runs as a persistent Node.js process, not serverless. Don't move it to Vercel without adding a proper queue.
 - **Redis** is deployed in both compose files and used for cross-process rate limiting and AI-search caching when `REDIS_URL` is set; it falls back to per-process memory when it isn't. OpenAI description and Google Maps geocoding caches are still per-process — fine for single-instance deploys.
 - **Tests use SQLite** (`DATABASE_URL=file:./test.db`). The tunnel is not needed to run tests.
-- **Playwright targets `https://dev.kaparro.com`** by default, not localhost. Override with `E2E_BASE_URL`.
+- **Playwright targets `http://localhost:3000`** by default. It used to default to `https://dev.kaparro.com`, a hostname that resolved to the production box, so the data-writing specs ran against production. Set `E2E_BASE_URL` explicitly to test a deployed environment.
 - **CSP comes from `next.config.ts`, not the Caddyfile.** Two CSP headers make browsers enforce the intersection of both.
 - **Notifications** go through `createNotification` (`lib/services/notification-service.ts`). Pass `tx` when inside a transaction so they commit or roll back with the rest.
+- **URLs that leave the app** (Stripe success/cancel, invite links) go through `appOrigin(request)` in `lib/api-utils.ts`, which prefers the request `Origin` header, then the per-environment `APP_ORIGIN`, then localhost. Never hardcode a hostname — five routes used to fall back to `https://dev.kaparro.com`, so a production checkout could redirect into QA.
 - **Locale formatting** lives in `lib/format.ts`; `useLanguage()` returns `isEl`. Don't reintroduce inline `language === 'el' ? 'el-GR' : 'en-US'` ternaries.
 - **`Booking.calComBookingId` is vestigial.** Cal.com was removed in migration `20260612000001_remove_calcom_fields`; nothing writes that column.
 
