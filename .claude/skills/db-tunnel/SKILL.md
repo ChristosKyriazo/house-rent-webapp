@@ -1,6 +1,6 @@
 ---
 name: db-tunnel
-description: Print the SSH tunnel command needed to connect local dev to the staging database on port 5433. Use when the user can't connect to the database or asks how to start the tunnel.
+description: Print the SSH tunnel command needed to connect local dev to the production database on port 5433 (read-only). Use when the user can't connect to the database or asks how to start the tunnel.
 disable-model-invocation: true
 ---
 

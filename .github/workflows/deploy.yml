@@ -1,20 +1,25 @@
 name: Deploy
 
-# Three environments, one pipeline:
+# Three environments, three long-lived branches, promoted in one direction:
 #
-#   local        feature/*   localhost:3000, own Postgres on 5432   (no deploy)
-#   staging   dev         dev.kaparro.com                        (gated, see below)
-#   production   main        kaparro.com                            (always on)
+#   feature/* ──PR──▶ dev ──PR──▶ staging ──PR──▶ main
+#
+#   local        feature/*, dev   localhost:3000, own Postgres on 5432   (CI only, no deploy)
+#   staging      staging          staging.kaparro.com                    (gated, see below)
+#   production   main             kaparro.com                            (always on)
+#
+# `dev` is where work lands; ci.yml tests it and opens the dev → staging PR.
+# This workflow runs on `staging` and `main` only.
 #
 # ── Staging is configured but not provisioned ────────────────────────────────────
-# There is no staging server yet. Every push to `dev` still runs CI and builds and
+# There is no staging server yet. Every push to `staging` still runs CI and builds and
 # pushes a real image tagged for staging — so the day a box exists, activation
 # is "set two values and re-run", not "write a pipeline". The deploy itself is
 # gated behind the repo variable DEPLOY_STAGING_ENABLED, which defaults to
 # false.
 #
 # This gate is not cosmetic. Until it existed, SERVER_HOST_STAGING and
-# SERVER_HOST_PROD pointed at the same box, so a push to `dev` deployed to
+# SERVER_HOST_PROD pointed at the same box, so a push to the pre-production branch deployed to
 # kaparro.com and the post-deploy E2E suite wrote into the production database.
 #
 # Gates are repo-level variables on purpose: environment-scoped variables are
@@ -23,7 +28,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, staging]
 
 env:
   REGISTRY: ghcr.io
@@ -41,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read   # the staging gate below reads dev's Deploy runs
+      actions: read   # the staging gate below reads the staging branch's Deploy runs
     outputs:
       target: ${{ steps.p.outputs.target }}
       enabled: ${{ steps.p.outputs.enabled }}
@@ -59,7 +64,7 @@ jobs:
             enabled="${{ vars.DEPLOY_PRODUCTION_ENABLED || 'true' }}"
           else
             target=staging
-            host_name=dev.kaparro.com
+            host_name=staging.kaparro.com
             # Staging defaults to DISABLED: no server exists, and the old fallback
             # behaviour was to deploy onto the production box.
             enabled="${{ vars.DEPLOY_STAGING_ENABLED || 'false' }}"
@@ -83,7 +88,7 @@ jobs:
       # ── Promotion order: dev → staging → production ──────────────────────────
       # Production only ships code staging has already run. Compared by TREE, not
       # commit SHA: merging the release PR creates a new merge commit on main
-      # whose content is identical to the dev commit staging deployed.
+      # whose content is identical to the commit the staging branch deployed.
       - uses: actions/checkout@v5
         if: github.ref_name == 'main'
         with:
@@ -104,10 +109,10 @@ jobs:
           fi
 
           want=$(git rev-parse 'HEAD^{tree}')
-          # Fully green Deploy runs on dev (CI + staging deploy + post-deploy E2E),
+          # Fully green Deploy runs on the staging branch (CI + staging deploy + post-deploy E2E),
           # newest first. A green run from before staging existed has no successful
           # "Deploy to staging" job, so it does not count.
-          runs=$(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?branch=dev&event=push&status=success&per_page=50" \
+          runs=$(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?branch=staging&event=push&status=success&per_page=50" \
             --jq '.workflow_runs[] | "\(.id) \(.head_sha)"')
           while read -r id sha; do
             [ -n "$sha" ] || continue
@@ -121,7 +126,7 @@ jobs:
             fi
           done <<< "$runs"
 
-          echo "::error::This code has not been deployed to staging successfully. Push it to dev, let the staging deploy finish, then merge the release PR."
+          echo "::error::This code has not been deployed to staging successfully. Merge it into the staging branch, let the staging deploy finish, then merge the release PR."
           exit 1
 
   build-push:
@@ -235,7 +240,7 @@ jobs:
 
       - name: Refuse to deploy staging onto the production host
         # Cheap insurance against the exact misconfiguration this pipeline was
-        # built to undo. A shared host means a `dev` push lands on kaparro.com.
+        # built to undo. A shared host means a staging push lands on kaparro.com.
         if: needs.plan.outputs.target == 'staging'
         env:
           STAGING_HOST: ${{ secrets.SERVER_HOST_STAGING }}
@@ -259,7 +264,7 @@ jobs:
           echo "Staging host is distinct from production."
 
       - name: Sync this environment's Caddyfile to the server
-        # Caddyfile.staging serves only dev.kaparro.com; Caddyfile.production
+        # Caddyfile.staging serves only staging.kaparro.com; Caddyfile.production
         # serves only kaparro.com + www. A single shared Caddyfile is what gave
         # production a second hostname on the staging domain.
         uses: appleboy/scp-action@v0.1.7
@@ -492,15 +497,17 @@ jobs:
             # with an empty 200. Not a rollback case — the app image is fine;
             # the Caddy config is what's wrong — so fail the job loudly instead.
             if [ "${{ needs.plan.outputs.target }}" = "production" ]; then
-              qa_body=$(curl -sk --resolve "dev.kaparro.com:443:127.0.0.1" --max-time 10 \
-                "https://dev.kaparro.com/" 2>/dev/null || true)
-              case "$qa_body" in
-                *'<title>'*)
-                  echo "::error::Production is still serving the app on dev.kaparro.com — Caddy is not running Caddyfile.production."
-                  exit 1
-                  ;;
-              esac
-              echo "  dev.kaparro.com → not served by production"
+              for other_host in staging.kaparro.com dev.kaparro.com; do
+                qa_body=$(curl -sk --resolve "${other_host}:443:127.0.0.1" --max-time 10 \
+                  "https://${other_host}/" 2>/dev/null || true)
+                case "$qa_body" in
+                  *'<title>'*)
+                    echo "::error::Production is serving the app on ${other_host} — Caddy is not running Caddyfile.production."
+                    exit 1
+                    ;;
+                esac
+                echo "  ${other_host} → not served by production"
+              done
             fi
 
             echo "Deploy verified: live, ready, and serving pages."
@@ -518,19 +525,19 @@ jobs:
     if: needs.plan.outputs.target == 'staging' && needs.plan.outputs.enabled == 'true'
     uses: ./.github/workflows/e2e.yml
     with:
-      base_url: https://dev.kaparro.com
+      base_url: https://staging.kaparro.com
       suite: smoke
     secrets: inherit
 
   release-pr:
-    # Step two of the promotion: once dev has finished its run (staging deployed and
+    # Last step of the promotion: once `staging` has finished its run (staging deployed and
     # smoke-tested — or, while staging has no server, built and skipped), open or
-    # refresh the dev → main release PR. A human merges it; production then
+    # refresh the staging → main release PR. A human merges it; production then
     # deploys, and the plan job's staging gate checks the code really went through staging.
-    name: Open release PR (dev → main)
+    name: Open release PR (staging → main)
     needs: [plan, build-push, deploy, deploy-skipped, e2e]
     if: >-
-      always() && github.ref_name == 'dev' &&
+      always() && github.ref_name == 'staging' &&
       needs.build-push.result == 'success' &&
       (needs.deploy.result == 'success' || needs.deploy-skipped.result == 'success') &&
       needs.e2e.result != 'failure' && needs.e2e.result != 'cancelled'
@@ -545,20 +552,20 @@ jobs:
           REPO: ${{ github.repository }}
           IMAGE: ${{ needs.build-push.outputs.full_image }}
         run: |
-          ahead=$(gh api "repos/$REPO/compare/main...dev" --jq .ahead_by)
+          ahead=$(gh api "repos/$REPO/compare/main...staging" --jq .ahead_by)
           if [ "$ahead" = "0" ]; then
-            echo "main already contains everything on dev — no release PR needed."
+            echo "main already contains everything on staging — no release PR needed."
             exit 0
           fi
 
           if [ "${{ needs.plan.outputs.enabled }}" = "true" ]; then
-            qa="✅ Deployed to staging (https://dev.kaparro.com) and smoke-tested. Check it there before merging."
+            qa="✅ Deployed to staging (https://staging.kaparro.com) and smoke-tested. Check it there before merging."
           else
             qa="⚠️ Staging is not provisioned — built as \`$IMAGE\` but **not deployed anywhere**. Merging ships straight to production."
           fi
 
           body=$(cat <<BODY
-          Promotes \`dev\` @ \`${GITHUB_SHA::7}\` to production (kaparro.com).
+          Promotes \`staging\` @ \`${GITHUB_SHA::7}\` to production (kaparro.com).
 
           **Staging:** $qa
 
@@ -566,17 +573,17 @@ jobs:
 
           Merging deploys to production. The production run refuses code that staging has not deployed (once staging exists).
 
-          _Opened automatically by the Deploy workflow after the \`dev\` pipeline finished._
+          _Opened automatically by the Deploy workflow after the \`staging\` pipeline finished._
           BODY
           )
 
-          num=$(gh pr list -R "$REPO" --base main --head dev --state open --json number --jq '.[0].number // empty')
+          num=$(gh pr list -R "$REPO" --base main --head staging --state open --json number --jq '.[0].number // empty')
           if [ -n "$num" ]; then
             gh pr edit "$num" -R "$REPO" --body "$body"
             echo "Updated release PR #$num"
-          elif gh pr create -R "$REPO" --base main --head dev \
-                 --title "release: promote dev to production" --body "$body"; then
+          elif gh pr create -R "$REPO" --base main --head staging \
+                 --title "release: promote staging to production" --body "$body"; then
             echo "Opened release PR"
           else
-            echo "::warning::Could not open the release PR. Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it by hand: https://github.com/$REPO/compare/main...dev"
+            echo "::warning::Could not open the release PR. Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it by hand: https://github.com/$REPO/compare/main...staging"
           fi

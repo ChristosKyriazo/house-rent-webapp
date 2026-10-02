@@ -10,7 +10,7 @@ name: E2E
 #
 # Two rungs of the ladder:
 #   • smoke ("public" project, no credentials) runs after every staging deploy
-#   • full  (all 6 projects) runs on a PR from dev → main, i.e. the release gate
+#   • full  (all 6 projects) runs on a PR from staging → main, i.e. the release gate
 #
 # Authenticated projects need the TEST_* Clerk credentials. When those secrets
 # are absent the run degrades to smoke-only rather than failing — a missing
@@ -23,7 +23,7 @@ on:
       base_url:
         description: Environment to test against
         type: string
-        default: https://dev.kaparro.com
+        default: https://staging.kaparro.com
       suite:
         description: '"smoke" (public only) or "full" (all projects)'
         type: string
@@ -33,7 +33,7 @@ on:
       base_url:
         description: Environment to test against
         type: string
-        default: https://dev.kaparro.com
+        default: https://staging.kaparro.com
       suite:
         description: '"smoke" or "full"'
         type: choice
@@ -43,7 +43,7 @@ on:
 jobs:
   e2e:
     # A PR into main is the release gate and always runs the full suite.
-    name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+    name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://staging.kaparro.com') || inputs.base_url }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # E2E only ever targets staging, so it reads staging's CLERK_SECRET_KEY and TEST_*
@@ -52,7 +52,7 @@ jobs:
     environment: staging
 
     env:
-      E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+      E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://staging.kaparro.com') || inputs.base_url }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
       TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}

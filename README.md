@@ -23,21 +23,21 @@ A two-sided Greek property marketplace for rentals and sales — listings, AI-as
 
 ## The three environments
 
-| | Local | staging / staging | Production |
+| | Local | Staging | Production |
 |---|---|---|---|
-| Branch | `feature/*` | `dev` | `main` |
-| URL | localhost:3000 | dev.kaparro.com | kaparro.com |
+| Branch | `feature/*`, `dev` (CI only) | `staging` | `main` |
+| URL | localhost:3000 | staging.kaparro.com | kaparro.com |
 | Database | your own Postgres on **5432**, seeded with fake data | staging DB — **does not exist yet** | production DB |
 | Status | ✅ real | ⏸ configured, not provisioned | ✅ real |
 
 Local development runs against **your own database**. Nothing you do locally can affect staging or production.
 
-> **Staging has no server yet.** A push to `dev` runs CI and builds a real
+> **Staging has no server yet.** A push to `staging` runs CI and builds a real
 > `sha-<commit>-staging` image, then stops — the deploy is gated behind the repo
 > variable `DEPLOY_STAGING_ENABLED` (default `false`). Activation is a checklist,
 > not a code change: [docs/OPERATIONS.md → Activating staging](./docs/OPERATIONS.md#activating-staging).
 >
-> Consequence worth knowing: until staging exists, the `dev` → `main` E2E release gate
+> Consequence worth knowing: until staging exists, the `staging` → `main` E2E release gate
 > has nothing to run against and no-ops with a warning.
 
 ### The port that will bite you
@@ -45,9 +45,9 @@ Local development runs against **your own database**. Nothing you do locally can
 | Port | What it is |
 |---|---|
 | **5432** | your local Postgres — fake seeded data, safe to wipe |
-| **5433** | an SSH tunnel to the **STAGING** database — real data, shared with UAT |
+| **5433** | an SSH tunnel to the **PRODUCTION** database — live customer data |
 
-Port 5433 is for *reading* staging when debugging a UAT-only bug. Writing to it changes the environment you are testing against, so point `DATABASE_URL` back at 5432 when you are done. `npm run db:seed:dev` refuses to run against 5433 or any non-localhost host.
+Port 5433 is for *reading* production when debugging a live-only bug. Writing to it changes live customer data, so point `DATABASE_URL` back at 5432 when you are done. `npm run db:seed:dev` refuses to run against 5433 or any non-localhost host.
 
 ---
 
@@ -104,7 +104,7 @@ With `DATABASE_URL` on **5432**:
 npm run db:migrate
 ```
 
-Never run `prisma migrate dev` against 5433 — that is staging, and the command is interactive and destructive.
+Never run `prisma migrate dev` against 5433 — that is production, and the command is interactive and destructive.
 
 ### Container parity check
 
@@ -193,7 +193,7 @@ npm test
 
 Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functions 60, lines 60.
 
-**E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`http://localhost:3000`** by default; set `E2E_BASE_URL` to target a deployed environment, and put credentials in `.env.test`. The default used to be `https://dev.kaparro.com` — a hostname that resolved to the production box — so these data-writing specs ran against production.
+**E2E** — Playwright, 6 projects (`public`, `owner`, `renter`, `broker`, `both`, `flows`) using saved `storageState` auth. It runs against **`http://localhost:3000`** by default; set `E2E_BASE_URL` to target a deployed environment, and put credentials in `.env.test`. The default used to be `https://staging.kaparro.com` — a hostname that resolved to the production box — so these data-writing specs ran against production.
 
 **Where E2E runs in CI:**
 
@@ -202,7 +202,7 @@ Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functi
 | push to `feature/*` | none — fast gate only (lint, typecheck, unit, build) |
 | PR into `dev` | none — fast gate only |
 | merge to `dev` | smoke (`public` project) after the deploy — **skipped while staging is unprovisioned** |
-| **PR `dev` → `main`** | **full suite** against staging — the release gate, **inert until staging exists** |
+| **PR `staging` → `main`** | **full suite** against staging — the release gate, **inert until staging exists** |
 | merge to `main` | in-deploy smoke (liveness, readiness, page render) with auto-rollback |
 
 ---
@@ -237,7 +237,7 @@ Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS
 1. Branch from `dev`: `feature/*` for product work, `hardening/*` for reliability work.
 2. Small commits, push, open a **PR into `dev`**.
 3. Merging to `dev` builds a staging image. It **does not deploy** until staging is provisioned and `DEPLOY_STAGING_ENABLED=true`.
-4. Promote `dev` → `main` with `git merge --ff-only dev` when a release candidate is ready.
+4. Promote through pull requests: `dev` → `staging` (deploys staging), then `staging` → `main` (deploys production). Both PRs open automatically; the owner merges them.
 5. Never work directly on `main` — pushing it deploys to production immediately.
 
 ---
@@ -257,9 +257,9 @@ Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS
 |---|---|
 | `ECONNREFUSED ... 5432` | local Postgres is not running — `npm run db:up` |
 | Queries return no data | the local DB was never seeded — `npm run db:setup` |
-| `ECONNREFUSED ... 5433` | you are pointed at the staging tunnel and it is not running. For normal work use 5432 |
+| `ECONNREFUSED ... 5433` | you are pointed at the production tunnel and it is not running. For normal work use 5432 |
 | Seed refuses to run | working as intended — `DATABASE_URL` is not a local database. Check it is `localhost:5432` |
-| `prisma migrate dev` prompts to reset | you are pointed at 5433 (staging). Point at 5432 first |
+| `prisma migrate dev` prompts to reset | you are pointed at 5433 (production). Point at 5432 first |
 | Docker port 5432 already in use | stop other Postgres processes, or change the port in `docker-compose.yml` |
 | Clerk session not recognised | dev vs production Clerk keys mismatched between `.env` and the Clerk dashboard |
 | Port 3000 in use | `npx next dev -p 3001` |

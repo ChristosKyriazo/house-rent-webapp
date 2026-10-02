@@ -1,17 +1,17 @@
 ---
 name: release-to-prod
-description: Promote dev to production via a dev → main PR, with the pre-flight checks that the pipeline cannot enforce by itself. Use when cutting a release to kaparro.com.
+description: Promote staging to production via a staging → main PR, with the pre-flight checks that the pipeline cannot enforce by itself. Use when cutting a release to kaparro.com.
 disable-model-invocation: true
 ---
 
-Pushing to `main` deploys to production immediately. **Never push to `main` directly** — the only supported path is a `dev` → `main` PR, because that PR is what triggers the full E2E suite.
+Pushing to `main` deploys to production immediately. **Never push to `main` directly** — the only supported path is a `staging` → `main` PR, because that PR is what triggers the full E2E suite.
 
 Work through this in order and report each result.
 
-## 1. Is dev green and actually deployed?
+## 1. Is staging green and actually deployed?
 
 ```bash
-gh run list --branch dev --limit 5
+gh run list --branch staging --limit 5
 ```
 
 All three must be green for the commit you are promoting: `CI`, `Deploy`, and the post-deploy `Post-deploy E2E (staging)`. A green `Deploy` already proves staging passed liveness → readiness → page smoke, since a failure there rolls back and fails the job.
@@ -20,12 +20,12 @@ All three must be green for the commit you are promoting: `CI`, `Deploy`, and th
 
 ```bash
 git fetch origin
-git log --oneline origin/main..origin/dev | wc -l
-git log --oneline origin/main..origin/dev
-git diff --stat origin/main..origin/dev -- prisma/migrations
+git log --oneline origin/main..origin/staging | wc -l
+git log --oneline origin/main..origin/staging
+git diff --stat origin/main..origin/staging -- prisma/migrations
 ```
 
-Production is far behind `dev` and has never been released, so the first release carries a large migration backlog. Review every migration landing in it against the `new-migration` checklist — especially that each is a safe no-op on a database shape that is not staging's. Migrations run on container startup, so a failing one means the container does not start.
+Review every migration landing in it against the `new-migration` checklist — especially that each is a safe no-op on a database shape that is not staging's. Migrations run on container startup, so a failing one means the container does not start.
 
 ## 3. Back up the production database first
 
@@ -49,21 +49,25 @@ Three of those fail quietly in ways worth calling out: empty `ADMIN_*` makes `/a
 gh secret list --env production
 ```
 
-## 5. Open the PR
+## 5. Find (or open) the release PR
+
+The staging deploy opens `staging` → `main` automatically. Check for it before creating one:
 
 ```bash
-gh pr create --base main --head dev \
-  --title "release: <summary>" \
-  --body "<migrations, user-facing changes, risks>"
+gh pr list --base main --head staging
+# only if none exists:
+gh pr create --base main --head staging --title "release: <summary>" --body "<migrations, user-facing changes, risks>"
 ```
 
 ## 6. Verify the full E2E suite really ran
 
 The release gate degrades instead of failing: if `TEST_*` or `CLERK_SECRET_KEY` are missing from the environment, `e2e.yml` falls back to **smoke-only** with a `::warning::` and still reports green. Authenticated journeys would then be untested.
 
-Confirm the job name reads `full → https://dev.kaparro.com`, not `smoke`, and that no fallback warning appears in the log.
+Confirm the job name reads `full → https://staging.kaparro.com`, not `smoke`, and that no fallback warning appears in the log.
 
-## 7. Merge and watch
+## 7. Hand over — the owner merges, then watch
+
+**Do not merge.** Give the user the PR link and stop; they merge to `main` themselves (`.claude/settings.json` denies `gh pr merge`). Once they have merged:
 
 ```bash
 gh run watch
