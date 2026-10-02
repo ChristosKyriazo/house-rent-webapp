@@ -8,11 +8,11 @@ Companion docs: [README](../README.md) for local setup, [docs/APP.md](./APP.md) 
 
 ## Environments
 
-| | Local | QA / staging | Production |
+| | Local | staging / staging | Production |
 |---|---|---|---|
 | Branch | `feature/*` | `dev` | `main` |
 | Domain | localhost:3000 | dev.kaparro.com | kaparro.com, www.kaparro.com |
-| Database | own Postgres on 5432, fake seed | QA DB (does not exist yet) | production DB |
+| Database | own Postgres on 5432, fake seed | staging DB (does not exist yet) | production DB |
 | Host secret | — | `SERVER_HOST_STAGING` | `SERVER_HOST_PROD` |
 | GitHub Environment | — | `staging` | `production` |
 | Caddy config | — | `Caddyfile.staging` | `Caddyfile.production` |
@@ -20,12 +20,12 @@ Companion docs: [README](../README.md) for local setup, [docs/APP.md](./APP.md) 
 | Deploy gate | — | `DEPLOY_STAGING_ENABLED` (default **false**) | `DEPLOY_PRODUCTION_ENABLED` (default true) |
 | Status | ✅ real | ⏸ **configured, not provisioned** | ✅ real |
 
-### QA is wired but switched off
+### staging is wired but switched off
 
-There is no QA server. Everything in the repo is ready for one — pipeline, Caddy
+There is no staging server. Everything in the repo is ready for one — pipeline, Caddy
 config, secret list, per-environment image build — and the deploy itself is gated
 off, so a push to `dev` builds a real image and stops. See
-[Activating QA](#activating-qa).
+[Activating staging](#activating-staging).
 
 This gate is not bureaucracy. Before it existed, `SERVER_HOST_STAGING` and
 `SERVER_HOST_PROD` pointed at the **same box**, so:
@@ -190,7 +190,7 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 `SERVER_HOST_STAGING` (staging environment), `SERVER_HOST_PROD` (**repository** secret — the staging job compares against it and cannot read production-environment secrets), `DEPLOY_SSH_KEY` (private key whose public half is in `deploy`'s `authorized_keys`), and the automatic `GITHUB_TOKEN`.
 
-`NEXT_PUBLIC_*` build args are repository secrets holding the **production** values. QA overrides them by setting the same names in the `staging` environment — until it does, a QA build carries the live Clerk key.
+`NEXT_PUBLIC_*` build args are repository secrets holding the **production** values. Staging overrides them by setting the same names in the `staging` environment — until it does, a staging build carries the live Clerk key.
 
 ### Feature flags — GitHub *variables*, not secrets
 
@@ -441,7 +441,7 @@ If a choice improves speed but hurts reliability or security, do not choose it.
 
 ---
 
-## Activating QA
+## Activating staging
 
 Everything below is infrastructure and third-party setup. No code changes are
 needed — the pipeline already handles both environments.
@@ -464,13 +464,13 @@ second front door into production.
 
 ### 3. Separate third-party tenants
 
-| Service | What QA needs | Why |
+| Service | What staging needs | Why |
 |---|---|---|
-| Clerk | its own **development instance**, `pk_test`/`sk_test` | QA sign-ups otherwise create real production users; publishable and secret keys must be from the same instance |
+| Clerk | its own **development instance**, `pk_test`/`sk_test` | staging sign-ups otherwise create real production users; publishable and secret keys must be from the same instance |
 | Stripe | test-mode keys **and its own webhook endpoint** for `https://dev.kaparro.com/api/webhooks/stripe` | a webhook endpoint is bound to one URL and has its own signing secret |
-| Google Maps | a key restricted to the QA domain | referrer restrictions are per-domain |
-| Sentry | its own environment or project | otherwise QA noise lands in production alerting |
-| OpenAI | its own key | keeps QA spend visible and separately cappable |
+| Google Maps | a key restricted to the staging domain | referrer restrictions are per-domain |
+| Sentry | its own environment or project | otherwise staging noise lands in production alerting |
+| OpenAI | its own key | keeps staging spend visible and separately cappable |
 
 ### 4. GitHub `staging` environment secrets
 
@@ -481,20 +481,20 @@ Use `.env.staging.example` as the checklist — it mirrors exactly what
 **Replace every value, not just the missing ones.** Until 2026-10-02 the
 `staging` environment held the credentials that deployed kaparro.com — the
 production database password, the live Clerk secret, Stripe. Any of those left
-in place points QA at production again.
+in place points staging at production again.
 
 Anything unset lands in the server `.env` as an empty value, silently.
 
-### 5. QA test users
+### 5. Staging test users
 
-Create the four E2E accounts (`owner`, `renter`, `broker`, `both`) in the QA
+Create the four E2E accounts (`owner`, `renter`, `broker`, `both`) in the staging
 Clerk instance, complete each role-setup flow, and set the `TEST_*` secrets.
 Without them `e2e.yml` degrades the `dev` → `main` gate to smoke-only and still
 reports green.
 
-### 6. QA data
+### 6. Staging data
 
-A fresh QA database starts empty. `scripts/seeds/seed-dev.ts` refuses any
+A fresh staging database starts empty. `scripts/seeds/seed-dev.ts` refuses any
 non-localhost host by design — do not weaken that guard. Either restore a
 sanitized dump of production, or add a `seed-qa` script with its own explicit
 host allowlist. `db:seed:areas` and `db:seed:universities` are environment-safe
@@ -554,11 +554,11 @@ gh api -X PUT repos/ChristosKyriazo/house-rent-webapp/branches/dev/protection \
 - [x] Automatic rollback on a failed deploy
 - [x] Migrations proven to apply to an empty database
 - [x] Local development isolated from UAT — own database, guarded seed
-- [x] QA and production cannot share a host — the deploy fails if the host secrets match
+- [x] staging and production cannot share a host — the deploy fails if the host secrets match
 - [x] Image built per environment, so `NEXT_PUBLIC_*` values cannot leak across environments
 - [x] Playwright defaults to localhost, so a local run cannot write into a deployed environment
-- [ ] **QA server provisioned** — until then the `dev` → `main` E2E gate is inert
-- [ ] QA Clerk / Stripe test tenants created
+- [ ] **Staging server provisioned** — until then the `dev` → `main` E2E gate is inert
+- [ ] staging Clerk / Stripe test tenants created
 - [ ] Branch protections active on `main` and `dev` — **apply the JSON above**
 - [ ] `TEST_*` E2E secrets set, so the release gate is not smoke-only
 - [ ] `ADMIN_CLERK_IDS` and `CRON_SECRET` set in both GitHub Environments

@@ -2,7 +2,7 @@
 #
 # deploy.yml scp's this file to /opt/house-rent/Caddyfile on the production
 # server. There is deliberately NO dev.kaparro.com block here: that hostname
-# belongs to the QA box, and serving it from production is how QA traffic
+# belongs to the staging box, and serving it from production is how staging traffic
 # reached the production database.
 #
 # Production — kaparro.com

@@ -3,11 +3,11 @@ name: Deploy
 # Three environments, one pipeline:
 #
 #   local        feature/*   localhost:3000, own Postgres on 5432   (no deploy)
-#   QA/staging   dev         dev.kaparro.com                        (gated, see below)
+#   staging   dev         dev.kaparro.com                        (gated, see below)
 #   production   main        kaparro.com                            (always on)
 #
-# ── QA is configured but not provisioned ────────────────────────────────────
-# There is no QA server yet. Every push to `dev` still runs CI and builds and
+# ── Staging is configured but not provisioned ────────────────────────────────────
+# There is no staging server yet. Every push to `dev` still runs CI and builds and
 # pushes a real image tagged for staging — so the day a box exists, activation
 # is "set two values and re-run", not "write a pipeline". The deploy itself is
 # gated behind the repo variable DEPLOY_STAGING_ENABLED, which defaults to
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read   # the QA gate below reads dev's Deploy runs
+      actions: read   # the staging gate below reads dev's Deploy runs
     outputs:
       target: ${{ steps.p.outputs.target }}
       enabled: ${{ steps.p.outputs.enabled }}
@@ -60,7 +60,7 @@ jobs:
           else
             target=staging
             host_name=dev.kaparro.com
-            # QA defaults to DISABLED: no server exists, and the old fallback
+            # Staging defaults to DISABLED: no server exists, and the old fallback
             # behaviour was to deploy onto the production box.
             enabled="${{ vars.DEPLOY_STAGING_ENABLED || 'false' }}"
           fi
@@ -80,32 +80,32 @@ jobs:
           echo "| Host | $host_name |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Deploy enabled | \`$enabled\` |" >> "$GITHUB_STEP_SUMMARY"
 
-      # ── Promotion order: dev → QA → production ──────────────────────────
-      # Production only ships code QA has already run. Compared by TREE, not
+      # ── Promotion order: dev → staging → production ──────────────────────────
+      # Production only ships code staging has already run. Compared by TREE, not
       # commit SHA: merging the release PR creates a new merge commit on main
-      # whose content is identical to the dev commit QA deployed.
+      # whose content is identical to the dev commit staging deployed.
       - uses: actions/checkout@v5
         if: github.ref_name == 'main'
         with:
           fetch-depth: 0
 
-      - name: Production only ships what QA already deployed
+      - name: Production only ships what staging already deployed
         if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          # While QA has no server there is nothing to have verified on. Ship
+          # While staging has no server there is nothing to have verified on. Ship
           # anyway — main must stay current — but say so loudly in the run.
           if [ "${{ vars.DEPLOY_STAGING_ENABLED }}" != "true" ]; then
-            echo "::warning::QA is not provisioned — this production deploy was NOT verified on QA first."
-            echo "| QA verification | ⚠️ skipped — QA not provisioned |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Staging is not provisioned — this production deploy was NOT verified on staging first."
+            echo "| Staging verification | ⚠️ skipped — staging not provisioned |" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           want=$(git rev-parse 'HEAD^{tree}')
-          # Fully green Deploy runs on dev (CI + QA deploy + post-deploy E2E),
-          # newest first. A green run from before QA existed has no successful
+          # Fully green Deploy runs on dev (CI + staging deploy + post-deploy E2E),
+          # newest first. A green run from before staging existed has no successful
           # "Deploy to staging" job, so it does not count.
           runs=$(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?branch=dev&event=push&status=success&per_page=50" \
             --jq '.workflow_runs[] | "\(.id) \(.head_sha)"')
@@ -115,13 +115,13 @@ jobs:
             deployed=$(gh api "repos/$REPO/actions/runs/$id/jobs" \
               --jq '[.jobs[] | select(.name == "Deploy to staging" and .conclusion == "success")] | length')
             if [ "$deployed" -gt 0 ]; then
-              echo "Verified on QA: ${sha} (run ${id})"
-              echo "| QA verification | ✅ \`${sha::7}\` deployed to QA in run ${id} |" >> "$GITHUB_STEP_SUMMARY"
+              echo "Verified on staging: ${sha} (run ${id})"
+              echo "| Staging verification | ✅ \`${sha::7}\` deployed to staging in run ${id} |" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
           done <<< "$runs"
 
-          echo "::error::This code has not been deployed to QA successfully. Push it to dev, let the QA deploy finish, then merge the release PR."
+          echo "::error::This code has not been deployed to staging successfully. Push it to dev, let the staging deploy finish, then merge the release PR."
           exit 1
 
   build-push:
@@ -130,8 +130,8 @@ jobs:
     runs-on: ubuntu-latest
     # The image is built from THIS environment's secrets. NEXT_PUBLIC_* values
     # are baked into the bundle at build time, so one image cannot serve two
-    # environments: without this, QA and production shared a single Clerk
-    # publishable key (and QA ran against the live Clerk instance).
+    # environments: without this, staging and production shared a single Clerk
+    # publishable key (and staging ran against the live Clerk instance).
     #
     # Consequence to know: if the production environment has required
     # reviewers, this build waits for that approval too, not just the deploy.
@@ -233,7 +233,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Refuse to deploy QA onto the production host
+      - name: Refuse to deploy staging onto the production host
         # Cheap insurance against the exact misconfiguration this pipeline was
         # built to undo. A shared host means a `dev` push lands on kaparro.com.
         if: needs.plan.outputs.target == 'staging'
@@ -253,7 +253,7 @@ jobs:
             exit 1
           fi
           if [ "$STAGING_HOST" = "$PROD_HOST" ]; then
-            echo "::error::SERVER_HOST_STAGING equals SERVER_HOST_PROD. QA and production would share one box, one database and one Caddy. Provision a separate server."
+            echo "::error::SERVER_HOST_STAGING equals SERVER_HOST_PROD. Staging and production would share one box, one database and one Caddy. Provision a separate server."
             exit 1
           fi
           echo "Staging host is distinct from production."
@@ -261,7 +261,7 @@ jobs:
       - name: Sync this environment's Caddyfile to the server
         # Caddyfile.staging serves only dev.kaparro.com; Caddyfile.production
         # serves only kaparro.com + www. A single shared Caddyfile is what gave
-        # production a second hostname on the QA domain.
+        # production a second hostname on the staging domain.
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ needs.plan.outputs.target == 'production' && secrets.SERVER_HOST_PROD || secrets.SERVER_HOST_STAGING }}
@@ -302,7 +302,7 @@ jobs:
 
             # This environment's own public origin. Consumed by lib/api-utils.ts
             # appOrigin() for Stripe success/cancel redirects and invite links,
-            # so production never hands a user a link into QA.
+            # so production never hands a user a link into staging.
             APP_ORIGIN=${{ needs.plan.outputs.app_origin }}
 
             # ── Database ──────────────────────────────────────────────────────
@@ -312,8 +312,8 @@ jobs:
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
 
             # ── Clerk auth ────────────────────────────────────────────────────
-            # QA must use its own Clerk instance (pk_test/sk_test). Sharing the
-            # live instance means QA sign-ups create real production users.
+            # Staging must use its own Clerk instance (pk_test/sk_test). Sharing the
+            # live instance means staging sign-ups create real production users.
             CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
             NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
@@ -326,7 +326,7 @@ jobs:
             GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
 
             # ── Stripe ───────────────────────────────────────────────────────
-            # QA must use test-mode keys and its OWN webhook endpoint/signing
+            # Staging must use test-mode keys and its OWN webhook endpoint/signing
             # secret — a webhook endpoint is bound to one URL.
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
             STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
@@ -487,7 +487,7 @@ jobs:
               echo "  ${path} → ${code}"
             done
 
-            # ── Production must not answer for the QA hostname ────────────────
+            # ── Production must not answer for the staging hostname ────────────────
             # Checks the body, not the status: Caddy answers an unmatched host
             # with an empty 200. Not a rollback case — the app image is fine;
             # the Caddy config is what's wrong — so fail the job loudly instead.
@@ -506,14 +506,14 @@ jobs:
             echo "Deploy verified: live, ready, and serving pages."
 
   e2e:
-    # QA only. Browser-level smoke against the environment we just shipped to,
+    # Staging only. Browser-level smoke against the environment we just shipped to,
     # so UAT is known-good before anyone promotes it to main.
     #
     # Deliberately does NOT run against production: these specs write data.
-    # Skipped entirely while QA is unprovisioned — running it against
+    # Skipped entirely while staging is unprovisioned — running it against
     # dev.kaparro.com when that hostname resolved to the production box is how
     # test listings reached the production database.
-    name: Post-deploy E2E (QA)
+    name: Post-deploy E2E (staging)
     needs: [plan, deploy]
     if: needs.plan.outputs.target == 'staging' && needs.plan.outputs.enabled == 'true'
     uses: ./.github/workflows/e2e.yml
@@ -523,10 +523,10 @@ jobs:
     secrets: inherit
 
   release-pr:
-    # Step two of the promotion: once dev has finished its run (QA deployed and
-    # smoke-tested — or, while QA has no server, built and skipped), open or
+    # Step two of the promotion: once dev has finished its run (staging deployed and
+    # smoke-tested — or, while staging has no server, built and skipped), open or
     # refresh the dev → main release PR. A human merges it; production then
-    # deploys, and the plan job's QA gate checks the code really went through QA.
+    # deploys, and the plan job's staging gate checks the code really went through staging.
     name: Open release PR (dev → main)
     needs: [plan, build-push, deploy, deploy-skipped, e2e]
     if: >-
@@ -552,19 +552,19 @@ jobs:
           fi
 
           if [ "${{ needs.plan.outputs.enabled }}" = "true" ]; then
-            qa="✅ Deployed to QA (https://dev.kaparro.com) and smoke-tested. Check it there before merging."
+            qa="✅ Deployed to staging (https://dev.kaparro.com) and smoke-tested. Check it there before merging."
           else
-            qa="⚠️ QA is not provisioned — built as \`$IMAGE\` but **not deployed anywhere**. Merging ships straight to production."
+            qa="⚠️ Staging is not provisioned — built as \`$IMAGE\` but **not deployed anywhere**. Merging ships straight to production."
           fi
 
           body=$(cat <<BODY
           Promotes \`dev\` @ \`${GITHUB_SHA::7}\` to production (kaparro.com).
 
-          **QA:** $qa
+          **Staging:** $qa
 
           **Commits:** $ahead ahead of \`main\` — see the Commits tab.
 
-          Merging deploys to production. The production run refuses code that QA has not deployed (once QA exists).
+          Merging deploys to production. The production run refuses code that staging has not deployed (once staging exists).
 
           _Opened automatically by the Deploy workflow after the \`dev\` pipeline finished._
           BODY

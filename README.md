@@ -23,21 +23,21 @@ A two-sided Greek property marketplace for rentals and sales — listings, AI-as
 
 ## The three environments
 
-| | Local | QA / staging | Production |
+| | Local | staging / staging | Production |
 |---|---|---|---|
 | Branch | `feature/*` | `dev` | `main` |
 | URL | localhost:3000 | dev.kaparro.com | kaparro.com |
-| Database | your own Postgres on **5432**, seeded with fake data | QA DB — **does not exist yet** | production DB |
+| Database | your own Postgres on **5432**, seeded with fake data | staging DB — **does not exist yet** | production DB |
 | Status | ✅ real | ⏸ configured, not provisioned | ✅ real |
 
-Local development runs against **your own database**. Nothing you do locally can affect QA or production.
+Local development runs against **your own database**. Nothing you do locally can affect staging or production.
 
-> **QA has no server yet.** A push to `dev` runs CI and builds a real
+> **Staging has no server yet.** A push to `dev` runs CI and builds a real
 > `sha-<commit>-staging` image, then stops — the deploy is gated behind the repo
 > variable `DEPLOY_STAGING_ENABLED` (default `false`). Activation is a checklist,
-> not a code change: [docs/OPERATIONS.md → Activating QA](./docs/OPERATIONS.md#activating-qa).
+> not a code change: [docs/OPERATIONS.md → Activating staging](./docs/OPERATIONS.md#activating-staging).
 >
-> Consequence worth knowing: until QA exists, the `dev` → `main` E2E release gate
+> Consequence worth knowing: until staging exists, the `dev` → `main` E2E release gate
 > has nothing to run against and no-ops with a warning.
 
 ### The port that will bite you
@@ -201,8 +201,8 @@ Coverage thresholds (`vitest.config.ts`): statements 60, **branches 55**, functi
 |---|---|
 | push to `feature/*` | none — fast gate only (lint, typecheck, unit, build) |
 | PR into `dev` | none — fast gate only |
-| merge to `dev` | smoke (`public` project) after the deploy — **skipped while QA is unprovisioned** |
-| **PR `dev` → `main`** | **full suite** against QA — the release gate, **inert until QA exists** |
+| merge to `dev` | smoke (`public` project) after the deploy — **skipped while staging is unprovisioned** |
+| **PR `dev` → `main`** | **full suite** against staging — the release gate, **inert until staging exists** |
 | merge to `main` | in-deploy smoke (liveness, readiness, page render) with auto-rollback |
 
 ---
@@ -236,7 +236,7 @@ Short version — the full playbook is in [docs/OPERATIONS.md](./docs/OPERATIONS
 
 1. Branch from `dev`: `feature/*` for product work, `hardening/*` for reliability work.
 2. Small commits, push, open a **PR into `dev`**.
-3. Merging to `dev` builds a QA image. It **does not deploy** until QA is provisioned and `DEPLOY_STAGING_ENABLED=true`.
+3. Merging to `dev` builds a staging image. It **does not deploy** until staging is provisioned and `DEPLOY_STAGING_ENABLED=true`.
 4. Promote `dev` → `main` with `git merge --ff-only dev` when a release candidate is ready.
 5. Never work directly on `main` — pushing it deploys to production immediately.
 

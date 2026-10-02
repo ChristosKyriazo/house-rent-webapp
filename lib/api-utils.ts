@@ -61,7 +61,7 @@ export function validateBody<T>(
  * The last resort is localhost on purpose: a missing `APP_ORIGIN` should
  * produce an obviously broken local URL, never a link into a *different*
  * environment. Hardcoding a real host here is how a production checkout ends
- * up redirecting to the QA domain.
+ * up redirecting to the staging domain.
  */
 export function appOrigin(request: NextRequest): string {
   return request.headers.get('origin') ?? process.env.APP_ORIGIN ?? 'http://localhost:3000'
