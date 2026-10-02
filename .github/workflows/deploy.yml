@@ -198,6 +198,13 @@ jobs:
             echo "::error::SERVER_HOST_STAGING is empty — set it in the staging environment."
             exit 1
           fi
+          # SERVER_HOST_PROD must be a REPO-level secret: this job runs in the
+          # staging environment and cannot read production-environment secrets.
+          # If it is empty here the comparison below is meaningless, so refuse.
+          if [ -z "$PROD_HOST" ]; then
+            echo "::error::SERVER_HOST_PROD is not visible to the staging job — it must be a repository secret, not a production-environment one."
+            exit 1
+          fi
           if [ "$STAGING_HOST" = "$PROD_HOST" ]; then
             echo "::error::SERVER_HOST_STAGING equals SERVER_HOST_PROD. QA and production would share one box, one database and one Caddy. Provision a separate server."
             exit 1
@@ -329,14 +336,29 @@ jobs:
             # ── Rolling restart (app only — DB and Caddy keep running) ────────
             docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
 
-            # ── Reload Caddy if Caddyfile changed ─────────────────────────────
-            # caddy reload validates the new config first — a bad Caddyfile will NOT
-            # take down the running server; it will keep serving the old config.
-            # It must not be silent, though: a rejected Caddyfile is also one
-            # Caddy cannot START with, so the next container restart is an outage.
-            docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
-              --config /etc/caddy/Caddyfile --adapter caddyfile \
-              || echo "::error::Caddy rejected the new Caddyfile and is still serving the OLD config. Caddy will not start with this file — fix it before the container restarts."
+            # ── Apply this environment's Caddyfile ────────────────────────────
+            # ./Caddyfile is a single-file bind mount, which Docker pins to an
+            # inode. If the file was ever replaced (unlink + create) rather than
+            # rewritten in place, the container keeps reading the ORPHANED old
+            # file and `caddy reload` happily re-applies stale config. That is how
+            # production kept serving dev.kaparro.com after Caddyfile.production
+            # landed. So compare what the container sees with what is on disk,
+            # and recreate Caddy when they differ — after validating the file, so
+            # a bad Caddyfile can never replace a running Caddy.
+            if docker compose -f docker-compose.prod.yml exec -T caddy cat /etc/caddy/Caddyfile \
+                 | cmp -s - Caddyfile; then
+              docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
+                --config /etc/caddy/Caddyfile --adapter caddyfile \
+                || echo "::error::Caddy rejected the Caddyfile and is still serving the OLD config. Caddy will not start with this file — fix it before the container restarts."
+            elif docker run --rm \
+                   -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+                   -v "$PWD/certs:/etc/caddy/certs:ro" \
+                   caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+              echo "Caddy is reading a stale Caddyfile — recreating the container."
+              docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate caddy
+            else
+              echo "::error::Caddyfile.${{ needs.plan.outputs.target }} failed validation; Caddy left running on its OLD config."
+            fi
 
             # ── Roll back to the previous image and fail the deploy ───────────
             rollback() {
@@ -417,6 +439,22 @@ jobs:
               fi
               echo "  ${path} → ${code}"
             done
+
+            # ── Production must not answer for the QA hostname ────────────────
+            # Checks the body, not the status: Caddy answers an unmatched host
+            # with an empty 200. Not a rollback case — the app image is fine;
+            # the Caddy config is what's wrong — so fail the job loudly instead.
+            if [ "${{ needs.plan.outputs.target }}" = "production" ]; then
+              qa_body=$(curl -sk --resolve "dev.kaparro.com:443:127.0.0.1" --max-time 10 \
+                "https://dev.kaparro.com/" 2>/dev/null || true)
+              case "$qa_body" in
+                *'<title>'*)
+                  echo "::error::Production is still serving the app on dev.kaparro.com — Caddy is not running Caddyfile.production."
+                  exit 1
+                  ;;
+              esac
+              echo "  dev.kaparro.com → not served by production"
+            fi
 
             echo "Deploy verified: live, ready, and serving pages."
 
