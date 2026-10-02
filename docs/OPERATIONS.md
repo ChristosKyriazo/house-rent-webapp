@@ -188,7 +188,9 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 ### Infrastructure
 
-`SERVER_HOST_STAGING`, `SERVER_HOST_PROD`, `DEPLOY_SSH_KEY` (private key whose public half is in `deploy`'s `authorized_keys`), and the automatic `GITHUB_TOKEN`.
+`SERVER_HOST_STAGING` (staging environment), `SERVER_HOST_PROD` (**repository** secret — the staging job compares against it and cannot read production-environment secrets), `DEPLOY_SSH_KEY` (private key whose public half is in `deploy`'s `authorized_keys`), and the automatic `GITHUB_TOKEN`.
+
+`NEXT_PUBLIC_*` build args are repository secrets holding the **production** values. QA overrides them by setting the same names in the `staging` environment — until it does, a QA build carries the live Clerk key.
 
 ### Feature flags — GitHub *variables*, not secrets
 
@@ -196,7 +198,7 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 ### Optional E2E secrets
 
-`TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD` and the `RENTER`, `BROKER`, `BOTH` equivalents, plus `CLERK_SECRET_KEY`, let `e2e.yml` run the authenticated projects. **If they are absent the release gate silently degrades to smoke-only** — it emits a workflow warning and passes. Set them, or the `dev` → `main` gate is much weaker than it looks.
+`TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD` and the `RENTER`, `BROKER`, `BOTH` equivalents, plus `CLERK_SECRET_KEY` — all in the **`staging`** environment, which `e2e.yml` declares — let it run the authenticated projects. **If they are absent the release gate silently degrades to smoke-only** — it emits a workflow warning and passes. Set them, or the `dev` → `main` gate is much weaker than it looks.
 
 ### Not written by deploy.yml
 
@@ -474,7 +476,12 @@ second front door into production.
 
 Use `.env.staging.example` as the checklist — it mirrors exactly what
 `deploy.yml` writes. `SERVER_HOST_STAGING` **must differ** from
-`SERVER_HOST_PROD`; the deploy has a step that fails the run if they match.
+`SERVER_HOST_PROD`; the deploy has a step that fails the run if they match, or if `SERVER_HOST_PROD` is not visible to it.
+
+**Replace every value, not just the missing ones.** Until 2026-10-02 the
+`staging` environment held the credentials that deployed kaparro.com — the
+production database password, the live Clerk secret, Stripe. Any of those left
+in place points QA at production again.
 
 Anything unset lands in the server `.env` as an empty value, silently.
 

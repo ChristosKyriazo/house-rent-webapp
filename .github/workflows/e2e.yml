@@ -46,6 +46,10 @@ jobs:
     name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # E2E only ever targets QA, so it reads QA's CLERK_SECRET_KEY and TEST_*
+    # accounts. Without this the job sees repository secrets only, and the
+    # authenticated projects would silently degrade to smoke.
+    environment: staging
 
     env:
       E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
