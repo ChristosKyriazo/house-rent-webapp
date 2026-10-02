@@ -1,12 +1,12 @@
-# QA / staging Caddy config — serves ONLY dev.kaparro.com.
+# Staging Caddy config — serves ONLY staging.kaparro.com.
 #
-# deploy.yml scp's this file to /opt/house-rent/Caddyfile on the QA server.
+# deploy.yml scp's this file to /opt/house-rent/Caddyfile on the staging server.
 # One site block per environment is deliberate: a single shared Caddyfile meant
 # the production box also answered on dev.kaparro.com, giving production a
 # second public hostname and letting the E2E suite write into it.
 #
-# Staging — dev.kaparro.com
-dev.kaparro.com {
+# Staging — staging.kaparro.com
+staging.kaparro.com {
     tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
 
     # No rate_limit here: it needs the caddy-ratelimit plugin, which

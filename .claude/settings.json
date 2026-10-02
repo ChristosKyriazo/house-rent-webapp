@@ -3,6 +3,12 @@
     "allow": [
       "Bash(npx playwright *)",
       "Bash(npm run test:e2e*)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin HEAD:main*)",
+      "Bash(git push * main:main*)"
     ]
   },
   "hooks": {

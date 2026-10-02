@@ -11,7 +11,7 @@ config({ path: path.resolve(__dirname, '../../.env.test') })
 // https://dev.kaparro.com — a hostname that resolved to the PRODUCTION box —
 // so `npm run test:e2e` wrote test listings, inquiries and bookings into the
 // production database. Point it at a deployed environment explicitly:
-//   E2E_BASE_URL=https://dev.kaparro.com npm run test:e2e
+//   E2E_BASE_URL=https://staging.kaparro.com npm run test:e2e
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
 const AUTH_DIR = path.join(__dirname, '.auth')
 

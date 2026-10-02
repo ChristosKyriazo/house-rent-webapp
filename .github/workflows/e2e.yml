@@ -2,7 +2,7 @@ name: E2E
 
 # Playwright against a real deployed environment — never localhost.
 #
-# ⚠️ This workflow needs a deployed QA environment. While QA is unprovisioned
+# ⚠️ This workflow needs a deployed staging environment. While staging is unprovisioned
 # (repo variable DEPLOY_STAGING_ENABLED is not "true") there is nothing to test
 # against, so the run becomes a visible no-op: it annotates a warning and says
 # so in the job summary rather than failing the release PR, and rather than
@@ -10,7 +10,7 @@ name: E2E
 #
 # Two rungs of the ladder:
 #   • smoke ("public" project, no credentials) runs after every staging deploy
-#   • full  (all 6 projects) runs on a PR from dev → main, i.e. the release gate
+#   • full  (all 6 projects) runs on a PR from staging → main, i.e. the release gate
 #
 # Authenticated projects need the TEST_* Clerk credentials. When those secrets
 # are absent the run degrades to smoke-only rather than failing — a missing
@@ -23,7 +23,7 @@ on:
       base_url:
         description: Environment to test against
         type: string
-        default: https://dev.kaparro.com
+        default: https://staging.kaparro.com
       suite:
         description: '"smoke" (public only) or "full" (all projects)'
         type: string
@@ -33,7 +33,7 @@ on:
       base_url:
         description: Environment to test against
         type: string
-        default: https://dev.kaparro.com
+        default: https://staging.kaparro.com
       suite:
         description: '"smoke" or "full"'
         type: choice
@@ -43,16 +43,16 @@ on:
 jobs:
   e2e:
     # A PR into main is the release gate and always runs the full suite.
-    name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+    name: ${{ (github.event_name == 'pull_request' && 'full') || inputs.suite }} → ${{ (github.event_name == 'pull_request' && 'https://staging.kaparro.com') || inputs.base_url }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # E2E only ever targets QA, so it reads QA's CLERK_SECRET_KEY and TEST_*
+    # E2E only ever targets staging, so it reads staging's CLERK_SECRET_KEY and TEST_*
     # accounts. Without this the job sees repository secrets only, and the
     # authenticated projects would silently degrade to smoke.
     environment: staging
 
     env:
-      E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://dev.kaparro.com') || inputs.base_url }}
+      E2E_BASE_URL: ${{ (github.event_name == 'pull_request' && 'https://staging.kaparro.com') || inputs.base_url }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
       TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
@@ -64,22 +64,22 @@ jobs:
       TEST_BOTH_PASSWORD: ${{ secrets.TEST_BOTH_PASSWORD }}
 
     steps:
-      - name: Is there a QA environment to test against?
+      - name: Is there a staging environment to test against?
         id: gate
         run: |
           if [ "${{ vars.DEPLOY_STAGING_ENABLED }}" = "true" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::QA is not provisioned (DEPLOY_STAGING_ENABLED is not 'true') — no E2E ran. This release gate is currently inert."
+            echo "::warning::Staging is not provisioned (DEPLOY_STAGING_ENABLED is not 'true') — no E2E ran. This release gate is currently inert."
             {
-              echo "### E2E skipped — no QA environment"
+              echo "### E2E skipped — no staging environment"
               echo ""
               echo "\`DEPLOY_STAGING_ENABLED\` is not \`true\`, so there is no deployed"
-              echo "QA environment to test against."
+              echo "staging environment to test against."
               echo ""
               echo "**This means the \`dev\` → \`main\` release gate is not testing anything.**"
-              echo "Browser-level regressions will reach production unnoticed until QA exists."
+              echo "Browser-level regressions will reach production unnoticed until staging exists."
               echo ""
               echo "Running the suite against production is not an option: the specs write data."
             } >> "$GITHUB_STEP_SUMMARY"

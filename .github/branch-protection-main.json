@@ -3,7 +3,7 @@
     "strict": true,
     "contexts": [
       "CI / Lint · Typecheck · Test",
-      "E2E / full → https://dev.kaparro.com"
+      "E2E / full → https://staging.kaparro.com"
     ]
   },
   "enforce_admins": true,

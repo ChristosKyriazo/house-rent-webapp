@@ -8,11 +8,11 @@ Companion docs: [README](../README.md) for local setup, [docs/APP.md](./APP.md) 
 
 ## Environments
 
-| | Local | QA / staging | Production |
+| | Local | Staging | Production |
 |---|---|---|---|
-| Branch | `feature/*` | `dev` | `main` |
-| Domain | localhost:3000 | dev.kaparro.com | kaparro.com, www.kaparro.com |
-| Database | own Postgres on 5432, fake seed | QA DB (does not exist yet) | production DB |
+| Branch | `feature/*`, `dev` (CI only) | `staging` | `main` |
+| Domain | localhost:3000 | staging.kaparro.com | kaparro.com, www.kaparro.com |
+| Database | own Postgres on 5432, fake seed | staging DB (does not exist yet) | production DB |
 | Host secret | — | `SERVER_HOST_STAGING` | `SERVER_HOST_PROD` |
 | GitHub Environment | — | `staging` | `production` |
 | Caddy config | — | `Caddyfile.staging` | `Caddyfile.production` |
@@ -20,12 +20,12 @@ Companion docs: [README](../README.md) for local setup, [docs/APP.md](./APP.md) 
 | Deploy gate | — | `DEPLOY_STAGING_ENABLED` (default **false**) | `DEPLOY_PRODUCTION_ENABLED` (default true) |
 | Status | ✅ real | ⏸ **configured, not provisioned** | ✅ real |
 
-### QA is wired but switched off
+### staging is wired but switched off
 
-There is no QA server. Everything in the repo is ready for one — pipeline, Caddy
+There is no staging server. Everything in the repo is ready for one — pipeline, Caddy
 config, secret list, per-environment image build — and the deploy itself is gated
-off, so a push to `dev` builds a real image and stops. See
-[Activating QA](#activating-qa).
+off, so a push to `staging` builds a real image and stops. See
+[Activating staging](#activating-staging).
 
 This gate is not bureaucracy. Before it existed, `SERVER_HOST_STAGING` and
 `SERVER_HOST_PROD` pointed at the **same box**, so:
@@ -42,9 +42,9 @@ Confirmed by `GET /api/homes?type=rent` returning byte-identical responses from
 both hostnames — the same 50 cuid listing keys, which two separate databases
 cannot produce.
 
-Local runs against its own database (`npm run db:setup`) — see the [README](../README.md#the-three-environments). Port 5433 is a tunnel to *staging*, not a local database; treat it as read-only.
+Local runs against its own database (`npm run db:setup`) — see the [README](../README.md#the-three-environments). Port 5433 is a tunnel to *production*, not a local database; treat it as read-only.
 
-**Both branches deploy.** `.github/workflows/deploy.yml` triggers on pushes to `main` *and* `dev`. A push to `dev` is a real deploy to staging, not just a build.
+**Two branches deploy, in order:** `feature/*` → `dev` → `staging` → `main`. `.github/workflows/deploy.yml` triggers on pushes to `staging` (deploys staging) and `main` (deploys production). `dev` only runs CI — when it is green, `ci.yml` opens or refreshes the `dev` → `staging` PR. A green staging run opens the `staging` → `main` release PR. The owner merges both.
 
 Hosting is a self-hosted **Hetzner CX32** (4 vCPU / 8 GB, Ubuntu 24.04) at `/opt/house-rent`, deployed over SSH. There is no Fly.io, Railway, or Vercel involved anywhere.
 
@@ -73,15 +73,16 @@ git push -u origin <branch-name>
 # open a PR into dev; merge when lint, typecheck and tests pass
 ```
 
-`ci.yml` runs on every push to a non-`main`/`dev` branch, so you get lint/typecheck/test/build feedback within a few minutes of pushing, before the PR is even open. It runs again on the PR, and a third time as the blocking first job of `deploy.yml`.
+`ci.yml` runs on every push to a branch other than `main`/`staging` (so `dev` and every feature branch), so you get lint/typecheck/test/build feedback within a few minutes of pushing, before the PR is even open. It runs again on the PR, and a third time as the blocking first job of `deploy.yml`.
 
-### Promotion to production
+### Promotion: dev → staging → production
 
-Promote by **pull request**, not by pushing `main`. The PR is what triggers the full Playwright suite against dev.kaparro.com — the release gate. A direct push to `main` skips it.
+Promote by **pull request** only — never push `staging` or `main`.
 
-```bash
-gh pr create --base main --head dev --title "Release: <summary>" --body "<what changed>"
-```
+1. **`dev` → `staging`.** Opened automatically when CI passes on `dev` (`promote-to-staging` in `ci.yml`). Merging it deploys to staging.
+2. **`staging` → `main`.** Opened automatically when the staging run finishes (`release-pr` in `deploy.yml`). This PR triggers the full Playwright suite against staging.kaparro.com — the release gate. The production deploy also refuses code that staging has not deployed (once staging exists).
+
+If either PR is missing (the repo setting "Allow GitHub Actions to create and approve pull requests" is off), open it by hand: `gh pr create --base staging --head dev` / `gh pr create --base main --head staging`.
 
 Wait for CI **and** the full E2E run to go green, then merge. Merging deploys to production, which runs its own in-deploy smoke check and rolls back automatically on failure.
 
@@ -122,14 +123,14 @@ Naming: `feature/owner-notes-card`, `hardening/booking-overlap-invariants`, `hot
 4. **Regenerate `/opt/house-rent/.env`** wholesale from GitHub secrets (mktemp → `chmod 600` → atomic `mv`, so the running container never sees a partial file).
 5. `docker login ghcr.io` → `docker compose -f docker-compose.prod.yml pull app`.
 6. **Rolling restart of the app only**: `up -d --no-deps --remove-orphans app`. DB, pgbouncer, Redis and Caddy keep running.
-7. `caddy reload` — config-validated, so a bad Caddyfile keeps the old config serving rather than taking the site down. Suffixed `|| true`.
+7. **Apply the Caddyfile.** If the container already reads the file on disk, `caddy reload` (config-validated; a rejected file logs `::error::` and the old config keeps serving). If it reads a stale copy — a single-file bind mount pins the inode, so a replaced file is invisible to it — the new file is validated with `caddy validate` and the Caddy container is recreated.
 8. **Verification, in three rungs** — any failure triggers an automatic rollback (below):
    - **Liveness**: `/api/healthz`, polled 30× at 3s (90s total). Proves the process answers.
    - **Readiness**: `/api/readyz` must report `"db":"connected"`, polled 10× at 3s. Catches a failed migration or a dead pool, which liveness alone happily passes.
    - **Smoke**: `/` and `/homes` each expected to return 200. Exercises routing and rendering, not just the container.
 
    All three go over **HTTPS via `curl --resolve <host>:443:127.0.0.1`**, not `http://localhost`. This matters: Caddy 308-redirects every port-80 request to HTTPS, and `curl -f` only fails on 4xx/5xx — so a 308 with an empty body is a curl *success*. The original `curl -sf http://localhost/api/healthz` gate passed the moment Caddy was up, regardless of whether the app worked, and had never verified anything. `-k` is required because the origin certificate is a Cloudflare origin cert, not publicly trusted.
-9. **Post-deploy E2E** (`dev` only): `e2e.yml` runs the Playwright `public` project against dev.kaparro.com. Not run against production — those specs write data.
+9. **Post-deploy E2E** (`staging` only): `e2e.yml` runs the Playwright `public` project against staging.kaparro.com. Not run against production — those specs write data.
 
 ### Automatic rollback
 
@@ -190,7 +191,7 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 `SERVER_HOST_STAGING` (staging environment), `SERVER_HOST_PROD` (**repository** secret — the staging job compares against it and cannot read production-environment secrets), `DEPLOY_SSH_KEY` (private key whose public half is in `deploy`'s `authorized_keys`), and the automatic `GITHUB_TOKEN`.
 
-`NEXT_PUBLIC_*` build args are repository secrets holding the **production** values. QA overrides them by setting the same names in the `staging` environment — until it does, a QA build carries the live Clerk key.
+`NEXT_PUBLIC_*` build args are repository secrets holding the **production** values. Staging overrides them by setting the same names in the `staging` environment — until it does, a staging build carries the live Clerk key.
 
 ### Feature flags — GitHub *variables*, not secrets
 
@@ -198,7 +199,7 @@ Derived from `deploy.yml`, which is the only authority. Set under **Settings →
 
 ### Optional E2E secrets
 
-`TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD` and the `RENTER`, `BROKER`, `BOTH` equivalents, plus `CLERK_SECRET_KEY` — all in the **`staging`** environment, which `e2e.yml` declares — let it run the authenticated projects. **If they are absent the release gate silently degrades to smoke-only** — it emits a workflow warning and passes. Set them, or the `dev` → `main` gate is much weaker than it looks.
+`TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD` and the `RENTER`, `BROKER`, `BOTH` equivalents, plus `CLERK_SECRET_KEY` — all in the **`staging`** environment, which `e2e.yml` declares — let it run the authenticated projects. **If they are absent the release gate silently degrades to smoke-only** — it emits a workflow warning and passes. Set them, or the `staging` → `main` gate is much weaker than it looks.
 
 ### Not written by deploy.yml
 
@@ -239,7 +240,7 @@ Migrations therefore run on container start via the compose `command:` — *not*
 ### Caddy
 
 - **Explicit origin certificates**: `tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key`. ACME auto-TLS is **off** — certs are mounted from `./certs`, Cloudflare-origin style. They do not auto-renew; renew them before expiry.
-- Two site blocks: `dev.kaparro.com` (HSTS 1 year) and `kaparro.com, www.kaparro.com` (HSTS 2 years, www → apex 301).
+- Two site blocks: `staging.kaparro.com` (HSTS 1 year) and `kaparro.com, www.kaparro.com` (HSTS 2 years, www → apex 301).
 - `/uploads/*` is served straight from `/srv` by `file_server`, bypassing Next.js entirely.
 - Security headers set here; **CSP is deliberately not** — it comes from `next.config.ts`, and two CSP headers make browsers enforce the intersection of both.
 - `encode gzip`; access log rolls at 10 MB, 7 kept.
@@ -441,7 +442,7 @@ If a choice improves speed but hurts reliability or security, do not choose it.
 
 ---
 
-## Activating QA
+## Activating staging
 
 Everything below is infrastructure and third-party setup. No code changes are
 needed — the pipeline already handles both environments.
@@ -457,20 +458,20 @@ already points at it.
 
 ### 2. DNS
 
-Point `dev.kaparro.com` at the new box. Until then that hostname has no server:
+Point `staging.kaparro.com` at the new box. Until then that hostname has no server:
 `Caddyfile.production` deliberately has no block for it, so after the next
 production deploy it stops answering. That is the intended state — it was a
 second front door into production.
 
 ### 3. Separate third-party tenants
 
-| Service | What QA needs | Why |
+| Service | What staging needs | Why |
 |---|---|---|
-| Clerk | its own **development instance**, `pk_test`/`sk_test` | QA sign-ups otherwise create real production users; publishable and secret keys must be from the same instance |
-| Stripe | test-mode keys **and its own webhook endpoint** for `https://dev.kaparro.com/api/webhooks/stripe` | a webhook endpoint is bound to one URL and has its own signing secret |
-| Google Maps | a key restricted to the QA domain | referrer restrictions are per-domain |
-| Sentry | its own environment or project | otherwise QA noise lands in production alerting |
-| OpenAI | its own key | keeps QA spend visible and separately cappable |
+| Clerk | its own **development instance**, `pk_test`/`sk_test` | staging sign-ups otherwise create real production users; publishable and secret keys must be from the same instance |
+| Stripe | test-mode keys **and its own webhook endpoint** for `https://staging.kaparro.com/api/webhooks/stripe` | a webhook endpoint is bound to one URL and has its own signing secret |
+| Google Maps | a key restricted to the staging domain | referrer restrictions are per-domain |
+| Sentry | its own environment or project | otherwise staging noise lands in production alerting |
+| OpenAI | its own key | keeps staging spend visible and separately cappable |
 
 ### 4. GitHub `staging` environment secrets
 
@@ -481,20 +482,20 @@ Use `.env.staging.example` as the checklist — it mirrors exactly what
 **Replace every value, not just the missing ones.** Until 2026-10-02 the
 `staging` environment held the credentials that deployed kaparro.com — the
 production database password, the live Clerk secret, Stripe. Any of those left
-in place points QA at production again.
+in place points staging at production again.
 
 Anything unset lands in the server `.env` as an empty value, silently.
 
-### 5. QA test users
+### 5. Staging test users
 
-Create the four E2E accounts (`owner`, `renter`, `broker`, `both`) in the QA
+Create the four E2E accounts (`owner`, `renter`, `broker`, `both`) in the staging
 Clerk instance, complete each role-setup flow, and set the `TEST_*` secrets.
-Without them `e2e.yml` degrades the `dev` → `main` gate to smoke-only and still
+Without them `e2e.yml` degrades the `staging` → `main` gate to smoke-only and still
 reports green.
 
-### 6. QA data
+### 6. Staging data
 
-A fresh QA database starts empty. `scripts/seeds/seed-dev.ts` refuses any
+A fresh staging database starts empty. `scripts/seeds/seed-dev.ts` refuses any
 non-localhost host by design — do not weaken that guard. Either restore a
 sanitized dump of production, or add a `seed-qa` script with its own explicit
 host allowlist. `db:seed:areas` and `db:seed:universities` are environment-safe
@@ -511,7 +512,7 @@ not resolved when a job-level `if:` is evaluated.
 
 ```bash
 # Must now differ: different data, different Clerk instance.
-curl -s https://dev.kaparro.com/api/homes?type=rent | md5sum
+curl -s https://staging.kaparro.com/api/homes?type=rent | md5sum
 curl -s https://kaparro.com/api/homes?type=rent     | md5sum
 ```
 
@@ -530,7 +531,7 @@ Configure under Settings → Branches. Both branches deploy, so both need rules.
 - Do not allow force pushes or deletion
 - Include administrators — the point is to stop *you* pushing to prod at 2am
 
-**`dev`** — UAT:
+**`dev`** and **`staging`**:
 - Require a pull request before merging
 - Require status check: `Lint · Typecheck · Test`
 - Do not allow force pushes or deletion
@@ -553,12 +554,12 @@ gh api -X PUT repos/ChristosKyriazo/house-rent-webapp/branches/dev/protection \
 - [x] Deploy verifies more than liveness — readiness plus page-render smoke
 - [x] Automatic rollback on a failed deploy
 - [x] Migrations proven to apply to an empty database
-- [x] Local development isolated from UAT — own database, guarded seed
-- [x] QA and production cannot share a host — the deploy fails if the host secrets match
+- [x] Local development isolated from staging and production — own database, guarded seed
+- [x] staging and production cannot share a host — the deploy fails if the host secrets match
 - [x] Image built per environment, so `NEXT_PUBLIC_*` values cannot leak across environments
 - [x] Playwright defaults to localhost, so a local run cannot write into a deployed environment
-- [ ] **QA server provisioned** — until then the `dev` → `main` E2E gate is inert
-- [ ] QA Clerk / Stripe test tenants created
+- [ ] **Staging server provisioned** — until then the `staging` → `main` E2E gate is inert
+- [ ] staging Clerk / Stripe test tenants created
 - [ ] Branch protections active on `main` and `dev` — **apply the JSON above**
 - [ ] `TEST_*` E2E secrets set, so the release gate is not smoke-only
 - [ ] `ADMIN_CLERK_IDS` and `CRON_SECRET` set in both GitHub Environments
