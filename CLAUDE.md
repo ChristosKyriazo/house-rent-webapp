@@ -127,7 +127,7 @@ Replaces four overlapping phase-plan documents. Verified against the code on 202
 | 2 | ~~Admin allowlist empty in production.~~ **Fixed in `deploy.yml`** — it now writes `ADMIN_CLERK_IDS`, `ADMIN_EMAILS`, `CRON_SECRET` and the `FEATURE_*` flags. The **secrets must still be set** in the GitHub `staging` and `production` environments, or the values land empty. |
 | 3 | ~~Node version split.~~ **Fixed.** Dockerfile is `node:22.18.0-alpine`; `ci.yml` reads `.nvmrc`. One version everywhere. |
 | 4 | ~~CI never runs E2E.~~ **Fixed.** `e2e.yml` runs smoke after every staging deploy and the full suite on a `dev` → `main` PR. Authenticated projects need the `TEST_*` secrets set, or the run degrades to smoke-only with a warning. |
-| 5 | **Caddy rate limiting is inert.** The `rate_limit` directive needs the caddy-ratelimit plugin, which `caddy:2-alpine` does not ship. Either build with xcaddy or drop the block. |
+| 5 | ~~Caddy rate limiting is inert.~~ **Fixed — and it was worse than inert.** `caddy:2-alpine` has no caddy-ratelimit plugin, so the `rate_limit` block made Caddy reject the *whole* Caddyfile: every deploy's `caddy reload ... \|\| true` silently kept the old config, and a Caddy restart would not have come up. Block dropped from both Caddyfiles (API rate limiting is in `lib/rate-limit.ts`); a rejected reload now logs `::error::`. |
 | 6 | ~~`CALCOM_TOKEN_ENCRYPTION_KEY` written with zero consumers.~~ **Removed from `deploy.yml`.** |
 | 7 | Backups are on-box only — no off-server copy. |
 | 8 | `~185` `any` warnings across API routes. |

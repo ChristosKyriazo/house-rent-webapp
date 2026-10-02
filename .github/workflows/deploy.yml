@@ -332,8 +332,11 @@ jobs:
             # ── Reload Caddy if Caddyfile changed ─────────────────────────────
             # caddy reload validates the new config first — a bad Caddyfile will NOT
             # take down the running server; it will keep serving the old config.
+            # It must not be silent, though: a rejected Caddyfile is also one
+            # Caddy cannot START with, so the next container restart is an outage.
             docker compose -f docker-compose.prod.yml exec -T caddy caddy reload \
-              --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              --config /etc/caddy/Caddyfile --adapter caddyfile \
+              || echo "::error::Caddy rejected the new Caddyfile and is still serving the OLD config. Caddy will not start with this file — fix it before the container restarts."
 
             # ── Roll back to the previous image and fail the deploy ───────────
             rollback() {

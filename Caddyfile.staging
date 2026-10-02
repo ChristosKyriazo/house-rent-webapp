@@ -9,16 +9,10 @@
 dev.kaparro.com {
     tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
 
-    # Rate limiting — protect API endpoints from abuse
-    # Requires the caddy-ratelimit plugin; if not available this block is ignored
-    @api path /api/*
-    rate_limit @api {
-        zone api_zone {
-            key {remote_host}
-            events 120
-            window 1m
-        }
-    }
+    # No rate_limit here: it needs the caddy-ratelimit plugin, which
+    # caddy:2-alpine does not ship. An unknown directive makes Caddy reject the
+    # whole file, so `caddy reload` kept the old config and a restart would not
+    # come up at all. API rate limiting lives in the app (lib/rate-limit.ts).
 
     # Serve uploaded files directly from volume
     handle /uploads/* {

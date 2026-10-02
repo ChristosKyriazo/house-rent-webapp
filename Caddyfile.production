@@ -13,15 +13,10 @@ kaparro.com, www.kaparro.com {
     @www host www.kaparro.com
     redir @www https://kaparro.com{uri} permanent
 
-    # Rate limiting — protect API endpoints from abuse
-    @api path /api/*
-    rate_limit @api {
-        zone api_zone {
-            key {remote_host}
-            events 120
-            window 1m
-        }
-    }
+    # No rate_limit here: it needs the caddy-ratelimit plugin, which
+    # caddy:2-alpine does not ship. An unknown directive makes Caddy reject the
+    # whole file, so `caddy reload` kept the old config and a restart would not
+    # come up at all. API rate limiting lives in the app (lib/rate-limit.ts).
 
     handle /uploads/* {
         root * /srv
