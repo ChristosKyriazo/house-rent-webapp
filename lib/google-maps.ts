@@ -86,13 +86,26 @@ async function attemptGeocode(address: string, apiKey: string): Promise<Coordina
 }
 
 /**
- * Geocode an address to get coordinates.
- * Falls back to progressively simpler address forms if the full address fails:
- *   1. street + area + city + country
- *   2. street + city + country  (drops area — sometimes causes ZERO_RESULTS)
- *   3. city + country           (last resort, at least returns city-centre coords)
+ * How far a geocoded street may sit from the centre of the area the listing claims to be
+ * in. Athens neighbourhoods are a few km across; a street result further out than this is
+ * a same-named street somewhere else.
  */
-async function geocodeAddress(
+export const AREA_RADIUS_KM = 3
+
+/**
+ * Geocode a listing's address, and make sure the pin lands **in the listing's area**.
+ *
+ * Google returns its best guess for "Kifisias 88, Athens", not necessarily the one in
+ * Marousi — and the old fallback dropped the area entirely and took the first hit, so
+ * listings in Zografou, Marousi and Peristeri were pinned 3–7 km away, in other
+ * neighbourhoods. Their distances to metro, schools and parks were computed from the
+ * wrong spot too.
+ *
+ * Now a street result is only accepted within `AREA_RADIUS_KM` of the area's own centre.
+ * If no street result qualifies, the area centre itself is used: approximate, but in the
+ * right neighbourhood. City centre remains the last resort when the area is unknown.
+ */
+export async function geocodeAddress(
   street: string | null,
   area: string | null,
   city: string,
@@ -104,27 +117,26 @@ async function geocodeAddress(
     return null
   }
 
-  // Attempt 1: full address
-  const fullAddress = [street, area, city, country].filter(Boolean).join(', ')
-  const coords1 = await attemptGeocode(fullAddress, apiKey)
-  if (coords1) return coords1
+  const areaCentre = area
+    ? await attemptGeocode([area, city, country].filter(Boolean).join(', '), apiKey)
+    : null
+  const inArea = (c: Coordinates | null): c is Coordinates =>
+    Boolean(c) && (!areaCentre || calculateDistance(c!.lat, c!.lng, areaCentre.lat, areaCentre.lng) <= AREA_RADIUS_KM)
 
-  // Attempt 2: drop area (area can confuse geocoder if not in Google's index)
-  if (area) {
-    const noAreaAddress = [street, city, country].filter(Boolean).join(', ')
-    // retrying without area
-    const coords2 = await attemptGeocode(noAreaAddress, apiKey)
-    if (coords2) return coords2
+  if (street) {
+    // Full address first, then street + city — but either only counts inside the area.
+    const full = await attemptGeocode([street, area, city, country].filter(Boolean).join(', '), apiKey)
+    if (inArea(full)) return full
+    if (area) {
+      const noArea = await attemptGeocode([street, city, country].filter(Boolean).join(', '), apiKey)
+      if (inArea(noArea)) return noArea
+    }
   }
 
-  // Attempt 3: city + country only (coarse but better than null)
-  const cityOnlyAddress = [city, country].filter(Boolean).join(', ')
-  // retrying with city only
-  const coords3 = await attemptGeocode(cityOnlyAddress, apiKey)
-  if (coords3) return coords3
+  if (areaCentre) return areaCentre
 
-  // all geocoding attempts failed
-  return null
+  // Unknown area: city centre is coarse, but better than nothing.
+  return attemptGeocode([city, country].filter(Boolean).join(', '), apiKey)
 }
 
 /**
