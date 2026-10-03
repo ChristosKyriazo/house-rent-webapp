@@ -58,6 +58,9 @@ const searchResultCache = new Map<string, CachedSearchResult>()
 const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
 const SEARCH_CACHE_MAX_ENTRIES = 100
 
+/** Upper bound on listings scored per AI search — newest first. A safety net, not a filter. */
+const AI_MAX_CANDIDATES = 1500
+
 function resultCacheKey(query: string, type: string | undefined, student: boolean): string {
   const hash = createHash('sha256').update(query).digest('hex').slice(0, 24)
   return `ai-search:v2:${type || 'any'}:${student ? 's' : '-'}:${hash}`
@@ -468,27 +471,40 @@ export async function POST(request: NextRequest) {
       where.yearRenovated = { ...where.yearRenovated, lte: extractedFilters.maxYearRenovated }
     }
 
-    // Distance filters will be applied in JavaScript after fetching
-    // City/area/country filters will be applied in JavaScript for better Greek/English matching
-    // Don't add them to where clause - we'll filter in JavaScript
-
-    // Step 3: Fetch homes with filters applied (reduces dataset before AI processing)
-    // Note: City/area/country filters will be applied in JavaScript for better Greek/English matching
-    let homes = await prisma.home.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        owner: {
-          select: { id: true, name: true },
+    // Step 3: Fetch candidates. Location is filtered IN THE DATABASE on every known spelling
+    // (Greek/English, any case, with and without accents) — it used to load every listing
+    // and filter in JavaScript. The exact JS match below still runs on the narrowed set.
+    // Embeddings are never loaded here (1,536 floats per listing): pgvector compares them
+    // in-database, and only listings without a vector fetch theirs (see the semantic step).
+    const { cityMap, countryMap, areaNameMap } = createLocationMaps(allAreas)
+    const spellings = (value: string, map: Map<string, Set<string>>) => {
+      const all = getLocationVariations(value, map)
+      all.add(value.trim())
+      for (const v of [...all]) all.add(removeGreekAccents(v))
+      return [...all].filter(Boolean)
+    }
+    const fetchCandidates = (loc: { city?: string | null; area?: string | null; country?: string | null }) =>
+      prisma.home.findMany({
+        where: {
+          ...where,
+          ...(loc.city ? { city: { in: spellings(loc.city, cityMap), mode: 'insensitive' as const } } : {}),
+          ...(loc.country ? { country: { in: spellings(loc.country, countryMap), mode: 'insensitive' as const } } : {}),
+          ...(loc.area ? { area: { in: spellings(loc.area, areaNameMap), mode: 'insensitive' as const } } : {}),
         },
-      },
-    })
+        orderBy: { createdAt: 'desc' },
+        take: AI_MAX_CANDIDATES,
+        omit: { embedding: true },
+        include: { owner: { select: { id: true, name: true } } },
+      })
+
+    let homes = await fetchCandidates(extractedFilters)
+    if (homes.length === AI_MAX_CANDIDATES) {
+      log.warn({ cap: AI_MAX_CANDIDATES }, 'AI search candidate cap reached — oldest matches not scored')
+    }
 
     homesCountBeforeFilter = homes.length
 
-    // Step 4: Apply city/area/country filters with Greek/English matching
-    // Create bidirectional maps for matching (English <-> Greek)
-    const { cityMap, countryMap, areaNameMap } = createLocationMaps(allAreas)
+    // Step 4: Exact city/area/country match with Greek/English variations
 
     // Filter homes by city with Greek/English matching
     if (extractedFilters.city) {
@@ -510,12 +526,7 @@ export async function POST(request: NextRequest) {
           // Convert city filter to area filter
           extractedFilters.area = matchingArea.name || matchingArea.nameGreek || extractedFilters.city
           extractedFilters.city = null
-          // Re-fetch homes without city filter
-          homes = await prisma.home.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, name: true } } },
-          })
+          homes = await fetchCandidates(extractedFilters)
       }
       }
     }
@@ -552,13 +563,9 @@ export async function POST(request: NextRequest) {
           // Convert area filter to city filter
           extractedFilters.city = matchingArea.city || matchingArea.cityGreek || null
           extractedFilters.area = null
-          // Re-fetch homes without area filter — and apply the city filter we just switched
-          // to. Without this the fallback returned every home in every city.
-          homes = await prisma.home.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            include: { owner: { select: { id: true, name: true } } },
-          })
+          // Re-fetch for the city we just switched to (the JS filter below re-checks it).
+          // Without the city the fallback used to return every home in every city.
+          homes = await fetchCandidates(extractedFilters)
           if (extractedFilters.city) {
             const fallbackCity = extractedFilters.city as string
             const fallbackVariations = getLocationVariations(fallbackCity, cityMap)
@@ -992,13 +999,15 @@ export async function POST(request: NextRequest) {
         // uploader and the re-embed job, so a single bulk-uploaded home in the result set
         // used to mark pgvector "used" and silently strip the semantic signal from every
         // normally-created listing.
-        for (const home of candidates) {
-          if (scoredByPgvector.has(home.id)) continue
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const stored = (home as any).embedding
-          getComponents(home.id).semantic = Array.isArray(stored)
-            ? semanticScore(cosineSimilarity(queryEmbedding, stored as number[]))
-            : SEM_NEUTRAL
+        // Only listings without a vector column fetch their JSON embedding — never all of them.
+        const missing = candidates.filter(h => !scoredByPgvector.has(h.id)).map(h => h.id)
+        if (missing.length > 0) {
+          const stored = await prisma.home.findMany({ where: { id: { in: missing } }, select: { id: true, embedding: true } })
+          for (const { id, embedding } of stored) {
+            getComponents(id).semantic = Array.isArray(embedding)
+              ? semanticScore(cosineSimilarity(queryEmbedding, embedding as number[]))
+              : SEM_NEUTRAL
+          }
         }
       }
     }
