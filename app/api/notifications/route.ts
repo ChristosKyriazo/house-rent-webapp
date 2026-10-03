@@ -16,8 +16,11 @@ import {
 } from '@/lib/services/notification-service'
 import { localeFor } from '@/lib/format'
 import { reasonText, type MatchReason } from '@/lib/search/match-reasons'
+import { ATHENS_TZ } from '@/lib/athens-time'
 
 // GET: Get notifications for the current user (excluding deleted ones)
+const NOTIFICATIONS_LIMIT = 50
+
 export async function GET(request: NextRequest) {
   const log = requestLogger(request)
   try {
@@ -40,6 +43,9 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: 'desc',
       },
+      // The bell shows the latest ones; loading every notification ever on each poll grew
+      // without bound.
+      take: NOTIFICATIONS_LIMIT,
     })
 
     // Hide "availability_set" once the user has a scheduled viewing for that home (no need to keep nudging)
@@ -85,11 +91,12 @@ export async function GET(request: NextRequest) {
     const homes = homeKeys.length > 0 
       ? await prisma.home.findMany({
           where: { key: { in: homeKeys } },
-          select: { key: true, title: true },
+          select: { key: true, title: true, titleGreek: true },
         })
       : []
 
-    const homeMap = new Map(homes.map(h => [h.key, h.title]))
+    // Greek readers get the Greek title when the listing has one.
+    const homeMap = new Map(homes.map(h => [h.key, language === 'el' && h.titleGreek ? h.titleGreek : h.title]))
 
     // Get user information for owner notifications (inquiry type) and finalize notifications
     const teamTypes = new Set(['boost_request', 'boost_approved', 'boost_declined', 'team_invite', 'team_invite_accepted', 'team_removed', 'team_left'])
@@ -254,8 +261,19 @@ export async function GET(request: NextRequest) {
         } else {
           message = t.notificationBookingCreatedGeneric.replace('{propertyTitle}', propertyTitle)
         }
+      } else if (notif.type === 'booking_reminder' && notif.data) {
+        // Reminders since the cron rewrite carry what they announce, so the text never
+        // drifts; times are shown in Athens time (the server runs in UTC).
+        const d = notif.data as { title?: string; startTime?: string; count?: number }
+        if (notif.role === 'user' && d.startTime) {
+          const time = new Date(d.startTime).toLocaleTimeString(localeFor(language), { hour: '2-digit', minute: '2-digit', timeZone: ATHENS_TZ })
+          message = t.notificationBookingReminder.replace('{title}', d.title ?? propertyTitle).replace('{time}', time)
+        } else {
+          const count = d.count ?? 0
+          message = t.notificationOwnerBookingReminder.replace('{count}', count.toString()).replace('{plural}', count !== 1 ? 's' : '')
+        }
       } else if (notif.type === 'booking_reminder') {
-        // Uses pre-fetched reminderBookings / tomorrowCountMap — no per-notification queries
+        // Older reminders without data: reconstructed from upcoming bookings.
         if (notif.homeKey) {
           const homeId = reminderHomeMap.get(notif.homeKey)
           if (homeId !== undefined) {
@@ -267,7 +285,7 @@ export async function GET(request: NextRequest) {
               if (notif.role === 'user') {
                 const bookingTime = new Date(booking.startTime).toLocaleTimeString(
                   localeFor(language),
-                  { hour: '2-digit', minute: '2-digit' }
+                  { hour: '2-digit', minute: '2-digit', timeZone: ATHENS_TZ }
                 )
                 message = t.notificationBookingReminder.replace('{title}', booking.title).replace('{time}', bookingTime)
               } else {

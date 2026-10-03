@@ -101,9 +101,11 @@ export default function NotificationBell() {
     // Initial load
     fetchNotifications()
 
-    // Near real-time: poll while tab is visible so owners see new inquiries within a couple of seconds
-    const POLL_MS_VISIBLE = 2000
-    const POLL_MS_HIDDEN = 30000
+    // Polling. Every request runs ~9 queries, so the old 2 s interval cost ~270 queries a
+    // minute per open tab. 30 s while visible, plus an immediate refresh on focus, on tab
+    // return and on reconnect (below), keeps new inquiries prompt at a fraction of the load.
+    const POLL_MS_VISIBLE = 30_000
+    const POLL_MS_HIDDEN = 5 * 60_000
 
     let intervalId: ReturnType<typeof setInterval> | null = null
 
