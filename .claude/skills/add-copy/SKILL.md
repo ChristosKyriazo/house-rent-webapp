@@ -13,7 +13,7 @@ type TranslationKey = keyof typeof translations.el
 
 The key type is derived from the **Greek** object only. A key present in `el` but missing from `en` is therefore not a type error — and `getTranslation` falls back `dict[key] ?? translations.en[key] ?? String(key)`, so for an English-language user the raw key name renders in the UI.
 
-There are currently **24 such keys** (`statusApproved`, `houseOwnerRating`, `confirmFinalize`, `reject`, `save`, …), meaning English users see `statusApproved` where a label belongs. Do not add to that pile.
+There were 24 such keys until 2026-10 (English users saw `statusApproved` where a label belonged); they are fixed and the parity check below now prints nothing. Keep it that way.
 
 ## Procedure
 
@@ -34,7 +34,7 @@ echo "--- missing from el ---"
 comm -13 <(keys $((el_start+1)) $((en_start-1))) <(keys $((en_start+1)) $((end-1)))
 ```
 
-Run it before and after your edit, so you are judged on the keys you added rather than the 24 that were already there.
+Run it after your edit; it must print nothing.
 
 ## Formatting
 

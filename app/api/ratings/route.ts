@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
     // ── Viewing: tenant rates broker ────────────────────────────────────────
     if (type === 'viewing_broker') {
       const booking = await prisma.booking.findFirst({
-        where: { id: body.bookingId, userId: user.id, status: { not: 'cancelled' } },
+        // Only once the viewing has actually happened — it could be rated in advance before.
+        where: { id: body.bookingId, userId: user.id, status: { not: 'cancelled' }, endTime: { lte: new Date() } },
         include: { home: { select: { owner: { select: { id: true, role: true } } } } },
       })
       if (!booking) return forbidden('No valid booking found')
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     // ── Viewing: owner/broker rates tenant ──────────────────────────────────
     if (type === 'viewing_tenant') {
       const booking = await prisma.booking.findFirst({
-        where: { id: body.bookingId, ownerId: user.id, userId: body.ratedUserId, status: { not: 'cancelled' } },
+        where: { id: body.bookingId, ownerId: user.id, userId: body.ratedUserId, status: { not: 'cancelled' }, endTime: { lte: new Date() } },
       })
       if (!booking) return forbidden('No valid booking found for this tenant')
       if (await hasRatedBooking(user.id, body.bookingId, 'viewing_tenant')) {
