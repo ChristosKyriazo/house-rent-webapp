@@ -54,24 +54,42 @@ export function meetingNotesConfigured(): boolean {
   }
 }
 
-function aad(bookingId: number): Buffer {
-  return Buffer.from(`meeting-note:v1:booking:${bookingId}`, 'utf8')
+function aad(bookingId: number): string {
+  return `meeting-note:v1:booking:${bookingId}`
+}
+
+/** Binding for visitor notes: a ciphertext only decrypts for the same listing and visitor. */
+export function visitorNoteContext(homeId: number, visitorId: number): string {
+  return `visitor-note:v1:home:${homeId}:visitor:${visitorId}`
 }
 
 export function encryptNote(plaintext: string, bookingId: number): { ciphertext: string; keyVersion: number } {
+  return encryptWithContext(plaintext, aad(bookingId))
+}
+
+/** Throws if the key version is unknown, the data was altered, or it belongs to another booking. */
+export function decryptNote(ciphertext: string, keyVersion: number, bookingId: number): string {
+  return decryptWithContext(ciphertext, keyVersion, aad(bookingId))
+}
+
+/**
+ * Encrypt bound to `context` (authenticated, not secret): decrypting under any other context
+ * fails, so a ciphertext copied onto another row is useless.
+ */
+export function encryptWithContext(plaintext: string, context: string): { ciphertext: string; keyVersion: number } {
   const all = keys()
   if (all.size === 0) throw new MeetingNotesKeyError('MEETING_NOTES_KEYS is not set')
   const keyVersion = Math.max(...all.keys())
   const iv = randomBytes(IV_BYTES)
   const cipher = createCipheriv(ALGORITHM, all.get(keyVersion)!, iv, { authTagLength: TAG_BYTES })
-  cipher.setAAD(aad(bookingId))
+  cipher.setAAD(Buffer.from(context, 'utf8'))
   const body = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
   return { ciphertext: Buffer.concat([iv, tag, body]).toString('base64'), keyVersion }
 }
 
-/** Throws if the key version is unknown, the data was altered, or it belongs to another booking. */
-export function decryptNote(ciphertext: string, keyVersion: number, bookingId: number): string {
+/** Throws if the key version is unknown, the data was altered, or the context differs. */
+export function decryptWithContext(ciphertext: string, keyVersion: number, context: string): string {
   const key = keys().get(keyVersion)
   if (!key) throw new MeetingNotesKeyError(`No key for meeting-notes key version ${keyVersion}`)
   const raw = Buffer.from(ciphertext, 'base64')
@@ -80,7 +98,7 @@ export function decryptNote(ciphertext: string, keyVersion: number, bookingId: n
   const tag = raw.subarray(IV_BYTES, IV_BYTES + TAG_BYTES)
   const body = raw.subarray(IV_BYTES + TAG_BYTES)
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_BYTES })
-  decipher.setAAD(aad(bookingId))
+  decipher.setAAD(Buffer.from(context, 'utf8'))
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(body), decipher.final()]).toString('utf8')
 }
