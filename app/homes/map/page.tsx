@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getCityName, getHomeTitle } from '@/lib/area-utils'
 import MatchBadge from '@/app/components/MatchBadge'
 import type { MatchBreakdown, MatchReason } from '@/lib/search/match-reasons'
+import { fetchAllHomes } from '@/lib/client/fetch-all-homes'
 
 interface Home {
   id: number
@@ -189,14 +190,13 @@ function MapContent() {
   // Fetch homes (manual mode)
   const fetchHomes = useCallback((f: typeof filters) => {
     setLoading(true)
-    const params = new URLSearchParams({ listingType: type, limit: '200' })
+    const params = new URLSearchParams({ listingType: type })
     if (f.minPrice) params.set('minPrice', f.minPrice)
     if (f.maxPrice) params.set('maxPrice', f.maxPrice)
     if (f.minBedrooms) params.set('minBedrooms', f.minBedrooms)
     if (f.area) params.set('areas', f.area)
-    fetch(`/api/homes?${params}`)
-      .then(r => r.json())
-      .then(d => setHomes((d.homes ?? []).filter((h: Home) => h.latitude && h.longitude)))
+    fetchAllHomes<Home>(params)
+      .then(all => setHomes(all.filter(h => h.latitude && h.longitude)))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [type])

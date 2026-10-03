@@ -1,0 +1,39 @@
+name: Cron
+
+# Hourly housekeeping on production: booking reminders (renters ~24 h ahead, owners the
+# evening before) and marking finished meetings completed — app/api/bookings/reminders.
+#
+# Nothing called that endpoint before this workflow existed, so no reminder was ever sent.
+# The endpoint is idempotent and tolerant of late or skipped runs (wide window, per-meeting
+# dedupe), which matters because GitHub may delay scheduled runs at busy times.
+
+on:
+  schedule:
+    - cron: '7 * * * *' # every hour at :07 — off the top of the hour, when GitHub is busiest
+  workflow_dispatch:
+
+concurrency:
+  group: cron-reminders
+  cancel-in-progress: false
+
+jobs:
+  reminders:
+    name: Booking reminders (production)
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Call the reminders endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not set in the production environment."
+            exit 1
+          fi
+          body=$(curl -sS --max-time 60 -w '\n%{http_code}' -X POST \
+            -H "x-cron-secret: $CRON_SECRET" \
+            https://kaparro.com/api/bookings/reminders)
+          code=$(echo "$body" | tail -n1)
+          echo "HTTP $code: $(echo "$body" | sed '$d')"
+          [ "$code" = "200" ] || { echo "::error::Reminders endpoint returned $code"; exit 1; }

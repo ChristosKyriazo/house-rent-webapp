@@ -12,6 +12,7 @@ import AIChatPanel from '@/app/components/AIChatPanel'
 import { ManualFiltersPanel } from '@/app/homes/components/ManualFiltersPanel'
 import { HomeCard } from '@/app/components/HomeCard'
 import SaveSearchModal from '@/app/components/SaveSearchModal'
+import { fetchAllHomes } from '@/lib/client/fetch-all-homes'
 
 const isGreekInput = (text: string) => /[Ͱ-Ͽἀ-῿]/.test(text)
 
@@ -479,10 +480,7 @@ function HomesPageInner() {
     setLoading(true)
     setAiSearchError(null)
     try {
-      const response = await fetch('/api/homes')
-      if (!response.ok) throw new Error(String(response.status))
-      const data = await response.json()
-      setHomes(data.homes || [])
+      setHomes(await fetchAllHomes<Home>())
     } catch {
       setHomes([])
     } finally {
@@ -571,9 +569,7 @@ function HomesPageInner() {
       if (excludeInquired) params.append('excludeInquired', 'true')
       if (excludeApproved) params.append('excludeApproved', 'true')
 
-      const response = await fetch(`/api/homes?${params.toString()}`)
-      const data = await response.json()
-      const homesResults = data.homes || []
+      const homesResults = await fetchAllHomes<Home>(params)
       setHomes(homesResults)
       // Collapse filters after search
       setShowFilters(false)
