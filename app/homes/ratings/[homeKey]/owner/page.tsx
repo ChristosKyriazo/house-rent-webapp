@@ -97,12 +97,12 @@ export default function OwnerRatingsPage() {
     )
   }
 
-  const ownerLabel = data.ownerRole === 'broker' ? 'House Owner' : (data.ownerName || 'Owner')
+  const ownerLabel = data.ownerRole === 'broker' ? getTranslation(language, 'houseOwner') : (data.ownerName || getTranslation(language, 'owner'))
 
   const dimensions = [
-    { label: 'Move-in handover', score: data.dimensions.handover },
-    { label: 'Fairness during tenancy', score: data.dimensions.ownerFair },
-    { label: 'Move-out handling', score: data.dimensions.moveoutHandling },
+    { label: getTranslation(language, 'dimHandover'), score: data.dimensions.handover },
+    { label: getTranslation(language, 'dimOwnerFair'), score: data.dimensions.ownerFair },
+    { label: getTranslation(language, 'dimMoveoutHandling'), score: data.dimensions.moveoutHandling },
   ].filter(d => d.score !== null)
 
   return (
@@ -122,7 +122,7 @@ export default function OwnerRatingsPage() {
               href={`/homes/ratings/${homeKey}`}
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors underline"
             >
-              View property ratings
+              {getTranslation(language, 'viewHouseRatings')}
             </Link>
           </div>
           <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{ownerLabel}</h1>
@@ -138,8 +138,8 @@ export default function OwnerRatingsPage() {
             <StarRating rating={data.ownerScore ?? 0} size="lg" />
             <p className="text-sm text-[var(--text-muted)] mt-2">
               {data.totalRatings > 0
-                ? `${data.totalRatings} ${data.totalRatings === 1 ? 'rating' : 'ratings'}`
-                : 'No ratings yet'}
+                ? `${data.totalRatings} ${getTranslation(language, data.totalRatings === 1 ? 'rating' : 'ratings')}`
+                : getTranslation(language, 'noRatingsYet')}
             </p>
           </div>
           {dimensions.length > 0 && (

@@ -2,6 +2,14 @@ export type Language = 'el' | 'en'
 
 export const translations = {
   el: {
+    ratingsProperty: 'Ακίνητο',
+    ownerScoreLabel: 'Βαθμολογία ιδιοκτήτη',
+    ratingsHeading: 'Αξιολογήσεις',
+    viewOwnerRatings: 'Αξιολογήσεις ιδιοκτήτη',
+    dimHandover: 'Παράδοση κατά τη μετακόμιση',
+    dimOwnerFair: 'Δίκαιη συμπεριφορά κατά τη μίσθωση',
+    dimMoveoutHandling: 'Χειρισμός αποχώρησης',
+    statusCancelled: 'Ακυρώθηκε',
     // Meeting notes (private, encrypted)
     meetingNotesTitle: 'Ιδιωτικές σημειώσεις',
     visitorsTitle: 'Επισκέπτες',
@@ -617,6 +625,14 @@ export const translations = {
     timeToRateAgain: 'Time to rate again',
     updated: 'Updated',
     viewHouseRatings: 'View property ratings',
+    ratingsProperty: 'Property',
+    ownerScoreLabel: 'Owner score',
+    ratingsHeading: 'Ratings',
+    viewOwnerRatings: 'View owner ratings',
+    dimHandover: 'Move-in handover',
+    dimOwnerFair: 'Fairness during tenancy',
+    dimMoveoutHandling: 'Move-out handling',
+    statusCancelled: 'Cancelled',
     // Meeting notes (private, encrypted)
     meetingNotesTitle: 'Private notes',
     visitorsTitle: 'Visitors',

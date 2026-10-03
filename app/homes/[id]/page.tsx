@@ -955,14 +955,14 @@ function HomeDetailPage() {
                     href={`/homes/ratings/${home.key}`}
                     className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 shrink-0 flex flex-col items-center justify-between"
                   >
-                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">Property</h2>
+                    <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">{getTranslation(language, 'ratingsProperty')}</h2>
                     <div className="flex flex-col items-center justify-center flex-1">
                       <span className="text-2xl font-bold text-[var(--text)]">
                         {home.ratings?.houseScore != null ? home.ratings.houseScore.toFixed(1) : '—'}
                       </span>
                       <StarRating rating={home.ratings?.houseScore ?? 0} size="sm" />
                       <span className="text-xs text-[var(--text-muted)] mt-1">
-                        {home.ratings?.totalRatings ? `${home.ratings.totalRatings} ${home.ratings.totalRatings === 1 ? 'rating' : 'ratings'}` : 'No ratings yet'}
+                        {home.ratings?.totalRatings ? `${home.ratings.totalRatings} ${getTranslation(language, home.ratings.totalRatings === 1 ? 'rating' : 'ratings')}` : getTranslation(language, 'noRatingsYet')}
                       </span>
                     </div>
                   </Link>
@@ -972,7 +972,7 @@ function HomeDetailPage() {
                     className="px-4 py-4 rounded-xl bg-[var(--ink-soft)]/50 border border-[var(--border-subtle)] hover:border-[var(--accent)]/35 hover:bg-[var(--ink-soft)]/70 transition-all w-36 h-40 shrink-0 flex flex-col items-center justify-between"
                   >
                     <h2 className="text-xs font-medium text-[var(--text-muted)] text-center">
-                      {home.owner.isBroker ? 'House Owner' : (home.owner.name || 'Owner')}
+                      {home.owner.isBroker ? getTranslation(language, 'houseOwner') : (home.owner.name || getTranslation(language, 'owner'))}
                       {home.owner.agencyName && (
                         <span className="block text-[10px] text-[var(--text-muted)]/70 mt-0.5 truncate">🏢 {home.owner.agencyName}</span>
                       )}
@@ -982,7 +982,7 @@ function HomeDetailPage() {
                         {home.ratings?.ownerScore != null ? home.ratings.ownerScore.toFixed(1) : '—'}
                       </span>
                       <StarRating rating={home.ratings?.ownerScore ?? 0} size="sm" />
-                      <span className="text-xs text-[var(--text-muted)] mt-1">Owner score</span>
+                      <span className="text-xs text-[var(--text-muted)] mt-1">{getTranslation(language, 'ownerScoreLabel')}</span>
                     </div>
                   </Link>
                 </div>
@@ -1413,17 +1413,17 @@ function HomeDetailPage() {
             )}
                 {/* Ratings in Modal — house score + owner score side by side */}
                 <div className="pt-4 border-t border-[var(--border-subtle)]">
-                  <p className="block text-sm font-medium text-[var(--text-muted)] mb-3">Ratings</p>
+                  <p className="block text-sm font-medium text-[var(--text-muted)] mb-3">{getTranslation(language, 'ratingsHeading')}</p>
                   <div className="flex gap-4">
                     <Link href={`/homes/ratings/${home.key}`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
-                      <p className="text-xs text-[var(--text-muted)] mb-1">Property</p>
+                      <p className="text-xs text-[var(--text-muted)] mb-1">{getTranslation(language, 'ratingsProperty')}</p>
                       <p className="text-xl font-bold text-[var(--text)]">
                         {home.ratings?.houseScore != null ? home.ratings.houseScore.toFixed(1) : '—'}
                       </p>
                       <StarRating rating={home.ratings?.houseScore ?? 0} size="sm" />
                     </Link>
                     <Link href={`/homes/ratings/${home.key}/owner`} className="flex-1 rounded-xl bg-[var(--ink-soft)]/60 border border-[var(--border-subtle)] p-3 hover:border-[var(--accent)]/35 transition-all text-center">
-                      <p className="text-xs text-[var(--text-muted)] mb-1">Owner</p>
+                      <p className="text-xs text-[var(--text-muted)] mb-1">{getTranslation(language, 'owner')}</p>
                       <p className="text-xl font-bold text-[var(--text)]">
                         {home.ratings?.ownerScore != null ? home.ratings.ownerScore.toFixed(1) : '—'}
                       </p>
@@ -1431,9 +1431,9 @@ function HomeDetailPage() {
                     </Link>
                   </div>
                   {home.ratings?.totalRatings ? (
-                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">{home.ratings.totalRatings} {home.ratings.totalRatings === 1 ? 'rating' : 'ratings'}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">{home.ratings.totalRatings} {getTranslation(language, home.ratings.totalRatings === 1 ? 'rating' : 'ratings')}</p>
                   ) : (
-                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">No ratings yet</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">{getTranslation(language, 'noRatingsYet')}</p>
                   )}
                 </div>
               </div>

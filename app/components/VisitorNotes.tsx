@@ -37,6 +37,8 @@ interface Visitor {
 }
 
 const MAX_CHARS = 5000
+
+const STATUS_KEYS: Record<string, TKey> = { scheduled: 'statusScheduled', completed: 'completed', cancelled: 'statusCancelled' }
 type TKey = Parameters<typeof getTranslation>[1]
 
 const OUTCOME_KEYS: Record<Outcome, TKey> = {
@@ -107,7 +109,7 @@ function VisitorCard({ visitor }: { visitor: Visitor }) {
           {t('visitorTenantRating')}: {p.tenantScore != null ? `★ ${p.tenantScore.toFixed(1)}` : t('visitorNoRating')}
         </p>
         <p className="text-[11px] text-[var(--text-muted)]">
-          {visitor.visits.map(v => `${formatDateTimeFull(v.startTime, language)} (${v.status})`).join(' · ')}
+          {visitor.visits.map(v => `${formatDateTimeFull(v.startTime, language)} (${t(STATUS_KEYS[v.status] ?? 'statusScheduled')})`).join(' · ')}
         </p>
       </div>
     </div>

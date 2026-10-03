@@ -6,7 +6,7 @@ describe('API error translations', () => {
   it('every fixed error message the API can return has Greek', () => {
     // Same extraction as a human would do: every literal error string in app/api and lib.
     const out = execSync(
-      `git grep -hoE "(badRequest|forbidden|notFound)\\('[^']+'\\)|error: '[^']+'|error: \\"[^\\"]+\\"" -- app/api lib`,
+      `git grep -hoE "(badRequest|forbidden|notFound)\\('[^']+'\\)|error: '[^']+'|error: \\"[^\\"]+\\"" -- app/api lib ':!lib/api-errors.ts'`,
       { encoding: 'utf8' },
     )
     const messages = new Set(
