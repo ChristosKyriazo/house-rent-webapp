@@ -7,6 +7,7 @@ import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import RatingForm from '@/app/components/RatingForm'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface PendingRating {
   actionType: 'viewing_tenant' | 'moveout_tenant'
@@ -89,7 +90,7 @@ export default function RateUserPage() {
     })
     if (!res.ok) {
       const data = await res.json()
-      throw new Error(data.error ?? 'Failed to submit rating')
+      throw new Error(apiErrorText(data, language, language === 'el' ? 'Η υποβολή αξιολόγησης απέτυχε' : 'Failed to submit rating'))
     }
     setNotification({ type: 'success', message: 'Rating submitted.' })
     setSelected(null)

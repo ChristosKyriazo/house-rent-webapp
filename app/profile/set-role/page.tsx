@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { apiErrorText } from '@/lib/api-errors'
 
 export default function SetRolePage() {
   const router = useRouter()
@@ -46,7 +47,7 @@ export default function SetRolePage() {
         const data = await res.json()
         if (!res.ok) {
           console.error('Set role API error:', data)
-          setError(data.error || (language === 'el' ? 'Αποτυχία ορισμού ρόλου' : 'Failed to set role'))
+          setError(apiErrorText(data, language, language === 'el' ? 'Αποτυχία ορισμού ρόλου' : 'Failed to set role'))
           setTimeout(() => router.push('/profile'), 3000)
           return
         }

@@ -10,6 +10,7 @@ import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
 import { localeFor } from '@/lib/format'
 import { VisitorNotePanel } from '@/app/components/VisitorNotes'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Booking {
   id: number
@@ -116,7 +117,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to cancel booking')
+        throw new Error(apiErrorText(errorData, language, language === 'el' ? 'Η ακύρωση απέτυχε' : 'Failed to cancel booking'))
       }
 
       onCancel()

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue, translateRole } from '@/lib/translations'
+import { apiErrorText } from '@/lib/api-errors'
 export default function EditProfilePage() {
   const router = useRouter()
   const { language } = useLanguage()
@@ -70,7 +71,7 @@ export default function EditProfilePage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || getTranslation(language, 'profileUpdateFailed'))
+        setError(apiErrorText(data, language, getTranslation(language, 'profileUpdateFailed')))
         return
       }
 
@@ -99,7 +100,7 @@ export default function EditProfilePage() {
 
       if (!response.ok) {
         const data = await response.json()
-        setError(data.error || getTranslation(language, 'accountDeletionFailed'))
+        setError(apiErrorText(data, language, getTranslation(language, 'accountDeletionFailed')))
         setDeleting(false)
         setShowDeleteConfirm(false)
         return

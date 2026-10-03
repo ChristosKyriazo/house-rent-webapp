@@ -8,6 +8,7 @@ import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import { getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { localeFor } from '@/lib/format'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Inquiry {
   id: number
@@ -172,7 +173,7 @@ export default function HomeInquiriesPage() {
         if (refreshed.ok) setInquiries((await refreshed.json()).inquiries || [])
       } else {
         const data = await res.json()
-        setNotification({ type: 'error', message: data.error || 'Failed to send finalization.' })
+        setNotification({ type: 'error', message: apiErrorText(data, language, language === 'el' ? 'Η αποστολή οριστικοποίησης απέτυχε.' : 'Failed to send finalization.') })
       }
     } catch {
       setNotification({ type: 'error', message: 'Something went wrong.' })
