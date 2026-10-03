@@ -157,6 +157,22 @@ export function normalizeParking(hasParking: boolean | null | undefined): number
 }
 
 /**
+ * A listing whose heating is **known** and is not what was asked for. Asking for
+ * "autonomous heating" is a requirement, not a taste — those listings are filtered out.
+ * Listings that don't state their heating are kept (and scored by `normalizeHeating`).
+ */
+export function contradictsHeating(
+  home: { heatingCategory?: string | null; heatingAgent?: string | null },
+  wanted: { heatingCategory?: string | null; heatingAgent?: string | null },
+): boolean {
+  const pairs: Array<[string | null | undefined, string | null | undefined]> = [
+    [wanted.heatingCategory, home.heatingCategory],
+    [wanted.heatingAgent, home.heatingAgent],
+  ]
+  return pairs.some(([want, has]) => Boolean(want?.trim()) && Boolean(has?.trim()) && !sameHeating(want!, has!))
+}
+
+/**
  * Heating the user asked for, against what the listing has. Each requested attribute
  * (system type, fuel) is 1 on a match, 0 on a known mismatch, and `HEATING_UNKNOWN` when the
  * listing doesn't say — averaged over what was asked.
@@ -184,13 +200,27 @@ export function normalizeHeating(
   return total / asked.length
 }
 
-function sameHeating(a: string, b: string): boolean {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')
-  const x = norm(a)
-  const y = norm(b)
-  if (x === y) return true
-  // "gas" vs "natural gas", "electric" vs "electricity"
-  return x.length >= 3 && y.length >= 3 && (x.includes(y) || y.includes(x))
+/**
+ * Spellings of the same heating, mapped to one canonical value. Listings store
+ * Autonomous/Central and Natural gas/Oil/Power; the AI writes "electricity", users write
+ * Greek. Without this, "electric heating" would have excluded every "Power" listing.
+ */
+const HEATING_SYNONYMS: Array<[RegExp, string]> = [
+  [/^(autonomous|independent|individual|αυτονομ)/, 'autonomous'],
+  [/^(central|κεντρικ)/, 'central'],
+  [/(natural ?gas|^gas$|φυσικ|αεριο)/, 'gas'],
+  [/(^oil|diesel|heating ?oil|πετρελ)/, 'oil'],
+  [/(power|electric|heat ?pump|ρευμα|ηλεκτρ|αντλια)/, 'power'],
+]
+
+function canonicalHeating(value: string): string {
+  const v = value.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim()
+  for (const [pattern, canonical] of HEATING_SYNONYMS) if (pattern.test(v)) return canonical
+  return v.replace(/[^a-z]/g, '')
+}
+
+export function sameHeating(a: string, b: string): boolean {
+  return canonicalHeating(a) === canonicalHeating(b)
 }
 
 /**
