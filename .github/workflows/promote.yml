@@ -1,0 +1,63 @@
+name: Promote
+
+# First step of the promotion feature → dev → staging → main: when CI passes on a
+# push to `dev`, open or refresh the dev → staging PR. The owner merges it, and the
+# merge deploys to staging (deploy.yml).
+#
+# A separate workflow on purpose. It needs `pull-requests: write`, and ci.yml is also
+# called by deploy.yml — a called workflow may not request a permission its caller
+# doesn't grant, so putting this job in ci.yml made GitHub reject deploy.yml outright.
+#
+# `workflow_run` only fires for workflow files on the default branch (`dev`).
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [dev]
+
+jobs:
+  promote-to-staging:
+    name: Open promotion PR (dev → staging)
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Open or update the dev → staging PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # The commit CI actually tested — not GITHUB_SHA, which is the default branch head.
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          ahead=$(gh api "repos/$REPO/compare/staging...dev" --jq .ahead_by)
+          if [ "$ahead" = "0" ]; then
+            echo "staging already contains everything on dev — no promotion PR needed."
+            exit 0
+          fi
+
+          body=$(cat <<BODY
+          Promotes \`dev\` @ \`${SHA::7}\` to staging (staging.kaparro.com).
+
+          **CI:** ✅ lint, typecheck, unit tests and build passed on this commit.
+
+          **Commits:** $ahead ahead of \`staging\` — see the Commits tab.
+
+          Merging deploys to staging (once a staging server exists). After that deploy succeeds, a staging → main release PR opens for production.
+
+          _Opened automatically after CI passed on \`dev\`._
+          BODY
+          )
+
+          num=$(gh pr list -R "$REPO" --base staging --head dev --state open --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh pr edit "$num" -R "$REPO" --body "$body"
+            echo "Updated promotion PR #$num"
+          elif gh pr create -R "$REPO" --base staging --head dev \
+                 --title "promote: dev to staging" --body "$body"; then
+            echo "Opened promotion PR"
+          else
+            echo "::warning::Could not open the promotion PR. Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it by hand: https://github.com/$REPO/compare/staging...dev"
+          fi
