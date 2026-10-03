@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getTranslation, translateValue, reverseTranslateValue } from '@/lib/translations'
 import { findMostSimilarArea, getAreaName, getHomeTitle } from '@/lib/area-utils'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Home {
   id: number
@@ -296,7 +297,7 @@ export default function EditHomePage() {
 
         if (!response.ok) {
           const data = await response.json()
-          throw new Error(data.error || 'Upload failed')
+          throw new Error(apiErrorText(data, language, language === 'el' ? 'Η μεταφόρτωση απέτυχε' : 'Upload failed'))
         }
 
         const data = await response.json()
@@ -386,8 +387,8 @@ export default function EditHomePage() {
 
       if (!response.ok) {
         const errorMsg = data.details 
-          ? `${data.error || getTranslation(language, 'updateListingFailed')}: ${data.details}`
-          : data.error || getTranslation(language, 'updateListingFailed')
+          ? `${apiErrorText(data, language, getTranslation(language, 'updateListingFailed'))}: ${data.details}`
+          : apiErrorText(data, language, getTranslation(language, 'updateListingFailed'))
         setError(errorMsg)
         console.error('Update listing error:', { 
           status: response.status, 
@@ -435,7 +436,7 @@ export default function EditHomePage() {
           typeof data === 'object' && data !== null && 'error' in data
             ? String((data as { error?: unknown }).error || '')
             : ''
-        setError(errorFromBody || getTranslation(language, 'deleteFailed'))
+        setError(apiErrorText(errorFromBody, language, getTranslation(language, 'deleteFailed')))
         setDeleting(false)
         setShowDeleteConfirm(false)
         return

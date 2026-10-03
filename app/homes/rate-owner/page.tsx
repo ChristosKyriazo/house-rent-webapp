@@ -8,6 +8,7 @@ import { getTranslation } from '@/lib/translations'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import RatingForm from '@/app/components/RatingForm'
 import { getHomeTitle as _getHomeTitle } from '@/lib/area-utils'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface PendingRating {
   actionType: 'movein_house' | 'moveout_house'
@@ -98,7 +99,7 @@ export default function RateOwnerPage() {
     })
     if (!res.ok) {
       const data = await res.json()
-      throw new Error(data.error ?? 'Failed to submit rating')
+      throw new Error(apiErrorText(data, language, language === 'el' ? 'Η υποβολή αξιολόγησης απέτυχε' : 'Failed to submit rating'))
     }
     setNotification({ type: 'success', message: 'Rating submitted.' })
     setSelected(null)

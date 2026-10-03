@@ -13,6 +13,7 @@ import {
 } from '@/lib/appointment-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import { localeFor } from '@/lib/format'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Availability {
   id: number
@@ -322,7 +323,7 @@ function BookPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || (language === 'el' ? 'Αποτυχία κράτησης' : 'Failed to book slot'))
+        throw new Error(apiErrorText(errorData, language, language === 'el' ? 'Αποτυχία κράτησης' : 'Failed to book slot'))
       }
 
       // Mark availability as booked (or create a new availability record for the remaining time)

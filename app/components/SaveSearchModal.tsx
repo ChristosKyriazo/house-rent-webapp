@@ -2,6 +2,7 @@
 
 import { useState, lazy, Suspense } from 'react'
 import { clientFeatures } from '@/lib/features'
+import { apiErrorText } from '@/lib/api-errors'
 
 const ViberAlertModal = lazy(() => import('./ViberAlertModal'))
 
@@ -52,7 +53,7 @@ export default function SaveSearchModal({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? `Error ${res.status}`)
+        throw new Error(apiErrorText(data, language === 'el' ? 'el' : 'en', `Error ${res.status}`))
       }
 
       // The one moment where offering push alerts is a continuation rather than an

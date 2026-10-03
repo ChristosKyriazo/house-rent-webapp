@@ -13,6 +13,7 @@ import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
 import { localeFor } from '@/lib/format'
 import { VisitorsSection } from '@/app/components/VisitorNotes'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Home {
   id: number
@@ -391,7 +392,7 @@ function HomeDetailPage() {
         setFinalizeRequestSent(true)
       } else {
         const data = await response.json()
-        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
+        setToast({ type: 'error', message: apiErrorText(data, language, getTranslation(language, 'finalizeFailed')) })
       }
     } catch (error) {
       console.error('Error finalizing:', error)
@@ -419,7 +420,7 @@ function HomeDetailPage() {
         setTimeout(() => router.push('/homes/approved'), 1500)
       } else {
         const data = await response.json()
-        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
+        setToast({ type: 'error', message: apiErrorText(data, language, getTranslation(language, 'finalizeFailed')) })
       }
     } catch (error) {
       console.error('Error approving finalization:', error)
@@ -450,7 +451,7 @@ function HomeDetailPage() {
         router.push('/homes')
       } else {
         const data = await response.json()
-        setToast({ type: 'error', message: data.error || getTranslation(language, 'somethingWentWrong') })
+        setToast({ type: 'error', message: apiErrorText(data, language, getTranslation(language, 'somethingWentWrong')) })
       }
     } catch (error) {
       console.error('Error rejecting finalization:', error)

@@ -8,6 +8,7 @@ import { getTranslation } from '@/lib/translations'
 import { getAreaName, getCityName, getCountryName, getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import { SkeletonList } from '@/app/components/SkeletonCard'
 import { localeFor } from '@/lib/format'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Home {
   id: number
@@ -63,7 +64,7 @@ export default function UserInquiriesPage() {
           try {
             const parsed = raw ? (JSON.parse(raw) as { error?: string; details?: string }) : null
             if (parsed && typeof parsed.error === 'string') {
-              message = parsed.error
+              message = apiErrorText(parsed, language)
               if (typeof parsed.details === 'string') {
                 message = `${message} (${parsed.details})`
               }

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useLanguage } from '@/app/contexts/LanguageContext'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface ChatMessage {
   id: string
@@ -122,7 +123,7 @@ export default function UsageAssistantPanel() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.message || data.error || t.genericError)
+        setError(data.message || apiErrorText(data, isEl ? 'el' : 'en', t.genericError))
         return
       }
 
