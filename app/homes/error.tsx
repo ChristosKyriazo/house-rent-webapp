@@ -3,12 +3,15 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import * as Sentry from '@sentry/nextjs'
+import { isStaleBuildError, reloadOnceForNewBuild } from '@/lib/stale-build'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 
 export default function HomesError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const { language } = useLanguage()
 
   useEffect(() => {
+    // Stale tab after a deploy: reload into the new build instead of showing an error.
+    if (isStaleBuildError(error) && reloadOnceForNewBuild()) return
     Sentry.captureException(error)
   }, [error])
 
