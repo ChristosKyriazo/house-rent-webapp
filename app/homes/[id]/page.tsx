@@ -12,6 +12,7 @@ import StarRating from '@/app/components/StarRating'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
 import { localeFor } from '@/lib/format'
+import { HomeVisitNotes } from '@/app/components/MeetingNotes'
 
 interface Home {
   id: number
@@ -1335,6 +1336,13 @@ function HomeDetailPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* The owner's/broker's own record of who visited and what they noted (encrypted) */}
+        {isOwner && (
+          <div className="mt-8">
+            <HomeVisitNotes homeKey={home.key} />
           </div>
         )}
 

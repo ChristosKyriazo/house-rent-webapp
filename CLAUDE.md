@@ -126,6 +126,7 @@ Use the predicates in `lib/broker-hierarchy.ts` rather than comparing `brokerCat
 - **Notifications** go through `createNotification` (`lib/services/notification-service.ts`). Pass `tx` when inside a transaction so they commit or roll back with the rest.
 - **URLs that leave the app** (Stripe success/cancel, invite links) go through `appOrigin(request)` in `lib/api-utils.ts`, which prefers the request `Origin` header, then the per-environment `APP_ORIGIN`, then localhost. Never hardcode a hostname — five routes used to fall back to `https://dev.kaparro.com`, so a production checkout could redirect into staging.
 - **Locale formatting** lives in `lib/format.ts`; `useLanguage()` returns `isEl`. Don't reintroduce inline `language === 'el' ? 'el-GR' : 'en-US'` ternaries.
+- **Meeting notes are GDPR data — keep them unreadable.** `meeting_notes.ciphertext` is AES-256-GCM (`lib/crypto/meeting-notes.ts`) under `MEETING_NOTES_KEYS`, a per-environment secret that must never be stored in the DB, logs or backups. Never log note text, never return it without the Clerk `strict` reverification check, never add it to search/embeddings/AI prompts, and keep the Sentry `beforeSend` scrub for `/api/meeting-notes`. Only the author reads; a team broker's notes move to the main broker (`detachChildBroker`). Losing every key loses every note.
 - **`Booking.calComBookingId` is vestigial.** Cal.com was removed in migration `20260612000001_remove_calcom_fields`; nothing writes that column.
 
 ## Known issues / status

@@ -125,6 +125,9 @@ export async function detachChildBroker(childId: number): Promise<number | null>
     // Transfer listings + owner-side bookings up to the Main broker.
     await tx.home.updateMany({ where: { ownerId: childId }, data: { ownerId: parentId } })
     await tx.booking.updateMany({ where: { ownerId: childId }, data: { ownerId: parentId } })
+    // Private meeting notes follow their meetings: the main broker now manages those
+    // viewings. Notes stay encrypted; the cipher binds them to the booking, not the author.
+    await tx.meetingNote.updateMany({ where: { authorId: childId }, data: { authorId: parentId } })
 
     // Cancel any still-pending boost requests this child had in flight.
     await tx.boostRequest.updateMany({

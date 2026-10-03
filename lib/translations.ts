@@ -2,6 +2,25 @@ export type Language = 'el' | 'en'
 
 export const translations = {
   el: {
+    // Meeting notes (private, encrypted)
+    meetingNotesTitle: 'Ιδιωτικές σημειώσεις',
+    meetingNotesLockedHint: 'Κρυπτογραφημένες. Μόνο εσείς μπορείτε να τις δείτε, αφού επιβεβαιώσετε την ταυτότητά σας.',
+    meetingNotesUnlock: 'Προβολή σημειώσεων',
+    meetingNotesPrivacy: 'Γράψτε μόνο ό,τι χρειάζεστε. Αποφύγετε αριθμούς ταυτότητας, στοιχεία υγείας ή οικονομικά δεδομένα.',
+    meetingNotesPlaceholder: 'Πώς πήγε η επίσκεψη; Τι ζήτησε ο ενδιαφερόμενος;',
+    meetingNotesSave: 'Αποθήκευση',
+    meetingNotesSaved: 'Αποθηκεύτηκε',
+    meetingNotesDelete: 'Διαγραφή σημείωσης',
+    meetingNotesDeleteConfirm: 'Η σημείωση θα διαγραφεί οριστικά. Δεν μπορεί να ανακτηθεί.',
+    meetingNotesError: 'Κάτι πήγε στραβά. Δοκιμάστε ξανά.',
+    meetingNotesUnavailable: 'Οι σημειώσεις δεν είναι διαθέσιμες αυτή τη στιγμή.',
+    meetingNotesCancelled: 'Χρειάζεται επιβεβαίωση ταυτότητας για να δείτε τις σημειώσεις.',
+    meetingNotesEdit: 'Επεξεργασία',
+    meetingNotesCancel: 'Άκυρο',
+    visitNotesTitle: 'Επισκέψεις & σημειώσεις',
+    visitNotesNone: 'Δεν υπάρχουν ακόμη ραντεβού για αυτό το ακίνητο.',
+    visitNotesNoNote: 'Χωρίς σημείωση',
+    visitNotesVisitor: 'Επισκέπτης',
     // App
     appTitle: 'Καλώς ήρθατε',
     appDescription: 'Βρείτε το ιδανικό σπίτι για ενοικίαση ή αγορά',
@@ -558,6 +577,25 @@ export const translations = {
     'Touristic, historic': 'Τουριστικό, Ιστορικό',
   },
   en: {
+    // Meeting notes (private, encrypted)
+    meetingNotesTitle: 'Private notes',
+    meetingNotesLockedHint: 'Encrypted. Only you can see them, after confirming it is you.',
+    meetingNotesUnlock: 'Show notes',
+    meetingNotesPrivacy: 'Write only what you need. Avoid ID numbers, health or financial details.',
+    meetingNotesPlaceholder: 'How did the viewing go? What did the visitor ask for?',
+    meetingNotesSave: 'Save',
+    meetingNotesSaved: 'Saved',
+    meetingNotesDelete: 'Delete note',
+    meetingNotesDeleteConfirm: 'This note will be deleted permanently. It cannot be recovered.',
+    meetingNotesError: 'Something went wrong. Please try again.',
+    meetingNotesUnavailable: 'Notes are not available right now.',
+    meetingNotesCancelled: 'Confirming your identity is required to see your notes.',
+    meetingNotesEdit: 'Edit',
+    meetingNotesCancel: 'Cancel',
+    visitNotesTitle: 'Visits & notes',
+    visitNotesNone: 'No meetings for this property yet.',
+    visitNotesNoNote: 'No note',
+    visitNotesVisitor: 'Visitor',
     // App
     appTitle: 'Welcome',
     appDescription: 'Find your ideal home for rent or purchase',
