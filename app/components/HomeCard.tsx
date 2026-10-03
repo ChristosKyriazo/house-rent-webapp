@@ -7,6 +7,8 @@ import { getCityName, getCountryName, getAreaName, getHomeTitle } from '@/lib/ar
 import TranslatedDescription from './TranslatedDescription'
 import { SaveButton } from './SaveButton'
 import { localeFor } from '@/lib/format'
+import MatchBadge from '@/app/components/MatchBadge'
+import type { MatchBreakdown, MatchReason } from '@/lib/search/match-reasons'
 
 interface HomeCardHome {
   id: number
@@ -27,6 +29,9 @@ interface HomeCardHome {
   createdAt: string
   /** null when the query was pure hard filters — every result matches, so there is no percentage to show */
   matchPercentage?: number | null
+  /** Why it scored what it scored — shown when the badge is clicked. */
+  matchReasons?: MatchReason[] | null
+  matchBreakdown?: MatchBreakdown | null
   incompatibilityReason?: string
   owner: { email: string; name: string | null; createdAt?: string }
 }
@@ -146,6 +151,18 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
 
   const textColor = status ? 'text-[var(--text)]/50' : 'text-[var(--text)]'
 
+  const badgeClass = `inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
+    home.incompatibilityReason
+      ? 'border-[var(--status-error)] bg-[var(--status-error-bg)] text-[var(--status-error)]'
+      : home.matchPercentage == null
+        ? 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+        : home.matchPercentage >= 80
+          ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)]'
+          : home.matchPercentage >= 60
+            ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
+            : 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
+  }`
+
   return (
     <div
       className={`relative bg-[var(--surface)] backdrop-blur-sm rounded-3xl p-6 shadow-xl border transition-all transform hover:-translate-y-1 overflow-hidden ${
@@ -158,24 +175,23 @@ export function HomeCard({ home, status, language, allAreas, areas, compareKeys,
       {/* AI match badge — top right */}
       {'matchPercentage' in home && (
         <div className="absolute right-4 top-4 z-20 max-w-[min(14rem,calc(100%-2rem))] text-right">
+          {home.matchPercentage != null && !home.incompatibilityReason ? (
+            <MatchBadge
+              percentage={home.matchPercentage}
+              reasons={home.matchReasons}
+              breakdown={home.matchBreakdown}
+              className={badgeClass}
+            />
+          ) : (
           <div
-            className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold shadow-lg border-2 ${
-              home.incompatibilityReason
-                ? 'border-[var(--status-error)] bg-[var(--status-error-bg)] text-[var(--status-error)]'
-                : home.matchPercentage == null
-                  ? 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
-                  : home.matchPercentage >= 80
-                    ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)]'
-                    : home.matchPercentage >= 60
-                      ? 'border-[var(--status-warning)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]'
-                      : 'border-[var(--border-default)] bg-[var(--ink-soft)] text-[var(--text-muted)]'
-            }`}
+            className={badgeClass}
             title={home.incompatibilityReason || undefined}
           >
             {home.matchPercentage == null
               ? (language === 'el' ? 'Ταιριάζει με τα φίλτρα' : 'Matches your filters')
               : `${home.matchPercentage.toFixed(1)}% Match`}
           </div>
+          )}
           {home.incompatibilityReason && (
             <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">
               {home.incompatibilityReason}

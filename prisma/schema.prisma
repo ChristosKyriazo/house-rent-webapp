@@ -279,6 +279,7 @@ model Notification {
   userId      Int?      // User ID (for owners, this is the user who inquired)
   ownerKey    String?   // Owner key (for users, this is the owner's key)
   inquiryId   Int?      // Inquiry ID (for finalize notifications)
+  data        Json?     // Structured extras — new_listing_match: { fit, reasons } (lib/search/match-reasons.ts)
   deleted     Boolean   @default(false) // Whether the notification has been deleted
   viewed      Boolean   @default(false) // Whether the notification has been viewed
   createdAt   DateTime  @default(now())
