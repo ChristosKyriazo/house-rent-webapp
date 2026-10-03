@@ -54,7 +54,13 @@ function MapContent() {
   const mapInstanceRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clustererRef = useRef<any>(null)
+  /** Bumped on every render pass so a slower, older pass can't add stale markers. */
+  const renderPassRef = useRef(0)
   const homesRef = useRef<Home[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const homeByMarkerRef = useRef(new Map<any, Home>())
   const languageRef = useRef(language)
   const scriptTaggedRef = useRef(false)
   const loadedLangRef = useRef<string | null>(null)
@@ -65,6 +71,8 @@ function MapContent() {
 
   const [homes, setHomes] = useState<Home[]>([])
   const [selected, setSelected] = useState<Home | null>(null)
+  /** Homes in a cluster that zooming cannot split (same building, or already fully zoomed in). */
+  const [selectedGroup, setSelectedGroup] = useState<Home[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [mapError, setMapError] = useState(false)
 
@@ -297,11 +305,17 @@ function MapContent() {
     fetchHomes(filters)
   }
 
-  function renderMarkers() {
+  async function renderMarkers() {
     if (!window.google || !mapInstanceRef.current) return
+    const pass = ++renderPassRef.current
+    clustererRef.current?.clearMarkers()
     markersRef.current.forEach(m => m.setMap(null))
     markersRef.current = []
     setSelected(null)
+    setSelectedGroup(null)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const homeByMarker = new Map<any, Home>()
 
     homesRef.current.forEach(home => {
       if (!home.latitude || !home.longitude) return
@@ -325,16 +339,70 @@ function MapContent() {
             color: '#0c0f14', fontWeight: 'bold', fontSize: '10px',
           }
 
+      // No `map` here — the clusterer decides whether each marker shows on its own or
+      // folds into a numbered group.
       const marker = new window.google.maps.Marker({
         position: { lat: home.latitude, lng: home.longitude },
-        map: mapInstanceRef.current,
         title: getHomeTitle(lang, home),
         label,
         icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 18, fillColor, fillOpacity: 1, strokeColor, strokeWeight: 1.5 },
       })
-      marker.addListener('click', () => setSelected(home))
+      marker.addListener('click', () => { setSelectedGroup(null); setSelected(home) })
       markersRef.current.push(marker)
+      homeByMarker.set(marker, home)
     })
+
+    // Loaded on demand: the library needs `google.maps`, which only exists in the browser
+    // once the Maps script has run.
+    const { MarkerClusterer, SuperClusterAlgorithm } = await import('@googlemaps/markerclusterer')
+    if (pass !== renderPassRef.current || !mapInstanceRef.current) return
+
+    const map = mapInstanceRef.current
+    if (!clustererRef.current || clustererRef.current.getMap?.() !== map) {
+      clustererRef.current?.setMap?.(null)
+      clustererRef.current = new MarkerClusterer({
+        map,
+        // Cluster at every zoom level: listings at the same address overlap no matter how
+        // far you zoom in, so they must stay grouped (and countable) all the way down.
+        algorithm: new SuperClusterAlgorithm({ radius: 60, maxZoom: 21 }),
+        renderer: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          render: ({ count, position }: { count: number; position: any }) =>
+            new window.google.maps.Marker({
+              position,
+              label: { text: String(count), color: '#0c0f14', fontWeight: 'bold', fontSize: '12px' },
+              icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: Math.min(18 + Math.log2(count) * 4, 34),
+                fillColor: '#e3a75f',
+                fillOpacity: 0.95,
+                strokeColor: '#ffffff',
+                strokeWeight: 3,
+              },
+              title: languageRef.current === 'el' ? `${count} ακίνητα` : `${count} homes`,
+              zIndex: Number(window.google.maps.Marker.MAX_ZINDEX) + count,
+            }),
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onClusterClick: (_event: unknown, cluster: any, clusterMap: any) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const members = (cluster.markers as any[])
+            .map(m => homeByMarkerRef.current.get(m))
+            .filter((h): h is Home => Boolean(h))
+          const positions = new Set(members.map(h => `${h.latitude?.toFixed(5)},${h.longitude?.toFixed(5)}`))
+          const zoom = clusterMap.getZoom() ?? 0
+          // Zooming can't separate homes at one address — list them instead, like Airbnb.
+          if (positions.size <= 1 || zoom >= 18) {
+            setSelected(null)
+            setSelectedGroup(members)
+          } else if (cluster.bounds) {
+            clusterMap.fitBounds(cluster.bounds, 60)
+          }
+        },
+      })
+    }
+    homeByMarkerRef.current = homeByMarker
+    clustererRef.current.addMarkers(markersRef.current)
   }
 
   useEffect(() => {
@@ -383,6 +451,8 @@ function MapContent() {
       delete (window as any).google
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).initMap
+      clustererRef.current?.clearMarkers()
+      clustererRef.current = null
       mapInstanceRef.current = null
       scriptTaggedRef.current = false
     }
@@ -639,6 +709,46 @@ function MapContent() {
         )}
 
         {/* Selected home popup */}
+        {selectedGroup && selectedGroup.length > 0 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-80 max-w-[calc(100vw-2rem)] max-h-[60vh] flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <p className="font-bold text-[var(--text)]">
+                {selectedGroup.length} {isEl ? 'ακίνητα εδώ' : 'homes here'}
+              </p>
+              <button onClick={() => setSelectedGroup(null)} className="text-[var(--text-muted)] hover:text-[var(--text)]">✕</button>
+            </div>
+            <ul className="overflow-y-auto px-2 pb-2">
+              {selectedGroup.map(home => (
+                <li key={home.id}>
+                  <Link
+                    href={`/homes/${home.key}?from=map`}
+                    onClick={saveAISession}
+                    className="flex items-center gap-3 rounded-xl p-2 hover:bg-[var(--ink-soft)]"
+                  >
+                    {parsePhotos(home.photos)[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={parsePhotos(home.photos)[0]} alt={home.title} className="h-12 w-12 flex-none rounded-lg object-cover" />
+                    ) : (
+                      <div className="h-12 w-12 flex-none rounded-lg bg-[var(--ink-soft)]" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-[var(--text)]">{getHomeTitle(language, home)}</p>
+                      <p className="text-xs text-[var(--accent)] font-semibold">
+                        €{home.pricePerMonth.toLocaleString()}
+                        {home.listingType === 'rent' ? (isEl ? '/μήνα' : '/mo') : ''}
+                        <span className="text-[var(--text-muted)] font-normal"> · {home.bedrooms} {isEl ? 'υπνοδ.' : 'bed'}</span>
+                      </p>
+                    </div>
+                    {home.matchPercentage != null && (
+                      <span className="flex-none text-xs font-bold text-[var(--text-muted)]">{Math.round(home.matchPercentage)}%</span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {selected && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] p-4 shadow-2xl backdrop-blur-xl">
             <button onClick={() => setSelected(null)} className="absolute right-3 top-3 text-[var(--text-muted)] hover:text-[var(--text)]">✕</button>
