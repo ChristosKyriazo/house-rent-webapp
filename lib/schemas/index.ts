@@ -19,6 +19,16 @@ export const createBookingSchema = z.object({
   location: z.string().optional(),
 })
 
+// ── Meeting notes ─────────────────────────────────────────────────────────────
+
+/** Private, encrypted notes about a viewing. Capped: notes, not documents. */
+export const MEETING_NOTE_MAX_CHARS = 5000
+
+export const upsertMeetingNoteSchema = z.object({
+  bookingKey: nonEmptyString,
+  text: z.string().trim().min(1).max(MEETING_NOTE_MAX_CHARS),
+})
+
 // ── Homes ─────────────────────────────────────────────────────────────────────
 
 export const createHomeSchema = z.object({

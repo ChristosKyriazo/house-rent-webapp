@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { clerkClient } from '@clerk/nextjs/server'
 import { requestLogger } from '@/lib/logger'
+import { detachChildBroker, isChildBroker } from '@/lib/broker-hierarchy'
 import { unauthorized } from '@/lib/api-utils'
 
 // GET /api/profile - get current user's profile or a specific user by userId query param
@@ -165,6 +166,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const clerkUserId = user.clerkUserId
+
+    // A team (child) broker's listings, meetings and private meeting notes go to their main
+    // broker rather than being deleted with the account. Done before anything is deleted so
+    // a failure here leaves the account fully intact.
+    if (isChildBroker(user)) {
+      await detachChildBroker(user.id)
+    }
 
     // Delete from Clerk FIRST — if this fails we abort before touching the DB,
     // so the user's account stays intact and they see a real error.
