@@ -1,12 +1,12 @@
 ---
 name: staging-triage
-description: Diagnose something broken on the deployed staging environment (dev.kaparro.com) — errors, blank pages, a feature not working, a deploy that looks wrong. Use when the symptom is on the server, not in local code.
+description: Diagnose something broken on the deployed staging environment (staging.kaparro.com) — errors, blank pages, a feature not working, a deploy that looks wrong. Use when the symptom is on the server, not in local code.
 ---
 
-Staging is `dev.kaparro.com` on `116.203.100.64`, everything under `/opt/house-rent`, all compose commands with `-f docker-compose.prod.yml`. It holds **real UAT data shared with testers** — read freely, write nothing.
+Staging is `staging.kaparro.com` on its **own** server (the `SERVER_HOST_STAGING` secret) — everything under `/opt/house-rent`, all compose commands with `-f docker-compose.prod.yml`. **It has no server yet**; until it does there is nothing to triage. `116.203.100.64` is **production** (kaparro.com), never staging — read freely, write nothing there.
 
 ```bash
-ssh -i ~/.ssh/deploy_key deploy@116.203.100.64
+ssh -i ~/.ssh/deploy_key deploy@<staging-host>
 ```
 
 ## 1. Health, over HTTPS
@@ -14,9 +14,9 @@ ssh -i ~/.ssh/deploy_key deploy@116.203.100.64
 From the box. Do **not** use `http://localhost`: Caddy 308-redirects every port-80 request, and `curl -f` treats a 308 as success, so an HTTP health check passes whether or not the app works. `--resolve` pins the public hostname to loopback so the request goes through Caddy's real site block — routing, TLS, and the app.
 
 ```bash
-curl -sk --resolve dev.kaparro.com:443:127.0.0.1 https://dev.kaparro.com/api/healthz   # process alive
-curl -sk --resolve dev.kaparro.com:443:127.0.0.1 https://dev.kaparro.com/api/readyz    # {"status":"ok","db":"connected"}
-curl -sk -o /dev/null -w '%{http_code}\n' --resolve dev.kaparro.com:443:127.0.0.1 https://dev.kaparro.com/homes
+curl -sk --resolve staging.kaparro.com:443:127.0.0.1 https://staging.kaparro.com/api/healthz   # process alive
+curl -sk --resolve staging.kaparro.com:443:127.0.0.1 https://staging.kaparro.com/api/readyz    # {"status":"ok","db":"connected"}
+curl -sk -o /dev/null -w '%{http_code}\n' --resolve staging.kaparro.com:443:127.0.0.1 https://staging.kaparro.com/homes
 ```
 
 `-k` is expected: the origin certificate is a Cloudflare origin cert, not publicly trusted.

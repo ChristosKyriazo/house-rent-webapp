@@ -3,7 +3,7 @@ name: e2e-spec
 description: Add or run a Playwright E2E spec in the right project. Use when writing browser-level tests, or when an existing spec is not running or is failing for environment reasons.
 ---
 
-Playwright runs against a **real deployed environment**, never localhost. `E2E_BASE_URL` defaults to `https://dev.kaparro.com`, so **specs write real data into staging.** Keep that in mind when choosing fixtures.
+Playwright runs against a **real deployed environment**, never localhost. `E2E_BASE_URL` defaults to `https://staging.kaparro.com`, so **specs write real data into staging.** Keep that in mind when choosing fixtures.
 
 ## The six projects, and where a new spec goes
 
@@ -59,5 +59,5 @@ Timeout is 60s per test; screenshots and video are always on, trace on first ret
 ## Where these run in the pipeline
 
 - Smoke, after every staging deploy — the `e2e` job at the end of `deploy.yml`, staging only.
-- Full suite, on a `dev` → `main` PR — the release gate.
+- Full suite, on a `staging` → `main` PR — the release gate.
 - Never against production: these specs write data.

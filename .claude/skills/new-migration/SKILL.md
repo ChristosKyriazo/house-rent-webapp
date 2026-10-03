@@ -28,7 +28,7 @@ grep DATABASE_URL .env
 npm run db:migrate      # prisma migrate dev — interactive, local only
 ```
 
-Never run `prisma migrate dev` against port **5433** (the staging tunnel) or any remote host. It prompts interactively and can drop data.
+Never run `prisma migrate dev` against port **5433** (the production tunnel) or any remote host. It prompts interactively and can drop data.
 
 ## 3. Review the generated SQL
 

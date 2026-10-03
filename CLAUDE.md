@@ -31,7 +31,7 @@ npm run db:setup      # up + migrate deploy + seed areas, universities, dev data
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/house_rent"
 ```
 
-**Port 5433 is an SSH tunnel to the STAGING database — real data shared with UAT.** Use it only to read staging while debugging, then switch back. Writing to it mutates the environment being tested.
+**Port 5433 is an SSH tunnel to the PRODUCTION database** — `116.203.100.64` is the box that serves kaparro.com, so this is live customer data. Use it only to read while debugging, then switch back. Never write to it.
 
 ```
 ssh -i ~/.ssh/deploy_key -L 5433:172.18.0.2:5432 deploy@116.203.100.64 -N
@@ -72,21 +72,30 @@ Never run `prisma migrate dev` against the production or staging DB — it promp
 
 ## Deploy flow
 
-Three environments: **local** (`feature/*`, localhost:3000), **QA** (`dev`, dev.kaparro.com), **production** (`main`, kaparro.com).
+Three environments, three long-lived branches, promoted in one direction:
 
-- **QA is configured but not provisioned.** There is no QA server yet. A push to `dev` runs CI and builds + pushes a real `sha-<commit>-staging` image, then stops: the deploy is gated behind the repo variable `DEPLOY_STAGING_ENABLED`, which defaults to `false`. The run reports *why* it stopped in the job summary. Activation steps: [docs/OPERATIONS.md](./docs/OPERATIONS.md#activating-qa).
-- Push to **`main`** → deploys to **production** (kaparro.com). Enabled by default.
-- **Promotion is strictly dev → QA → production.** When a `dev` run finishes (QA deployed + smoke-tested, or skipped while QA has no server), the `release-pr` job opens/updates the `dev` → `main` PR; a human merges it. The production run's `plan` job then **refuses** any code whose *tree* was not deployed by a green `Deploy to staging` job — compared by tree because the merge commit SHA differs from dev's. While `DEPLOY_STAGING_ENABLED` is off, that gate warns and lets production ship.
-- The `release-pr` job needs **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"**; without it, it warns with a compare link. PRs opened by `GITHUB_TOKEN` do not trigger `pull_request` workflows until the next push to `dev`.
-- Never push directly to `main` — it triggers the production pipeline immediately.
-- **Until QA exists, the `dev` → `main` E2E release gate is inert.** `e2e.yml` has nothing to test against, so it annotates a warning and no-ops rather than failing the PR. It will not catch browser-level regressions.
+```
+feature/* ──PR──▶ dev ──PR──▶ staging ──PR──▶ main
+ (local)        (CI only)   staging.kaparro.com   kaparro.com
+```
+
+"Staging" is the only name for the middle environment — it was also called "QA", and the two meant the same thing. Each deployed environment gets its **own server and database**; never share a box between staging and production.
+
+- **`dev`** is where work lands. A push runs CI (`ci.yml`) — no deploy — and, when green, `promote.yml` opens/updates the **`dev` → `staging`** PR.
+- **`staging`** deploys to staging (`deploy.yml`). When that run finishes (staging deployed + smoke-tested, or skipped while it has no server), the `release-pr` job opens/updates the **`staging` → `main`** PR.
+- **`main`** deploys to **production** (kaparro.com). Enabled by default. The `plan` job **refuses** any code whose *tree* was not deployed by a green `Deploy to staging` job on the `staging` branch — compared by tree because merge commits change the SHA. While `DEPLOY_STAGING_ENABLED` is off, that gate warns and lets production ship.
+- **The owner merges both promotion PRs.** Claude prepares them and stops; `.claude/settings.json` denies `gh pr merge` and pushes to `main`.
+- **Staging is configured but not provisioned.** There is no staging server yet. A push to `staging` builds + pushes a real `sha-<commit>-staging` image, then stops: the deploy is gated behind the repo variable `DEPLOY_STAGING_ENABLED`, which defaults to `false`. Activation steps: [docs/OPERATIONS.md](./docs/OPERATIONS.md#activating-staging).
+- Both PR-opening jobs need **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"**; without it they warn with a compare link. PRs opened by `GITHUB_TOKEN` do not trigger `pull_request` workflows until the next push to the head branch.
+- Never push directly to `staging` or `main` — each triggers its deploy immediately.
+- **Until staging exists, the `staging` → `main` E2E release gate is inert.** `e2e.yml` has nothing to test against, so it annotates a warning and no-ops rather than failing the PR. It will not catch browser-level regressions.
 - The image is built **per environment** (`build-push` declares `environment:`), because `NEXT_PUBLIC_*` values are baked into the bundle at build time. One image genuinely cannot serve two environments — that is why the immutable tag carries an environment suffix: `sha-<commit>-staging` / `sha-<commit>-production`, plus `<branch>-latest`. **There is no plain `:latest`.**
-- `Caddyfile.staging` and `Caddyfile.production` are separate, each serving only its own hostname; `deploy.yml` scp's the right one and copies it to `/opt/house-rent/Caddyfile`. A single shared Caddyfile gave production a second public hostname on the QA domain.
-- The deploy **refuses to run** if `SERVER_HOST_STAGING` equals `SERVER_HOST_PROD`. They did, which is why `dev` pushes were landing on kaparro.com and the E2E suite was writing into the production database.
+- `Caddyfile.staging` and `Caddyfile.production` are separate, each serving only its own hostname; `deploy.yml` scp's the right one and copies it to `/opt/house-rent/Caddyfile`. A single shared Caddyfile gave production a second public hostname on the staging domain.
+- The deploy **refuses to run** if `SERVER_HOST_STAGING` equals `SERVER_HOST_PROD`. They did, which is why pre-production pushes were landing on kaparro.com and the E2E suite was writing into the production database.
 - The deploy only restarts the app container; DB, pgbouncer, Redis and Caddy keep running.
 - **`/opt/house-rent/.env` is regenerated wholesale from GitHub secrets on every deploy.** Hand edits do not survive.
 - Deploy verification (liveness → readiness → page smoke) must go over **HTTPS with `curl --resolve <host>:443:127.0.0.1`**. Caddy 308-redirects all port-80 traffic, and `curl -f` treats a 308 as success, so any `http://localhost` health check silently passes without testing the app.
-- `APP_IMAGE` deploys the immutable `sha-<short>-<env>` tag, never `dev-latest` — rollback to a mutable tag is a no-op.
+- `APP_IMAGE` deploys the immutable `sha-<short>-<env>` tag, never `staging-latest` — rollback to a mutable tag is a no-op.
 
 ## Payments (Stripe)
 
@@ -115,7 +124,7 @@ Use the predicates in `lib/broker-hierarchy.ts` rather than comparing `brokerCat
 - **Playwright targets `http://localhost:3000`** by default. It used to default to `https://dev.kaparro.com`, a hostname that resolved to the production box, so the data-writing specs ran against production. Set `E2E_BASE_URL` explicitly to test a deployed environment.
 - **CSP comes from `next.config.ts`, not the Caddyfile.** Two CSP headers make browsers enforce the intersection of both.
 - **Notifications** go through `createNotification` (`lib/services/notification-service.ts`). Pass `tx` when inside a transaction so they commit or roll back with the rest.
-- **URLs that leave the app** (Stripe success/cancel, invite links) go through `appOrigin(request)` in `lib/api-utils.ts`, which prefers the request `Origin` header, then the per-environment `APP_ORIGIN`, then localhost. Never hardcode a hostname — five routes used to fall back to `https://dev.kaparro.com`, so a production checkout could redirect into QA.
+- **URLs that leave the app** (Stripe success/cancel, invite links) go through `appOrigin(request)` in `lib/api-utils.ts`, which prefers the request `Origin` header, then the per-environment `APP_ORIGIN`, then localhost. Never hardcode a hostname — five routes used to fall back to `https://dev.kaparro.com`, so a production checkout could redirect into staging.
 - **Locale formatting** lives in `lib/format.ts`; `useLanguage()` returns `isEl`. Don't reintroduce inline `language === 'el' ? 'el-GR' : 'en-US'` ternaries.
 - **`Booking.calComBookingId` is vestigial.** Cal.com was removed in migration `20260612000001_remove_calcom_fields`; nothing writes that column.
 
@@ -128,7 +137,7 @@ Replaces four overlapping phase-plan documents. Verified against the code on 202
 | 1 | ~~Viber alerts are not gated on payment.~~ **Fixed.** The route now returns `501` (`FEATURE_VIBER_ALERTS` off by default) and the modal is gated on `NEXT_PUBLIC_FEATURE_VIBER_ALERTS`. Shipping it for real still needs a verified phone column, a Stripe gate flipped from the webhook, and a sender — see [docs/APP.md](./docs/APP.md#viber-alerts--not-shipped). |
 | 2 | ~~Admin allowlist empty in production.~~ **Fixed in `deploy.yml`** — it now writes `ADMIN_CLERK_IDS`, `ADMIN_EMAILS`, `CRON_SECRET` and the `FEATURE_*` flags. The **secrets must still be set** in the GitHub `staging` and `production` environments, or the values land empty. |
 | 3 | ~~Node version split.~~ **Fixed.** Dockerfile is `node:22.18.0-alpine`; `ci.yml` reads `.nvmrc`. One version everywhere. |
-| 4 | ~~CI never runs E2E.~~ **Fixed.** `e2e.yml` runs smoke after every staging deploy and the full suite on a `dev` → `main` PR. Authenticated projects need the `TEST_*` secrets set, or the run degrades to smoke-only with a warning. |
+| 4 | ~~CI never runs E2E.~~ **Fixed.** `e2e.yml` runs smoke after every staging deploy and the full suite on a `staging` → `main` PR. Authenticated projects need the `TEST_*` secrets set, or the run degrades to smoke-only with a warning. |
 | 5 | ~~Caddy rate limiting is inert.~~ **Fixed — and it was worse than inert.** `caddy:2-alpine` has no caddy-ratelimit plugin, so the `rate_limit` block made Caddy reject the *whole* Caddyfile: every deploy's `caddy reload ... \|\| true` silently kept the old config, and a Caddy restart would not have come up. Block dropped from both Caddyfiles (API rate limiting is in `lib/rate-limit.ts`); a rejected reload now logs `::error::`. |
 | 6 | ~~`CALCOM_TOKEN_ENCRYPTION_KEY` written with zero consumers.~~ **Removed from `deploy.yml`.** |
 | 7 | Backups are on-box only — no off-server copy. |

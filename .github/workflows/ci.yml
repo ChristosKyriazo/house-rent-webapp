@@ -1,13 +1,18 @@
 name: CI
 
-# The fast gate. Runs on every feature-branch push (so you get a red X within
-# ~3 minutes of pushing), on PRs into dev/main, and — via workflow_call — as the
-# blocking first job of deploy.yml so a broken commit never reaches a server.
+# The fast gate. Runs on every push to a feature branch or `dev` (so you get a red
+# X within ~3 minutes of pushing), on PRs into dev/staging/main, and — via
+# workflow_call — as the blocking first job of deploy.yml so a broken commit never
+# reaches a server.
+#
+# The dev → staging PR is opened by promote.yml once this passes on `dev`. It
+# cannot live here: deploy.yml calls this workflow, and a called workflow may not
+# request `pull-requests: write` — GitHub then rejects deploy.yml at startup.
 on:
   push:
-    branches-ignore: [main, dev] # pushes to main/dev come in through deploy.yml
+    branches-ignore: [main, staging] # pushes to main/staging come in through deploy.yml
   pull_request:
-    branches: [main, dev]
+    branches: [main, staging, dev]
   workflow_call:
 
 # A newer push to the same branch cancels the older run. Never applied to

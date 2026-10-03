@@ -4,7 +4,7 @@
  *
  * LOCAL ONLY. This script refuses to run against anything that is not a
  * localhost database (see assertLocalDatabase below). Never add it to a deploy
- * pipeline, and never point it at the tunnel on port 5433 — that is staging.
+ * pipeline, and never point it at the tunnel on port 5433 — that is production.
  *
  * Run areas and universities first; homes reference area names:
  *   npm run db:seed:areas && npm run db:seed:universities && npm run db:seed:dev
@@ -17,7 +17,7 @@ const prisma = new PrismaClient()
  * Hard guard against seeding a shared database.
  *
  * Port 5433 is deliberately rejected as well as remote hosts: locally that port
- * is the SSH tunnel to the STAGING database, so a "localhost" check alone would
+ * is the SSH tunnel to the PRODUCTION database, so a "localhost" check alone would
  * happily wipe staging.
  */
 function assertLocalDatabase(): void {
@@ -43,7 +43,7 @@ function assertLocalDatabase(): void {
 
   if (parsed.port === '5433') {
     throw new Error(
-      'Refusing to seed: port 5433 is the SSH tunnel to the STAGING database. ' +
+      'Refusing to seed: port 5433 is the SSH tunnel to the PRODUCTION database. ' +
         'Point DATABASE_URL at the local Postgres on port 5432 (npm run db:up).'
     )
   }
