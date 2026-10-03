@@ -7,6 +7,7 @@ import { getTranslation } from '@/lib/translations'
 import { getHomeTitle, getHomeStreet } from '@/lib/area-utils'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import { localeFor } from '@/lib/format'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface FinalizeNotification {
   id: number
@@ -107,7 +108,7 @@ export default function FinalizeNotificationModal({
         router.push('/homes/approved')
       } else {
         const data = await response.json()
-        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
+        setToast({ type: 'error', message: apiErrorText(data, language, getTranslation(language, 'finalizeFailed')) })
       }
     } catch (error) {
       console.error('Error approving finalization:', error)
@@ -132,7 +133,7 @@ export default function FinalizeNotificationModal({
         onDismiss()
       } else {
         const data = await response.json()
-        setToast({ type: 'error', message: data.error || getTranslation(language, 'finalizeFailed') })
+        setToast({ type: 'error', message: apiErrorText(data, language, getTranslation(language, 'finalizeFailed')) })
       }
     } catch (error) {
       console.error('Error dismissing finalization:', error)

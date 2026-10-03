@@ -101,14 +101,14 @@ export default function HomeRatingsPage() {
               href={`/homes/ratings/${homeKey}/owner`}
               className="text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition-colors underline"
             >
-              View owner ratings
+              {getTranslation(language, 'viewOwnerRatings')}
             </Link>
           </div>
           <h1 className="text-4xl font-bold text-[var(--text)] mb-1">{data.homeTitle}</h1>
           <p className="text-[var(--text-muted)]">
             {data.totalRatings > 0
-              ? `${data.totalRatings} ${data.totalRatings === 1 ? 'rating' : 'ratings'}`
-              : 'No ratings yet'}
+              ? `${data.totalRatings} ${getTranslation(language, data.totalRatings === 1 ? 'rating' : 'ratings')}`
+              : getTranslation(language, 'noRatingsYet')}
           </p>
         </div>
 

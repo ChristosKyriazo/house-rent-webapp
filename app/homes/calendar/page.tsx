@@ -10,6 +10,7 @@ import { minutesBetween, parseAppointmentThresholdMinutes } from '@/lib/appointm
 import BookingDetailsModal from '@/app/components/BookingDetailsModal'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import { localeFor } from '@/lib/format'
+import { apiErrorText } from '@/lib/api-errors'
 
 interface Booking {
   id: number
@@ -839,7 +840,7 @@ function RescheduleModal({
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to reschedule booking')
+        throw new Error(apiErrorText(errorData, language, language === 'el' ? 'Η αλλαγή ώρας απέτυχε' : 'Failed to reschedule booking'))
       }
 
       setNotification({

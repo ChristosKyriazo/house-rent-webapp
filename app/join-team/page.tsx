@@ -6,6 +6,7 @@ import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import type { InvitationDetails } from '@/types/team'
+import { apiErrorText } from '@/lib/api-errors'
 
 function JoinTeamInner() {
   const router = useRouter()
@@ -35,7 +36,7 @@ function JoinTeamInner() {
       const res = await fetch(`/api/team/invite/${token}/${action}`, { method: 'POST' })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(json.error || (isEl ? 'Κάτι πήγε στραβά.' : 'Something went wrong.'))
+        setError(apiErrorText(json, isEl ? 'el' : 'en', isEl ? 'Κάτι πήγε στραβά.' : 'Something went wrong.'))
         return
       }
       router.push(action === 'accept' ? '/homes/my-listings' : '/')

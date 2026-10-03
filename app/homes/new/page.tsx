@@ -8,6 +8,7 @@ import { getTranslation, translateValue } from '@/lib/translations'
 import { findMostSimilarArea } from '@/lib/area-utils'
 import * as XLSX from 'xlsx'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
+import { apiErrorText } from '@/lib/api-errors'
 
 export default function NewHomePage() {
   const router = useRouter()
@@ -327,7 +328,7 @@ export default function NewHomePage() {
 
         if (!response.ok) {
           const data = await response.json()
-          throw new Error(data.error || 'Upload failed')
+          throw new Error(apiErrorText(data, language, language === 'el' ? 'Η μεταφόρτωση απέτυχε' : 'Upload failed'))
         }
 
         const data = await response.json()
@@ -440,8 +441,8 @@ export default function NewHomePage() {
           return
         }
         const errorMsg = data.details
-          ? `${data.error || getTranslation(language, 'createListingFailed')}: ${data.details}`
-          : data.error || getTranslation(language, 'createListingFailed')
+          ? `${apiErrorText(data, language, getTranslation(language, 'createListingFailed'))}: ${data.details}`
+          : apiErrorText(data, language, getTranslation(language, 'createListingFailed'))
         setError(errorMsg)
         console.error('Create listing error:', {
           status: response.status, 
@@ -1306,7 +1307,7 @@ export default function NewHomePage() {
                       const data = await response.json()
 
                       if (!response.ok) {
-                        setBulkUploadError(data.error || (language === 'el' ? 'Σφάλμα κατά την ανέβασμα' : 'Upload error'))
+                        setBulkUploadError(apiErrorText(data, language, language === 'el' ? 'Σφάλμα κατά τη μεταφόρτωση' : 'Upload error'))
                         setBulkUploadLoading(false)
                         return
                       }
