@@ -344,6 +344,12 @@ jobs:
             ADMIN_CLERK_IDS=${{ secrets.ADMIN_CLERK_IDS }}
             ADMIN_EMAILS=${{ secrets.ADMIN_EMAILS }}
 
+            # ── Meeting notes encryption ─────────────────────────────────────
+            # AES-256-GCM keys for private meeting notes (lib/crypto/meeting-notes.ts),
+            # "1:<base64 32 bytes>[,2:…]". Lives ONLY here and in GitHub secrets — never in
+            # the database or its backups. Unset = the notes feature is off (503).
+            MEETING_NOTES_KEYS=${{ secrets.MEETING_NOTES_KEYS }}
+
             # ── Cron ─────────────────────────────────────────────────────────
             # Required by /api/bookings/reminders — the route 401s every request
             # while this is unset, so booking reminders never send.

@@ -42,6 +42,7 @@ model User {
   notifications   Notification[] @relation
   bookingsAsUser  Booking[]      @relation("UserBookings")
   bookingsAsOwner Booking[]      @relation("OwnerBookings")
+  meetingNotes    MeetingNote[]
   bulkUploadJobs  BulkUploadJob[]
   savedHomes      SavedHome[]
   savedSearches   SavedSearch[]
@@ -395,6 +396,7 @@ model Booking {
   home            Home?         @relation(fields: [homeId], references: [id], onDelete: SetNull)
   availability    Availability? @relation(fields: [availabilityId], references: [id], onDelete: SetNull)
   ratings         Rating[]
+  notes           MeetingNote[]
 
   @@index([userId])
   @@index([ownerId])
@@ -557,4 +559,30 @@ model SavedSearch {
   @@index([userId])
   @@index([notificationsEnabled])
   @@map("saved_searches")
+}
+
+/// Private notes an owner/broker keeps about one scheduled meeting (viewing).
+///
+/// GDPR-sensitive: the text is NEVER stored in clear. `ciphertext` is AES-256-GCM
+/// (lib/crypto/meeting-notes.ts) under a key that exists only in the server's secrets,
+/// bound to the booking id — a DB dump, backup or the 5433 tunnel shows only ciphertext.
+/// Readable only by `author`. Deleted with the booking (so a renter's account deletion
+/// erases notes about their visits) or with the author's account; a team broker's notes
+/// move to their main broker instead (lib/broker-hierarchy.ts → detachChildBroker).
+model MeetingNote {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique @default(cuid())
+  bookingId  Int
+  authorId   Int
+  ciphertext String   // base64(iv[12] | authTag[16] | ciphertext)
+  keyVersion Int      // which MEETING_NOTES_KEYS entry encrypted it, for key rotation
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, authorId])
+  @@index([authorId])
+  @@map("meeting_notes")
 }
