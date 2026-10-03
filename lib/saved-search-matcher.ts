@@ -1,4 +1,5 @@
-import type { PrismaClient } from '@prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
+import { buildMatchReasons, topReasons, type Amenity, type MatchReason } from '@/lib/search/match-reasons'
 import { cosineSimilarity } from '@/lib/embeddings'
 import {
   calculateVibeScore,
@@ -12,6 +13,8 @@ import {
   normalizeVibe,
   normalizeParking,
   normalizeHeating,
+  COMPONENT_WEIGHTS,
+  contradictsHeating,
   evidenceScoreOptions,
   PREFERRED_AREA_BONUS,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
@@ -148,7 +151,7 @@ function scoreAgainstSavedSearch(
   params: FilterParams,
   areaData: { safety: number | null; vibe: string | null } | null,
   queryText: string | null,
-): number {
+): { fit: number; reasons: MatchReason[] } {
   // `semantic` is always expressed, exactly as in the search route. A weighted mean is only
   // comparable to another weighted mean when both cover the same set — express one side
   // more than the other and the same home scores 87% in search and 70% here, which is the
@@ -204,13 +207,33 @@ function scoreAgainstSavedSearch(
       })
     : null
 
-  return scoreHome(components, {
+  const weights = soft.hasLocationPreference === true && vibePreference
+    ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
+    : undefined
+  const preferred = inPreferredArea(home.area, soft.preferredAreas)
+  const fit = scoreHome(components, {
     ...(evidence ? evidenceScoreOptions(evidence) : {}),
-    areaBonus: inPreferredArea(home.area, soft.preferredAreas) ? PREFERRED_AREA_BONUS : undefined,
-    weights: soft.hasLocationPreference === true && vibePreference
-      ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
-      : undefined,
+    areaBonus: preferred ? PREFERRED_AREA_BONUS : undefined,
+    weights,
   })
+
+  // Same reasons the search would show for this home — the alert says why it matched.
+  const { reasons } = buildMatchReasons({
+    components,
+    weights: { ...COMPONENT_WEIGHTS, ...(weights ?? {}) },
+    distances: distances.map(d => {
+      const km = (home[d.field] as number | null | undefined) ?? null
+      return { amenity: d.name as Amenity, km, category: d.category as string, value: normalizeDistance(km, d.category) }
+    }),
+    vibeWanted: vibePreference ?? null,
+    safetyScore: areaData?.safety ?? null,
+    heatingWanted: (soft.heatingCategory ?? soft.heatingAgent ?? null) as string | null,
+    parkingHas: home.parking,
+    confirmedFeatures: evidence?.confirmed,
+    contradictedFeatures: evidence?.contradicted,
+    preferredArea: preferred ? home.area : null,
+  })
+  return { fit, reasons }
 }
 
 function inPreferredArea(area: string | null, preferred: unknown): boolean {
@@ -254,6 +277,8 @@ export async function matchSavedSearches(
     : null
 
   const toNotify: number[] = []
+  /** userId → the best AI match for this listing, shown in the alert. Filter searches have none. */
+  const bestByUser = new Map<number, { fit: number; reasons: MatchReason[] }>()
   const matchedIds: number[] = []
 
   for (const search of searches) {
@@ -275,9 +300,15 @@ export async function matchSavedSearches(
       // scored, not filtered, exactly as in the search route.
       const { heatingCategory: _hc, heatingAgent: _ha, softCriteria: _sc, ...hardParams } = params
       if (!matchesFilters(home, hardParams)) continue
+      // Same rule as the search route: known, different heating is not a match.
+      if (contradictsHeating(home, (params.softCriteria ?? {}) as { heatingCategory?: string; heatingAgent?: string })) continue
 
-      const fit = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData, search.queryText)
-      matched = fit >= (search.minMatchPercent ?? 70)
+      const scored = scoreAgainstSavedSearch(home, embedding, queryVec, params, areaData, search.queryText)
+      matched = scored.fit >= (search.minMatchPercent ?? 70)
+      // One alert per user: keep the best-scoring of their matching searches.
+      if (matched && (bestByUser.get(search.userId)?.fit ?? -1) < scored.fit) {
+        bestByUser.set(search.userId, { fit: scored.fit, reasons: topReasons(scored.reasons, 3) })
+      }
     }
 
     if (matched) {
@@ -325,6 +356,7 @@ export async function matchSavedSearches(
         role: 'user',
         type: 'new_listing_match',
         homeKey: home.key,
+        ...(bestByUser.has(userId) ? { data: bestByUser.get(userId) as unknown as Prisma.InputJsonValue } : {}),
       })),
     })
   }
