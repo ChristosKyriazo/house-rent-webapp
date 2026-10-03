@@ -9,7 +9,7 @@ import Link from 'next/link'
 import NotificationPopup from '@/app/components/NotificationPopup'
 import ConfirmDialog from '@/app/components/ConfirmDialog'
 import { localeFor } from '@/lib/format'
-import { MeetingNotesPanel } from '@/app/components/MeetingNotes'
+import { VisitorNotePanel } from '@/app/components/VisitorNotes'
 
 interface Booking {
   id: number
@@ -295,7 +295,7 @@ export default function BookingDetailsModal({ booking, onClose, isOwner, onResch
           )}
 
           {/* Host-only private notes — encrypted, unlocked by an identity re-check */}
-          {isOwner && <MeetingNotesPanel bookingKey={booking.key} />}
+          {isOwner && <VisitorNotePanel bookingKey={booking.key} />}
 
           {/* Other Person Information */}
           <div className="border-t border-[var(--border-subtle)] pt-6">

@@ -7,7 +7,7 @@ Sentry.init({
   // Meeting notes are GDPR-sensitive. Sentry attaches request bodies to server errors by
   // default; never let a note's text (or the query that addressed it) leave the server.
   beforeSend(event) {
-    if (event.request?.url?.includes('/api/meeting-notes')) {
+    if (event.request?.url?.includes('/api/meeting-notes') || event.request?.url?.includes('/api/visitor-notes')) {
       delete event.request.data
       delete event.request.query_string
     }

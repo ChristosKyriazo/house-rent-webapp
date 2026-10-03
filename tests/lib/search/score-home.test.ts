@@ -248,3 +248,26 @@ describe('expressedComponents', () => {
     expect(scoreHome(components)).toBe(scoreHome(components))
   })
 })
+
+describe('heating as a requirement', () => {
+  it('known, different heating contradicts; unknown heating does not', async () => {
+    const { contradictsHeating } = await import('@/lib/search/score-home')
+    const want = { heatingCategory: 'autonomous' }
+    expect(contradictsHeating({ heatingCategory: 'Central' }, want)).toBe(true)
+    expect(contradictsHeating({ heatingCategory: 'Autonomous' }, want)).toBe(false)
+    expect(contradictsHeating({ heatingCategory: null }, want)).toBe(false)
+    expect(contradictsHeating({ heatingCategory: 'Central' }, {})).toBe(false)
+  })
+
+  it('understands the spellings the AI, the data and Greek users use', async () => {
+    const { sameHeating } = await import('@/lib/search/score-home')
+    expect(sameHeating('electricity', 'Power')).toBe(true)
+    expect(sameHeating('heat pump', 'Power')).toBe(true)
+    expect(sameHeating('Ρεύμα', 'Power')).toBe(true)
+    expect(sameHeating('natural gas', 'Natural gas')).toBe(true)
+    expect(sameHeating('φυσικό αέριο', 'Natural gas')).toBe(true)
+    expect(sameHeating('αυτόνομη', 'Autonomous')).toBe(true)
+    expect(sameHeating('oil', 'Natural gas')).toBe(false)
+    expect(sameHeating('autonomous', 'Central')).toBe(false)
+  })
+})

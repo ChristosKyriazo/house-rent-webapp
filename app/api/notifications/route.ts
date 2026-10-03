@@ -15,6 +15,7 @@ import {
   NotificationServiceError,
 } from '@/lib/services/notification-service'
 import { localeFor } from '@/lib/format'
+import { reasonText, type MatchReason } from '@/lib/search/match-reasons'
 
 // GET: Get notifications for the current user (excluding deleted ones)
 export async function GET(request: NextRequest) {
@@ -290,7 +291,18 @@ export async function GET(request: NextRequest) {
           message = t.notificationBookingReminder.replace('{title}', '').replace('{time}', '')
         }
       } else if (notif.type === 'new_listing_match') {
-        message = (t as Record<string, string>).notificationNewListingMatch?.replace('{propertyTitle}', propertyTitle) ?? `New listing: ${propertyTitle}`
+        // AI saved searches store the match % and its top reasons (lib/saved-search-matcher.ts);
+        // say *why* it matched. Filter searches and older alerts have no data — generic text.
+        const match = notif.data as { fit?: number; reasons?: MatchReason[] } | null
+        if (match && typeof match.fit === 'number') {
+          const why = (match.reasons ?? []).map(r => reasonText(r, language)).join(' · ')
+          const pct = Math.round(match.fit)
+          message = language === 'el'
+            ? `Νέα αγγελία με ${pct}% ταίριασμα: «${propertyTitle}»${why ? ` — ${why}` : ''}`
+            : `New ${pct}% match: “${propertyTitle}”${why ? ` — ${why}` : ''}`
+        } else {
+          message = (t as Record<string, string>).notificationNewListingMatch?.replace('{propertyTitle}', propertyTitle) ?? `New listing: ${propertyTitle}`
+        }
       } else if (notif.type === 'boost_request') {
         const actor = (notif.userId ? userMap.get(notif.userId)?.name : null) || t.aUser
         message = language === 'el' ? `${actor} ζήτησε προώθηση για «${propertyTitle}»` : `${actor} requested a boost for “${propertyTitle}”`

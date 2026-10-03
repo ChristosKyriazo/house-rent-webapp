@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLanguage } from '@/app/contexts/LanguageContext'
 import { getCityName, getHomeTitle } from '@/lib/area-utils'
+import MatchBadge from '@/app/components/MatchBadge'
+import type { MatchBreakdown, MatchReason } from '@/lib/search/match-reasons'
 
 interface Home {
   id: number
@@ -21,6 +23,8 @@ interface Home {
   longitude: number | null
   photos: string | null
   matchPercentage?: number | null
+  matchReasons?: MatchReason[] | null
+  matchBreakdown?: MatchBreakdown | null
 }
 
 interface AIChatMessage { role: 'user' | 'assistant'; content: string }
@@ -43,6 +47,39 @@ const GUEST_STORAGE_KEY = 'kaparro_ai_map_searches'
 const MAP_AI_SESSION_KEY = 'mapAISession'
 const FREE_LIMIT = 10
 const SESSION_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+/**
+ * A home's circle. Selected, it inverts — dark fill, white text, thick accent ring, a
+ * little bigger and above its neighbours — so the one whose card is open stands out
+ * (as on Airbnb/Booking).
+ */
+function markerStyle(home: Home, isSelected: boolean) {
+  const pct = home.matchPercentage
+  const hasScore = pct != null
+  const fillColor = hasScore
+    ? pct >= 80 ? '#4ade80' : pct >= 60 ? '#e3a75f' : '#78716c'
+    : '#e3a75f'
+  const strokeColor = hasScore
+    ? pct >= 80 ? '#16a34a' : pct >= 60 ? '#b87a3d' : '#57534e'
+    : '#b87a3d'
+  const text = hasScore
+    ? `${Math.round(pct)}%`
+    : home.listingType === 'rent'
+      ? `€${home.pricePerMonth.toLocaleString()}/μ`
+      : home.pricePerMonth >= 1000 ? `€${(home.pricePerMonth / 1000).toFixed(0)}k` : `€${home.pricePerMonth.toLocaleString()}`
+  return {
+    label: { text, color: isSelected ? '#ffffff' : '#0c0f14', fontWeight: 'bold', fontSize: isSelected ? '11px' : '10px' },
+    icon: {
+      path: window.google.maps.SymbolPath.CIRCLE,
+      scale: isSelected ? 22 : 18,
+      fillColor: isSelected ? '#0c0f14' : fillColor,
+      fillOpacity: 1,
+      strokeColor: isSelected ? fillColor : strokeColor,
+      strokeWeight: isSelected ? 4 : 1.5,
+    },
+    zIndex: isSelected ? Number(window.google.maps.Marker.MAX_ZINDEX) + 10_000 : undefined,
+  }
+}
 
 function MapContent() {
   const { language, isEl } = useLanguage()
@@ -305,6 +342,19 @@ function MapContent() {
     fetchHomes(filters)
   }
 
+  /** Remove markers and the clusterer while `google` still exists. Never throws. */
+  function teardownMarkers() {
+    try {
+      clustererRef.current?.clearMarkers()
+      clustererRef.current?.setMap?.(null)
+      markersRef.current.forEach(m => m.setMap(null))
+    } catch {
+      // Already gone — nothing left to clean up.
+    }
+    clustererRef.current = null
+    markersRef.current = []
+  }
+
   async function renderMarkers() {
     if (!window.google || !mapInstanceRef.current) return
     const pass = ++renderPassRef.current
@@ -320,32 +370,12 @@ function MapContent() {
     homesRef.current.forEach(home => {
       if (!home.latitude || !home.longitude) return
       const lang = languageRef.current
-      const pct = home.matchPercentage
-      const hasScore = pct != null
-
-      const fillColor = hasScore
-        ? pct >= 80 ? '#4ade80' : pct >= 60 ? '#e3a75f' : '#78716c'
-        : '#e3a75f'
-      const strokeColor = hasScore
-        ? pct >= 80 ? '#16a34a' : pct >= 60 ? '#b87a3d' : '#57534e'
-        : '#b87a3d'
-
-      const label = hasScore
-        ? { text: `${Math.round(pct)}%`, color: '#0c0f14', fontWeight: 'bold', fontSize: '10px' }
-        : {
-            text: home.listingType === 'rent'
-              ? `€${home.pricePerMonth.toLocaleString()}/μ`
-              : home.pricePerMonth >= 1000 ? `€${(home.pricePerMonth / 1000).toFixed(0)}k` : `€${home.pricePerMonth.toLocaleString()}`,
-            color: '#0c0f14', fontWeight: 'bold', fontSize: '10px',
-          }
-
       // No `map` here — the clusterer decides whether each marker shows on its own or
       // folds into a numbered group.
       const marker = new window.google.maps.Marker({
         position: { lat: home.latitude, lng: home.longitude },
         title: getHomeTitle(lang, home),
-        label,
-        icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 18, fillColor, fillOpacity: 1, strokeColor, strokeWeight: 1.5 },
+        ...markerStyle(home, false),
       })
       marker.addListener('click', () => { setSelectedGroup(null); setSelected(home) })
       markersRef.current.push(marker)
@@ -411,6 +441,7 @@ function MapContent() {
 
     // If language changed after the map was already loaded, tear down and reload
     if (window.google && loadedLangRef.current && loadedLangRef.current !== lang) {
+      teardownMarkers()
       document.querySelector('script[src*="maps.googleapis.com"]')?.remove()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).google
@@ -446,19 +477,34 @@ function MapContent() {
     }
 
     return () => {
+      // Markers/clusters first: the clusterer's clearMarkers() re-renders through the global
+      // `google`, so removing it before this threw "google is not defined" during unmount —
+      // the crash screen users saw on "View property" (retry worked because it re-ran later).
+      teardownMarkers()
       document.querySelector('script[src*="maps.googleapis.com"]')?.remove()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).google
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).initMap
-      clustererRef.current?.clearMarkers()
-      clustererRef.current = null
       mapInstanceRef.current = null
       scriptTaggedRef.current = false
     }
   }, [apiKey, language])
 
-  useEffect(() => { renderMarkers() }, [homes, language])  
+  useEffect(() => { renderMarkers() }, [homes, language])
+
+  // Restyle in place when the selection changes — no re-render of the markers or clusters.
+  useEffect(() => {
+    if (!window.google) return
+    for (const marker of markersRef.current) {
+      const home = homeByMarkerRef.current.get(marker)
+      if (!home) continue
+      const style = markerStyle(home, selected?.id === home.id)
+      marker.setIcon(style.icon)
+      marker.setLabel(style.label)
+      marker.setZIndex(style.zIndex ?? null)
+    }
+  }, [selected])  
 
   const parsePhotos = (raw: string | null) => {
     try { const p = JSON.parse(raw ?? '[]'); return Array.isArray(p) ? p : [] } catch { return [] }
@@ -758,9 +804,16 @@ function MapContent() {
             )}
             <p className="font-bold text-[var(--text)] line-clamp-2">{getHomeTitle(language, selected)}</p>
             {selected.matchPercentage != null && (
-              <span className={`inline-block mt-1 mb-1 text-xs font-bold px-2 py-0.5 rounded-full ${selected.matchPercentage >= 80 ? 'bg-green-500/20 text-green-400' : selected.matchPercentage >= 60 ? 'bg-amber-500/20 text-amber-400' : 'bg-stone-500/20 text-stone-400'}`}>
-                {Math.round(selected.matchPercentage)}% {isEl ? 'ταίριασμα' : 'match'}
-              </span>
+              <div className="mt-1 mb-1">
+                <MatchBadge
+                  percentage={selected.matchPercentage}
+                  reasons={selected.matchReasons}
+                  breakdown={selected.matchBreakdown}
+                  placement="above"
+                  align="left"
+                  className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${selected.matchPercentage >= 80 ? 'bg-green-500/20 text-green-400' : selected.matchPercentage >= 60 ? 'bg-amber-500/20 text-amber-400' : 'bg-stone-500/20 text-stone-400'}`}
+                />
+              </div>
             )}
             <p className="mt-1 text-sm text-[var(--accent)] font-semibold">
               €{selected.pricePerMonth.toLocaleString()}

@@ -19,12 +19,17 @@ import {
   normalizeVibe,
   normalizeParking,
   normalizeHeating,
+  contradictsHeating,
+  COMPONENT_WEIGHTS,
+  DESCRIPTION_BONUS_MAX,
+  PHOTO_BONUS_MAX,
   evidenceScoreOptions,
   PREFERRED_AREA_BONUS,
   VIBE_WEIGHT_LOCATION_PREFERENCE,
   type HomeComponents,
 } from '@/lib/search/score-home'
 import { semanticScore, SEM_NEUTRAL } from '@/lib/search/calibration'
+import { buildMatchReasons, type Amenity } from '@/lib/search/match-reasons'
 
 // Initialize OpenAI client (using cheapest model: gpt-3.5-turbo)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -563,6 +568,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Heating the user asked for is a requirement: drop listings whose heating is known
+    // and different. It used to be scored only (6% of the fit), so "autonomous heating"
+    // still returned central-heating homes a few points lower. Unstated heating stays in.
+    if (present(extractedFilters.heatingCategory) || present(extractedFilters.heatingAgent)) {
+      homes = homes.filter(home => !contradictsHeating(home, extractedFilters))
+    }
+
     // Filter homes by districts (hard filter - multiple districts = OR condition)
     if (extractedFilters.districts && Array.isArray(extractedFilters.districts) && extractedFilters.districts.length > 0) {
       const requestedDistricts = extractedFilters.districts as string[]
@@ -999,17 +1011,47 @@ export async function POST(request: NextRequest) {
       ? { vibe: VIBE_WEIGHT_LOCATION_PREFERENCE }
       : undefined
 
+    // Distances the query expressed, for the per-amenity reasons (same set the score used).
+    const reasonDistances = getDistanceFields(filtersForDistanceScoring).filter(d =>
+      d.category && d.category !== 'Not important' && d.category !== 'Not mentioned')
+
     const homesWithMatches = homes.map(home => {
       const incompatibilityReason = disqualifierMap.get(home.id) ?? undefined
       const disqualified = incompatibilityReason !== undefined
 
+      const evidenceOptions = evidenceMap.has(home.id) ? evidenceScoreOptions(evidenceMap.get(home.id)!) : {}
       const fit = hardFiltersOnly
         ? null
         : scoreHome(componentsMap.get(home.id) ?? {}, {
-            ...(evidenceMap.has(home.id) ? evidenceScoreOptions(evidenceMap.get(home.id)!) : {}),
+            ...evidenceOptions,
             areaBonus: areaBonusMap.get(home.id),
             disqualified,
             weights: vibeWeightOverride,
+          })
+
+      // The "why" behind the percentage, from exactly the values scoreHome just used.
+      const explanation = fit === null || disqualified
+        ? null
+        : buildMatchReasons({
+            components: componentsMap.get(home.id) ?? {},
+            weights: { ...COMPONENT_WEIGHTS, ...(vibeWeightOverride ?? {}) },
+            distances: reasonDistances.map(d => {
+              const km = home[d.field] as number | null
+              return { amenity: d.name as Amenity, km, category: d.category as string, value: normalizeDistance(km, d.category) }
+            }),
+            vibeWanted: extractedFilters.vibePreference ?? null,
+            safetyScore: home.area ? areaSafetyVibeMap.get(home.area)?.safety ?? null : null,
+            heatingWanted: extractedFilters.heatingCategory ?? extractedFilters.heatingAgent ?? null,
+            parkingHas: home.parking,
+            confirmedFeatures: evidenceMap.get(home.id)?.confirmed,
+            contradictedFeatures: evidenceMap.get(home.id)?.contradicted,
+            preferredArea: areaBonusMap.has(home.id) ? home.area : null,
+            adjust: {
+              descriptionBonus: (evidenceOptions.descriptionBonus ?? 0) * DESCRIPTION_BONUS_MAX,
+              photoBonus: (evidenceOptions.photoBonus ?? 0) * PHOTO_BONUS_MAX,
+              penalty: evidenceOptions.penalty,
+              areaBonus: areaBonusMap.get(home.id),
+            },
           })
 
       const base = hardFiltersOnly
@@ -1026,6 +1068,8 @@ export async function POST(request: NextRequest) {
         // lib/search/listing-evidence.ts. Lets the UI explain a percentage.
         matchedFeatures: evidence?.confirmed ?? [],
         missingFeatures: evidence?.contradicted ?? [],
+        matchReasons: explanation?.reasons ?? null,
+        matchBreakdown: explanation?.breakdown ?? null,
         safety: extractedFilters.Safety || null,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         _rank: disqualified ? -1 : rankScore(base, (home as any).createdAt),

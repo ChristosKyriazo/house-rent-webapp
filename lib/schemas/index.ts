@@ -24,10 +24,14 @@ export const createBookingSchema = z.object({
 /** Private, encrypted notes about a viewing. Capped: notes, not documents. */
 export const MEETING_NOTE_MAX_CHARS = 5000
 
-export const upsertMeetingNoteSchema = z.object({
-  bookingKey: nonEmptyString,
-  text: z.string().trim().min(1).max(MEETING_NOTE_MAX_CHARS),
-})
+export const upsertVisitorNoteSchema = z
+  .object({
+    bookingKey: nonEmptyString,
+    text: z.string().trim().max(MEETING_NOTE_MAX_CHARS),
+    outcome: z.enum(['interested', 'maybe', 'not_a_fit', 'offer']).nullable(),
+    followUp: z.boolean(),
+  })
+  .refine(n => n.text.length > 0 || n.outcome !== null || n.followUp, { message: 'Empty note' })
 
 // ── Homes ─────────────────────────────────────────────────────────────────────
 
