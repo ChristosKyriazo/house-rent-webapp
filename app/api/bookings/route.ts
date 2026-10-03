@@ -515,6 +515,14 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === 'OWNER_CONFLICT') {
       return badRequest('The owner/broker already has an appointment at this time')
     }
+    // Two people booked overlapping slots at the same moment: Postgres aborts one of the
+    // serializable transactions (Prisma P2034). That's a lost race, not a server fault.
+    if ((error as { code?: string })?.code === 'P2034') {
+      return NextResponse.json(
+        { error: 'This time was just booked by someone else. Please pick another slot.' },
+        { status: 409 },
+      )
+    }
     log.error({ err: error }, 'Error creating booking')
     return serverError()
   }
