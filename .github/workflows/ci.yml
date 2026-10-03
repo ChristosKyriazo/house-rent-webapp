@@ -5,8 +5,9 @@ name: CI
 # workflow_call — as the blocking first job of deploy.yml so a broken commit never
 # reaches a server.
 #
-# A green push to `dev` also opens or refreshes the dev → staging PR: the first
-# step of the promotion dev → staging → main. Merging it deploys to staging.
+# The dev → staging PR is opened by promote.yml once this passes on `dev`. It
+# cannot live here: deploy.yml calls this workflow, and a called workflow may not
+# request `pull-requests: write` — GitHub then rejects deploy.yml at startup.
 on:
   push:
     branches-ignore: [main, staging] # pushes to main/staging come in through deploy.yml
@@ -59,48 +60,3 @@ jobs:
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_placeholder' }}
           DATABASE_URL: file:./test.db
-
-  promote-to-staging:
-    name: Open promotion PR (dev → staging)
-    needs: ci
-    # Only for a direct push to dev — not when deploy.yml calls this workflow.
-    if: github.event_name == 'push' && github.ref_name == 'dev'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Open or update the dev → staging PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          ahead=$(gh api "repos/$REPO/compare/staging...dev" --jq .ahead_by)
-          if [ "$ahead" = "0" ]; then
-            echo "staging already contains everything on dev — no promotion PR needed."
-            exit 0
-          fi
-
-          body=$(cat <<BODY
-          Promotes \`dev\` @ \`${GITHUB_SHA::7}\` to staging (staging.kaparro.com).
-
-          **CI:** ✅ lint, typecheck, unit tests and build passed on this commit.
-
-          **Commits:** $ahead ahead of \`staging\` — see the Commits tab.
-
-          Merging deploys to staging (once a staging server exists). After that deploy succeeds, a staging → main release PR opens for production.
-
-          _Opened automatically by CI after the \`dev\` push passed._
-          BODY
-          )
-
-          num=$(gh pr list -R "$REPO" --base staging --head dev --state open --json number --jq '.[0].number // empty')
-          if [ -n "$num" ]; then
-            gh pr edit "$num" -R "$REPO" --body "$body"
-            echo "Updated promotion PR #$num"
-          elif gh pr create -R "$REPO" --base staging --head dev \
-                 --title "promote: dev to staging" --body "$body"; then
-            echo "Opened promotion PR"
-          else
-            echo "::warning::Could not open the promotion PR. Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it by hand: https://github.com/$REPO/compare/staging...dev"
-          fi

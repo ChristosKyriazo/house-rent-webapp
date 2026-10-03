@@ -81,7 +81,7 @@ feature/* ──PR──▶ dev ──PR──▶ staging ──PR──▶ main
 
 "Staging" is the only name for the middle environment — it was also called "QA", and the two meant the same thing. Each deployed environment gets its **own server and database**; never share a box between staging and production.
 
-- **`dev`** is where work lands. A push runs CI (`ci.yml`) — no deploy — and, when green, the `promote-to-staging` job opens/updates the **`dev` → `staging`** PR.
+- **`dev`** is where work lands. A push runs CI (`ci.yml`) — no deploy — and, when green, `promote.yml` opens/updates the **`dev` → `staging`** PR.
 - **`staging`** deploys to staging (`deploy.yml`). When that run finishes (staging deployed + smoke-tested, or skipped while it has no server), the `release-pr` job opens/updates the **`staging` → `main`** PR.
 - **`main`** deploys to **production** (kaparro.com). Enabled by default. The `plan` job **refuses** any code whose *tree* was not deployed by a green `Deploy to staging` job on the `staging` branch — compared by tree because merge commits change the SHA. While `DEPLOY_STAGING_ENABLED` is off, that gate warns and lets production ship.
 - **The owner merges both promotion PRs.** Claude prepares them and stops; `.claude/settings.json` denies `gh pr merge` and pushes to `main`.

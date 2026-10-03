@@ -79,7 +79,7 @@ git push -u origin <branch-name>
 
 Promote by **pull request** only — never push `staging` or `main`.
 
-1. **`dev` → `staging`.** Opened automatically when CI passes on `dev` (`promote-to-staging` in `ci.yml`). Merging it deploys to staging.
+1. **`dev` → `staging`.** Opened automatically when CI passes on `dev` (`promote.yml`, after CI passes). Merging it deploys to staging.
 2. **`staging` → `main`.** Opened automatically when the staging run finishes (`release-pr` in `deploy.yml`). This PR triggers the full Playwright suite against staging.kaparro.com — the release gate. The production deploy also refuses code that staging has not deployed (once staging exists).
 
 If either PR is missing (the repo setting "Allow GitHub Actions to create and approve pull requests" is off), open it by hand: `gh pr create --base staging --head dev` / `gh pr create --base main --head staging`.
