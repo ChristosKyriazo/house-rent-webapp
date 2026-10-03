@@ -70,6 +70,8 @@ function HomeDetailPage() {
   const { language } = useLanguage()
   const [home, setHome] = useState<Home | null>(null)
   const [loading, setLoading] = useState(true)
+  /** Why the listing could not be shown (from the API), instead of silently leaving the page. */
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [showOwnerModal, setShowOwnerModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
@@ -189,9 +191,22 @@ function HomeDetailPage() {
         }
       }
 
-      if (!homeResponse.ok) { router.push('/homes'); return }
+      // Stay on the page and say why, rather than bouncing to search: a 403 (an inquiry on
+      // this listing was dismissed) or 410 (listing hidden) used to look like a broken link.
+      if (!homeResponse.ok) {
+        setLoadError(
+          homeResponse.status === 403
+            ? (language === 'el'
+                ? 'Ο ιδιοκτήτης δεν προχώρησε με το αίτημά σας για αυτό το ακίνητο, οπότε δεν εμφανίζεται πλέον σε εσάς.'
+                : "The owner didn't go ahead with your inquiry for this home, so it's no longer shown to you.")
+            : homeResponse.status === 410
+              ? (language === 'el' ? 'Η αγγελία είναι προσωρινά μη διαθέσιμη.' : 'This listing is temporarily unavailable.')
+              : null
+        )
+        return
+      }
       const data = await homeResponse.json()
-      if (!data.home) { router.push('/homes'); return }
+      if (!data.home) return
       setHome(data.home)
       setHasBookableAvailability(false)
       setHasScheduledViewingAppointment(false)
@@ -316,10 +331,12 @@ function HomeDetailPage() {
         }
       }
     } catch (error) {
+      // A cancelled load (the effect re-ran, e.g. on remount) is not a failure. Treating it as
+      // one redirected signed-in users from the map back to search before the page appeared.
+      if (signal?.aborted || (error as { name?: string })?.name === 'AbortError') return
       console.error('Error fetching data:', error)
-      router.push('/homes')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }
 
@@ -580,11 +597,18 @@ function HomeDetailPage() {
     return (
       <div className="min-h-screen bg-[var(--canvas)] flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-[var(--text)] text-xl font-semibold">
-          {language === 'el' ? 'Η αγγελία δεν βρέθηκε' : 'Listing not found'}
+          {language === 'el' ? 'Η αγγελία δεν είναι διαθέσιμη' : 'This listing is not available'}
         </p>
-        <Link href="/homes" className="px-4 py-2 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] text-sm font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
-          {language === 'el' ? '← Πίσω στις αγγελίες' : '← Back to listings'}
-        </Link>
+        {loadError && <p className="text-sm text-[var(--text-muted)] text-center max-w-md">{loadError}</p>}
+        {fromMap ? (
+          <button onClick={() => router.back()} className="px-4 py-2 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] text-sm font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
+            {language === 'el' ? '← Πίσω στον χάρτη' : '← Back to map'}
+          </button>
+        ) : (
+          <Link href="/homes" className="px-4 py-2 rounded-xl bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] text-sm font-semibold hover:bg-[var(--btn-primary-hover-bg)] transition-all">
+            {language === 'el' ? '← Πίσω στις αγγελίες' : '← Back to listings'}
+          </Link>
+        )}
       </div>
     )
   }
